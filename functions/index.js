@@ -2,8 +2,20 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const cors = require('cors')({origin: true});
 const axios = require("axios");
+const nodemailer = require('nodemailer');
 
 admin.initializeApp();
+
+// Nodemailer transporter setup
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: true, // true for 465, false for other ports
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
   // Ensure the user is authenticated.
@@ -138,6 +150,9 @@ exports.saveFormWithValidation = functions.https.onRequest((req, res) => {
           serverValidated: true
       };
 
+      const docSnap = await docRef.get();
+      const oldData = docSnap.exists ? docSnap.data() : null;
+
       const batch = db.batch();
       batch.set(docRef, dataToSave, { merge: true });
 
@@ -145,6 +160,37 @@ exports.saveFormWithValidation = functions.https.onRequest((req, res) => {
       batch.set(historyDocRef, dataToSave);
 
       await batch.commit();
+
+      // --- Email Notification Logic ---
+      const newStatus = dataToSave.status;
+      const oldStatus = oldData ? oldData.status : null;
+
+      if (newStatus && newStatus !== oldStatus) {
+        const creatorUid = dataToSave.creatorUid;
+        if (creatorUid) {
+          try {
+            const userRecord = await admin.auth().getUser(creatorUid);
+            const email = userRecord.email;
+            if (email) {
+              const mailOptions = {
+                from: `"Gestión PRO" <${process.env.EMAIL_USER}>`,
+                to: email,
+                subject: `Actualización de Estado: ${formType.toUpperCase()} ${docId}`,
+                html: `
+                  <p>Hola,</p>
+                  <p>El estado de tu <strong>${formType.toUpperCase()} ${docId}</strong> ha cambiado de <strong>${oldStatus || 'N/A'}</strong> a <strong>${newStatus}</strong>.</p>
+                  <p>Puedes ver los detalles en la aplicación.</p>
+                  <p>Saludos,<br>El equipo de Gestión PRO</p>
+                `
+              };
+              await transporter.sendMail(mailOptions);
+              console.log(`Email sent to ${email} for ${formType.toUpperCase()} ${docId} status change.`);
+            }
+          } catch (error) {
+            console.error(`Failed to send email for ${formType.toUpperCase()} ${docId}:`, error);
+          }
+        }
+      }
 
       // 3. Manual Response Formatting
       return res.status(200).json({
@@ -166,6 +212,45 @@ exports.saveFormWithValidation = functions.https.onRequest((req, res) => {
     }
   });
 });
+
+exports.sendTaskAssignmentEmail = functions.firestore
+  .document('tareas/{taskId}')
+  .onCreate(async (snap, context) => {
+    const task = snap.data();
+    const assigneeUid = task.assigneeUid;
+
+    if (!assigneeUid) {
+      console.log(`Task ${context.params.taskId} created without an assignee.`);
+      return null;
+    }
+
+    try {
+      const userRecord = await admin.auth().getUser(assigneeUid);
+      const email = userRecord.email;
+
+      if (email) {
+        const mailOptions = {
+          from: `"Gestión PRO" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: `Nueva Tarea Asignada: ${task.title}`,
+          html: `
+            <p>Hola,</p>
+            <p>Se te ha asignado una nueva tarea: <strong>${task.title}</strong>.</p>
+            <p><strong>Descripción:</strong> ${task.description || 'N/A'}</p>
+            <p><strong>Fecha de Vencimiento:</strong> ${task.dueDate || 'N/A'}</p>
+            <p>Puedes ver los detalles en la aplicación.</p>
+            <p>Saludos,<br>El equipo de Gestión PRO</p>
+          `
+        };
+        await transporter.sendMail(mailOptions);
+        console.log(`Assignment email sent to ${email} for task ${context.params.taskId}.`);
+      }
+      return null;
+    } catch (error) {
+      console.error(`Failed to send assignment email for task ${context.params.taskId}:`, error);
+      return null;
+    }
+  });
 
 exports.updateCollectionCounts = functions.firestore
   .document('{collectionId}/{docId}')
