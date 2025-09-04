@@ -4897,20 +4897,15 @@ async function runEcrFormLogic(params = null) {
         try {
             if (!isEditing) {
                 showToast('Generando número de ECR...', 'loading', { toastId });
-                const counterRef = doc(db, "counters", "ecr_counter");
-                const newEcrNumber = await runTransaction(db, async (transaction) => {
-                    const counterSnap = await transaction.get(counterRef);
-                    const currentYear = new Date().getFullYear();
-                    let nextNumber = 1;
-                    if (counterSnap.exists()) {
-                        const counterData = counterSnap.data();
-                        if (counterData.year === currentYear) {
-                            nextNumber = (counterData.count || 0) + 1;
-                        }
-                    }
-                    transaction.set(counterRef, { count: nextNumber, year: currentYear }, { merge: true });
-                    return `ECR-${currentYear}-${String(nextNumber).padStart(3, '0')}`;
-                });
+                // Call the new Cloud Function to get the next ECR number.
+                const getNextEcrNumber = httpsCallable(functions, 'getNextEcrNumber');
+                const result = await getNextEcrNumber();
+                const newEcrNumber = result.data.ecrNumber;
+
+                if (!newEcrNumber) {
+                    throw new Error("No se pudo generar un nuevo número de ECR desde el servidor.");
+                }
+
                 dataToSave.ecr_no = newEcrNumber;
                 dataToSave.id = newEcrNumber;
                 showToast(`Número de ECR ${newEcrNumber} generado. Guardando...`, 'loading', { toastId });
