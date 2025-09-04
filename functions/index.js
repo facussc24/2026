@@ -65,7 +65,9 @@ exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
   }
 });
 
-exports.saveFormWithValidation = functions.https.onRequest((req, res) => {
+exports.saveFormWithValidation = functions
+  .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
+  .https.onRequest((req, res) => {
   cors(req, res, async () => {
     try {
       // 1. Manual Authentication
@@ -213,8 +215,9 @@ exports.saveFormWithValidation = functions.https.onRequest((req, res) => {
   });
 });
 
-exports.sendTaskAssignmentEmail = functions.firestore
-  .document('tareas/{taskId}')
+exports.sendTaskAssignmentEmail = functions
+  .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
+  .firestore.document('tareas/{taskId}')
   .onCreate(async (snap, context) => {
     const task = snap.data();
     const assigneeUid = task.assigneeUid;
