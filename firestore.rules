@@ -134,7 +134,7 @@ service cloud.firestore {
       ) || (
         // Allow sector-specific approval updates
         request.resource.data.approvals.diff(resource.data.approvals)
-            .affectedKeys().hasOnly(getUserData().sector) &&
+            .affectedKeys().hasOnly([getUserData().sector]) &&
         isUserInSector(getUserData().sector)
       );
 
