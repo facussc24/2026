@@ -1,0 +1,36 @@
+/* Estilos específicos para la impresión y exportación a PDF */
+
+/* Ocultar elementos no deseados en el PDF */
+#action-buttons-container,
+.nav-link,
+.header-actions,
+#main-nav {
+    display: none !important;
+}
+
+/* Forzar un fondo blanco y texto negro para ahorrar tinta y mejorar la legibilidad */
+body, #eco-form {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+/* Ajustes de página para la impresión */
+@page {
+    size: A4 portrait;
+    margin: 20mm;
+}
+
+/* Evitar saltos de página inoportunos dentro de las secciones */
+.section-block {
+    page-break-inside: avoid;
+}
+
+/* Asegurarse de que el contenido del formulario ocupe todo el ancho disponible */
+#eco-form {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}

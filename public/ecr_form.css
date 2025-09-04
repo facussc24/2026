@@ -1,0 +1,304 @@
+@import url('forms.css');
+
+/* --- ANIMATIONS --- */
+@keyframes ecr-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.form-container {
+    animation: ecr-fade-in 0.5s ease-out forwards;
+}
+
+
+/* --- ECR FORM SPECIFIC STYLES --- */
+
+/* Page Header */
+.ecr-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid black;
+    padding-bottom: 8px;
+}
+.ecr-header .logo {
+    font-weight: bold;
+    font-size: 1.5rem;
+    text-transform: uppercase;
+}
+.ecr-header .title-block {
+    text-align: center;
+}
+.ecr-header .ecr-main-title {
+    font-size: 2rem;
+    font-weight: bold;
+}
+.ecr-header .ecr-subtitle {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+.ecr-header .ecr-number-box {
+    border: 2px solid black;
+    padding: 8px 12px;
+}
+.ecr-header .ecr-number-box span {
+    font-weight: bold;
+}
+
+/* Gray Bar */
+.ecr-checklist-bar {
+    background-color: #d1d5db; /* gray-300 */
+    text-align: center;
+    padding: 4px 0;
+    font-weight: bold;
+    margin: 12px 0;
+}
+
+/* Generic Form Layouts */
+.form-row {
+    display: flex;
+    gap: 1.5rem; /* Increased gap */
+    align-items: flex-end; /* Align to bottom for better vertical alignment */
+    margin-bottom: 1.25rem; /* Increased vertical spacing */
+}
+.form-field {
+    display: flex;
+    flex-direction: column;
+    flex: 1; /* Allow fields to grow */
+    min-width: 0; /* Prevent overflow on flex items */
+}
+.form-field.row {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+}
+.form-field label {
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem; /* Increased spacing */
+}
+.form-field input[type="text"],
+.form-field input[type="date"],
+.form-field select,
+.form-field textarea {
+    border: 1px solid #d1d5db; /* border-gray-300 */
+    padding: 0.5rem 0.75rem; /* Equivalent to py-2 px-3 */
+    border-radius: 0.375rem; /* rounded-md */
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.form-field input[type="text"]:focus,
+.form-field input[type="date"]:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+    border-color: #3b82f6; /* focus:border-blue-500 */
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); /* Simple focus ring */
+}
+
+.form-field input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+.checkbox-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* New Flex-based Layout for ECR Objectives section */
+.ecr-flex-section {
+    border: 1px solid black;
+    border-radius: 4px;
+    margin-top: 1rem;
+    overflow: hidden;
+}
+
+.ecr-flex-header {
+    background-color: #e5e7eb; /* gray-200 */
+    font-weight: bold;
+    padding: 8px 12px;
+    text-align: center;
+    border-bottom: 1px solid black;
+}
+
+.ecr-flex-content {
+    background-color: white;
+    padding: 12px;
+}
+
+.ecr-flex-content.ecr-flex-columns-2 {
+    display: flex;
+    gap: 1rem;
+}
+
+.ecr-flex-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* Two-column layout for "Situacion" */
+.two-column-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+}
+.column-box {
+    border: 1px solid #9ca3af;
+    padding: 0.5rem;
+}
+.column-box h3 {
+    font-weight: bold;
+    text-align: center;
+    background-color: #e5e7eb; /* gray-200 */
+    padding: 4px;
+    margin: -0.5rem -0.5rem 0.5rem -0.5rem;
+}
+.column-box textarea {
+    width: 100%;
+    height: 150px;
+    border: none;
+    resize: none;
+}
+
+/* Full Width Tables */
+.full-width-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    table-layout: fixed; /* Prevents table from expanding uncontrollably */
+}
+.full-width-table th, .full-width-table td {
+    border: 1px solid black;
+    padding: 4px 6px;
+    text-align: left;
+    word-wrap: break-word; /* Wraps long content */
+    vertical-align: top;
+}
+.full-width-table th {
+    background-color: #e5e7eb; /* gray-200 */
+    font-weight: bold;
+}
+
+/* Specific column widths for the risk analysis and directory approval tables */
+.risk-analysis-table th:nth-child(1), .risk-analysis-table td:nth-child(1) { width: 15%; }
+.risk-analysis-table th:nth-child(2), .risk-analysis-table td:nth-child(2) { width: 25%; } /* ANÁLISIS DE RIESGO */
+.risk-analysis-table th:nth-child(3), .risk-analysis-table td:nth-child(3) { width: 7%;  } /* Nivel */
+.risk-analysis-table th:nth-child(4), .risk-analysis-table td:nth-child(4) { width: 23%; } /* Observaciones */
+.risk-analysis-table th:nth-child(5), .risk-analysis-table td:nth-child(5) { width: 12%; } /* NOMBRE */
+.risk-analysis-table th:nth-child(6), .risk-analysis-table td:nth-child(6) { width: 9%; }  /* FECHA */
+.risk-analysis-table th:nth-child(7), .risk-analysis-table td:nth-child(7) { width: 9%; }  /* VISTO */
+
+.full-width-table td input {
+    width: 100%;
+    box-sizing: border-box; /* Includes padding and border in the element's total width */
+    border: none;
+    background: transparent;
+    padding: 2px;
+}
+
+/* Department Evaluation Pages */
+.department-section {
+    border: 1px solid #e2e8f0; /* slate-200 */
+    margin-bottom: 1.5rem;
+    border-radius: 0.75rem; /* rounded-xl */
+    overflow: hidden;
+    transition: all 0.2s ease-in-out;
+    background-color: white;
+}
+
+.department-section:hover {
+    border-color: #3b82f6;
+    box-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    transform: translateY(-2px);
+}
+
+.department-header {
+    background-color: #f8fafc; /* slate-50 */
+    padding: 0.75rem 1.25rem; /* py-3 px-5 */
+    font-weight: 700; /* font-bold */
+    font-size: 1.125rem; /* text-lg */
+    color: #1e293b; /* slate-800 */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+}
+.department-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 1.25rem; /* p-5 */
+    gap: 1.5rem; /* gap-6 */
+}
+.department-checklist {
+    width: 100%;
+    padding: 0; /* Padding is now on the parent */
+    border-right: none;
+    /* The border is removed in favor of the gap on department-content */
+}
+.department-checklist .check-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem; /* Increased gap */
+    padding: 6px 0; /* Increased vertical padding */
+}
+.department-comments {
+    width: 100%; /* Take full width */
+    padding: 0; /* Padding is now on the parent */
+}
+.department-comments textarea {
+    width: 100%;
+    box-sizing: border-box;
+    /* height: 120px; REMOVED - will be controlled by 'rows' attribute */
+    /* border: 1px solid #ccc; REMOVED - will use standard form-field styles */
+    /* border-radius: 4px; REMOVED - will use standard form-field styles */
+    /* padding: 4px; REMOVED - will use standard form-field styles */
+    resize: vertical;
+}
+.department-footer {
+    border-top: 1px solid #9ca3af;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1.5rem;
+    background-color: #f9fafb;
+}
+
+/* Watermark */
+.watermark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8rem;
+    color: rgba(0, 0, 0, 0.1);
+    font-weight: bold;
+    pointer-events: none;
+    z-index: -1;
+}
+
+.validation-error-message {
+    color: #ef4444; /* red-500 */
+    font-size: 0.75rem; /* text-xs */
+    margin-top: 0.25rem;
+}
+
+.highlight-section {
+  animation: highlight-animation 2.5s ease-out;
+}
+
+@keyframes highlight-animation {
+  0% { background-color: rgba(59, 130, 246, 0.25); }
+  100% { background-color: transparent; }
+}

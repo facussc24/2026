@@ -1,0 +1,236 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isUserAdmin() {
+      // Check for Super Admin UID first, then safely check the user's role from their document.
+      return request.auth.uid == 'KTIQRzPBRcOFtBRjoFViZPSsbSq2' ||
+        (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    function canCreateUpdate() {
+      // Check for Super Admin UID first, then for 'admin' or 'editor' roles.
+      // This ensures the seeder works on a clean install for the Super Admin.
+      return request.auth.uid == 'KTIQRzPBRcOFtBRjoFViZPSsbSq2' ||
+        (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+         (get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin' ||
+          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'editor'));
+    }
+
+    // --- USUARIOS ---
+    match /usuarios/{userId} {
+      // Cualquier usuario autenticado puede listar los usuarios para asignación de tareas.
+      allow list: if request.auth != null;
+
+      // Un usuario puede leer su propio perfil. Los admins pueden leer todos.
+      allow read: if request.auth.uid == userId || isUserAdmin();
+
+      // Un usuario puede crear su propio documento de perfil durante el registro.
+      allow create: if request.auth.uid == userId;
+
+      // Un usuario puede actualizar su propio perfil (nombre, avatar, etc.).
+      // Los administradores pueden actualizar cualquier perfil (para cambiar roles, etc.).
+      allow update: if request.auth.uid == userId || isUserAdmin();
+
+      // Solo los administradores pueden eliminar usuarios.
+      allow delete: if isUserAdmin();
+    }
+
+    // --- COLECCIONES DE DATOS ESPECÍFICAS ---
+    // Se aplica la misma lógica de permisos a varias colecciones de datos.
+    match /productos/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /semiterminados/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /insumos/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /clientes/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /sectores/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /procesos/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /proveedores/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /unidades/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+    match /proyectos/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+
+    match /roles/{docId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+
+    match /action_plans/{planId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if canCreateUpdate();
+    }
+
+    match /eco_forms/{ecoId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+
+      // History is part of the ECO, should be readable by the same people.
+      // It should only be created, not updated or deleted directly.
+      match /history/{historyId} {
+        allow read: if request.auth != null;
+        allow create: if canCreateUpdate();
+        allow update, delete: if false; // Immutable history
+      }
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function isUserInSector(sector) {
+        return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+               getUserData().sector == sector;
+    }
+
+    match /ecr_forms/{ecrId} {
+      allow read: if request.auth != null;
+      allow create: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+
+      allow update: if isUserAdmin() || (
+        // Allow general edits by the creator if it's a draft or rejected
+        (request.resource.data.diff(resource.data).affectedKeys()
+            .removeAll(['approvals', 'status']).size() == 0) &&
+        (resource.data.status == 'draft' || resource.data.status == 'rejected') &&
+        getUserData().email == resource.data.modifiedBy
+      ) || (
+        // Allow sector-specific approval updates
+        request.resource.data.approvals.diff(resource.data.approvals)
+            .affectedKeys().hasOnly(getUserData().sector) &&
+        isUserInSector(getUserData().sector)
+      );
+
+      match /history/{historyId} {
+        allow read: if request.auth != null;
+        allow create: if canCreateUpdate();
+        allow update, delete: if false;
+      }
+    }
+
+    match /reuniones_ecr/{reunionId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+
+    match /seguimiento_ecr_eco/{fichaId} {
+      allow read: if request.auth != null;
+      allow create, update: if canCreateUpdate();
+      allow delete: if isUserAdmin();
+    }
+
+    // --- CARÁTULA MAESTRA ---
+    match /cover_master/{docId} {
+      // Anyone authenticated can read the master cover.
+      allow read: if request.auth != null;
+
+      // Only admins can create or update the master cover.
+      // We only expect one document with id 'master'.
+      allow create, update: if isUserAdmin();
+
+      // The master cover should not be deleted.
+      allow delete: if false;
+
+      // History for the master cover
+      match /history/{historyId} {
+        // Anyone authenticated can read the history.
+        allow read: if request.auth != null;
+
+        // Only admins can create history entries (done via transaction).
+        allow create: if isUserAdmin();
+
+        // History is immutable.
+        allow update, delete: if false;
+      }
+    }
+
+    // --- TAREAS ---
+    // Las tareas tienen su propia lógica de permisos más detallada.
+    match /tareas/{taskId} {
+      // Cualquier usuario autenticado puede crear una tarea.
+      allow create: if request.auth != null;
+
+      // Un usuario puede leer una tarea si es pública, si se le asignó o si la creó.
+      // Los administradores pueden leer todas las tareas.
+      allow read: if request.auth != null &&
+                    (isUserAdmin() ||
+                     resource.data.isPublic == true ||
+                     resource.data.assigneeUid == request.auth.uid ||
+                     resource.data.creatorUid == request.auth.uid);
+
+      // Un usuario puede actualizar una tarea si se le asignó o si la creó.
+      // Los administradores pueden actualizar cualquier tarea.
+      allow update: if request.auth != null &&
+                      (isUserAdmin() ||
+                       resource.data.assigneeUid == request.auth.uid ||
+                       resource.data.creatorUid == request.auth.uid);
+
+      // Un usuario solo puede eliminar una tarea que él mismo creó.
+      // Los administradores pueden eliminar cualquier tarea.
+      allow delete: if request.auth != null &&
+                      (isUserAdmin() || resource.data.creatorUid == request.auth.uid);
+    }
+
+    // --- COUNTERS ---
+    // This collection stores different counters for the application.
+    // We use specific rules for each type of counter.
+    match /counters/{counterDoc} {
+      // Allow any authenticated user to read any document in the collection.
+      allow read: if request.auth != null;
+
+      // Allow admins to write to any counter document for seeding/maintenance.
+      // Allow any authenticated user to write to the 'ecr_counter' for transactions.
+      allow write: if isUserAdmin() || (request.auth != null && counterDoc == 'ecr_counter');
+    }
+
+    // --- NOTIFICACIONES ---
+    match /notifications/{notificationId} {
+      // Un usuario puede leer o actualizar sus propias notificaciones.
+      allow read, update: if request.auth != null && request.auth.uid == resource.data.userId;
+
+      // Un usuario puede eliminar sus propias notificaciones, O un admin puede eliminar cualquiera.
+      allow delete: if request.auth != null && (request.auth.uid == resource.data.userId || isUserAdmin());
+
+      // Cualquier usuario autenticado puede crear una notificación (la lógica de la app determina para quién es).
+      allow create: if request.auth != null;
+    }
+  }
+}
