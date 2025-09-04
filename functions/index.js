@@ -5,6 +5,54 @@ const axios = require("axios");
 
 admin.initializeApp();
 
+exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
+  // Ensure the user is authenticated.
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated.",
+    );
+  }
+
+  const db = admin.firestore();
+  const counterRef = db.collection("counters").doc("ecr_counter");
+
+  try {
+    const newEcrNumber = await db.runTransaction(async (transaction) => {
+      const counterSnap = await transaction.get(counterRef);
+      const currentYear = new Date().getFullYear();
+      let nextNumber = 1;
+
+      if (counterSnap.exists) {
+        const counterData = counterSnap.data();
+        // If the counter is for the current year, increment it.
+        // Otherwise, reset it for the new year.
+        if (counterData.year === currentYear) {
+          nextNumber = (counterData.count || 0) + 1;
+        }
+      }
+
+      // Update the counter in the transaction.
+      transaction.set(
+          counterRef,
+          {count: nextNumber, year: currentYear},
+          {merge: true},
+      );
+
+      // Return the formatted ECR number.
+      return `ECR-${currentYear}-${String(nextNumber).padStart(3, "0")}`;
+    });
+
+    return {ecrNumber: newEcrNumber};
+  } catch (error) {
+    console.error("Error generating ECR number:", error);
+    throw new functions.https.HttpsError(
+        "internal",
+        "An error occurred while generating the ECR number.",
+    );
+  }
+});
+
 exports.saveFormWithValidation = functions.https.onRequest((req, res) => {
   cors(req, res, async () => {
     try {
