@@ -3155,27 +3155,26 @@ async function runControlEcrsLogic() {
         <div class="animate-fade-in-up">
             <div class="text-center mb-12">
                 <div class="flex justify-center items-center gap-4">
-                    <h2 class="text-4xl font-extrabold text-slate-800">Panel de Control</h2>
-                    <button id="start-control-panel-tutorial-btn" class="bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 flex items-center shadow-md text-sm font-semibold">
-                        <i data-lucide="graduation-cap" class="mr-2 h-5 w-5"></i>
-                        Tutorial
+                    <h2 class="text-4xl font-extrabold text-slate-800">Panel de Control Unificado</h2>
+                    <button id="control-panel-help-btn" class="text-slate-400 hover:text-blue-600" title="¿Qué es esto?">
+                        <i data-lucide="help-circle" class="w-8 h-8"></i>
                     </button>
                 </div>
-                <p class="text-lg text-slate-500 mt-2">Seleccione un módulo para visualizar.</p>
+                <p class="text-lg text-slate-500 mt-2">Todos los módulos de gestión y seguimiento de Ingeniería en un solo lugar.</p>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto" data-tutorial-id="control-panel-container">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto" data-tutorial-id="control-panel-container">
                 <a href="#" data-view="ecr_table_view" data-tutorial-id="control-panel-card-table" class="nav-link dashboard-card bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer overflow-hidden transform hover:-translate-y-1">
                     <div class="p-6 bg-slate-700 text-white">
                         <div class="flex items-center gap-4">
                             <i data-lucide="table-properties" class="w-10 h-10"></i>
                             <div>
-                                <h3 class="text-2xl font-bold">Tabla de Control ECR</h3>
-                                <p class="opacity-90">Hoja de seguimiento de proyectos.</p>
+                                <h3 class="text-2xl font-bold">Tabla Maestra de ECRs</h3>
+                                <p class="opacity-90">Vista global de todos los ECRs.</p>
                             </div>
                         </div>
                     </div>
                     <div class="p-6">
-                        <p class="text-slate-600">Ver y gestionar la tabla maestra de todos los Engineering Change Requests (ECR).</p>
+                        <p class="text-slate-600">Visualice, filtre y busque en la hoja de seguimiento corporativa de todos los Engineering Change Requests.</p>
                     </div>
                 </a>
                 <a href="#" data-view="indicadores_ecm_view" data-tutorial-id="control-panel-card-indicators" class="nav-link dashboard-card bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer overflow-hidden transform hover:-translate-y-1">
@@ -3183,13 +3182,13 @@ async function runControlEcrsLogic() {
                         <div class="flex items-center gap-4">
                             <i data-lucide="bar-chart-3" class="w-10 h-10"></i>
                             <div>
-                                <h3 class="text-2xl font-bold">Indicadores ECM</h3>
-                                <p class="opacity-90">Dashboard de ECR / ECO.</p>
+                                <h3 class="text-2xl font-bold">Indicadores de Gestión</h3>
+                                <p class="opacity-90">Dashboard de Métricas (KPIs).</p>
                             </div>
                         </div>
                     </div>
                     <div class="p-6">
-                        <p class="text-slate-600">Visualizar KPIs y gráficos sobre el estado y rendimiento de los ECRs y ECOs.</p>
+                        <p class="text-slate-600">Analice el rendimiento del proceso de cambios con gráficos de estado, eficiencia y plazos de ECRs y ECOs.</p>
                     </div>
                 </a>
                 <a href="#" data-view="ecr_seguimiento" data-tutorial-id="control-panel-card-metrics" class="nav-link dashboard-card bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer overflow-hidden transform hover:-translate-y-1">
@@ -3197,13 +3196,27 @@ async function runControlEcrsLogic() {
                         <div class="flex items-center gap-4">
                             <i data-lucide="clipboard-check" class="w-10 h-10"></i>
                             <div>
-                                <h3 class="text-2xl font-bold">Seguimiento y Métricas</h3>
-                                <p class="opacity-90">Registro, asistencia y gráficos.</p>
+                                <h3 class="text-2xl font-bold">Seguimiento de Reuniones</h3>
+                                <p class="opacity-90">Asistencia y pendencias.</p>
                             </div>
                         </div>
                     </div>
                     <div class="p-6">
-                        <p class="text-slate-600">Consolidado de seguimiento de ECR, matriz de asistencia a reuniones y KPIs de ausentismo.</p>
+                        <p class="text-slate-600">Registre y consulte la matriz de asistencia a reuniones de ECR y el estado de las pendencias por departamento.</p>
+                    </div>
+                </a>
+                <a href="#" data-view="seguimiento_ecr_eco" class="nav-link dashboard-card bg-white rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 cursor-pointer overflow-hidden transform hover:-translate-y-1">
+                    <div class="p-6 bg-purple-600 text-white">
+                        <div class="flex items-center gap-4">
+                            <i data-lucide="file-check-2" class="w-10 h-10"></i>
+                            <div>
+                                <h3 class="text-2xl font-bold">Fichas de Seguimiento</h3>
+                                <p class="opacity-90">Comentarios y firmas por área.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-slate-600">Gestione las fichas individuales de cada ECR/ECO, con comentarios y estado de firma por departamento.</p>
                     </div>
                 </a>
             </div>
@@ -3212,6 +3225,36 @@ async function runControlEcrsLogic() {
 
     dom.viewContent.innerHTML = viewHTML;
     lucide.createIcons();
+
+    document.getElementById('control-panel-help-btn')?.addEventListener('click', () => {
+        const helpContent = `
+            <div class="space-y-4 text-slate-700">
+                <p>El <strong>Panel de Control Unificado</strong> centraliza todas las herramientas para la gestión de cambios de ingeniería. Cada módulo tiene un propósito específico:</p>
+                <ul class="list-disc list-inside space-y-3 pl-4">
+                    <li>
+                        <strong class="font-bold text-slate-800">Tabla Maestra de ECRs:</strong>
+                        <p class="pl-5 text-sm">Es la vista principal para consultar y filtrar todos los ECRs de la empresa. Use esta tabla para un seguimiento detallado y para exportar informes completos.</p>
+                    </li>
+                    <li>
+                        <strong class="font-bold text-slate-800">Indicadores de Gestión:</strong>
+                        <p class="pl-5 text-sm">Un dashboard con gráficos y KPIs (Indicadores Clave de Rendimiento) que miden la eficiencia del proceso de cambios, como tiempos de aprobación, ECRs abiertos vs cerrados, etc.</p>
+                    </li>
+                    <li>
+                        <strong class="font-bold text-slate-800">Seguimiento de Reuniones:</strong>
+                         <p class="pl-5 text-sm">Aquí se gestiona la asistencia a las reuniones periódicas de ECR. Permite registrar presentes/ausentes y visualizar el compromiso de cada área.</p>
+                    </li>
+                    <li>
+                        <strong class="font-bold text-slate-800">Fichas de Seguimiento:</strong>
+                         <p class="pl-5 text-sm">Permite gestionar los formularios individuales de cada ECR/ECO, donde cada departamento deja sus comentarios y firma digitalmente su aprobación o rechazo.</p>
+                    </li>
+                </ul>
+                 <div class="mt-6 pt-4 border-t">
+                     <p class="text-sm">Para una guía paso a paso, haga clic en el botón <strong>Ver Tutorial</strong> en el panel.</p>
+                 </div>
+            </div>
+        `;
+        showInfoModal('Ayuda del Panel de Control', helpContent);
+    });
 
     document.getElementById('start-control-panel-tutorial-btn')?.addEventListener('click', () => {
         appState.isTutorialActive = true;
@@ -3235,6 +3278,8 @@ async function runSeguimientoEcrEcoLogic() {
     dom.headerActions.style.display = 'none';
     const SEGUIMIENTO_COLLECTION = 'seguimiento_ecr_eco';
     let unsubscribe;
+    let sortConfig = { key: 'lastModified', direction: 'desc' };
+    let fichasData = [];
 
     const DEPARTAMENTOS = [
         'ENG. PRODUCTO', 'ENG. PROCESSO PLTL', 'HSE', 'QUALIDADE / CALIDAD', 'COMPRAS',
@@ -3546,8 +3591,13 @@ async function runSeguimientoEcrEcoLogic() {
 
         const viewHTML = `
             <div class="animate-fade-in-up">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-slate-800">Listado de Fichas de Seguimiento</h2>
+                 <div class="flex justify-between items-center mb-6">
+                     <div class="flex items-center gap-2">
+                        <button data-view="control_ecrs" class="p-2 rounded-full hover:bg-slate-100 transition-colors">
+                            <i data-lucide="arrow-left" class="w-6 h-6 text-slate-600"></i>
+                        </button>
+                        <h2 class="text-2xl font-bold text-slate-800">Listado de Fichas de Seguimiento</h2>
+                     </div>
                     ${createButtonHTML}
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-lg">
@@ -3555,11 +3605,11 @@ async function runSeguimientoEcrEcoLogic() {
                         <table class="w-full text-sm text-left text-gray-600">
                             <thead class="text-xs text-gray-700 uppercase bg-gray-100">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3">N° Eco/Ecr</th>
-                                    <th scope="col" class="px-6 py-3">Descripción</th>
-                                    <th scope="col" class="px-6 py-3">Cliente</th>
-                                    <th scope="col" class="px-6 py-3">Estado</th>
-                                    <th scope="col" class="px-6 py-3">Última Modificación</th>
+                                    <th scope="col" class="px-6 py-3 sortable-header" data-sort="n_eco_ecr" title="Número de Engineering Change Order / Request. Haga clic para ordenar.">N° Eco/Ecr</th>
+                                    <th scope="col" class="px-6 py-3 sortable-header" data-sort="descripcion" title="Descripción de la ficha. Haga clic para ordenar.">Descripción</th>
+                                    <th scope="col" class="px-6 py-3 sortable-header" data-sort="cliente" title="Cliente asociado. Haga clic para ordenar.">Cliente</th>
+                                    <th scope="col" class="px-6 py-3 sortable-header" data-sort="estadoGeneral" title="Estado actual de la ficha. Haga clic para ordenar.">Estado</th>
+                                    <th scope="col" class="px-6 py-3 sortable-header" data-sort="lastModified" title="Fecha de la última modificación. Haga clic para ordenar.">Última Modificación</th>
                                     <th scope="col" class="px-6 py-3 text-right">Acciones</th>
                                 </tr>
                             </thead>
@@ -3579,6 +3629,22 @@ async function runSeguimientoEcrEcoLogic() {
         }
 
         const listBody = document.getElementById('fichas-list');
+        const tableHead = dom.viewContent.querySelector('thead');
+
+        tableHead.addEventListener('click', (e) => {
+            const header = e.target.closest('.sortable-header');
+            if (header) {
+                const key = header.dataset.sort;
+                if (sortConfig.key === key) {
+                    sortConfig.direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    sortConfig.key = key;
+                    sortConfig.direction = 'asc';
+                }
+                renderTableRows(fichasData);
+            }
+        });
+
         listBody.addEventListener('click', async (e) => {
             const button = e.target.closest('button[data-action]');
             if (!button) return;
@@ -3599,62 +3665,86 @@ async function runSeguimientoEcrEcoLogic() {
         });
 
         const fichasCollection = collection(db, SEGUIMIENTO_COLLECTION);
+
+        // The query is now outside the snapshot to allow re-sorting without re-fetching
         const q = query(fichasCollection, orderBy('lastModified', 'desc'));
 
         unsubscribe = onSnapshot(q, (snapshot) => {
-            const listBody = document.getElementById('fichas-list');
-            if (!listBody) return;
-
-            if (snapshot.empty) {
-                listBody.innerHTML = `<tr><td colspan="6" class="text-center py-16 text-gray-500">No hay fichas de seguimiento. Puede crear una nueva.</td></tr>`;
-                return;
-            }
-
-            listBody.innerHTML = snapshot.docs.map(doc => {
-                const ficha = doc.data();
-                const statusClass = STATUS_COLORS[ficha.estadoGeneral?.replace(' ', '_')] || 'bg-gray-100 text-gray-800';
-
-                const n_eco_ecr = ficha.n_eco_ecr || '';
-                let rejectedIndicatorHTML = '';
-                if (n_eco_ecr) {
-                    let associatedDoc;
-                    const ecrCollection = appState.collectionsById[COLLECTIONS.ECR_FORMS];
-                    const ecoCollection = appState.collectionsById[COLLECTIONS.ECO_FORMS];
-
-                    if (n_eco_ecr.startsWith('ECR') && ecrCollection) {
-                        associatedDoc = ecrCollection.get(n_eco_ecr);
-                    } else if (n_eco_ecr.startsWith('ECO') && ecoCollection) {
-                        associatedDoc = ecoCollection.get(n_eco_ecr);
-                    }
-
-                    if (associatedDoc && associatedDoc.status === 'rejected') {
-                        rejectedIndicatorHTML = `<span class="ml-2" title="El ECR/ECO asociado fue rechazado"><i data-lucide="alert-circle" class="h-5 w-5 text-red-500"></i></span>`;
-                    }
-                }
-
-                const editButtonHTML = checkUserPermission('edit') ?
-                    `<button data-id="${ficha.id}" data-action="edit-ficha" class="text-gray-500 hover:text-green-600 p-1" title="Editar Ficha"><i data-lucide="edit" class="h-5 w-5 pointer-events-none"></i></button>` :
-                    '';
-
-                return `
-                    <tr class="bg-white border-b hover:bg-gray-50">
-                        <td class="px-6 py-4 font-medium text-gray-900 flex items-center">${ficha.n_eco_ecr}${rejectedIndicatorHTML}</td>
-                        <td class="px-6 py-4">${ficha.descripcion}</td>
-                        <td class="px-6 py-4">${ficha.cliente}</td>
-                        <td class="px-6 py-4"><span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${statusClass}">${ficha.estadoGeneral}</span></td>
-                        <td class="px-6 py-4">${ficha.lastModified.toDate().toLocaleString()}</td>
-                        <td class="px-6 py-4 text-right space-x-2">
-                            <button data-id="${ficha.id}" data-action="view-ficha" class="text-gray-500 hover:text-blue-600 p-1" title="Ver Ficha"><i data-lucide="eye" class="h-5 w-5 pointer-events-none"></i></button>
-                            ${editButtonHTML}
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-            lucide.createIcons();
+            fichasData = snapshot.docs.map(doc => doc.data());
+            renderTableRows(fichasData);
         }, (error) => {
             console.error("Error fetching fichas: ", error);
             showToast('Error al cargar las fichas de seguimiento.', 'error');
+            const listBody = document.getElementById('fichas-list');
+            if(listBody) listBody.innerHTML = `<tr><td colspan="6" class="text-center py-16 text-red-500">Error al cargar los datos.</td></tr>`;
         });
+    };
+
+    const renderTableRows = (data) => {
+        const listBody = document.getElementById('fichas-list');
+        if (!listBody) return;
+
+        // --- Sorting Logic ---
+        data.sort((a, b) => {
+            let valA = a[sortConfig.key];
+            let valB = b[sortConfig.key];
+
+            // Handle date objects
+            if (valA?.toDate && valB?.toDate) {
+                valA = valA.toDate();
+                valB = valB.toDate();
+            }
+
+            if (valA < valB) {
+                return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (valA > valB) {
+                return sortConfig.direction === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        // --- Update Header Icons ---
+        dom.viewContent.querySelectorAll('.sortable-header').forEach(header => {
+            const key = header.dataset.sort;
+            const iconContainer = header.querySelector('.sort-icon') || document.createElement('i');
+            iconContainer.className = 'sort-icon inline-block ml-1';
+            if (sortConfig.key === key) {
+                iconContainer.setAttribute('data-lucide', sortConfig.direction === 'asc' ? 'arrow-up' : 'arrow-down');
+            } else {
+                iconContainer.removeAttribute('data-lucide');
+            }
+            if (!header.querySelector('.sort-icon')) {
+                 header.appendChild(iconContainer);
+            }
+        });
+
+        if (data.length === 0) {
+            listBody.innerHTML = `<tr><td colspan="6" class="text-center py-16 text-gray-500">No hay fichas de seguimiento. Puede crear una nueva.</td></tr>`;
+            return;
+        }
+
+        listBody.innerHTML = data.map(ficha => {
+            const statusClass = STATUS_COLORS[ficha.estadoGeneral?.replace(' ', '_')] || 'bg-gray-100 text-gray-800';
+            const editButtonHTML = checkUserPermission('edit') ?
+                `<button data-id="${ficha.id}" data-action="edit-ficha" class="text-gray-500 hover:text-green-600 p-1" title="Editar Ficha"><i data-lucide="edit" class="h-5 w-5 pointer-events-none"></i></button>` :
+                '';
+
+            return `
+                <tr class="bg-white border-b hover:bg-gray-50">
+                    <td class="px-6 py-4 font-medium text-gray-900">${ficha.n_eco_ecr}</td>
+                    <td class="px-6 py-4">${ficha.descripcion || ''}</td>
+                    <td class="px-6 py-4">${ficha.cliente || ''}</td>
+                    <td class="px-6 py-4"><span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${statusClass}">${ficha.estadoGeneral}</span></td>
+                    <td class="px-6 py-4">${ficha.lastModified.toDate().toLocaleString('es-AR')}</td>
+                    <td class="px-6 py-4 text-right space-x-2">
+                        <button data-id="${ficha.id}" data-action="view-ficha" class="text-gray-500 hover:text-blue-600 p-1" title="Ver Ficha"><i data-lucide="eye" class="h-5 w-5 pointer-events-none"></i></button>
+                        ${editButtonHTML}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        lucide.createIcons();
     };
 
     renderMainView();
@@ -5262,6 +5352,33 @@ function showConfirmationModal(title, message, onConfirm) {
         const action = e.target.closest('button')?.dataset.action;
         if (action === 'confirm') { onConfirm(); modalElement.remove(); } 
         else if (action === 'cancel') { modalElement.remove(); }
+    });
+}
+
+function showInfoModal(title, htmlContent) {
+    const modalId = `info-modal-${Date.now()}`;
+    const modalHTML = `
+        <div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4 modal-content max-h-[80vh] flex flex-col">
+                <div class="flex justify-between items-center p-5 border-b">
+                    <h3 class="text-xl font-bold text-slate-800 flex items-center gap-3"><i data-lucide="info" class="w-6 h-6 text-blue-500"></i>${title}</h3>
+                    <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    ${htmlContent}
+                </div>
+                <div class="flex justify-end items-center p-4 border-t bg-gray-50">
+                    <button data-action="close" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Entendido</button>
+                </div>
+            </div>
+        </div>`;
+    dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
+    lucide.createIcons();
+    const modalElement = document.getElementById(modalId);
+    modalElement.addEventListener('click', e => {
+        if (e.target.closest('button')?.dataset.action === 'close') {
+            modalElement.remove();
+        }
     });
 }
 
