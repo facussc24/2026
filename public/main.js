@@ -10014,13 +10014,28 @@ export function runSinopticoTabularLogic() {
         searchHandler();
     };
 
-    const handleProductSelect = (productId) => {
-        const producto = appState.collections[COLLECTIONS.PRODUCTOS].find(p => p.id === productId);
-        if (producto) {
-            state.selectedProduct = producto;
-            renderReportView();
-        } else {
-            showToast("Error: Producto no encontrado.", "error");
+    const handleProductSelect = async (productId) => {
+        try {
+            // Ensure all collections needed for the BOM are loaded
+            await ensureCollectionsAreLoaded([
+                COLLECTIONS.SEMITERMINADOS,
+                COLLECTIONS.INSUMOS,
+                COLLECTIONS.PROCESOS,
+                COLLECTIONS.PROVEEDORES,
+                COLLECTIONS.UNIDADES
+            ]);
+
+            const producto = appState.collections[COLLECTIONS.PRODUCTOS].find(p => p.id === productId);
+            if (producto) {
+                state.selectedProduct = producto;
+                renderReportView();
+            } else {
+                showToast("Error: Producto no encontrado.", "error");
+                renderInitialView();
+            }
+        } catch (error) {
+            console.error("Error loading data for tabular report:", error);
+            showToast('Error al cargar los datos necesarios para el reporte.', 'error');
             renderInitialView();
         }
     };
