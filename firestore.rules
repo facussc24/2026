@@ -207,6 +207,27 @@ service cloud.firestore {
       // Los administradores pueden eliminar cualquier tarea.
       allow delete: if request.auth != null &&
                       (isUserAdmin() || resource.data.creatorUid == request.auth.uid);
+
+      // --- Subcolección de Comentarios de Tareas ---
+      match /comments/{commentId} {
+        // Un usuario puede leer los comentarios de una tarea si puede leer la tarea.
+        allow read: if request.auth != null &&
+                      (isUserAdmin() ||
+                       get(/databases/$(database)/documents/tareas/$(taskId)).data.isPublic == true ||
+                       get(/databases/$(database)/documents/tareas/$(taskId)).data.assigneeUid == request.auth.uid ||
+                       get(/databases/$(database)/documents/tareas/$(taskId)).data.creatorUid == request.auth.uid);
+
+        // Un usuario puede crear un comentario si puede leer la tarea.
+        allow create: if request.auth != null &&
+                        (isUserAdmin() ||
+                         get(/databases/$(database)/documents/tareas/$(taskId)).data.isPublic == true ||
+                         get(/databases/$(database)/documents/tareas/$(taskId)).data.assigneeUid == request.auth.uid ||
+                         get(/databases/$(database)/documents/tareas/$(taskId)).data.creatorUid == request.auth.uid);
+
+        // Solo el creador del comentario o un admin pueden actualizar o eliminar.
+        allow update, delete: if request.auth != null &&
+                                (isUserAdmin() || resource.data.creatorUid == request.auth.uid);
+      }
     }
 
     // --- COUNTERS ---
