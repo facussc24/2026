@@ -1,8 +1,3 @@
-/**
- * @file Cloud Functions for Firebase.
- * @author The Developer
- */
-
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const cors = require('cors')({origin: true});
@@ -11,11 +6,7 @@ const nodemailer = require('nodemailer');
 
 admin.initializeApp();
 
-/**
- * Nodemailer transporter for sending emails.
- * Configured using environment variables for security.
- * @type {import('nodemailer').Transporter}
- */
+// Nodemailer transporter setup
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST,
   port: process.env.EMAIL_PORT,
@@ -26,18 +17,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-/**
- * Generates the next sequential ECR (Engineering Change Request) number.
- * This is a callable function that ensures unique, sequential numbering
- * based on the current year (e.g., ECR-2024-001).
- * It uses a Firestore transaction to guarantee atomicity and prevent race conditions.
- * @name getNextEcrNumber
- * @param {object} data - The data passed to the function (not used).
- * @param {functions.https.CallableContext} context - The context of the call, including authentication information.
- * @returns {Promise<{ecrNumber: string}>} A promise that resolves to an object containing the new ECR number.
- * @throws {functions.https.HttpsError} Throws 'unauthenticated' if the user is not logged in.
- * @throws {functions.https.HttpsError} Throws 'internal' on any unexpected server error.
- */
 exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
   // Ensure the user is authenticated.
   if (!context.auth) {
@@ -86,23 +65,6 @@ exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
   }
 });
 
-/**
- * Saves and validates ECR (Engineering Change Request) or ECO (Engineering Change Order) forms.
- * This function acts as a secure endpoint for form submissions.
- *
- * It performs the following actions:
- * 1. Authenticates the user via an ID token.
- * 2. Validates required fields based on the form type ('ecr' or 'eco').
- * 3. Saves the form data to the corresponding Firestore collection ('ecr_forms' or 'eco_forms').
- * 4. Creates a history record of the change.
- * 5. Sends an email notification to the form creator if the status of the form changes.
- *
- * @name saveFormWithValidation
- * @type {functions.HttpsFunction}
- * @param {functions.https.Request} req - The HTTP request object. Expected body format: `{ data: { formType: string, formData: object } }`.
- * @param {functions.Response} res - The HTTP response object.
- * @returns {void}
- */
 exports.saveFormWithValidation = functions
   .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
   .https.onRequest((req, res) => {
@@ -253,14 +215,6 @@ exports.saveFormWithValidation = functions
   });
 });
 
-/**
- * Firestore trigger that sends an email notification when a new task is created.
- * The email is sent to the user specified in the task's `assigneeUid` field.
- * @name sendTaskAssignmentEmail
- * @param {functions.firestore.QueryDocumentSnapshot} snap - The snapshot of the created document.
- * @param {functions.EventContext} context - The context of the event.
- * @returns {Promise<null>} A promise that resolves when the function is complete.
- */
 exports.sendTaskAssignmentEmail = functions
   .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
   .firestore.document('tareas/{taskId}')
@@ -301,16 +255,6 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
-/**
- * Firestore trigger that sends a Telegram notification when a task is created or its status changes.
- * - On task creation, notifies the assignee.
- * - On status change, notifies the creator.
- * The user's Telegram Chat ID must be stored in their user profile in the 'usuarios' collection.
- * @name sendTaskNotification
- * @param {functions.Change<functions.firestore.DocumentSnapshot>} change - Object containing the document snapshots before and after the change.
- * @param {functions.EventContext} context - The context of the event, including document wildcard parameters.
- * @returns {Promise<null>} A promise that resolves when the function is complete.
- */
 exports.sendTaskNotification = functions
   .runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .firestore.document('tareas/{taskId}')
@@ -395,18 +339,6 @@ exports.sendTaskNotification = functions
     }
   });
 
-/**
- * Sends a test message to the authenticated user's configured Telegram chat ID.
- * This is a callable function used to verify that the Telegram integration is working for a user.
- * @name sendTestTelegramMessage
- * @param {object} data - The data passed to the function (not used).
- * @param {functions.https.CallableContext} context - The context of the call, including authentication information.
- * @returns {Promise<{success: boolean, message: string}>} A promise that resolves to a success object.
- * @throws {functions.https.HttpsError} Throws 'unauthenticated' if the user is not logged in.
- * @throws {functions.https.HttpsError} Throws 'not-found' if the user document doesn't exist.
- * @throws {functions.https.HttpsError} Throws 'failed-precondition' if the Telegram chat ID is not set.
- * @throws {functions.https.HttpsError} Throws 'internal' on any unexpected server error.
- */
 exports.sendTestTelegramMessage = functions
   .runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .https.onCall(async (data, context) => {
@@ -457,16 +389,6 @@ exports.sendTestTelegramMessage = functions
     }
   });
 
-/**
- * Firestore trigger that maintains a count of documents in key collections.
- * This is used to power a KPI dashboard by keeping an aggregate count document
- * up-to-date without needing to perform expensive count queries on the client.
- * The collections being counted are hardcoded in `collectionsToCount`.
- * @name updateCollectionCounts
- * @param {functions.Change<functions.firestore.DocumentSnapshot>} change - Object containing the document snapshots before and after the change.
- * @param {functions.EventContext} context - The context of the event, including document wildcard parameters.
- * @returns {Promise<null|admin.firestore.WriteResult>} A promise that resolves when the function is complete.
- */
 exports.updateCollectionCounts = functions.firestore
   .document('{collectionId}/{docId}')
   .onWrite(async (change, context) => {
@@ -491,39 +413,31 @@ exports.updateCollectionCounts = functions.firestore
     }, { merge: true });
 });
 
-/**
- * A scheduled function that runs every day at 09:00 (America/Argentina/Buenos_Aires)
- * to send daily reminders for tasks or events due on the current day.
- * It queries the 'recordatorios' collection and sends a Telegram message for each due item.
- * @name enviarRecordatoriosDiarios
- * @param {functions.EventContext} context - The context of the scheduled event.
- * @returns {Promise<null>} A promise that resolves when the function is complete.
- */
 exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires") // Ajusta a tu zona horaria
   .onRun(async (context) => {
     console.log("Ejecutando la revisión de recordatorios diarios.");
 
     const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID; // This seems to be a global chat ID, not user-specific
+    const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
     if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) {
-        console.log("Telegram token or global chat ID not set.");
+        console.log("Telegram token or chat ID not set.");
         return null;
     }
 
     const db = admin.firestore();
     const recordatoriosRef = db.collection("recordatorios");
 
-    // Get today's date range
+    // Obtenemos la fecha de hoy para comparar
     const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0); // Start of day
+    hoy.setHours(0, 0, 0, 0); // Inicio del día
 
     const manana = new Date(hoy);
-    manana.setDate(hoy.getDate() + 1); // End of day (start of tomorrow)
+    manana.setDate(hoy.getDate() + 1); // Fin del día (inicio de mañana)
 
     try {
-      // Find reminders with a due date of today
+      // Buscamos recordatorios cuya fecha de vencimiento sea hoy
       const snapshot = await recordatoriosRef
         .where("fechaVencimiento", ">=", hoy)
         .where("fechaVencimiento", "<", manana)
@@ -534,7 +448,7 @@ exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00"
         return null;
       }
 
-      // For each reminder found, send a message
+      // Para cada recordatorio encontrado, enviamos un mensaje
       for (const doc of snapshot.docs) {
         const recordatorio = doc.data();
         const mensaje = `🔔 ¡Recordatorio! Hoy vence: ${recordatorio.descripcion}`;
