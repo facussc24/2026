@@ -166,32 +166,14 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
             const updateData = { [approvalPath]: approvalUpdate };
             ecrData.approvals[departmentId] = approvalUpdate; // Apply update to local copy
 
-            let newOverallStatus = ecrData.status;
-            if (ecrData.status === 'pending-approval') {
-                const allDepartments = [
-                    'ing_producto', 'ing_manufatura', 'hse', 'calidad', 'compras',
-                    'sqa', 'tooling', 'logistica', 'financiero', 'comercial',
-                    'mantenimiento', 'produccion', 'calidad_cliente'
-                ];
-                const requiredApprovals = allDepartments.filter(dept => ecrData[`afecta_${dept}`] === true);
-
-                if (requiredApprovals.length === 0 && decision === 'approved') {
-                    newOverallStatus = 'approved';
-                } else {
-                    if (decision === 'rejected') {
-                        newOverallStatus = 'rejected';
-                    } else {
-                        const allApproved = requiredApprovals.every(dept => ecrData.approvals[dept]?.status === 'approved');
-                        if (allApproved) {
-                            newOverallStatus = 'approved';
-                        }
-                    }
-                }
-            }
-
-            if (newOverallStatus !== ecrData.status) {
+            // --- Refactored logic ---
+            // The `decision` is passed to ensure that a 'rejected' status is applied immediately
+            // without needing to check all other departments.
+            const newOverallStatus = checkAndUpdateEcrStatus(ecrData, decision);
+            if (newOverallStatus && newOverallStatus !== ecrData.status) {
                 updateData.status = newOverallStatus;
             }
+            // --- End refactored logic ---
 
             updateData.lastModified = new Date();
             updateData.modifiedBy = user.email;
@@ -220,6 +202,50 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
         console.error("Error al registrar la aprobación del ECR:", error);
         showToast(error.message || 'No se pudo registrar la aprobación.', 'error');
     }
+}
+
+/**
+ * Evaluates an ECR's data to determine if its overall status should change.
+ * This is pure logic, decoupled from database transactions.
+ * @param {object} ecrData - The ECR data object.
+ * @param {string} [currentDecision=''] - The current decision being made (e.g., 'approved', 'rejected').
+ *                                        Used to immediately reject an ECR.
+ * @returns {string|null} - The new status ('approved', 'rejected') or null if no change.
+ */
+export function checkAndUpdateEcrStatus(ecrData, currentDecision = '') {
+    if (ecrData.status !== 'pending-approval') {
+        return null; // Don't change status if it's not pending
+    }
+
+    // Immediate rejection if the current decision is 'rejected'
+    if (currentDecision === 'rejected') {
+        return 'rejected';
+    }
+
+    const allDepartments = [
+        'ing_producto', 'ing_manufatura', 'hse', 'calidad', 'compras',
+        'sqa', 'tooling', 'logistica', 'financiero', 'comercial',
+        'mantenimiento', 'produccion', 'calidad_cliente'
+    ];
+
+    const requiredApprovals = allDepartments.filter(dept => ecrData[`afecta_${dept}`] === true);
+
+    // If there are no required departments, one 'approved' decision is enough to approve the ECR.
+    if (requiredApprovals.length === 0) {
+        // This handles the edge case where no departments are checked, but a user (e.g., admin) approves.
+        return currentDecision === 'approved' ? 'approved' : null;
+    }
+
+    // Check if all required departments have approved.
+    const allRequiredHaveApproved = requiredApprovals.every(
+        dept => ecrData.approvals?.[dept]?.status === 'approved'
+    );
+
+    if (allRequiredHaveApproved) {
+        return 'approved';
+    }
+
+    return null; // No status change required
 }
 
 /**
