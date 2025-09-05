@@ -1,19 +1,44 @@
 /**
- * Interactive Tutorial Module
- *
- * This module creates a guided tour for new users to understand the ECR/ECO workflow.
+ * @file Interactive Tutorial Module for the ECR/ECO Workflow.
+ * @description This module provides a step-by-step guided tour for new users to
+ * understand the core process of creating and managing Engineering Change Requests (ECR)
+ * and Engineering Change Orders (ECO). It highlights UI elements and explains each
+ * part of the process.
+ * @module tutorial
+ */
+
+/**
+ * Creates and manages an interactive tutorial instance.
+ * @param {object} app - The main application object, providing access to core functions
+ * like `switchView`, `showToast`, and the global `appState`.
+ * @returns {object} A tutorial instance with `start` and `skip` methods.
  */
 const tutorial = (app) => {
     let currentStepIndex = 0;
     let steps = [];
 
+    /**
+     * @property {HTMLElement|null} overlay - The main overlay element for the tutorial.
+     * @property {HTMLElement|null} tooltip - The tooltip element to display step information.
+     * @property {HTMLElement|null} highlight - The element used to highlight parts of the UI.
+     */
     const dom = {
         overlay: null,
         tooltip: null,
         highlight: null,
     };
 
-    // All tutorial steps are defined here for clarity and easier maintenance.
+    /**
+     * An array of tutorial step definitions. Each object defines a step in the tour.
+     * @type {Array<object>}
+     * @property {string} element - A CSS selector for the element to highlight.
+     * @property {string} title - The title to display in the tooltip.
+     * @property {string} content - The HTML content for the tooltip body.
+     * @property {'top'|'bottom'|'left'|'right'|'center'} position - The preferred tooltip position.
+     * @property {Function} [preAction] - An async function to run before the step is shown.
+     * @property {Function} [postAction] - An async function to run after the step's action (e.g., a click).
+     * @property {boolean} [click=false] - If true, simulates a click on the element before proceeding.
+     */
     const TUTORIAL_STEPS = [
         {
             element: 'body',
@@ -43,9 +68,7 @@ const tutorial = (app) => {
             postAction: async () => {
                 await app.switchView('ecr');
                 const menu = document.querySelector('[data-tutorial-id="eco-ecr-menu"]');
-                if (menu) {
-                    menu.classList.remove('open');
-                }
+                if (menu) menu.classList.remove('open');
             }
         },
         {
@@ -53,9 +76,7 @@ const tutorial = (app) => {
             title: 'Panel de Control de ECRs',
             content: 'Esta tabla muestra todos los ECRs con su estado actual. Para proponer un nuevo cambio, crearemos un nuevo ECR.',
             position: 'bottom',
-            preAction: async () => {
-                await app.switchView('ecr');
-            }
+            preAction: async () => await app.switchView('ecr')
         },
         {
             element: '[data-tutorial-id="create-new-button"]',
@@ -63,12 +84,8 @@ const tutorial = (app) => {
             content: 'Este botón abre el formulario para detallar una nueva solicitud de cambio. Le daremos un identificador único y describiremos la propuesta.',
             position: 'bottom',
             click: true,
-            preAction: async () => {
-                await app.switchView('ecr');
-            },
-            postAction: async () => {
-                await app.switchView('ecr_form');
-            }
+            preAction: async () => await app.switchView('ecr'),
+            postAction: async () => await app.switchView('ecr_form')
         },
         {
             element: '.ecr-header',
@@ -118,9 +135,7 @@ const tutorial = (app) => {
             title: 'Máquina de Estados del ECR',
             content: 'Una vez enviado, el estado del ECR cambia a <strong>"pending-approval"</strong>. Si todos aprueban, pasa a <strong>"approved"</strong>. Si uno solo rechaza, se marca como <strong>"rejected"</strong>.',
             position: 'center',
-            preAction: async () => {
-                await app.switchView('ecr');
-            }
+            preAction: async () => await app.switchView('ecr')
         },
         {
             element: '[data-tutorial-id="ecr-table-body"]',
@@ -133,16 +148,10 @@ const tutorial = (app) => {
             title: 'Generación del ECO',
             content: 'Para este ECR aprobado de ejemplo, el botón "Generar ECO" está activo. Al hacer clic, se crea la Orden de Cambio de Ingeniería (ECO) y nos lleva a su formulario.',
             position: 'left',
-            // By calling switchView directly in postAction, we bypass the generic click handler
-            // and its racy re-fetch from the database. This ensures the correct, fresh data is used.
             postAction: async () => {
                 const ecrData = await app.createTutorialEcr();
-                if (ecrData) {
-                    await app.switchView('eco_form', { ecrData: ecrData });
-                } else {
-                    app.showToast('No se pudieron generar los datos del tutorial.', 'error');
-                }
-                // Now, wait for the form to be visible as a result of the view switch.
+                if (ecrData) await app.switchView('eco_form', { ecrData: ecrData });
+                else app.showToast('No se pudieron generar los datos del tutorial.', 'error');
                 await waitForVisibleElement('#eco-form');
             }
         },
@@ -161,7 +170,7 @@ const tutorial = (app) => {
         {
             element: '.section-block:first-of-type',
             title: 'ECO: Checklists Departamentales',
-            content: 'Cada departamento utiliza estas listas de verificación para confirmar que todas lasactions necesarias (actualizar planos, planes de control, etc.) se han completado antes del cierre del ECO.',
+            content: 'Cada departamento utiliza estas listas de verificación para confirmar que todas las acciones necesarias (actualizar planos, planes de control, etc.) se han completado antes del cierre del ECO.',
             position: 'top'
         },
         {
@@ -200,126 +209,51 @@ const tutorial = (app) => {
      * Creates the main DOM elements for the tutorial (overlay, highlight, tooltip).
      */
     const createTutorialUI = () => {
-        // Create overlay
         dom.overlay = document.createElement('div');
         dom.overlay.id = 'tutorial-overlay';
-
-        // Create highlight element
         dom.highlight = document.createElement('div');
         dom.highlight.id = 'tutorial-highlight';
         dom.overlay.appendChild(dom.highlight);
-
-        // Create tooltip
         dom.tooltip = document.createElement('div');
         dom.tooltip.id = 'tutorial-tooltip';
         dom.tooltip.innerHTML = `
-            <div id="tutorial-tooltip-content">
-                <h3 id="tutorial-tooltip-title"></h3>
-                <p id="tutorial-tooltip-text"></p>
-            </div>
+            <div id="tutorial-tooltip-content"><h3 id="tutorial-tooltip-title"></h3><p id="tutorial-tooltip-text"></p></div>
             <div id="tutorial-tooltip-nav">
                 <div id="tutorial-tooltip-progress" class="text-sm text-slate-500"></div>
                 <div id="tutorial-nav-buttons">
                     <button id="tutorial-skip-btn">Omitir</button>
-                    <div id="tutorial-nav-right">
-                        <button id="tutorial-prev-btn">Anterior</button>
-                        <button id="tutorial-next-btn">Siguiente</button>
-                    </div>
+                    <div id="tutorial-nav-right"><button id="tutorial-prev-btn">Anterior</button><button id="tutorial-next-btn">Siguiente</button></div>
                 </div>
-            </div>
-        `;
+            </div>`;
         dom.overlay.appendChild(dom.tooltip);
-
         document.body.appendChild(dom.overlay);
-
-        // Add event listeners
         document.getElementById('tutorial-skip-btn').addEventListener('click', skip);
-
         const prevBtn = document.getElementById('tutorial-prev-btn');
-        prevBtn.addEventListener('click', async () => {
-            prevBtn.disabled = true;
-            try {
-                await previous();
-            } finally {
-                prevBtn.disabled = false;
-            }
-        });
-
+        prevBtn.addEventListener('click', async () => { prevBtn.disabled = true; try { await previous(); } finally { prevBtn.disabled = false; } });
         const nextBtn = document.getElementById('tutorial-next-btn');
-        nextBtn.addEventListener('click', async () => {
-            nextBtn.disabled = true;
-            try {
-                await next();
-            } finally {
-                nextBtn.disabled = false;
-            }
-        });
+        nextBtn.addEventListener('click', async () => { nextBtn.disabled = true; try { await next(); } finally { nextBtn.disabled = false; } });
     };
 
     /**
-     * Shows a specific step of the tutorial.
-     * @param {number} index - The index of the step to show.
+     * Waits for a specified element to become visible in the DOM.
+     * @param {string} selector - The CSS selector for the element.
+     * @param {number} [timeout=7000] - The maximum time to wait in milliseconds.
+     * @returns {Promise<Element|null>} A promise that resolves with the element or null if it times out.
      */
     const waitForVisibleElement = (selector, timeout = 7000) => {
         return new Promise(resolve => {
-            if (selector === 'body' && document.body) {
-                resolve(document.body);
-                return;
-            }
-
-            const interval = 100;
+            if (selector === 'body' && document.body) return resolve(document.body);
             let elapsedTime = 0;
-
-            let originalTitle, originalText;
-            if (dom.tooltip) {
-                originalTitle = document.getElementById('tutorial-tooltip-title')?.textContent;
-                originalText = document.getElementById('tutorial-tooltip-text')?.innerHTML;
-            }
-
-            const showWaitingMessage = () => {
-                if (!dom.tooltip) return;
-                const titleEl = document.getElementById('tutorial-tooltip-title');
-                const textEl = document.getElementById('tutorial-tooltip-text');
-                if (titleEl) titleEl.textContent = 'Buscando Elemento...';
-                if (textEl) textEl.innerHTML = `Esperando que aparezca el siguiente elemento: <code class="text-xs bg-slate-200 p-1 rounded">${selector}</code>`;
-                dom.tooltip.classList.add('is-waiting');
-            };
-
-            const hideWaitingMessage = () => {
-                if (!dom.tooltip) return;
-                const titleEl = document.getElementById('tutorial-tooltip-title');
-                const textEl = document.getElementById('tutorial-tooltip-text');
-                if (titleEl) titleEl.textContent = originalTitle;
-                if (textEl) textEl.innerHTML = originalText;
-                dom.tooltip.classList.remove('is-waiting');
-            };
-
-            const isElementVisible = (el) => {
-                if (!el) return false;
-                const style = window.getComputedStyle(el);
-                if (style.display === 'none' || style.visibility === 'hidden' || el.hidden) {
-                    return false;
-                }
-                if (el.offsetParent === null) return false;
-                const rect = el.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
-            }
-
-            const waitingTimeout = setTimeout(showWaitingMessage, 250);
-
+            const interval = 100;
             const timer = setInterval(() => {
                 const element = document.querySelector(selector);
-                if (isElementVisible(element)) {
-                    clearTimeout(waitingTimeout);
+                if (element && (element.offsetWidth > 0 || element.offsetHeight > 0)) {
                     clearInterval(timer);
-                    hideWaitingMessage();
                     resolve(element);
                 } else {
                     elapsedTime += interval;
                     if (elapsedTime >= timeout) {
-                        clearTimeout(waitingTimeout);
                         clearInterval(timer);
-                        hideWaitingMessage();
                         resolve(null);
                     }
                 }
@@ -330,81 +264,45 @@ const tutorial = (app) => {
     let resizeObserver = null;
     let scrollHandler = null;
 
+    /**
+     * Updates the position and size of the highlight element to match the target.
+     * @param {Element} targetElement - The element to highlight.
+     * @param {object} step - The current tutorial step object.
+     */
     const updateHighlight = (targetElement, step) => {
         if (!targetElement || !dom.highlight) return;
-
         const targetRect = targetElement.getBoundingClientRect();
-        console.log(`Highlighting step "${step.title}" on element:`, targetElement, 'Rect:', targetRect);
         const padding = 5;
         const offset = step.offset || { top: 0, left: 0 };
-
         dom.highlight.style.width = `${targetRect.width + (padding * 2)}px`;
         dom.highlight.style.height = `${targetRect.height + (padding * 2)}px`;
         dom.highlight.style.top = `${targetRect.top - padding + (offset.top || 0)}px`;
         dom.highlight.style.left = `${targetRect.left - padding + (offset.left || 0)}px`;
-
         positionTooltip(targetRect, step.position);
     };
 
+    /**
+     * Shows a specific step of the tutorial.
+     * @param {number} index - The index of the step to show.
+     */
     const showStep = async (index) => {
-        // Clear any existing observers or listeners to prevent leaks
-        if (resizeObserver) {
-            resizeObserver.disconnect();
-            resizeObserver = null;
-        }
-        if (scrollHandler) {
-            window.removeEventListener('scroll', scrollHandler, true);
-            scrollHandler = null;
-        }
+        if (resizeObserver) resizeObserver.disconnect();
+        if (scrollHandler) window.removeEventListener('scroll', scrollHandler, true);
 
-        if (index < 0 || index >= steps.length) {
-            skip();
-            return;
-        }
-
+        if (index < 0 || index >= steps.length) return skip();
         currentStepIndex = index;
         const step = steps[index];
 
-        if (dom.tooltip) {
-            dom.tooltip.classList.remove('is-waiting');
-            const content = dom.tooltip.querySelector('#tutorial-tooltip-content');
-            const nav = dom.tooltip.querySelector('#tutorial-tooltip-nav');
-            if (content) content.style.visibility = 'visible';
-            if (nav) nav.style.visibility = 'visible';
-        }
-
-        if (step.preAction) {
-            await step.preAction();
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
-
-        const targetElement = await waitForVisibleElement(step.element, 7000);
+        if (step.preAction) await step.preAction();
+        const targetElement = await waitForVisibleElement(step.element);
 
         if (!targetElement) {
-            if (dom.tooltip) {
-                const titleEl = document.getElementById('tutorial-tooltip-title');
-                const textEl = document.getElementById('tutorial-tooltip-text');
-                if(titleEl) titleEl.textContent = 'Elemento no encontrado';
-                if(textEl) textEl.innerHTML = `No se pudo encontrar el elemento: <code class="text-xs bg-red-100 p-1 rounded">${step.element}</code>. Omitiendo este paso.`;
-                dom.tooltip.classList.add('is-waiting');
-                await new Promise(resolve => setTimeout(resolve, 1500)); // Shorter wait time
-            }
-            next();
-            return;
+            console.warn(`Tutorial element not found: ${step.element}. Skipping step.`);
+            return next();
         }
-
-        if (dom.tooltip) dom.tooltip.classList.remove('is-waiting');
 
         await smartScroll(targetElement);
-
-        // The setTimeout wrapper has been removed. By awaiting a properly implemented
-        // smartScroll, we ensure the highlight is drawn after the element is in place.
-        if (step.click) {
-            targetElement.classList.add('tutorial-click-effect');
-            setTimeout(() => {
-                    targetElement.classList.remove('tutorial-click-effect');
-            }, 1000);
-        }
+        if (step.click) targetElement.classList.add('tutorial-click-effect');
 
         document.getElementById('tutorial-tooltip-title').textContent = step.title;
         document.getElementById('tutorial-tooltip-text').innerHTML = step.content;
@@ -413,38 +311,24 @@ const tutorial = (app) => {
         document.getElementById('tutorial-tooltip-progress').textContent = `Paso ${index + 1} de ${steps.length}`;
 
         updateHighlight(targetElement, step);
-
-        resizeObserver = new ResizeObserver(() => {
-            updateHighlight(targetElement, step);
-        });
+        resizeObserver = new ResizeObserver(() => updateHighlight(targetElement, step));
         resizeObserver.observe(targetElement);
-        resizeObserver.observe(document.body);
-
-        // Also listen for scroll events to keep the highlight in sync
         scrollHandler = () => updateHighlight(targetElement, step);
         window.addEventListener('scroll', scrollHandler, true);
     };
 
     /**
-     * Scrolls the element into view only if it's not already visible.
+     * Intelligently scrolls an element into view only if it's not already visible.
      * @param {Element} element - The DOM element to scroll to.
+     * @returns {Promise<void>}
      */
     const smartScroll = (element) => {
         return new Promise(resolve => {
             const rect = element.getBoundingClientRect();
-            const isVisible = (
-                rect.top >= 0 &&
-                rect.left >= 0 &&
-                rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-            );
-
+            const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
             if (!isVisible) {
                 element.scrollIntoView({ behavior: 'instant', block: 'nearest' });
-                // We wait for two animation frames to ensure the browser has painted the change.
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(resolve);
-                });
+                requestAnimationFrame(() => requestAnimationFrame(resolve));
             } else {
                 resolve();
             }
@@ -452,70 +336,30 @@ const tutorial = (app) => {
     };
 
     /**
-     * Positions the tooltip relative to the target element.
+     * Positions the tooltip relative to the target element, with smart flipping.
      * @param {DOMRect} targetRect - The bounding rect of the highlighted element.
-     * @param {string} position - The desired position ('top', 'bottom', 'left', 'right').
+     * @param {string} [position='bottom'] - The desired position.
      */
     const positionTooltip = (targetRect, position = 'bottom') => {
         const tooltipRect = dom.tooltip.getBoundingClientRect();
         const spacing = 10;
         let top, left;
-
-        // --- Position Calculation with Smart Flipping ---
         let finalPosition = position;
 
-        // Try to flip right to left if there's no space
-        if (position === 'right' && (targetRect.right + spacing + tooltipRect.width > window.innerWidth)) {
-            finalPosition = 'left';
-        }
-        // Try to flip left to right if there's no space
-        if (position === 'left' && (targetRect.left - spacing - tooltipRect.width < 0)) {
-            finalPosition = 'right';
-        }
-        // Try to flip top to bottom if there's no space
-        if (position === 'top' && (targetRect.top - spacing - tooltipRect.height < 0)) {
-            finalPosition = 'bottom';
-        }
-        // Try to flip bottom to top if there's no space
-        if (position === 'bottom' && (targetRect.bottom + spacing + tooltipRect.height > window.innerHeight)) {
-            finalPosition = 'top';
-        }
+        if (position === 'right' && (targetRect.right + spacing + tooltipRect.width > window.innerWidth)) finalPosition = 'left';
+        if (position === 'left' && (targetRect.left - spacing - tooltipRect.width < 0)) finalPosition = 'right';
+        if (position === 'top' && (targetRect.top - spacing - tooltipRect.height < 0)) finalPosition = 'bottom';
+        if (position === 'bottom' && (targetRect.bottom + spacing + tooltipRect.height > window.innerHeight)) finalPosition = 'top';
 
-        // Calculate position based on the (potentially flipped) finalPosition
         switch (finalPosition) {
-            case 'top':
-                top = targetRect.top - tooltipRect.height - spacing;
-                left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2);
-                break;
-            case 'right':
-                top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2);
-                left = targetRect.right + spacing;
-                break;
-            case 'left':
-                top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2);
-                left = targetRect.left - tooltipRect.width - spacing;
-                break;
-            case 'bottom':
-            default:
-                top = targetRect.bottom + spacing;
-                left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2);
-                break;
+            case 'top': top = targetRect.top - tooltipRect.height - spacing; left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2); break;
+            case 'right': top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2); left = targetRect.right + spacing; break;
+            case 'left': top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2); left = targetRect.left - tooltipRect.width - spacing; break;
+            default: top = targetRect.bottom + spacing; left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2); break;
         }
 
-        // --- Final Boundary Enforcement ---
-        // Ensure the tooltip never goes out of bounds, no matter what.
-        if (left < spacing) {
-            left = spacing;
-        }
-        if (left + tooltipRect.width > window.innerWidth - spacing) {
-            left = window.innerWidth - tooltipRect.width - spacing;
-        }
-        if (top < spacing) {
-            top = spacing;
-        }
-        if (top + tooltipRect.height > window.innerHeight - spacing) {
-            top = window.innerHeight - tooltipRect.height - spacing;
-        }
+        left = Math.max(spacing, Math.min(left, window.innerWidth - tooltipRect.width - spacing));
+        top = Math.max(spacing, Math.min(top, window.innerHeight - tooltipRect.height - spacing));
 
         dom.tooltip.style.top = `${top}px`;
         dom.tooltip.style.left = `${left}px`;
@@ -525,68 +369,43 @@ const tutorial = (app) => {
      * Starts the tutorial.
      */
     const start = () => {
-        if (dom.overlay) return; // Already running
-
-        // Ensure the ECR/ECO menu is closed before the tutorial starts for a clean view.
+        if (dom.overlay) return;
         const menu = document.querySelector('[data-tutorial-id="eco-ecr-menu"]');
-        if (menu) {
-            menu.classList.remove('open');
-        }
-
+        if (menu) menu.classList.remove('open');
         steps = TUTORIAL_STEPS;
-
         createTutorialUI();
         dom.overlay.style.display = 'block';
         showStep(0);
     };
 
     /**
-     * Moves to the next step.
+     * Moves to the next step in the tutorial.
      */
     const next = async () => {
         const step = steps[currentStepIndex];
-        if (step && step.postAction) {
-            await step.postAction();
-        }
+        if (step && step.postAction) await step.postAction();
         await showStep(currentStepIndex + 1);
     };
 
     /**
-     * Moves to the previous step.
+     * Moves to the previous step in the tutorial.
      */
     const previous = async () => {
         await showStep(currentStepIndex - 1);
     };
 
     /**
-     * Skips and closes the tutorial.
+     * Skips and closes the tutorial, cleaning up all elements and listeners.
      */
     const skip = () => {
-        if (resizeObserver) {
-            resizeObserver.disconnect();
-            resizeObserver = null;
-        }
-        if (scrollHandler) {
-            window.removeEventListener('scroll', scrollHandler, true);
-            scrollHandler = null;
-        }
-        if (dom.overlay) {
-            dom.overlay.remove();
-            dom.overlay = null;
-            dom.tooltip = null;
-            dom.highlight = null;
-        }
-        // Signal to the main app that the tutorial has ended.
-        if (app && typeof app.onTutorialEnd === 'function') {
-            app.onTutorialEnd();
-        }
+        if (resizeObserver) resizeObserver.disconnect();
+        if (scrollHandler) window.removeEventListener('scroll', scrollHandler, true);
+        if (dom.overlay) dom.overlay.remove();
+        dom.overlay = dom.tooltip = dom.highlight = null;
+        if (app && typeof app.onTutorialEnd === 'function') app.onTutorialEnd();
     };
 
-    // Expose public methods
-    return {
-        start,
-        skip,
-    };
+    return { start, skip };
 };
 
 export default tutorial;

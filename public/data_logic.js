@@ -1,7 +1,25 @@
-// No longer importing from firebase here. The functions will be passed in.
+/**
+ * @file Contains core data manipulation and business logic functions for the application.
+ * These functions often interact directly with the Firestore database and manage complex state changes.
+ */
 
 import { getUniqueKeyForCollection } from './utils.js';
 
+/**
+ * Deletes a main product and then identifies and deletes any of its "semiterminado" sub-components
+ * that have become "orphaned" (i.e., are no longer used in any other existing product).
+ * This function is critical for maintaining data integrity when products are removed.
+ *
+ * @async
+ * @param {string} productDocId - The document ID of the main product to be deleted.
+ * @param {object} db - The Firestore database instance.
+ * @param {object} firestore - An object containing destructured Firestore functions like `doc`, `getDoc`, etc.
+ * @param {object} COLLECTIONS - The application's collection name constants.
+ * @param {object} uiCallbacks - An object containing callback functions for UI updates.
+ * @param {Function} uiCallbacks.showToast - A function to display toast notifications to the user.
+ * @param {Function} uiCallbacks.runTableLogic - A function to refresh the main data table view.
+ * @returns {Promise<void>} A promise that resolves when the entire deletion process is complete.
+ */
 export async function deleteProductAndOrphanedSubProducts(productDocId, db, firestore, COLLECTIONS, uiCallbacks) {
     // Destructure the required firestore functions from the passed-in object
     const { doc, getDoc, getDocs, deleteDoc, collection, query, where } = firestore;
@@ -19,6 +37,7 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
         const productData = productSnap.data();
         const subProductRefs = new Set();
 
+        // Recursively finds all unique sub-product references within a product's structure.
         function findSubProducts(nodes) {
             if (!nodes) return;
             for (const node of nodes) {
@@ -45,19 +64,21 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
 
         showToast(`Verificando ${subProductRefs.size} sub-componentes...`, 'info');
 
+        // Get all other products to check for dependencies.
         const allProductsSnap = await getDocs(collection(db, COLLECTIONS.PRODUCTOS));
         const allOtherProducts = [];
         allProductsSnap.docs.forEach(doc => {
-            // This is the fix: Exclude the product being deleted from the dependency check.
             if (doc.id !== productDocId) {
                 allOtherProducts.push(doc.data());
             }
         });
 
         let deletedCount = 0;
+        // Check each sub-product to see if it's used elsewhere.
         for (const subProductRefId of subProductRefs) {
             let isUsedElsewhere = false;
             for (const otherProduct of allOtherProducts) {
+                // Recursively checks if a specific sub-product is used in a given product structure.
                 function isSubProductInStructure(nodes) {
                     if (!nodes) return false;
                     for (const node of nodes) {
@@ -77,12 +98,9 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
                 }
             }
 
+            // If not used anywhere else, delete the orphaned sub-product.
             if (!isUsedElsewhere) {
-                // FIX: `subProductRefId` is the document ID. We should not query by `codigo_pieza`.
-                // We can and should delete the document directly by its ID.
                 const subProductDocRef = doc(db, COLLECTIONS.SEMITERMINADOS, subProductRefId);
-                // To prevent race conditions and ensure the count is accurate,
-                // we first check if the document still exists before deleting.
                 const subProductDocSnap = await getDoc(subProductDocRef);
                 if (subProductDocSnap.exists()) {
                     await deleteDoc(subProductDocRef);
@@ -101,22 +119,27 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
         console.error("Error deleting product and orphaned sub-products:", error);
         showToast('Ocurrió un error durante la eliminación compleja.', 'error');
     } finally {
-        runTableLogic();
+        runTableLogic(); // Always refresh the table at the end.
     }
 }
 
 /**
- * Registra la decisión de un departamento sobre un ECR y evalúa si el estado general del ECR debe cambiar.
- * @param {string} ecrId - El ID del ECR a modificar.
- *param {string} departmentId - El ID del departamento que emite la decisión (ej: 'calidad').
- * @param {string} decision - La decisión tomada ('approved', 'rejected', 'stand-by').
- * @param {string} comment - Un comentario opcional sobre la decisión.
- * @param {object} deps - An object containing all dependencies.
+ * Registers a department's approval decision for an ECR and updates the ECR's overall status.
+ * This function acts as the state machine for the ECR approval workflow.
+ * It runs as a Firestore transaction to ensure atomicity.
+ *
+ * @async
+ * @param {string} ecrId - The ID of the ECR document to modify.
+ * @param {string} departmentId - The ID of the department making the decision (e.g., 'calidad').
+ * @param {string} decision - The decision made ('approved', 'rejected', 'stand-by').
+ * @param {string} comment - An optional comment associated with the decision.
+ * @param {object} deps - An object containing all necessary dependencies for the function.
  * @param {object} deps.db - The Firestore database instance.
  * @param {object} deps.firestore - An object with Firestore functions like { runTransaction, doc, getDoc }.
- * @param {object} deps.COLLECTIONS - The collections map.
- * @param {object} deps.appState - The global application state.
- * @param {object} deps.uiCallbacks - An object with UI functions like { showToast, sendNotification }.
+ * @param {object} deps.COLLECTIONS - The application's collection name constants.
+ * @param {object} deps.appState - The global application state, including the current user.
+ * @param {object} deps.uiCallbacks - An object with UI callback functions like { showToast, sendNotification }.
+ * @returns {Promise<void>} A promise that resolves when the approval has been processed.
  */
 export async function registerEcrApproval(ecrId, departmentId, decision, comment, deps) {
     const { db, firestore, COLLECTIONS, appState, uiCallbacks } = deps;
@@ -151,10 +174,12 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
                 ecrData.approvals = {};
             }
 
+            // Check for permissions
             if (appState.currentUser.sector !== departmentId && appState.currentUser.role !== 'admin') {
                 throw new Error(`No tienes permiso para aprobar por el departamento de ${departmentId}.`);
             }
 
+            // Prepare the approval data
             const approvalPath = `approvals.${departmentId}`;
             const approvalUpdate = {
                 status: decision,
@@ -164,8 +189,9 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
             };
 
             const updateData = { [approvalPath]: approvalUpdate };
-            ecrData.approvals[departmentId] = approvalUpdate; // Apply update to local copy
+            ecrData.approvals[departmentId] = approvalUpdate; // Apply update to local copy for evaluation
 
+            // Evaluate the new overall status of the ECR
             let newOverallStatus = ecrData.status;
             if (ecrData.status === 'pending-approval') {
                 const allDepartments = [
@@ -176,11 +202,14 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
                 const requiredApprovals = allDepartments.filter(dept => ecrData[`afecta_${dept}`] === true);
 
                 if (requiredApprovals.length === 0 && decision === 'approved') {
+                    // If no departments are marked as affected, any single approval moves it to 'approved'
                     newOverallStatus = 'approved';
                 } else {
                     if (decision === 'rejected') {
+                        // A single rejection rejects the whole ECR
                         newOverallStatus = 'rejected';
                     } else {
+                        // Check if all required departments have now approved
                         const allApproved = requiredApprovals.every(dept => ecrData.approvals[dept]?.status === 'approved');
                         if (allApproved) {
                             newOverallStatus = 'approved';
@@ -196,6 +225,7 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
             updateData.lastModified = new Date();
             updateData.modifiedBy = user.email;
 
+            // Commit the transaction
             transaction.update(ecrRef, updateData);
         });
 
@@ -204,6 +234,7 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
 
         showToast(`Decisión del departamento de ${departmentId} registrada.`, 'success');
 
+        // Send notification if the overall status changed
         if (finalEcrData.status !== ecrDataBeforeUpdate.status) {
             showToast(`El estado del ECR ha cambiado a: ${finalEcrData.status}`, 'info');
             if (finalEcrData.creatorUid) {
@@ -223,10 +254,11 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
 }
 
 /**
- * Gathers and formats data from the ECR form, including the state of all checkboxes.
- * This is the function with the bug that includes disabled checkboxes.
+ * Gathers and formats data from the ECR form element into a plain JavaScript object.
+ * This function correctly handles all standard form inputs and ensures that the state
+ * of `input[type="checkbox"]` is captured, excluding any that are disabled.
  * @param {HTMLFormElement} formContainer - The form element to process.
- * @returns {object} - The processed form data.
+ * @returns {object} An object representing the form's current data.
  */
 export function getEcrFormData(formContainer) {
     const formData = new FormData(formContainer);
