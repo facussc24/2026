@@ -78,12 +78,14 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
             }
 
             if (!isUsedElsewhere) {
-                const uniqueKeyField = getUniqueKeyForCollection(COLLECTIONS.SEMITERMINADOS);
-                const q = query(collection(db, COLLECTIONS.SEMITERMINADOS), where(uniqueKeyField, "==", subProductRefId));
-                const subProductToDeleteSnap = await getDocs(q);
-                if (!subProductToDeleteSnap.empty) {
-                    const subProductDocToDelete = subProductToDeleteSnap.docs[0];
-                    await deleteDoc(doc(db, COLLECTIONS.SEMITERMINADOS, subProductDocToDelete.id));
+                // FIX: `subProductRefId` is the document ID. We should not query by `codigo_pieza`.
+                // We can and should delete the document directly by its ID.
+                const subProductDocRef = doc(db, COLLECTIONS.SEMITERMINADOS, subProductRefId);
+                // To prevent race conditions and ensure the count is accurate,
+                // we first check if the document still exists before deleting.
+                const subProductDocSnap = await getDoc(subProductDocRef);
+                if (subProductDocSnap.exists()) {
+                    await deleteDoc(subProductDocRef);
                     deletedCount++;
                 }
             }
