@@ -5222,82 +5222,6 @@ function renderNotificationCenter() {
     `;
     lucide.createIcons();
 
-    // --- Telegram Config Logic ---
-    const loadTelegramConfig = () => {
-        const user = appState.currentUser;
-        if (user) {
-            const chatIdInput = document.getElementById('telegram-chat-id');
-            const onAssignmentCheck = document.getElementById('notify-on-assignment');
-            const onStatusChangeCheck = document.getElementById('notify-on-status-change');
-
-            if (chatIdInput) {
-                chatIdInput.value = user.telegramChatId || '';
-            }
-            if (onAssignmentCheck) {
-                // Default to true if not set
-                onAssignmentCheck.checked = user.telegramNotifications?.onAssignment !== false;
-            }
-            if (onStatusChangeCheck) {
-                // Default to true if not set
-                onStatusChangeCheck.checked = user.telegramNotifications?.onStatusChange !== false;
-            }
-        }
-    };
-
-    const saveTelegramConfig = async () => {
-        const chatId = document.getElementById('telegram-chat-id').value.trim();
-        const onAssignment = document.getElementById('notify-on-assignment').checked;
-        const onStatusChange = document.getElementById('notify-on-status-change').checked;
-
-        if (!chatId || !/^-?\d+$/.test(chatId)) {
-            showToast('Por favor, ingrese un Chat ID de Telegram válido (solo números).', 'error');
-            return;
-        }
-
-        const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
-        try {
-            await updateDoc(userDocRef, {
-                telegramChatId: chatId,
-                telegramNotifications: {
-                    onAssignment: onAssignment,
-                    onStatusChange: onStatusChange
-                }
-            });
-            showToast('Configuración de Telegram guardada.', 'success');
-        } catch (error) {
-            console.error("Error saving Telegram config:", error);
-            showToast('Error al guardar la configuración.', 'error');
-        }
-    };
-
-    console.log("JULES_DEBUG: Attaching Telegram button listeners."); // This is a debug message.
-    document.getElementById('save-telegram-config-btn')?.addEventListener('click', saveTelegramConfig);
-
-    const testButton = document.getElementById('send-test-telegram-btn');
-    if (testButton) {
-        testButton.addEventListener('click', async () => {
-            const originalText = testButton.textContent;
-            testButton.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Enviando...';
-            testButton.disabled = true;
-            lucide.createIcons();
-
-            try {
-                const sendTestMessage = httpsCallable(functions, 'sendTestTelegramMessage');
-                const result = await sendTestMessage();
-                showToast(result.data.message, 'success');
-            } catch (error) {
-                console.error("Error sending test message:", error);
-                const errorMessage = error.message || "Error desconocido.";
-                showToast(`Error: ${errorMessage}`, 'error');
-            } finally {
-                testButton.innerHTML = originalText;
-                testButton.disabled = false;
-            }
-        });
-    }
-
-    loadTelegramConfig(); // Load config when the view is rendered
-
     document.getElementById('notification-bell')?.addEventListener('click', () => {
         document.getElementById('notification-dropdown')?.classList.toggle('hidden');
     });
@@ -7629,15 +7553,18 @@ function runKanbanBoardLogic() {
     }
 
     const telegramConfigHTML = `
-        <div id="telegram-config-section" class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
+    <div id="telegram-config-collapsible" class="bg-white rounded-xl shadow-lg mb-6 border border-blue-200 overflow-hidden">
+        <button id="telegram-config-header" class="w-full flex justify-between items-center p-4">
             <div class="flex items-center gap-4">
-                <i data-lucide="send" class="w-10 h-10 text-blue-500"></i>
+                <i data-lucide="send" class="w-8 h-8 text-blue-500"></i>
                 <div>
-                    <h3 class="text-xl font-bold text-slate-800">Configuración de Notificaciones de Telegram</h3>
-                    <p class="text-sm text-slate-500 mt-1">Recibe notificaciones de tus tareas directamente en tu teléfono.</p>
+                    <h3 class="text-lg font-bold text-slate-800 text-left">Configuración de Notificaciones de Telegram</h3>
+                    <p class="text-sm text-slate-500 text-left">Recibe notificaciones de tus tareas directamente en tu teléfono.</p>
                 </div>
             </div>
-
+            <i data-lucide="chevron-down" id="telegram-config-chevron" class="w-6 h-6 text-slate-500 transition-transform"></i>
+        </button>
+        <div id="telegram-config-body" class="p-6 pt-0" style="display: none;">
             <div class="mt-4 text-sm text-slate-600 bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
                 <div>
                     <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="info"></i>¿Cómo funciona?</p>
@@ -7653,7 +7580,6 @@ function runKanbanBoardLogic() {
                     </p>
                 </div>
             </div>
-
             <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t">
                 <div>
                     <label for="telegram-chat-id" class="block text-sm font-medium text-gray-700 mb-1">Tu Chat ID de Telegram</label>
@@ -7673,14 +7599,13 @@ function runKanbanBoardLogic() {
                     </div>
                 </div>
             </div>
-
             <div class="mt-6 flex items-center gap-4">
                 <button id="save-telegram-config-btn" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Configuración</button>
                 <button id="send-test-telegram-btn" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold">Enviar Mensaje de Prueba</button>
             </div>
         </div>
+    </div>
     `;
-
 
     // 1. Set up the basic HTML layout for the board
     dom.viewContent.innerHTML = `
@@ -7743,6 +7668,90 @@ function runKanbanBoardLogic() {
     // 2. Set up event listeners for filters and the add button
     document.getElementById('add-new-task-btn').addEventListener('click', () => openTaskFormModal());
     document.getElementById('go-to-stats-view-btn').addEventListener('click', renderTaskDashboardView);
+
+    document.getElementById('telegram-config-header').addEventListener('click', () => {
+        const body = document.getElementById('telegram-config-body');
+        const chevron = document.getElementById('telegram-config-chevron');
+        const isHidden = body.style.display === 'none';
+
+        body.style.display = isHidden ? 'block' : 'none';
+        chevron.classList.toggle('rotate-180', isHidden);
+    });
+
+    // --- Telegram Config Logic ---
+    const loadTelegramConfig = () => {
+        const user = appState.currentUser;
+        if (user) {
+            const chatIdInput = document.getElementById('telegram-chat-id');
+            const onAssignmentCheck = document.getElementById('notify-on-assignment');
+            const onStatusChangeCheck = document.getElementById('notify-on-status-change');
+
+            if (chatIdInput) {
+                chatIdInput.value = user.telegramChatId || '';
+            }
+            if (onAssignmentCheck) {
+                // Default to true if not set
+                onAssignmentCheck.checked = user.telegramNotifications?.onAssignment !== false;
+            }
+            if (onStatusChangeCheck) {
+                // Default to true if not set
+                onStatusChangeCheck.checked = user.telegramNotifications?.onStatusChange !== false;
+            }
+        }
+    };
+
+    const saveTelegramConfig = async () => {
+        const chatId = document.getElementById('telegram-chat-id').value.trim();
+        const onAssignment = document.getElementById('notify-on-assignment').checked;
+        const onStatusChange = document.getElementById('notify-on-status-change').checked;
+
+        if (!chatId || !/^-?\d+$/.test(chatId)) {
+            showToast('Por favor, ingrese un Chat ID de Telegram válido (solo números).', 'error');
+            return;
+        }
+
+        const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
+        try {
+            await updateDoc(userDocRef, {
+                telegramChatId: chatId,
+                telegramNotifications: {
+                    onAssignment: onAssignment,
+                    onStatusChange: onStatusChange
+                }
+            });
+            showToast('Configuración de Telegram guardada.', 'success');
+        } catch (error) {
+            console.error("Error saving Telegram config:", error);
+            showToast('Error al guardar la configuración.', 'error');
+        }
+    };
+
+    document.getElementById('save-telegram-config-btn')?.addEventListener('click', saveTelegramConfig);
+
+    const testButton = document.getElementById('send-test-telegram-btn');
+    if (testButton) {
+        testButton.addEventListener('click', async () => {
+            const originalText = testButton.textContent;
+            testButton.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Enviando...';
+            testButton.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const sendTestMessage = httpsCallable(functions, 'sendTestTelegramMessage');
+                const result = await sendTestMessage();
+                showToast(result.data.message, 'success');
+            } catch (error) {
+                console.error("Error sending test message:", error);
+                const errorMessage = error.message || "Error desconocido.";
+                showToast(`Error: ${errorMessage}`, 'error');
+            } finally {
+                testButton.innerHTML = originalText;
+                testButton.disabled = false;
+            }
+        });
+    }
+
+    loadTelegramConfig();
 
     document.getElementById('task-board').addEventListener('click', e => {
         const header = e.target.closest('.kanban-column-header');
