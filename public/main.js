@@ -5270,6 +5270,7 @@ function renderNotificationCenter() {
         }
     };
 
+    console.log("JULES_DEBUG: Attaching Telegram button listeners."); // This is a debug message.
     document.getElementById('save-telegram-config-btn')?.addEventListener('click', saveTelegramConfig);
 
     const testButton = document.getElementById('send-test-telegram-btn');
