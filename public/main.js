@@ -1914,7 +1914,9 @@ async function runEcoFormLogic(params = null) {
                         exists: () => true,
                         data: () => ({
                             cliente_requiere_ppap: true,
-                            cliente_aprobacion_estado: 'aprobado'
+                            cliente_aprobacion_estado: 'aprobado',
+                            denominacion_producto: 'Componente de Tutorial',
+                            id: 'TUTORIAL-ECR-001'
                         })
                     };
                 } else {
@@ -1922,10 +1924,17 @@ async function runEcoFormLogic(params = null) {
                     ecrDocSnap = await getDoc(ecrDocRef);
                 }
 
-                if (ecrDocSnap.exists() && shouldRequirePpapConfirmation(ecrDocSnap.data())) {
-                    const ppapContainer = formElement.querySelector('#ppap-confirmation-container');
-                    if (ppapContainer) {
-                        ppapContainer.classList.remove('hidden');
+                if (ecrDocSnap.exists()) {
+                    const ecrData = ecrDocSnap.data();
+                    const ecrNoDisplay = formElement.querySelector('#ecr_no_display');
+                    if (ecrNoDisplay) {
+                        ecrNoDisplay.value = `${ecrData.denominacion_producto} (${ecrData.id})`;
+                    }
+                    if (shouldRequirePpapConfirmation(ecrData)) {
+                        const ppapContainer = formElement.querySelector('#ppap-confirmation-container');
+                        if (ppapContainer) {
+                            ppapContainer.classList.remove('hidden');
+                        }
                     }
                 }
             } else {
@@ -9117,7 +9126,14 @@ function handleDropEvent(evt) {
     renderArbol();
 }
 
-function openProductSearchModal() {
+async function openProductSearchModal() {
+    try {
+        await ensureCollectionsAreLoaded([COLLECTIONS.CLIENTES, COLLECTIONS.PRODUCTOS]);
+    } catch (error) {
+        showToast('Error al cargar datos para la búsqueda. Intente de nuevo.', 'error');
+        return;
+    }
+
     let clientOptions = '<option value="">Todos</option>' + appState.collections[COLLECTIONS.CLIENTES].map(c => `<option value="${c.id}">${c.descripcion}</option>`).join('');
     const modalId = `prod-search-modal-${Date.now()}`;
     const modalHTML = `<div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in"><div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col m-4 modal-content"><div class="flex justify-between items-center p-5 border-b"><h3 class="text-xl font-bold">Buscar Producto Principal</h3><button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button></div><div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"><div><label for="search-prod-term" class="block text-sm font-medium">Código/Descripción</label><input type="text" id="search-prod-term" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></div><div><label for="search-prod-client" class="block text-sm font-medium">Cliente</label><select id="search-prod-client" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">${clientOptions}</select></div></div><div id="search-prod-results" class="p-6 border-t overflow-y-auto flex-1"></div></div></div>`;
@@ -9871,7 +9887,7 @@ export function runSinopticoTabularLogic() {
     };
 
     // --- Event Handlers ---
-    const handleViewClick = (e) => {
+    const handleViewClick = async (e) => {
         const button = e.target.closest('button[data-action]');
 
         // Handle dropdown toggle separately to prevent it from closing immediately
@@ -9887,7 +9903,7 @@ export function runSinopticoTabularLogic() {
 
         switch (action) {
             case 'open-product-search-modal-tabular':
-                openProductSearchModal();
+                await openProductSearchModal();
                 break;
             case 'select-another-product-tabular':
                 state.selectedProduct = null;
