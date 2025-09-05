@@ -639,11 +639,10 @@ async function clearOtherUsers() {
     }
 }
 
-async function seedEcos(batch, users, generatedData) {
-    showToast('Generando 10 ECOs de prueba detallados...', 'info');
+async function seedEcos(batch, users, generatedEcrs) {
+    showToast('Generando ECOs para ECRs aprobados...', 'info');
     const ecoFormsRef = collection(db, COLLECTIONS.ECO_FORMS);
-    const TOTAL_ECOS = 10;
-    const currentYear = new Date().getFullYear();
+    let ecosGenerated = 0;
 
     const getRandomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
     const getRandomDate = (start, end) => new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
@@ -661,15 +660,16 @@ async function seedEcos(batch, users, generatedData) {
         "Layout validado por el equipo de seguridad.", "Plan de control actualizado y liberado."
     ];
 
-    for (let i = 1; i <= TOTAL_ECOS; i++) {
+    const approvedEcrs = generatedEcrs.filter(ecr => ecr.status === 'approved');
+
+    for (const ecr of approvedEcrs) {
         const user1 = getRandomItem(users) || { email: 'test@example.com', name: 'Usuario de Prueba 1' };
         const user2 = getRandomItem(users) || { email: 'test2@example.com', name: 'Usuario de Prueba 2' };
         const status = getRandomItem(['in-progress', 'approved', 'rejected']);
-        const ecrId = `ECR-${currentYear}-${String(i).padStart(3, '0')}`; // Match the generated ECRs
 
         const ecoData = {
-            id: ecrId, // The ECO ID is the same as the ECR ID
-            ecr_no: ecrId,
+            id: ecr.id,
+            ecr_no: ecr.id,
             status: status,
             lastModified: getRandomDate(new Date(2023, 0, 1), new Date()),
             modifiedBy: user1.email,
@@ -679,12 +679,12 @@ async function seedEcos(batch, users, generatedData) {
             action_plan: []
         };
 
-        const taskCount = Math.floor(Math.random() * 4) + 2; // Always add 2 to 5 tasks
+        const taskCount = Math.floor(Math.random() * 4) + 2;
         for (let j = 0; j < taskCount; j++) {
             const assignee = getRandomItem(users);
             ecoData.action_plan.push({
                 id: `task_${Date.now()}_${j}`,
-                description: `Tarea de implementación de ejemplo ${j + 1} para ${ecrId}`,
+                description: `Tarea de implementación de ejemplo ${j + 1} para ${ecr.id}`,
                 assignee: assignee ? assignee.name : 'Sin asignar',
                 assigneeUid: assignee ? assignee.docId : null,
                 dueDate: getRandomDate(new Date(), new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0],
@@ -692,29 +692,24 @@ async function seedEcos(batch, users, generatedData) {
             });
         }
 
-
         formSectionsData.forEach(section => {
             if (section.checklist) {
                 ecoData.checklists[section.id] = section.checklist.map(() => {
                     const choice = Math.random();
-                    if (choice < 0.6) return { si: true, na: false }; // 60% SI
-                    if (choice < 0.8) return { si: false, na: true }; // 20% N/A
-                    return { si: false, na: false }; // 20% NO
+                    if (choice < 0.6) return { si: true, na: false };
+                    if (choice < 0.8) return { si: false, na: true };
+                    return { si: false, na: false };
                 });
             }
-
             ecoData.comments[section.id] = getRandomItem(sampleComments);
-
             const approver = getRandomItem([user1, user2]);
             const reviewDate = getRandomDate(new Date(2023, 6, 1), new Date());
             let sectionStatus = 'ok';
-
             if (status === 'rejected') {
                 sectionStatus = (Math.random() < 0.4) ? 'nok' : 'ok';
             } else if (status === 'in-progress') {
                 sectionStatus = (Math.random() < 0.3) ? null : 'ok';
             }
-
             ecoData.signatures[section.id] = {
                 date_review: reviewDate.toISOString().split('T')[0],
                 name: approver.name,
@@ -723,11 +718,12 @@ async function seedEcos(batch, users, generatedData) {
             };
         });
 
-        const docRef = doc(ecoFormsRef, ecrId);
+        const docRef = doc(ecoFormsRef, ecoData.id);
         batch.set(docRef, ecoData);
+        ecosGenerated++;
     }
 
-    console.log(`${TOTAL_ECOS} ECOs de prueba detallados añadidos al batch.`);
+    console.log(`${ecosGenerated} ECOs de prueba generados para ECRs aprobados.`);
 }
 
 async function seedEcrs(batch, users, generatedData) {
@@ -744,6 +740,8 @@ async function seedEcrs(batch, users, generatedData) {
         "Impacto mínimo en el costo, se aprueba.", "Requiere validación adicional del cliente.", "Rechazado por falta de análisis de riesgo.",
         "Propuesta viable, proceder con el plan.", "El cambio mejora la producibilidad.", "Sin objeciones por parte de este departamento."
     ];
+
+    const createdEcrs = [];
 
     for (let i = 1; i <= TOTAL_ECRS; i++) {
         const user1 = getRandomItem(users);
@@ -813,8 +811,10 @@ async function seedEcrs(batch, users, generatedData) {
 
         const docRef = doc(ecrFormsRef, ecrId);
         batch.set(docRef, ecrData);
+        createdEcrs.push(ecrData);
     }
     console.log(`${TOTAL_ECRS} ECRs de prueba detallados añadidos al batch.`);
+    return createdEcrs;
 }
 
 async function seedReunionesEcr(batch) {
@@ -1056,13 +1056,13 @@ async function seedDatabase() {
         setInBatch(COLLECTIONS.PRODUCTOS, productoData);
     }
 
-    // --- GENERACIÓN DE ECOS DE PRUEBA ---
+    // --- GENERACIÓN DE ECRs Y ECOs DE PRUEBA ---
     // Fetch users directly for seeding, as they are no longer pre-loaded globally.
     const usersSnapshot = await getDocs(collection(db, COLLECTIONS.USUARIOS));
     const users = usersSnapshot.docs.map(d => ({...d.data(), docId: d.id})).filter(u => u.disabled !== true);
 
-    await seedEcos(batch, users, generated);
-    await seedEcrs(batch, users, generated);
+    const generatedEcrs = await seedEcrs(batch, users, generated);
+    await seedEcos(batch, users, generatedEcrs);
     await seedReunionesEcr(batch);
 
     // --- COMMIT FINAL ---
@@ -2190,12 +2190,7 @@ async function runEcoLogic() {
                 <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
                     <div>
                         <h2 class="text-2xl font-bold text-slate-800">Planilla General de ECO</h2>
-                        <p class="text-sm text-slate-500">Aquí puede ver, gestionar y crear un nuevo ECO.</p>
-                    </div>
-                    <div class="flex items-center gap-4">
-                        <button data-action="create-new-eco" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
-                            <i data-lucide="recycle" class="mr-2 h-5 w-5"></i>Crear Nuevo ECO
-                        </button>
+                        <p class="text-sm text-slate-500">Aquí puede ver y gestionar sus ECOs. Los nuevos ECOs se generan desde la lista de ECRs aprobados.</p>
                     </div>
                 </div>
                 <div class="bg-white p-6 rounded-xl shadow-lg">
@@ -2228,10 +2223,6 @@ async function runEcoLogic() {
 
         dom.viewContent.innerHTML = viewHTML;
         lucide.createIcons();
-
-        dom.viewContent.querySelector('[data-action="create-new-eco"]').addEventListener('click', () => {
-            switchView('eco_form');
-        });
 
         const ecoFormsRef = collection(db, COLLECTIONS.ECO_FORMS);
         const q = query(ecoFormsRef, orderBy('lastModified', 'desc'));
