@@ -6739,7 +6739,7 @@ async function guardarEstructura(button) {
 // =================================================================================
 
 let taskState = {
-    activeFilter: 'engineering', // 'engineering', 'personal', 'all', 'supervision'
+    activeFilter: 'personal', // 'engineering', 'personal', 'all', 'supervision'
     searchTerm: '',
     priorityFilter: 'all',
     unsubscribers: [],
@@ -7614,6 +7614,10 @@ function runKanbanBoardLogic() {
                             <input type="checkbox" id="notify-on-status-change" name="onStatusChange" class="h-4 w-4 rounded text-blue-600">
                             <span class="ml-2 text-sm">Cuando una tarea que creé cambia de estado.</span>
                         </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-due-date-reminder" name="onDueDateReminder" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Un día antes del vencimiento de una tarea asignada.</span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -7703,6 +7707,7 @@ function runKanbanBoardLogic() {
             const chatIdInput = document.getElementById('telegram-chat-id');
             const onAssignmentCheck = document.getElementById('notify-on-assignment');
             const onStatusChangeCheck = document.getElementById('notify-on-status-change');
+            const onDueDateReminderCheck = document.getElementById('notify-on-due-date-reminder');
 
             if (chatIdInput) {
                 chatIdInput.value = user.telegramChatId || '';
@@ -7715,6 +7720,10 @@ function runKanbanBoardLogic() {
                 // Default to true if not set
                 onStatusChangeCheck.checked = user.telegramNotifications?.onStatusChange !== false;
             }
+            if (onDueDateReminderCheck) {
+                // Default to true if not set
+                onDueDateReminderCheck.checked = user.telegramNotifications?.onDueDateReminder !== false;
+            }
         }
     };
 
@@ -7722,6 +7731,7 @@ function runKanbanBoardLogic() {
         const chatId = document.getElementById('telegram-chat-id').value.trim();
         const onAssignment = document.getElementById('notify-on-assignment').checked;
         const onStatusChange = document.getElementById('notify-on-status-change').checked;
+        const onDueDateReminder = document.getElementById('notify-on-due-date-reminder').checked;
 
         if (!chatId || !/^-?\d+$/.test(chatId)) {
             showToast('Por favor, ingrese un Chat ID de Telegram válido (solo números).', 'error');
@@ -7734,7 +7744,8 @@ function runKanbanBoardLogic() {
                 telegramChatId: chatId,
                 telegramNotifications: {
                     onAssignment: onAssignment,
-                    onStatusChange: onStatusChange
+                    onStatusChange: onStatusChange,
+                    onDueDateReminder: onDueDateReminder
                 }
             });
             showToast('Configuración de Telegram guardada.', 'success');
@@ -8205,6 +8216,20 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                     </div>
                 </div>
 
+                <!-- Comments Section -->
+                <div class="space-y-2 pt-4 border-t mt-4">
+                    <label class="block text-sm font-medium text-gray-700">Comentarios</label>
+                    <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-50 border custom-scrollbar">
+                        <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
+                    </div>
+                    <div class="flex items-start gap-2">
+                        <textarea id="new-task-comment" placeholder="Escribe un comentario..." rows="2" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></textarea>
+                        <button type="button" id="post-comment-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold h-full">
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
@@ -8317,6 +8342,84 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
 
     rerenderSubtasks(); // Initial render
 
+    // --- Comments Logic ---
+    const commentsListEl = modalElement.querySelector('#task-comments-list');
+    const newCommentInput = modalElement.querySelector('#new-task-comment');
+    const postCommentBtn = modalElement.querySelector('#post-comment-btn');
+    let commentsUnsubscribe = null;
+
+    const renderTaskComments = (comments) => {
+        if (!commentsListEl) return;
+        if (comments.length === 0) {
+            commentsListEl.innerHTML = '<p class="text-xs text-center text-slate-400 py-2">No hay comentarios todavía.</p>';
+            return;
+        }
+        commentsListEl.innerHTML = comments.map(comment => {
+            const author = (appState.collections.usuarios || []).find(u => u.docId === comment.creatorUid) || { name: 'Usuario Desconocido', photoURL: '' };
+            const timestamp = comment.createdAt?.toDate ? formatTimeAgo(comment.createdAt.toDate()) : 'hace un momento';
+            return `
+                <div class="flex items-start gap-3">
+                    <img src="${author.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(author.name)}`}" alt="Avatar" class="w-8 h-8 rounded-full mt-1">
+                    <div class="flex-1 bg-white p-3 rounded-lg border">
+                        <div class="flex justify-between items-center">
+                            <p class="font-bold text-sm text-slate-800">${author.name}</p>
+                            <p class="text-xs text-slate-400">${timestamp}</p>
+                        </div>
+                        <p class="text-sm text-slate-600 mt-1 whitespace-pre-wrap">${comment.text}</p>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        lucide.createIcons();
+        // Scroll to the bottom of the comments list
+        commentsListEl.scrollTop = commentsListEl.scrollHeight;
+    };
+
+    if (isEditing) {
+        postCommentBtn.disabled = false;
+        newCommentInput.disabled = false;
+        const commentsRef = collection(db, 'tareas', task.docId, 'comments');
+        const q = query(commentsRef, orderBy('createdAt', 'asc'));
+        commentsUnsubscribe = onSnapshot(q, (snapshot) => {
+            const comments = snapshot.docs.map(doc => doc.data());
+            renderTaskComments(comments);
+        });
+    } else {
+        renderTaskComments([]); // Show "No hay comentarios" for new tasks
+        postCommentBtn.disabled = true;
+        newCommentInput.disabled = true;
+        newCommentInput.placeholder = 'Guarde la tarea para poder añadir comentarios.';
+    }
+
+    const postComment = async () => {
+        const text = newCommentInput.value.trim();
+        if (!text || !isEditing) return;
+
+        postCommentBtn.disabled = true;
+        const commentsRef = collection(db, 'tareas', task.docId, 'comments');
+        try {
+            await addDoc(commentsRef, {
+                text: text,
+                creatorUid: appState.currentUser.uid,
+                createdAt: new Date()
+            });
+            newCommentInput.value = '';
+        } catch (error) {
+            console.error("Error posting comment: ", error);
+            showToast('Error al publicar el comentario.', 'error');
+        } finally {
+            postCommentBtn.disabled = false;
+        }
+    };
+
+    postCommentBtn.addEventListener('click', postComment);
+    newCommentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            postComment();
+        }
+    });
+
     // Autofocus the title field for new tasks
     if (!isEditing) {
         modalElement.querySelector('#task-title').focus();
@@ -8328,10 +8431,16 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
         if (!button) return;
         const action = button.dataset.action;
         if (action === 'close') {
+            if (commentsUnsubscribe) {
+                commentsUnsubscribe();
+            }
             modalElement.remove();
         } else if (action === 'delete') {
             showConfirmationModal('Eliminar Tarea', '¿Estás seguro de que quieres eliminar esta tarea?', async () => {
                 try {
+                    if (commentsUnsubscribe) {
+                        commentsUnsubscribe();
+                    }
                     await deleteDoc(doc(db, COLLECTIONS.TAREAS, task.docId));
                     showToast('Tarea eliminada.', 'success');
                     modalElement.remove();

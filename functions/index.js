@@ -255,6 +255,82 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
+exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }).pubsub.schedule("every day 09:00")
+  .timeZone("America/Argentina/Buenos_Aires")
+  .onRun(async (context) => {
+    console.log("Ejecutando la revisión de recordatorios de vencimiento de tareas.");
+
+    const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+    if (!TELEGRAM_TOKEN) {
+        console.error("El token de Telegram no está configurado.");
+        return null;
+    }
+
+    const db = admin.firestore();
+    const tasksRef = db.collection("tareas");
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    try {
+      // Busca tareas no completadas que venzan mañana.
+      const snapshot = await tasksRef
+        .where("status", "!=", "done")
+        .where("dueDate", "==", tomorrowStr)
+        .get();
+
+      if (snapshot.empty) {
+        console.log("No se encontraron tareas que venzan mañana.");
+        return null;
+      }
+
+      for (const doc of snapshot.docs) {
+        const task = doc.data();
+        const assigneeUid = task.assigneeUid;
+
+        if (!assigneeUid) {
+          console.log(`La tarea ${task.title} no tiene un asignado.`);
+          continue;
+        }
+
+        const userDoc = await db.collection('usuarios').doc(assigneeUid).get();
+        if (!userDoc.exists) {
+          console.log(`No se encontró el documento de usuario para UID ${assigneeUid}.`);
+          continue;
+        }
+
+        const userData = userDoc.data();
+        const telegramChatId = userData.telegramChatId;
+        const notificationPrefs = userData.telegramNotifications || {};
+
+        // La preferencia 'onDueDateReminder' se añadirá en el siguiente paso del plan.
+        // La función ya está preparada para respetarla.
+        if (telegramChatId && notificationPrefs.onDueDateReminder !== false) {
+          const mensaje = `🔔 *Recordatorio de Vencimiento* 🔔\n\nLa tarea "*${task.title}*" vence mañana, ${task.dueDate}.`;
+          const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+
+          try {
+            await axios.post(url, {
+              chat_id: telegramChatId,
+              text: mensaje,
+              parse_mode: "Markdown",
+            });
+            console.log(`Recordatorio de vencimiento enviado al usuario ${assigneeUid} para la tarea ${doc.id}`);
+          } catch (error) {
+            console.error(`Error al enviar mensaje de Telegram al usuario ${assigneeUid}:`, error.response ? error.response.data : error.message);
+          }
+        } else {
+            console.log(`El usuario ${assigneeUid} no tiene activados los recordatorios de vencimiento o no tiene chat ID.`);
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error("Error al procesar los recordatorios de vencimiento de tareas:", error);
+      return null;
+    }
+  });
+
 exports.sendTaskNotification = functions
   .runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .firestore.document('tareas/{taskId}')
