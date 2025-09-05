@@ -8664,7 +8664,7 @@ function showAuthScreen(screenName) {
 async function handleResendVerificationEmail() {
     const resendButton = document.getElementById('resend-verification-btn');
     const timerElement = document.getElementById('resend-timer');
-    if (!resendButton || !timerElement) return;
+    if (!resendButton || !timerElement || resendButton.disabled) return;
 
     resendButton.disabled = true;
     timerElement.textContent = 'Enviando...';
@@ -8689,75 +8689,83 @@ async function handleResendVerificationEmail() {
 
     } catch (error) {
         console.error("Error resending verification email:", error);
-        showToast(`Error al reenviar el correo: ${error.message}`, 'error');
-        timerElement.textContent = 'Hubo un error. Inténtalo de nuevo.';
-        resendButton.disabled = false;
+        let friendlyMessage = 'Error al reenviar el correo.';
+        if (error.code === 'auth/too-many-requests') {
+            friendlyMessage = 'Demasiados intentos. Por favor, espera un momento antes de volver a intentarlo.';
+        }
+        showToast(friendlyMessage, 'error');
+        timerElement.textContent = 'Hubo un error. Inténtalo de nuevo más tarde.';
+        // Keep the button disabled for a shorter cooldown on error
+        setTimeout(() => {
+            if (timerElement.textContent.includes('error')) {
+                 timerElement.textContent = '';
+            }
+            resendButton.disabled = false;
+        }, 30000);
     }
+}
+
+
+async function handleLogin(form, email, password) {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    // The onAuthStateChanged listener will handle successful login
+}
+
+async function handleRegister(form, email, password) {
+    const name = form.querySelector('#register-name').value;
+    if (!email.toLowerCase().endsWith('@barackmercosul.com')) {
+        throw new Error('auth/unauthorized-domain');
+    }
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(userCredential.user, { displayName: name });
+
+    await setDoc(doc(db, COLLECTIONS.USUARIOS, userCredential.user.uid), {
+        id: userCredential.user.uid,
+        name: name,
+        email: userCredential.user.email,
+        role: 'lector',
+        sector: 'Sin Asignar',
+        createdAt: new Date()
+    });
+
+    await sendEmailVerification(userCredential.user);
+    showToast('¡Registro exitoso! Revisa tu correo para verificar tu cuenta.', 'success');
+    showAuthScreen('verify-email');
+}
+
+async function handlePasswordReset(form, email) {
+    await sendPasswordResetEmail(auth, email);
+    showToast(`Si la cuenta ${email} existe, se ha enviado un enlace para restablecer la contraseña.`, 'info');
+    showAuthScreen('login');
 }
 
 async function handleAuthForms(e) {
     e.preventDefault();
-    const formId = e.target.id;
-    const email = e.target.querySelector('input[type="email"]').value;
-    const passwordInput = e.target.querySelector('input[type="password"]');
+    const form = e.target;
+    const formId = form.id;
+    const email = form.querySelector('input[type="email"]').value;
+    const passwordInput = form.querySelector('input[type="password"]');
     const password = passwordInput ? passwordInput.value : null;
 
-    const submitButton = e.target.querySelector('button[type="submit"]');
+    const submitButton = form.querySelector('button[type="submit"]');
     const originalButtonHTML = submitButton.innerHTML;
     submitButton.disabled = true;
     submitButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5 mx-auto"></i>`;
     lucide.createIcons();
 
     try {
-        if (formId === 'login-form') {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            if (!userCredential.user.emailVerified) {
-                await signOut(auth);
-                throw new Error('auth/email-not-verified');
-            }
-        } 
-        else if (formId === 'register-form') {
-            const name = e.target.querySelector('#register-name').value;
-            if (!email.toLowerCase().endsWith('@barackmercosul.com')) {
-                showToast('Dominio no autorizado. Use un correo de @barackmercosul.com.', 'error');
-                submitButton.disabled = false;
-                submitButton.innerHTML = originalButtonHTML;
-                return;
-            }
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            await updateProfile(userCredential.user, { displayName: name });
-
-            // Crear documento de usuario en Firestore
-            await setDoc(doc(db, COLLECTIONS.USUARIOS, userCredential.user.uid), {
-                id: userCredential.user.uid,
-                name: name,
-                email: userCredential.user.email,
-                role: 'lector',
-                sector: 'Sin Asignar',
-                createdAt: new Date()
-            });
-
-            try {
-                console.log("Attempting to send verification email to:", userCredential.user.email);
-                await sendEmailVerification(userCredential.user);
-                console.log("sendEmailVerification call completed without throwing an error.");
-                showToast('Registro exitoso. Se ha enviado un correo de verificación a tu casilla.', 'success');
-                showAuthScreen('verify-email');
-            } catch (emailError) {
-                console.error("Error sending verification email:", emailError.code, emailError.message, emailError);
-                let errorMessage = 'Usuario registrado, pero no se pudo enviar el correo de verificación. ';
-                errorMessage += 'Por favor, inténtelo de nuevo desde la pantalla de verificación o contacte a un administrador.';
-                showToast(errorMessage, 'error', 6000);
-                // A pesar del error en el email, se muestra la pantalla de verificación
-                // porque el usuario SÍ fue creado y puede intentar el reenvío.
-                showAuthScreen('verify-email');
-            }
+        switch (formId) {
+            case 'login-form':
+                await handleLogin(form, email, password);
+                break;
+            case 'register-form':
+                await handleRegister(form, email, password);
+                break;
+            case 'reset-form':
+                await handlePasswordReset(form, email);
+                break;
         }
-        else if (formId === 'reset-form') {
-            await sendPasswordResetEmail(auth, email);
-            showToast(`Si la cuenta ${email} existe, se ha enviado un enlace.`, 'info');
-            showAuthScreen('login');
-        }
+        // onAuthStateChanged will handle UI changes for successful login/registration
     } catch (error) {
         console.error("Authentication error:", error);
         let friendlyMessage = "Ocurrió un error inesperado.";
@@ -8767,21 +8775,32 @@ async function handleAuthForms(e) {
             case 'auth/user-not-found':
                 friendlyMessage = 'Credenciales incorrectas. Por favor, verifique su email y contraseña.';
                 break;
-            case 'auth/email-not-verified':
+            case 'auth/email-not-verified': // This is now caught by onAuthStateChanged, but kept as a fallback.
                 friendlyMessage = 'Debe verificar su email para poder iniciar sesión. Revise su casilla de correo.';
+                showAuthScreen('verify-email');
                 break;
             case 'auth/email-already-in-use':
-                friendlyMessage = 'Este correo electrónico ya está registrado.';
+                friendlyMessage = 'Este correo electrónico ya está registrado. Intente iniciar sesión.';
                 break;
             case 'auth/weak-password':
                 friendlyMessage = 'La contraseña debe tener al menos 6 caracteres.';
                 break;
+            case 'auth/unauthorized-domain':
+                friendlyMessage = 'Dominio no autorizado. Use un correo de @barackmercosul.com.';
+                break;
+            case 'auth/too-many-requests':
+                 friendlyMessage = 'Demasiados intentos. Por favor, espera un momento antes de volver a intentarlo.';
+                 break;
             default:
-                friendlyMessage = 'Error de autenticación. Intente de nuevo.';
+                friendlyMessage = 'Error de autenticación. Intente de nuevo más tarde.';
         }
         showToast(friendlyMessage, 'error');
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonHTML;
+    } finally {
+        // Restore button state only on failure, as success is handled by onAuthStateChanged
+        if (!auth.currentUser || (formId === 'register-form' && error)) {
+             submitButton.disabled = false;
+             submitButton.innerHTML = originalButtonHTML;
+        }
     }
 }
 
