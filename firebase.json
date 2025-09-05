@@ -12,6 +12,17 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Content-Security-Policy",
+            "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net/npm/ https://cdnjs.cloudflare.com/ https://api.dicebear.com; object-src 'none'; base-uri 'self';"
+          }
+        ]
+      }
     ]
   }
 }
