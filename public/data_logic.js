@@ -223,19 +223,43 @@ export async function registerEcrApproval(ecrId, departmentId, decision, comment
 }
 
 /**
- * Gathers and formats data from the ECR form, including the state of all checkboxes.
- * This is the function with the bug that includes disabled checkboxes.
+ * Gathers and formats data from the ECR form, ensuring that disabled fields
+ * are ignored and the state of all inputs (including unchecked checkboxes) is captured correctly.
  * @param {HTMLFormElement} formContainer - The form element to process.
  * @returns {object} - The processed form data.
  */
 export function getEcrFormData(formContainer) {
-    const formData = new FormData(formContainer);
-    const dataToSave = Object.fromEntries(formData.entries());
+    const dataToSave = {};
 
-    // FIX: This selector now correctly excludes disabled checkboxes.
-    formContainer.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => {
-        dataToSave[cb.name] = cb.checked;
-    });
+    for (const element of formContainer.elements) {
+        // Skip disabled elements, elements without a name, or buttons/irrelevant inputs.
+        if (element.disabled || !element.name || element.tagName === 'BUTTON' || element.type === 'submit' || element.type === 'reset') {
+            continue;
+        }
+
+        switch (element.type) {
+            case 'checkbox':
+                // For checkboxes, we always store the boolean `checked` state.
+                dataToSave[element.name] = element.checked;
+                break;
+            case 'radio':
+                // For radio buttons, only save the value of the selected one.
+                if (element.checked) {
+                    dataToSave[element.name] = element.value;
+                }
+                break;
+            case 'select-multiple':
+                // For multi-select, gather all selected options into an array.
+                dataToSave[element.name] = Array.from(element.options)
+                    .filter(option => option.selected)
+                    .map(option => option.value);
+                break;
+            default:
+                // For all other input types (text, date, select-one, etc.).
+                dataToSave[element.name] = element.value;
+                break;
+        }
+    }
 
     return dataToSave;
 }
