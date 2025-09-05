@@ -9734,7 +9734,7 @@ export function runSinopticoTabularLogic() {
             let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;').join('');
             if (level > 0)  prefix += isLast ? '└─ ' : '├─ ';
             const descripcion = `<span class="font-sans">${prefix}</span>${item.descripcion || item.nombre || ''}`;
-            const nivel = node.originalLevel;
+            const nivel = level;
             const lc_kd = item.lc_kd || NA;
             const codigo_pieza = item.codigo_pieza || NA;
             const version = item.version || NA;
