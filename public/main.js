@@ -104,6 +104,7 @@ const viewConfig = {
             { key: 'codigo_cliente', label: 'Código de cliente' },
             { key: 'descripcion', label: 'Descripción' },
             { key: 'proceso', label: 'Proceso' },
+            { key: 'aspecto', label: 'Aspecto' },
         ],
         fields: [
             { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
@@ -112,6 +113,7 @@ const viewConfig = {
             { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
             { key: 'peso', label: 'Peso (gr)', type: 'number' },
             { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
+            { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
         ]
     },
     semiterminados: {
@@ -856,7 +858,7 @@ async function seedDatabase() {
     await clearDataOnly();
     showToast('Iniciando carga masiva de datos de prueba...', 'info');
     const batch = writeBatch(db);
-    const TOTAL_PRODUCTS = 50; // Aumentado a 50 productos
+    const TOTAL_PRODUCTS = 10;
 
     const setInBatch = (collectionName, data) => {
         const docRef = doc(db, collectionName, data.id);
@@ -985,9 +987,11 @@ async function seedDatabase() {
     for (let i = 1; i <= TOTAL_PRODUCTS; i++) {
         const productId = `PROD${String(i).padStart(4, '0')}`;
         const productoData = {
-            id: productId, codigo_pieza: productId, lc_kd: getRandomItem(['LC', 'KD']),
+            id: productId,
+            codigo_pieza: productId,
+            lc_kd: getRandomItem(['LC', 'KD']),
             version_vehiculo: `${getRandomItem(vehicleBrands)} ${getRandomItem(vehicleModels)} 2024`,
-            descripcion: `Ensamblaje ${getRandomItem(productAdjectives)} de ${getRandomItem(productNouns)}`,
+            descripcion: `Ensamblaje ${getRandomItem(productAdjectives)} de ${getRandomItem(productNouns)} ${i}`,
             version: '1.0',
             fecha_modificacion: getRandomDate(new Date(2024, 0, 1), new Date()),
             imagen: getRandomItem(imageUrls),
@@ -997,27 +1001,42 @@ async function seedDatabase() {
             color: getRandomItem(colors),
             piezas_por_vehiculo: Math.floor(Math.random() * 4) + 1,
             material_separar: getRandomItem([true, false]),
+            aspecto: getRandomItem(['Sí', 'No']),
+            proceso: getRandomItem(generated.procesos).id
         };
 
         const crearNodo = (tipo, refId) => ({
             id: `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            refId, tipo, icon: { producto: 'package', semiterminado: 'box', insumo: 'beaker' }[tipo],
-            quantity: Math.floor(Math.random() * 10) + 1, children: []
+            refId,
+            tipo,
+            icon: { producto: 'package', semiterminado: 'box', insumo: 'beaker' }[tipo],
+            quantity: Math.floor(Math.random() * 10) + 1,
+            children: []
         });
 
         const rootNode = crearNodo('producto', productoData.id);
 
-        // Crear una estructura de árbol aleatoria
-        const maxDepth = 4;
-        const maxChildren = 5;
+        // Define complexity for different products
+        let maxDepth, maxChildren;
+        if (i === 1) { // Large product
+            maxDepth = 5;
+            maxChildren = 6;
+            productoData.descripcion = `Gran Ensamblaje de Chasis para ${getRandomItem(vehicleBrands)}`;
+        } else if (i === TOTAL_PRODUCTS) { // Small product
+            maxDepth = 2;
+            maxChildren = 2;
+            productoData.descripcion = `Soporte Pequeño de Motor para ${getRandomItem(vehicleModels)}`;
+        } else { // Medium products
+            maxDepth = 3;
+            maxChildren = 4;
+        }
 
         function buildTree(node, depth) {
             if (depth >= maxDepth) return;
 
             const numChildren = Math.floor(Math.random() * maxChildren) + 1;
             for (let j = 0; j < numChildren; j++) {
-                // 70% de probabilidad de ser semiterminado, 30% de ser insumo (si no es muy profundo)
-                const isSemi = Math.random() < 0.7 && depth < maxDepth -1;
+                const isSemi = Math.random() < 0.7 && depth < maxDepth - 1;
                 if (isSemi) {
                     const semi = getRandomItem(generated.semiterminados);
                     const childNode = crearNodo('semiterminado', semi.id);
@@ -1033,7 +1052,7 @@ async function seedDatabase() {
 
         buildTree(rootNode, 1);
         productoData.estructura = [rootNode];
-        generated.productos.push(productoData); // This line was missing
+        generated.productos.push(productoData);
         setInBatch(COLLECTIONS.PRODUCTOS, productoData);
     }
 
@@ -9735,7 +9754,7 @@ export function runSinopticoTabularLogic() {
                 proceso = procesoData ? procesoData.descripcion : item.proceso;
             }
 
-            const aspecto = node.tipo === 'semiterminado' ? (item.aspecto || NA) : NA;
+            const aspecto = item.aspecto || NA;
 
             let peso_display = NA;
             if (node.tipo === 'semiterminado' && item.peso_gr) {
@@ -10820,8 +10839,8 @@ async function exportProductTreePdf(productNode) {
         doc.setFontSize(FONT_SIZES.HEADER_TABLE);
         doc.setTextColor('#FFFFFF');
 
-        const headers = ['Componente', 'Tipo', 'Cantidad', 'Código'];
-        const colX = [PAGE_MARGIN + 2, 110, 135, 160];
+        const headers = ['Componente', 'Tipo', 'Aspecto', 'Cantidad', 'Código'];
+        const colX = [PAGE_MARGIN + 2, 110, 135, 150, 170];
         headers.forEach((header, i) => {
             doc.text(header, colX[i], cursorY + BASE_ROW_HEIGHT / 2, { baseline: 'middle' });
         });
@@ -10874,14 +10893,17 @@ async function exportProductTreePdf(productNode) {
         doc.text(descriptionLines, descriptionX, cursorY + 3.5);
         doc.text(node.tipo.charAt(0).toUpperCase() + node.tipo.slice(1), 110, textY, { baseline: 'middle' });
 
+        const aspecto = item.aspecto || 'N/A';
+        doc.text(aspecto, 135, textY, { baseline: 'middle' });
+
         const unitData = appState.collectionsById[COLLECTIONS.UNIDADES].get(item.unidadMedidaId);
         const unit = unitData ? unitData.id : 'Un';
         const quantityValue = node.quantity;
         const isQuantitySet = quantityValue !== null && quantityValue !== undefined;
         const quantityText = isQuantitySet ? `${quantityValue} ${unit}` : '---';
-        doc.text(node.tipo !== 'producto' ? quantityText : '', 135, textY, { baseline: 'middle' });
+        doc.text(node.tipo !== 'producto' ? quantityText : '', 150, textY, { baseline: 'middle' });
 
-        doc.text(item.id, 160, textY, { baseline: 'middle' });
+        doc.text(item.id, 170, textY, { baseline: 'middle' });
 
         cursorY += rowHeight;
         return true;
