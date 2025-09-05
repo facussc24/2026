@@ -21,14 +21,13 @@ import newControlPanelTutorial from './new-control-panel-tutorial.js';
 // NO REEMPLAZAR con la inicialización automática de Firebase Hosting sin
 // refactorizar la carga de módulos en toda la aplicación.
 const firebaseConfig = {
-  apiKey: "AIzaSyDxSXFD1WJkpS8aVfSDXyzQ0bsdPqWCgk0",
-  authDomain: "barack2-0-f81a6.firebaseapp.com",
-  databaseURL: "https://barack2-0-f81a6-default-rtdb.firebaseio.com",
-  projectId: "barack2-0-f81a6",
-  storageBucket: "barack2-0-f81a6.firebasestorage.app",
-  messagingSenderId: "879433250962",
-  appId: "1:879433250962:web:ae73b31bacb1c4db094e4b",
-  measurementId: "G-KN7R7JZKTR"
+  apiKey: "AIzaSyAUQxlBCiYoR4-tlGL-S3xR8LXrrMkx1Tk",
+  authDomain: "barackingenieria-e763c.firebaseapp.com",
+  projectId: "barackingenieria-e763c",
+  storageBucket: "barackingenieria-e763c.firebasestorage.app",
+  messagingSenderId: "44704892099",
+  appId: "1:44704892099:web:738c8cbc3cea65808a8e76",
+  measurementId: "G-ZHZ3R9XXDM"
 };
 
 // Inicializar Firebase
