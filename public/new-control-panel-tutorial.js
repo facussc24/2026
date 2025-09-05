@@ -1,18 +1,36 @@
 /**
- * **New and Improved** Interactive Tutorial Module for the ECR/ECO Control Panel
- * Generated based on AI-provided steps.
+ * @file Interactive Tutorial Module for the new ECR/ECO Control Panel.
+ * @description This module provides a guided tour for the redesigned control panel,
+ * showcasing its three main modules: the detailed ECR table, the KPI dashboard,
+ * and the meeting tracking section.
+ * @module newControlPanelTutorial
+ */
+
+/**
+ * Creates and manages an interactive tutorial for the control panel.
+ * @param {object} app - The main application object, providing access to core functions
+ * like `switchView`, `showToast`, and data seeding functions.
+ * @returns {object} A tutorial instance with `start` and `skip` methods.
  */
 const newControlPanelTutorial = (app) => {
     let currentStepIndex = 0;
     let steps = [];
 
+    /**
+     * @property {HTMLElement|null} overlay - The main overlay element for the tutorial.
+     * @property {HTMLElement|null} tooltip - The tooltip element to display step information.
+     * @property {HTMLElement|null} highlight - The element used to highlight parts of the UI.
+     */
     const dom = {
         overlay: null,
         tooltip: null,
         highlight: null,
     };
 
-    // Steps for the improved tutorial
+    /**
+     * An array of tutorial step definitions for the control panel tour.
+     * @type {Array<object>}
+     */
     const TUTORIAL_STEPS = [
         {
             element: 'body',
@@ -101,6 +119,9 @@ const newControlPanelTutorial = (app) => {
         }
     ];
 
+    /**
+     * Creates the main DOM elements for the tutorial UI.
+     */
     const createTutorialUI = () => {
         dom.overlay = document.createElement('div');
         dom.overlay.id = 'tutorial-overlay';
@@ -110,21 +131,14 @@ const newControlPanelTutorial = (app) => {
         dom.tooltip = document.createElement('div');
         dom.tooltip.id = 'tutorial-tooltip';
         dom.tooltip.innerHTML = `
-            <div id="tutorial-tooltip-content">
-                <h3 id="tutorial-tooltip-title"></h3>
-                <p id="tutorial-tooltip-text"></p>
-            </div>
+            <div id="tutorial-tooltip-content"><h3 id="tutorial-tooltip-title"></h3><p id="tutorial-tooltip-text"></p></div>
             <div id="tutorial-tooltip-nav">
                 <div id="tutorial-tooltip-progress"></div>
                 <div id="tutorial-nav-buttons">
                     <button id="tutorial-skip-btn">Omitir</button>
-                    <div id="tutorial-nav-right">
-                        <button id="tutorial-prev-btn">Anterior</button>
-                        <button id="tutorial-next-btn">Siguiente</button>
-                    </div>
+                    <div id="tutorial-nav-right"><button id="tutorial-prev-btn">Anterior</button><button id="tutorial-next-btn">Siguiente</button></div>
                 </div>
-            </div>
-        `;
+            </div>`;
         dom.overlay.appendChild(dom.tooltip);
         document.body.appendChild(dom.overlay);
         document.getElementById('tutorial-skip-btn').addEventListener('click', skip);
@@ -132,6 +146,12 @@ const newControlPanelTutorial = (app) => {
         document.getElementById('tutorial-next-btn').addEventListener('click', next);
     };
 
+    /**
+     * Waits for a specified element to become visible in the DOM.
+     * @param {string} selector - The CSS selector for the element.
+     * @param {number} [timeout=7000] - The maximum time to wait.
+     * @returns {Promise<Element|null>} A promise that resolves with the element or null.
+     */
     const waitForVisibleElement = (selector, timeout = 7000) => {
         return new Promise(resolve => {
             if (selector === 'body') return resolve(document.body);
@@ -156,6 +176,11 @@ const newControlPanelTutorial = (app) => {
     let resizeObserver = null;
     let scrollHandler = null;
 
+    /**
+     * Updates the position and size of the highlight element.
+     * @param {Element} targetElement - The element to highlight.
+     * @param {object} step - The current tutorial step object.
+     */
     const updateHighlight = (targetElement, step) => {
         if (!targetElement || !dom.highlight) return;
         const targetRect = targetElement.getBoundingClientRect();
@@ -167,6 +192,10 @@ const newControlPanelTutorial = (app) => {
         positionTooltip(targetRect, step.position);
     };
 
+    /**
+     * Shows a specific step of the tutorial.
+     * @param {number} index - The index of the step to show.
+     */
     const showStep = async (index) => {
         if (resizeObserver) resizeObserver.disconnect();
         if (scrollHandler) window.removeEventListener('scroll', scrollHandler, true);
@@ -176,26 +205,18 @@ const newControlPanelTutorial = (app) => {
         currentStepIndex = index;
         const step = steps[index];
 
-        if (dom.overlay) {
-            dom.overlay.style.display = 'none';
-        }
-
+        if (dom.overlay) dom.overlay.style.display = 'none';
         if (step.preAction) await step.preAction();
 
         const targetElement = await waitForVisibleElement(step.element);
+        if (dom.overlay) dom.overlay.style.display = 'block';
 
-        if (dom.overlay) {
-            dom.overlay.style.display = 'block';
-        }
         if (!targetElement) {
             app.showToast(`Elemento del tutorial no encontrado: ${step.element}`, 'error');
             return next();
         }
 
         await smartScroll(targetElement);
-
-        // The setTimeout wrapper has been removed. By awaiting a properly implemented
-        // smartScroll, we ensure the highlight is drawn after the element is in place.
         document.getElementById('tutorial-tooltip-title').textContent = step.title;
         document.getElementById('tutorial-tooltip-text').innerHTML = step.content;
         document.getElementById('tutorial-prev-btn').style.display = index === 0 ? 'none' : 'inline-block';
@@ -207,91 +228,57 @@ const newControlPanelTutorial = (app) => {
         window.addEventListener('scroll', scrollHandler = () => updateHighlight(targetElement, step), true);
     };
 
+    /**
+     * Intelligently scrolls an element into view only if needed.
+     * @param {Element} element - The DOM element to scroll to.
+     * @returns {Promise<void>}
+     */
     const smartScroll = (element) => {
         return new Promise(resolve => {
             const rect = element.getBoundingClientRect();
-            const isVisible = (
-                rect.top >= 0 &&
-                rect.left >= 0 &&
-                rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-            );
-
+            const isVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
             if (!isVisible) {
                 element.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
-                // We wait for two animation frames to ensure the browser has painted the change.
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(resolve);
-                });
+                requestAnimationFrame(() => requestAnimationFrame(resolve));
             } else {
                 resolve();
             }
         });
     };
 
+    /**
+     * Positions the tooltip relative to the target element, with smart flipping.
+     * @param {DOMRect} targetRect - The bounding rect of the highlighted element.
+     * @param {string} [position='bottom'] - The desired position.
+     */
     const positionTooltip = (targetRect, position = 'bottom') => {
         const tooltipRect = dom.tooltip.getBoundingClientRect();
         const spacing = 10;
         let top, left;
         let finalPosition = position;
 
-        // Try to flip right to left if there's no space
-        if (position === 'right' && (targetRect.right + spacing + tooltipRect.width > window.innerWidth)) {
-            finalPosition = 'left';
-        }
-        // Try to flip left to right if there's no space
-        if (position === 'left' && (targetRect.left - spacing - tooltipRect.width < 0)) {
-            finalPosition = 'right';
-        }
-        // Try to flip top to bottom if there's no space
-        if (position === 'top' && (targetRect.top - spacing - tooltipRect.height < 0)) {
-            finalPosition = 'bottom';
-        }
-        // Try to flip bottom to top if there's no space
-        if (position === 'bottom' && (targetRect.bottom + spacing + tooltipRect.height > window.innerHeight)) {
-            finalPosition = 'top';
-        }
+        if (position === 'right' && (targetRect.right + spacing + tooltipRect.width > window.innerWidth)) finalPosition = 'left';
+        if (position === 'left' && (targetRect.left - spacing - tooltipRect.width < 0)) finalPosition = 'right';
+        if (position === 'top' && (targetRect.top - spacing - tooltipRect.height < 0)) finalPosition = 'bottom';
+        if (position === 'bottom' && (targetRect.bottom + spacing + tooltipRect.height > window.innerHeight)) finalPosition = 'top';
 
-        // Calculate position based on the (potentially flipped) finalPosition
         switch (finalPosition) {
-            case 'top':
-                top = targetRect.top - tooltipRect.height - spacing;
-                left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2);
-                break;
-            case 'right':
-                top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2);
-                left = targetRect.right + spacing;
-                break;
-            case 'left':
-                top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2);
-                left = targetRect.left - tooltipRect.width - spacing;
-                break;
-            case 'bottom':
-            default:
-                top = targetRect.bottom + spacing;
-                left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2);
-                break;
+            case 'top': top = targetRect.top - tooltipRect.height - spacing; left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2); break;
+            case 'right': top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2); left = targetRect.right + spacing; break;
+            case 'left': top = targetRect.top + (targetRect.height / 2) - (tooltipRect.height / 2); left = targetRect.left - tooltipRect.width - spacing; break;
+            default: top = targetRect.bottom + spacing; left = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2); break;
         }
 
-        // --- Final Boundary Enforcement ---
-        // Ensure the tooltip never goes out of bounds, no matter what.
-        if (left < spacing) {
-            left = spacing;
-        }
-        if (left + tooltipRect.width > window.innerWidth - spacing) {
-            left = window.innerWidth - tooltipRect.width - spacing;
-        }
-        if (top < spacing) {
-            top = spacing;
-        }
-        if (top + tooltipRect.height > window.innerHeight - spacing) {
-            top = window.innerHeight - tooltipRect.height - spacing;
-        }
+        left = Math.max(spacing, Math.min(left, window.innerWidth - tooltipRect.width - spacing));
+        top = Math.max(spacing, Math.min(top, window.innerHeight - tooltipRect.height - spacing));
 
         dom.tooltip.style.top = `${top}px`;
         dom.tooltip.style.left = `${left}px`;
     };
 
+    /**
+     * Starts the tutorial, seeding data if necessary.
+     */
     const start = async () => {
         if (dom.overlay) return;
         if (app && typeof app.seedControlPanelTutorialData === 'function') {
@@ -303,14 +290,23 @@ const newControlPanelTutorial = (app) => {
         await showStep(0);
     };
 
+    /**
+     * Moves to the next step.
+     */
     const next = async () => {
         await showStep(currentStepIndex + 1);
     };
 
+    /**
+     * Moves to the previous step.
+     */
     const previous = async () => {
         await showStep(currentStepIndex - 1);
     };
 
+    /**
+     * Skips and closes the tutorial.
+     */
     const skip = () => {
         if (resizeObserver) resizeObserver.disconnect();
         if (scrollHandler) window.removeEventListener('scroll', scrollHandler, true);
