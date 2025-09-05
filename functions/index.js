@@ -255,6 +255,140 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
+exports.sendTaskNotification = functions
+  .runWith({ secrets: ["TELEGRAM_TOKEN"] })
+  .firestore.document('tareas/{taskId}')
+  .onWrite(async (change, context) => {
+    const beforeData = change.before.exists ? change.before.data() : null;
+    const afterData = change.after.exists ? change.after.data() : null;
+
+    if (!afterData) {
+      console.log(`Task ${context.params.taskId} deleted. No notification sent.`);
+      return null;
+    }
+
+    const taskId = context.params.taskId;
+    let message = null;
+    let targetUid = null;
+
+    const wasJustCreated = !beforeData && afterData;
+    const statusChanged = beforeData && afterData.status !== beforeData.status;
+
+    // Notification for New Task Assignment
+    if (wasJustCreated && afterData.assigneeUid) {
+        targetUid = afterData.assigneeUid;
+        const creator = await admin.auth().getUser(afterData.creatorUid);
+        message = `🔔 *Nueva Tarea Asignada*\n\n*Tarea:* ${afterData.title}\n*Asignada por:* ${creator.displayName || creator.email}`;
+    }
+    // Notification for Task Status Change
+    else if (statusChanged && afterData.creatorUid) {
+        targetUid = afterData.creatorUid;
+        const assignee = afterData.assigneeUid ? await admin.auth().getUser(afterData.assigneeUid) : null;
+        const assigneeName = assignee ? (assignee.displayName || assignee.email) : 'Nadie';
+        message = `✅ *Actualización de Tarea*\n\nLa tarea *${afterData.title}* que creaste ha cambiado su estado a *${afterData.status}* por ${assigneeName}.`;
+    }
+
+    if (!message || !targetUid) {
+      console.log(`No notification condition met for task ${taskId}.`);
+      return null;
+    }
+
+    try {
+      const userDoc = await admin.firestore().collection('usuarios').doc(targetUid).get();
+      if (!userDoc.exists) {
+        console.log(`User document for UID ${targetUid} not found.`);
+        return null;
+      }
+
+      const userData = userDoc.data();
+      const telegramChatId = userData.telegramChatId;
+
+      if (!telegramChatId) {
+        console.log(`User ${targetUid} has not configured their Telegram Chat ID.`);
+        return null;
+      }
+
+      const notificationPrefs = userData.telegramNotifications || {};
+      if (wasJustCreated && notificationPrefs.onAssignment === false) {
+          console.log(`User ${targetUid} has disabled 'onAssignment' notifications.`);
+          return null;
+      }
+      if (statusChanged && notificationPrefs.onStatusChange === false) {
+          console.log(`User ${targetUid} has disabled 'onStatusChange' notifications.`);
+          return null;
+      }
+
+      const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+      const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+
+      await axios.post(url, {
+        chat_id: telegramChatId,
+        text: message,
+        parse_mode: 'Markdown'
+      });
+
+      console.log(`Telegram notification sent to user ${targetUid} for task ${taskId}.`);
+      return null;
+
+    } catch (error) {
+      console.error(`Failed to send Telegram notification for task ${taskId}:`, error);
+      if (error.response) {
+        console.error('Telegram API Error:', error.response.data);
+      }
+      return null;
+    }
+  });
+
+exports.sendTestTelegramMessage = functions
+  .runWith({ secrets: ["TELEGRAM_TOKEN"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+    const uid = context.auth.uid;
+
+    try {
+      const userDoc = await admin.firestore().collection("usuarios").doc(uid).get();
+      if (!userDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "User document not found.");
+      }
+      const telegramChatId = userDoc.data().telegramChatId;
+
+      if (!telegramChatId) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "El Chat ID de Telegram no está configurado para este usuario."
+        );
+      }
+
+      const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+      const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+      const message = "¡Hola! 👋 Esta es una prueba de notificación de Telegram desde Gestión PRO. ¡La configuración funciona!";
+
+      await axios.post(url, {
+        chat_id: telegramChatId,
+        text: message,
+        parse_mode: "Markdown",
+      });
+
+      console.log(`Test message sent to user ${uid} at chat ID ${telegramChatId}`);
+      return { success: true, message: "Mensaje de prueba enviado con éxito." };
+
+    } catch (error) {
+      console.error(`Error sending test message to user ${uid}:`, error);
+      if (error instanceof functions.https.HttpsError) {
+        throw error;
+      }
+      throw new functions.https.HttpsError(
+        "internal",
+        "Ocurrió un error inesperado al enviar el mensaje de prueba."
+      );
+    }
+  });
+
 exports.updateCollectionCounts = functions.firestore
   .document('{collectionId}/{docId}')
   .onWrite(async (change, context) => {

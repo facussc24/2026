@@ -5222,6 +5222,81 @@ function renderNotificationCenter() {
     `;
     lucide.createIcons();
 
+    // --- Telegram Config Logic ---
+    const loadTelegramConfig = () => {
+        const user = appState.currentUser;
+        if (user) {
+            const chatIdInput = document.getElementById('telegram-chat-id');
+            const onAssignmentCheck = document.getElementById('notify-on-assignment');
+            const onStatusChangeCheck = document.getElementById('notify-on-status-change');
+
+            if (chatIdInput) {
+                chatIdInput.value = user.telegramChatId || '';
+            }
+            if (onAssignmentCheck) {
+                // Default to true if not set
+                onAssignmentCheck.checked = user.telegramNotifications?.onAssignment !== false;
+            }
+            if (onStatusChangeCheck) {
+                // Default to true if not set
+                onStatusChangeCheck.checked = user.telegramNotifications?.onStatusChange !== false;
+            }
+        }
+    };
+
+    const saveTelegramConfig = async () => {
+        const chatId = document.getElementById('telegram-chat-id').value.trim();
+        const onAssignment = document.getElementById('notify-on-assignment').checked;
+        const onStatusChange = document.getElementById('notify-on-status-change').checked;
+
+        if (!chatId || !/^-?\d+$/.test(chatId)) {
+            showToast('Por favor, ingrese un Chat ID de Telegram válido (solo números).', 'error');
+            return;
+        }
+
+        const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
+        try {
+            await updateDoc(userDocRef, {
+                telegramChatId: chatId,
+                telegramNotifications: {
+                    onAssignment: onAssignment,
+                    onStatusChange: onStatusChange
+                }
+            });
+            showToast('Configuración de Telegram guardada.', 'success');
+        } catch (error) {
+            console.error("Error saving Telegram config:", error);
+            showToast('Error al guardar la configuración.', 'error');
+        }
+    };
+
+    document.getElementById('save-telegram-config-btn')?.addEventListener('click', saveTelegramConfig);
+
+    const testButton = document.getElementById('send-test-telegram-btn');
+    if (testButton) {
+        testButton.addEventListener('click', async () => {
+            const originalText = testButton.textContent;
+            testButton.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Enviando...';
+            testButton.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const sendTestMessage = httpsCallable(functions, 'sendTestTelegramMessage');
+                const result = await sendTestMessage();
+                showToast(result.data.message, 'success');
+            } catch (error) {
+                console.error("Error sending test message:", error);
+                const errorMessage = error.message || "Error desconocido.";
+                showToast(`Error: ${errorMessage}`, 'error');
+            } finally {
+                testButton.innerHTML = originalText;
+                testButton.disabled = false;
+            }
+        });
+    }
+
+    loadTelegramConfig(); // Load config when the view is rendered
+
     document.getElementById('notification-bell')?.addEventListener('click', () => {
         document.getElementById('notification-dropdown')?.classList.toggle('hidden');
     });
@@ -7552,8 +7627,63 @@ function runKanbanBoardLogic() {
         `;
     }
 
+    const telegramConfigHTML = `
+        <div id="telegram-config-section" class="bg-white p-6 rounded-xl shadow-lg mb-6 border border-blue-200">
+            <div class="flex items-center gap-4">
+                <i data-lucide="send" class="w-10 h-10 text-blue-500"></i>
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800">Configuración de Notificaciones de Telegram</h3>
+                    <p class="text-sm text-slate-500 mt-1">Recibe notificaciones de tus tareas directamente en tu teléfono.</p>
+                </div>
+            </div>
+
+            <div class="mt-4 text-sm text-slate-600 bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
+                <div>
+                    <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="info"></i>¿Cómo funciona?</p>
+                    <ul class="list-disc list-inside space-y-1 pl-5">
+                        <li>Recibirás un mensaje cuando alguien te <strong>asigne una tarea nueva</strong>.</li>
+                        <li>Recibirás un mensaje cuando el estado de una <strong>tarea que tú creaste</strong> cambie (por ejemplo, de "Por Hacer" a "En Progreso").</li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="help-circle"></i>¿Cómo obtener tu Chat ID?</p>
+                    <p class="pl-5">
+                        Abre Telegram y busca el bot <a href="https://t.me/userinfobot" target="_blank" class="text-blue-600 font-semibold hover:underline">@userinfobot</a>. Inicia una conversación con él y te enviará tu Chat ID numérico. Cópialo y pégalo en el campo de abajo.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t">
+                <div>
+                    <label for="telegram-chat-id" class="block text-sm font-medium text-gray-700 mb-1">Tu Chat ID de Telegram</label>
+                    <input type="text" id="telegram-chat-id" placeholder="Ingresa tu Chat ID numérico" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">¿Cuándo notificar?</label>
+                    <div class="space-y-2 mt-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-assignment" name="onAssignment" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Cuando se me asigna una tarea nueva.</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-status-change" name="onStatusChange" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Cuando una tarea que creé cambia de estado.</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex items-center gap-4">
+                <button id="save-telegram-config-btn" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Configuración</button>
+                <button id="send-test-telegram-btn" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold">Enviar Mensaje de Prueba</button>
+            </div>
+        </div>
+    `;
+
+
     // 1. Set up the basic HTML layout for the board
     dom.viewContent.innerHTML = `
+        ${telegramConfigHTML}
         ${topBarHTML}
         <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 ${taskState.selectedUserId ? 'hidden' : ''}">
             <div id="task-filters" class="flex items-center gap-2 rounded-lg bg-slate-200 p-1 flex-wrap"></div>
@@ -7737,7 +7867,6 @@ function renderTaskFilters() {
     ];
     if (appState.currentUser.role === 'admin') {
         filters.push({ key: 'all', label: 'Todas' });
-        filters.push({ key: 'supervision', label: 'Supervisión' });
     }
     const filterContainer = document.getElementById('task-filters');
     filterContainer.innerHTML = filters.map(f => `
