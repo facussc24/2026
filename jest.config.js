@@ -7,6 +7,8 @@ export default {
   },
   testEnvironment: 'jsdom',
   testMatch: ['<rootDir>/tests/unit/**/*.spec.js'],
-  transform: {},
+  transform: {
+    '^.+\\.js$': 'babel-jest',
+  },
   setupFilesAfterEnv: ['<rootDir>/tests/jest.setup.js'],
 };
