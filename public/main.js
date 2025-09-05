@@ -6,7 +6,7 @@ import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWith
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage } from './utils.js';
-import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData } from './data_logic.js';
+import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
 
@@ -4943,6 +4943,13 @@ async function runEcrFormLogic(params = null) {
             batch.set(historyDocRef, dataToSave);
 
             await batch.commit();
+
+            // After saving, check if the status needs to be updated due to the changes.
+            const newStatus = checkAndUpdateEcrStatus(dataToSave);
+            if (newStatus && newStatus !== dataToSave.status) {
+                showToast(`El estado del ECR ha cambiado a: ${newStatus}`, 'info');
+                await updateDoc(docRef, { status: newStatus });
+            }
 
             localStorage.removeItem(ECR_FORM_STORAGE_KEY);
             showToast('ECR guardado con éxito.', 'success', { toastId });
