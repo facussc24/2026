@@ -101,17 +101,15 @@ const viewConfig = {
         dataKey: COLLECTIONS.PRODUCTOS,
         columns: [
             { key: 'codigo_pieza', label: 'Código de pieza' },
+            { key: 'codigo_cliente', label: 'Código de cliente' },
             { key: 'descripcion', label: 'Descripción' },
-            { key: 'version_vehiculo', label: 'Versión Vehículo' },
         ],
         fields: [
-            { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
-            { key: 'version_vehiculo', label: 'Versión del Vehículo', type: 'text', required: true },
-            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
             { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
-            { key: 'version', label: 'Versión', type: 'text' },
+            { key: 'codigo_cliente', label: 'Código de cliente', type: 'text' },
+            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
+            { key: 'peso', label: 'Peso (gr)', type: 'number' },
             { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
-            { key: 'fecha_modificacion', label: 'Fecha de Modificación', type: 'date' },
         ]
     },
     semiterminados: {
@@ -127,13 +125,11 @@ const viewConfig = {
             { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
             { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
             { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
-            { key: 'version', label: 'Versión', type: 'text' },
             { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
-            { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
-            { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Crítico', 'No Crítico'], required: true },
+            { key: 'proceso', label: 'Proceso', type: 'text', readonly: true, defaultValue: 'proceso productos semiterminados' },
+            { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
             { key: 'peso_gr', label: 'Peso (gr)', type: 'number' },
             { key: 'tolerancia_gr', label: 'Tolerancia (gr)', type: 'number' },
-            { key: 'fecha_modificacion', label: 'Fecha de Modificación', type: 'date' },
         ]
     },
     insumos: {
@@ -146,15 +142,15 @@ const viewConfig = {
             { key: 'proveedor', label: 'Proveedor' },
         ],
         fields: [
-            { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
-            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
             { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
-            { key: 'version', label: 'Versión', type: 'text' },
+            { key: 'codigo_proveedor', label: 'Código de proveedor', type: 'text', required: true },
+            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
+            { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
             { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
             { key: 'proveedor', label: 'Proveedor', type: 'select', searchKey: COLLECTIONS.PROVEEDORES, required: true },
-            { key: 'costo', label: 'Costo', type: 'number' },
+            { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
+            { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
             { key: 'unidad_medida', label: 'Unidad de Medida', type: 'select', searchKey: COLLECTIONS.UNIDADES, required: true },
-            { key: 'fecha_modificacion', label: 'Fecha de Modificación', type: 'date' },
         ]
     },
     clientes: { title: 'Clientes', singular: 'Cliente', dataKey: COLLECTIONS.CLIENTES, columns: [ { key: 'id', label: 'Código' }, { key: 'descripcion', label: 'Descripción' } ], fields: [ { key: 'id', label: 'Código', type: 'text', required: true }, { key: 'descripcion', label: 'Descripción', type: 'text', required: true } ] },
