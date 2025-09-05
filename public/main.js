@@ -103,11 +103,13 @@ const viewConfig = {
             { key: 'codigo_pieza', label: 'Código de pieza' },
             { key: 'codigo_cliente', label: 'Código de cliente' },
             { key: 'descripcion', label: 'Descripción' },
+            { key: 'proceso', label: 'Proceso' },
         ],
         fields: [
             { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
             { key: 'codigo_cliente', label: 'Código de cliente', type: 'text' },
             { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
+            { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
             { key: 'peso', label: 'Peso (gr)', type: 'number' },
             { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
         ]
@@ -122,14 +124,14 @@ const viewConfig = {
             { key: 'proceso', label: 'Proceso' },
         ],
         fields: [
-            { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
-            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
             { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
-            { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
-            { key: 'proceso', label: 'Proceso', type: 'text', readonly: true, defaultValue: 'proceso productos semiterminados' },
+            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
+            { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
+            { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
             { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
             { key: 'peso_gr', label: 'Peso (gr)', type: 'number' },
             { key: 'tolerancia_gr', label: 'Tolerancia (gr)', type: 'number' },
+            { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
         ]
     },
     insumos: {
@@ -140,6 +142,7 @@ const viewConfig = {
             { key: 'codigo_pieza', label: 'Código de pieza' },
             { key: 'descripcion', label: 'Descripción' },
             { key: 'proveedor', label: 'Proveedor' },
+            { key: 'proceso', label: 'Proceso' },
         ],
         fields: [
             { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
@@ -9727,7 +9730,7 @@ export function runSinopticoTabularLogic() {
             const version = item.version || NA;
 
             let proceso = NA;
-            if (node.tipo === 'semiterminado' && item.proceso) {
+            if (item.proceso) {
                 const procesoData = appState.collectionsById[COLLECTIONS.PROCESOS]?.get(item.proceso);
                 proceso = procesoData ? procesoData.descripcion : item.proceso;
             }
@@ -10687,8 +10690,10 @@ function initSinoptico() {
         switch (targetNode.tipo) {
             case 'producto':
                 const client = appState.collectionsById[COLLECTIONS.CLIENTES].get(item.clienteId);
+                const procesoProd = appState.collectionsById[COLLECTIONS.PROCESOS]?.get(item.proceso);
                 content += createRow('building-2', 'Cliente', client?.descripcion);
                 content += createRow('hash', 'Código Cliente', item.codigo_cliente);
+                if(procesoProd) content += createRow('cpu', 'Proceso', procesoProd.descripcion);
                 content += createRow('tag', 'Versión', item.version);
                 content += createRow('car', 'Piezas por Vehículo', item.pzas_vh);
                 content += createRow('scale', 'Peso', item.peso_gr ? `${item.peso_gr} gr` : null);
@@ -10698,6 +10703,8 @@ function initSinoptico() {
                 const tiempoCiclo = item.tiempo_ciclo_seg ? `${item.tiempo_ciclo_seg} seg` : null;
                 const peso = item.peso_gr ? `${item.peso_gr} gr` : null;
                 const tolerancia = item.tolerancia_peso_gr ? `± ${item.tolerancia_peso_gr} gr` : null;
+                const procesoSemi = appState.collectionsById[COLLECTIONS.PROCESOS]?.get(item.proceso);
+                if(procesoSemi) content += createRow('cpu', 'Proceso', procesoSemi.descripcion);
                 content += createRow('timer', 'Tiempo Ciclo', tiempoCiclo);
                 content += createRow('scale', 'Peso', peso);
                 content += createRow('plus-minus', 'Tolerancia de Peso', tolerancia);
@@ -10708,6 +10715,8 @@ function initSinoptico() {
             case 'insumo':
                 const proveedor = appState.collectionsById[COLLECTIONS.PROVEEDORES].get(item.proveedorId);
                 const unidad = appState.collectionsById[COLLECTIONS.UNIDADES].get(item.unidadMedidaId);
+                const procesoInsumo = appState.collectionsById[COLLECTIONS.PROCESOS]?.get(item.proceso);
+                if(procesoInsumo) content += createRow('cpu', 'Proceso', procesoInsumo.descripcion);
                 content += createRow('truck', 'Proveedor', proveedor?.descripcion);
                 content += createRow('layers-3', 'Material', item.material);
                 content += createRow('ruler', 'Unidad Medida', unidad?.descripcion);
