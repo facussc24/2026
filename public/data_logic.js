@@ -230,6 +230,14 @@ export function checkAndUpdateEcrStatus(ecrData, currentDecision = '') {
 
     const requiredApprovals = allDepartments.filter(dept => ecrData[`afecta_${dept}`] === true);
 
+    // If any required department has rejected, the whole ECR is rejected.
+    const hasRejection = requiredApprovals.some(
+        dept => ecrData.approvals?.[dept]?.status === 'rejected'
+    );
+    if (hasRejection) {
+        return 'rejected';
+    }
+
     // If there are no required departments, one 'approved' decision is enough to approve the ECR.
     if (requiredApprovals.length === 0) {
         // This handles the edge case where no departments are checked, but a user (e.g., admin) approves.

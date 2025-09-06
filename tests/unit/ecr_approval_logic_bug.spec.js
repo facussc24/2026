@@ -44,4 +44,25 @@ describe('ECR Approval Status Logic', () => {
         // 4. The status should now be 'approved' because the only remaining requirement ('calidad') is met.
         expect(newStatus).toBe('approved');
     });
+
+    test('[BUG] should transition status to "rejected" as soon as one department rejects', () => {
+        // --- ARRANGE ---
+        // ECR requires 'calidad' and 'compras'
+        const ecrData = {
+            status: 'pending-approval',
+            afecta_calidad: true, // Required
+            afecta_compras: true, // Required
+            approvals: {
+                calidad: { status: 'approved', user: 'User A' },
+                compras: { status: 'rejected', user: 'User B' } // 'compras' rejects
+            }
+        };
+
+        // --- ACT ---
+        const newStatus = checkAndUpdateEcrStatus(ecrData);
+
+        // --- ASSERT ---
+        // The status should immediately become 'rejected'.
+        expect(newStatus).toBe('rejected');
+    });
 });
