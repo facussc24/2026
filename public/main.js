@@ -11424,12 +11424,15 @@ function exportSinopticoPdf(activeFilters) {
  */
 export function regenerateNodeIds(nodes) {
     if (!nodes) return;
+
+    // Use a more unique prefix for each batch of nodes
+    const prefix = `comp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     let counter = 0;
-    const timestamp = Date.now();
 
     function processNodes(nodeArray) {
         nodeArray.forEach(node => {
-            node.id = `comp_${timestamp}_${counter++}`;
+            // The combination of the unique prefix and an incrementing counter ensures uniqueness.
+            node.id = `${prefix}_${counter++}`;
             if (node.children) {
                 processNodes(node.children);
             }
