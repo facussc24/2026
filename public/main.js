@@ -4974,7 +4974,11 @@ async function runEcrFormLogic(params = null) {
     });
 
     const saveEcrForm = async (status = 'in-progress') => {
-        const dataToSave = getEcrFormData(formContainer);
+        const dataFromForm = getEcrFormData(formContainer);
+
+        // Combine the fresh form data with the existing ECR data (especially the approvals).
+        const dataToSave = { ...ecrData, ...dataFromForm };
+
         dataToSave.status = status;
         dataToSave.lastModified = new Date();
         dataToSave.modifiedBy = appState.currentUser.email;
