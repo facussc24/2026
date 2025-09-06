@@ -746,7 +746,8 @@ async function seedEcrs(batch, users, generatedData) {
     for (let i = 1; i <= TOTAL_ECRS; i++) {
         const user1 = getRandomItem(users);
         const product = getRandomItem(generatedData.productos || []);
-        const client = getRandomItem(generatedData.clientes.filter(c => c.id === product.clienteId)) || getRandomItem(generatedData.clientes);
+        const clientData = product.clienteId ? generatedData.clientes.find(c => c.id === product.clienteId) : null;
+        const client = clientData || null;
         const ecrId = `ECR-${currentYear}-${String(i).padStart(3, '0')}`;
 
         const approvals = {};
