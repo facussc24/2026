@@ -1,4 +1,4 @@
-import { getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, COLLECTIONS } from '../../public/utils.js';
+import { getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, calculateLinearMeters, COLLECTIONS } from '../../public/utils.js';
 
 describe('getUniqueKeyForCollection', () => {
   test('should return "codigo_pieza" for PRODUCTOS', () => {
@@ -123,4 +123,36 @@ describe('shouldRequirePpapConfirmation', () => {
         expect(shouldRequirePpapConfirmation(ecrData1)).toBe(false);
         expect(shouldRequirePpapConfirmation(ecrData2)).toBe(false);
     });
+});
+
+describe('calculateLinearMeters', () => {
+  test('should calculate linear meters correctly for valid inputs', () => {
+    expect(calculateLinearMeters(10, 2)).toBe(5);
+    expect(calculateLinearMeters(15.5, 1.25)).toBe(12.4);
+    expect(calculateLinearMeters(0, 1.5)).toBe(0);
+  });
+
+  test('should return null for invalid squareMeters input', () => {
+    expect(calculateLinearMeters(-10, 2)).toBeNull();
+    expect(calculateLinearMeters(null, 2)).toBeNull();
+    expect(calculateLinearMeters(undefined, 2)).toBeNull();
+    expect(calculateLinearMeters('abc', 2)).toBeNull();
+  });
+
+  test('should return null for invalid or zero rollWidth input', () => {
+    expect(calculateLinearMeters(10, 0)).toBeNull();
+    expect(calculateLinearMeters(10, -1.5)).toBeNull();
+    expect(calculateLinearMeters(10, null)).toBeNull();
+    expect(calculateLinearMeters(10, undefined)).toBeNull();
+    expect(calculateLinearMeters(10, 'xyz')).toBeNull();
+  });
+
+  test('should handle floating point calculations with precision', () => {
+    expect(calculateLinearMeters(1, 3)).toBeCloseTo(0.333);
+    expect(calculateLinearMeters(10, 3)).toBeCloseTo(3.333);
+  });
+
+  test('should handle string number inputs', () => {
+    expect(calculateLinearMeters('20', '2.5')).toBe(8);
+  });
 });
