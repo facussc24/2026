@@ -17,72 +17,71 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
         }
 
         const productData = productSnap.data();
-        const subProductRefs = new Set();
+        const subComponentRefs = new Map(); // Use a Map to store type and ID
 
-        function findSubProducts(nodes) {
+        function findSubComponents(nodes) {
             if (!nodes) return;
             for (const node of nodes) {
-                if (node.tipo === 'semiterminado') {
-                    subProductRefs.add(node.refId);
+                if (node.tipo === 'semiterminado' || node.tipo === 'insumo') {
+                    // Store the type along with the ID
+                    if (!subComponentRefs.has(node.refId)) {
+                        subComponentRefs.set(node.refId, node.tipo);
+                    }
                 }
                 if (node.children) {
-                    findSubProducts(node.children);
+                    findSubComponents(node.children);
                 }
             }
         }
 
-        findSubProducts(productData.estructura);
+        findSubComponents(productData.estructura);
 
         // Delete the main product
         await deleteDoc(productRef);
         showToast('Producto principal eliminado.', 'success');
 
-        if (subProductRefs.size === 0) {
+        if (subComponentRefs.size === 0) {
             showToast('El producto no tenía sub-componentes para verificar.', 'info');
             runTableLogic();
             return;
         }
 
-        showToast(`Verificando ${subProductRefs.size} sub-componentes...`, 'info');
+        showToast(`Verificando ${subComponentRefs.size} sub-componentes...`, 'info');
 
         const allProductsSnap = await getDocs(collection(db, COLLECTIONS.PRODUCTOS));
         const allOtherProducts = [];
         allProductsSnap.docs.forEach(doc => {
-            // This is the fix: Exclude the product being deleted from the dependency check.
             if (doc.id !== productDocId) {
                 allOtherProducts.push(doc.data());
             }
         });
 
         let deletedCount = 0;
-        for (const subProductRefId of subProductRefs) {
+        for (const [subComponentId, subComponentType] of subComponentRefs.entries()) {
             let isUsedElsewhere = false;
             for (const otherProduct of allOtherProducts) {
-                function isSubProductInStructure(nodes) {
+                function isSubComponentInStructure(nodes) {
                     if (!nodes) return false;
                     for (const node of nodes) {
-                        if (node.tipo === 'semiterminado' && node.refId === subProductRefId) {
+                        if (node.refId === subComponentId) {
                             return true;
                         }
-                        if (node.children && isSubProductInStructure(node.children)) {
+                        if (node.children && isSubComponentInStructure(node.children)) {
                             return true;
                         }
                     }
                     return false;
                 }
 
-                if (isSubProductInStructure(otherProduct.estructura)) {
+                if (isSubComponentInStructure(otherProduct.estructura)) {
                     isUsedElsewhere = true;
                     break;
                 }
             }
 
             if (!isUsedElsewhere) {
-                // FIX: `subProductRefId` is the document ID. We should not query by `codigo_pieza`.
-                // We can and should delete the document directly by its ID.
-                const subProductDocRef = doc(db, COLLECTIONS.SEMITERMINADOS, subProductRefId);
-                // To prevent race conditions and ensure the count is accurate,
-                // we first check if the document still exists before deleting.
+                const collectionName = subComponentType === 'insumo' ? COLLECTIONS.INSUMOS : COLLECTIONS.SEMITERMINADOS;
+                const subProductDocRef = doc(db, collectionName, subComponentId);
                 const subProductDocSnap = await getDoc(subProductDocRef);
                 if (subProductDocSnap.exists()) {
                     await deleteDoc(subProductDocRef);

@@ -104,4 +104,41 @@ describe('deleteProductAndOrphanedSubProducts', () => {
         // 5. Verify delete was called exactly twice (main product + orphan)
         expect(mockDeleteDoc).toHaveBeenCalledTimes(2);
     });
+
+    test('[NEW] should delete an orphaned insumo component', async () => {
+        // --- ARRANGE ---
+        const mainProductId = 'PROD-MAIN-INSU';
+        const orphanInsumoId = 'INSU-ORPHAN-123';
+
+        const mainProductData = {
+            id: mainProductId,
+            estructura: [
+                { tipo: 'insumo', refId: orphanInsumoId }
+            ]
+        };
+
+        // Mock for getDocs to fetch all products for dependency checking.
+        // No other products exist, so the insumo is an orphan.
+        mockGetDocs.mockResolvedValue({ docs: [] });
+
+        mockGetDoc.mockImplementation(async (docRef) => {
+            if (docRef.path === `productos/${mainProductId}`) {
+                return { exists: () => true, data: () => mainProductData };
+            }
+            if (docRef.path === `insumos/${orphanInsumoId}`) {
+                return { exists: () => true, data: () => ({ id: orphanInsumoId }) };
+            }
+            return { exists: () => false, data: () => null };
+        });
+
+        // --- ACT ---
+        await deleteProductAndOrphanedSubProducts(mainProductId, 'mockDb', mockFirestore, COLLECTIONS, mockUiCallbacks);
+
+        // --- ASSERT ---
+        // Verify that deleteDoc was called for both the product and the orphaned insumo
+        expect(mockDeleteDoc).toHaveBeenCalledTimes(2);
+        expect(mockDeleteDoc).toHaveBeenCalledWith(expect.objectContaining({ path: `productos/${mainProductId}` }));
+        expect(mockDeleteDoc).toHaveBeenCalledWith(expect.objectContaining({ path: `insumos/${orphanInsumoId}` }));
+        expect(mockShowToast).toHaveBeenCalledWith('1 sub-componentes huérfanos eliminados.', 'success');
+    });
 });

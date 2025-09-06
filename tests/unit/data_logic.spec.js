@@ -70,17 +70,22 @@ describe('deleteProductAndOrphanedSubProducts', () => {
         expect(mockUiCallbacks.showToast).toHaveBeenCalledWith('No se eliminaron sub-componentes (están en uso por otros productos).', 'info');
     });
 
-    test('should only delete product if it has no sub-products', async () => {
+    test('should delete product and its orphan insumo', async () => {
         // Arrange
         const productToDeleteData = { id: 'PROD001', estructura: [{ tipo: 'insumo', refId: 'INS001' }] };
-        mockFirestore.getDoc.mockResolvedValue({ exists: () => true, data: () => productToDeleteData });
+        mockFirestore.getDoc.mockImplementation(async (docRef) => {
+            if (docRef.id === 'PROD001') return { exists: () => true, data: () => productToDeleteData };
+            if (docRef.id === 'INS001') return { exists: () => true, data: () => ({ id: 'INS001' }) };
+            return { exists: () => false, data: () => null };
+        });
+        mockFirestore.getDocs.mockResolvedValue({ empty: true, docs: [] }); // No other products use INS001
 
         // Act
         await deleteProductAndOrphanedSubProducts('PROD001', mockDb, mockFirestore, COLLECTIONS, mockUiCallbacks);
 
         // Assert
-        expect(mockFirestore.deleteDoc).toHaveBeenCalledTimes(1);
-        expect(mockUiCallbacks.showToast).toHaveBeenCalledWith('El producto no tenía sub-componentes para verificar.', 'info');
+        expect(mockFirestore.deleteDoc).toHaveBeenCalledTimes(2);
+        expect(mockUiCallbacks.showToast).toHaveBeenCalledWith('1 sub-componentes huérfanos eliminados.', 'success');
     });
 
     test('should do nothing if product does not exist', async () => {
