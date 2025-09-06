@@ -13,6 +13,7 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
         const productSnap = await getDoc(productRef);
         if (!productSnap.exists()) {
             showToast('El producto ya no existe.', 'info');
+            runTableLogic();
             return;
         }
 
@@ -96,11 +97,11 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
             showToast('No se eliminaron sub-componentes (están en uso por otros productos).', 'info');
         }
 
+        runTableLogic();
+
     } catch (error) {
         console.error("Error deleting product and orphaned sub-products:", error);
         showToast('Ocurrió un error durante la eliminación compleja.', 'error');
-    } finally {
-        runTableLogic();
     }
 }
 
