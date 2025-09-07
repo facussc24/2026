@@ -38,6 +38,22 @@ El proyecto ha evolucionado desde un prototipo hasta convertirse en una aplicaci
 - **Exportación de BOM a PDF Profesional:** Se ha implementado una función de exportación que genera un listado de materiales (BOM) en formato PDF tabular. El reporte se presenta en formato horizontal e incluye columnas detalladas para Nivel, Descripción, Código, Cantidad y Unidad de Medida.
 - **Próximamente: Flujograma de Procesos:** Se está implementando una nueva vista dedicada que leerá la información de los árboles de producto para generar automáticamente un flujograma visual del proceso de fabricación completo.
 
+### Lecciones Aprendidas: Depuración del Módulo de Exportación a PDF
+
+Durante el desarrollo de la funcionalidad de exportación de la lista de materiales (BOM) a PDF, se encontró y solucionó un error persistente que impedía la generación del documento. La lección aprendida es crucial para futuras implementaciones que involucren librerías de generación de archivos.
+
+-   **El Problema:** Al intentar generar el PDF, la consola arrojaba un error `Error: Invalid arguments passed to jsPDF.text`. Este error indicaba que la librería `jspdf-autotable` estaba intentando renderizar un valor que no era una cadena de texto (string) o un número, como `undefined` o un objeto.
+
+-   **La Causa Raíz:** La causa del problema era que los datos de la estructura del producto, que incluían metadatos para la lógica de dibujo (como `level`, `isLast`, `lineage`), se pasaban directamente al cuerpo (`body`) de la tabla. La librería `jspdf-autotable` intentaba renderizar cada propiedad de los objetos en el `body`, fallando cuando encontraba propiedades que no eran strings (por ejemplo, `isLast: true` que es un booleano, o `lineage: [true, false]` que es un array).
+
+-   **La Solución Implementada:**
+    1.  **Separación de Datos y Metadatos:** Se refactorizó la función `prepareDataForPdfAutoTable` en `public/utils.js`. En lugar de devolver un único array con datos mezclados, ahora devuelve un objeto con dos propiedades:
+        -   `body`: Un array de objetos que contiene **únicamente los datos para ser mostrados** en la tabla. Todos los valores en estos objetos son convertidos explícitamente a strings para garantizar la compatibilidad con la librería PDF.
+        -   `rawData`: Un array paralelo que contiene los **metadatos puros** (`level`, `isLast`, `lineage`) necesarios para la lógica de dibujo.
+    2.  **Uso de Datos Segregados:** En la función `exportSinopticoTabularToPdf`, se pasó el array `body` (limpio y seguro) a la propiedad `body` de `doc.autoTable`. La lógica de dibujo personalizada, dentro del hook `didDrawCell`, ahora accede a los metadatos necesarios desde el array `rawData` usando el índice de la fila (`data.row.index`), asegurando que la renderización principal nunca reciba datos de tipo incorrecto.
+
+Esta separación de responsabilidades no solo solucionó el error, sino que también hizo el código más robusto, predecible y fácil de depurar.
+
 ### Gestión de Cambios de Ingeniería (ECR/ECO)
 
 Para digitalizar y controlar el proceso formal de modificaciones de la compañía, el sistema incluye un módulo avanzado de ECR/ECO con un flujo de trabajo, notificaciones y planes de acción integrados.

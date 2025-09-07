@@ -10554,9 +10554,9 @@ async function exportSinopticoTabularToPdf() {
                 halign: 'center',
             },
             columnStyles: {
-                level: { halign: 'center', cellWidth: 10 },
+                level: { halign: 'center', cellWidth: 15 }, // Centered and wider
                 descripcion: { cellWidth: 80 },
-                codigo: { cellWidth: 25 },
+                codigo: { halign: 'center', cellWidth: 25 }, // Centered
                 version: { halign: 'center', cellWidth: 15 },
                 proceso: { cellWidth: 30 },
                 cantidad: { halign: 'right', cellWidth: 15 },
@@ -10609,25 +10609,50 @@ async function exportSinopticoTabularToPdf() {
                 }
             },
             didDrawPage: (data) => {
-                doc.setFontSize(18);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor('#3B82F6');
-                doc.text('Reporte de Estructura de Producto (BOM)', PAGE_WIDTH / 2, 15, { align: 'center' });
+                // Carátula / Header
+                doc.setFillColor('#44546A');
+                doc.rect(PAGE_MARGIN, 10, PAGE_WIDTH - (PAGE_MARGIN * 2), 30, 'F');
 
                 if (logoBase64) {
-                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
+                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN + 2, 12, 40, 15);
                 }
 
-                doc.setFontSize(9);
-                doc.setTextColor(100);
-                const headerTextX = PAGE_WIDTH - PAGE_MARGIN;
-                doc.text(String(`Producto: ${product.descripcion || NA}`), headerTextX, 24, { align: 'right' });
-                doc.text(String(`Código: ${product.id || NA}`), headerTextX, 28, { align: 'right' });
-                const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
-                doc.text(String(`Cliente: ${client?.descripcion || NA}`), headerTextX, 32, { align: 'right' });
+                doc.setFontSize(16);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor('#FFFFFF');
+                doc.text('COMPOSICIÓN DE PIEZAS - BOM', PAGE_WIDTH - PAGE_MARGIN - 2, 18, { align: 'right' });
 
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
+                const headerTextX = PAGE_WIDTH - PAGE_MARGIN - 2;
+
+                const fields = [
+                    { label: 'PRODUCTO', value: product.descripcion },
+                    { label: 'NÚMERO DE PIEZA', value: product.id },
+                    { label: 'CLIENTE', value: client?.descripcion },
+                    { label: 'FECHA REVISIÓN', value: product.fechaRevision },
+                    { label: 'REALIZÓ', value: product.lastUpdatedBy },
+                    { label: 'APROBÓ', value: product.aprobadoPor }
+                ];
+
+                let fieldY = 25;
+                fields.forEach((field, index) => {
+                    const xPos = index % 2 === 0 ? 120 : headerTextX;
+                    if (index > 0 && index % 2 === 0) {
+                        fieldY += 5;
+                    }
+                    doc.setFont('helvetica', 'bold');
+                    doc.text(String(field.label || NA), xPos, fieldY, { align: 'right', 'maxWidth': 40 });
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(String(field.value || NA), xPos + 2, fieldY, { align: 'left' });
+                });
+
+
+                // Page Footer
                 const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(8);
+                doc.setTextColor(100);
                 doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, doc.internal.pageSize.height - 10, { align: 'center' });
                 doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, doc.internal.pageSize.height - 10);
             }
