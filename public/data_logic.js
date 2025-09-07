@@ -1,10 +1,11 @@
-// No longer importing from firebase here. The functions will be passed in.
-
+// Import only the functions that are truly needed at the module level.
+import { limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getUniqueKeyForCollection } from './utils.js';
+
 
 export async function deleteProductAndOrphanedSubProducts(productDocId, db, firestore, COLLECTIONS, uiCallbacks) {
     // Destructure the required firestore functions from the passed-in object
-    const { doc, getDoc, getDocs, deleteDoc, collection, query, where, limit } = firestore;
+    const { doc, getDoc, getDocs, deleteDoc, collection, query, where } = firestore;
     const { showToast, runTableLogic } = uiCallbacks;
 
     showToast('Iniciando eliminación de producto y componentes...', 'info');
@@ -55,16 +56,21 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
         // This is now an efficient loop. It performs one quick, indexed query per sub-component.
         for (const [subComponentId, subComponentType] of subComponentRefs.entries()) {
             // Query to see if any *other* product uses this sub-component.
+            // Query for products that contain the sub-component.
+            // Fetch up to 2 documents for efficiency. If we find 2 or more, we know for sure
+            // it's not an orphan, even after filtering out the product being deleted.
             const q = query(
                 productsRef,
                 where('component_ids', 'array-contains', subComponentId),
-                limit(1)
+                limit(2)
             );
-
             const usageSnap = await getDocs(q);
 
-            // If the query returns no documents, the component is an orphan.
-            if (usageSnap.empty) {
+            // Filter out the product that is currently being deleted from the usage results.
+            const otherUsers = usageSnap.docs.filter(doc => doc.id !== productDocId);
+
+            // If no OTHER products use this component, it's an orphan.
+            if (otherUsers.length === 0) {
                 const collectionName = subComponentType === 'insumo' ? COLLECTIONS.INSUMOS : COLLECTIONS.SEMITERMINADOS;
                 const subProductDocRef = doc(db, collectionName, subComponentId);
 
