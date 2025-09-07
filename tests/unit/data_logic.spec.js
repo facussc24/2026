@@ -158,8 +158,13 @@ describe('deleteProductAndOrphanedSubProducts', () => {
     // This test is now simpler as the logic doesn't depend on complex query mocks
     test('should correctly check for sub-product usage in other products with complex structures', async () => {
         // Arrange
-        const productToDeleteData = { id: 'PROD001', estructura: [{ tipo: 'semiterminado', refId: 'SUB001' }] };
-        const otherProductData = { id: 'PROD002', estructura: [{ tipo: 'semiterminado', refId: 'SUB002', children: [{ tipo: 'insumo', refId: 'INS001' }] }] };
+        const productToDeleteData = { id: 'PROD001', component_ids: ['SUB001'], estructura: [{ tipo: 'semiterminado', refId: 'SUB001' }] };
+        const otherProductData = { id: 'PROD002', component_ids: ['SUB002', 'INS001'], estructura: [{ tipo: 'semiterminado', refId: 'SUB002', children: [{ tipo: 'insumo', refId: 'INS001' }] }] };
+        const allProducts = [
+            { id: 'PROD001', data: () => productToDeleteData },
+            { id: 'PROD002', data: () => otherProductData }
+        ];
+
 
         mockFirestore.getDoc.mockImplementation(async (docRef) => {
             if (docRef.id === 'PROD001') return { exists: () => true, data: () => productToDeleteData };
@@ -167,7 +172,12 @@ describe('deleteProductAndOrphanedSubProducts', () => {
             return { exists: () => false, data: () => null };
         });
 
-        mockFirestore.getDocs.mockResolvedValue({ docs: [{ data: () => otherProductData }] });
+        mockFirestore.getDocs.mockImplementation(async (query) => {
+            const whereArgs = mockFirestore.where.mock.lastCall;
+            const componentId = whereArgs[2];
+            const matchingDocs = allProducts.filter(p => p.data().component_ids.includes(componentId));
+            return { docs: matchingDocs, empty: matchingDocs.length === 0 };
+        });
 
         // Act
         await deleteProductAndOrphanedSubProducts('PROD001', mockDb, mockFirestore, COLLECTIONS, mockUiCallbacks);
@@ -180,8 +190,12 @@ describe('deleteProductAndOrphanedSubProducts', () => {
     // This test is also simplified
     test('should handle products with empty structure in other products', async () => {
         // Arrange
-        const productToDeleteData = { id: 'PROD001', estructura: [{ tipo: 'semiterminado', refId: 'SUB001' }] };
-        const otherProductData = { id: 'PROD002', estructura: [] }; // Empty structure
+        const productToDeleteData = { id: 'PROD001', component_ids: ['SUB001'], estructura: [{ tipo: 'semiterminado', refId: 'SUB001' }] };
+        const otherProductData = { id: 'PROD002', component_ids: [], estructura: [] }; // Empty structure
+        const allProducts = [
+            { id: 'PROD001', data: () => productToDeleteData },
+            { id: 'PROD002', data: () => otherProductData }
+        ];
 
         mockFirestore.getDoc.mockImplementation(async (docRef) => {
             if (docRef.id === 'PROD001') return { exists: () => true, data: () => productToDeleteData };
@@ -189,7 +203,12 @@ describe('deleteProductAndOrphanedSubProducts', () => {
             return { exists: () => false, data: () => null };
         });
 
-        mockFirestore.getDocs.mockResolvedValue({ docs: [{ data: () => otherProductData }] });
+        mockFirestore.getDocs.mockImplementation(async (query) => {
+            const whereArgs = mockFirestore.where.mock.lastCall;
+            const componentId = whereArgs[2];
+            const matchingDocs = allProducts.filter(p => p.data().component_ids.includes(componentId));
+            return { docs: matchingDocs, empty: matchingDocs.length === 0 };
+        });
 
         // Act
         await deleteProductAndOrphanedSubProducts('PROD001', mockDb, mockFirestore, COLLECTIONS, mockUiCallbacks);
@@ -206,8 +225,12 @@ describe('deleteProductAndOrphanedSubProducts', () => {
     test('should correctly identify and delete an orphan when it is only used by the product being deleted', async () => {
         // Arrange
         const productToDeleteId = 'PROD_A';
-        const productToDeleteData = { id: productToDeleteId, estructura: [{ tipo: 'semiterminado', refId: 'ORPHAN_SUB' }] };
-        const otherProductData = { id: 'PROD_B', estructura: [{ tipo: 'semiterminado', refId: 'USED_SUB' }] };
+        const productToDeleteData = { id: productToDeleteId, component_ids: ['ORPHAN_SUB'], estructura: [{ tipo: 'semiterminado', refId: 'ORPHAN_SUB' }] };
+        const otherProductData = { id: 'PROD_B', component_ids: ['USED_SUB'], estructura: [{ tipo: 'semiterminado', refId: 'USED_SUB' }] };
+        const allProducts = [
+            { id: productToDeleteId, data: () => productToDeleteData },
+            { id: 'PROD_B', data: () => otherProductData }
+        ];
 
         mockFirestore.getDoc.mockImplementation(async (docRef) => {
             if (docRef.id === productToDeleteId) return { exists: () => true, data: () => productToDeleteData };
@@ -215,9 +238,20 @@ describe('deleteProductAndOrphanedSubProducts', () => {
             return { exists: () => false, data: () => null };
         });
 
-        // The dependency check now correctly excludes the product being deleted in the main logic,
-        // so we only need to provide the "other" products here.
-        mockFirestore.getDocs.mockResolvedValue({ docs: [{ id: 'PROD_B', data: () => otherProductData }] });
+        // This mock now simulates the Firestore query more accurately.
+        mockFirestore.getDocs.mockImplementation(async (query) => {
+            // This is a simplified mock. We assume the query has a 'where' clause on 'component_ids'.
+            // For a real-world scenario, you might need a more robust query mock.
+            // We get the component ID from the last call to the 'where' mock.
+            const whereArgs = mockFirestore.where.mock.lastCall;
+            const componentId = whereArgs[2];
+
+            const matchingDocs = allProducts.filter(p => p.data().component_ids.includes(componentId));
+            return {
+                docs: matchingDocs,
+                empty: matchingDocs.length === 0,
+            };
+        });
 
         // Act
         await deleteProductAndOrphanedSubProducts(productToDeleteId, mockDb, mockFirestore, COLLECTIONS, mockUiCallbacks);
