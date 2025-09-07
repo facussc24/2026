@@ -10395,12 +10395,25 @@ export function runSinopticoTabularLogic() {
                 COLLECTIONS.UNIDADES
             ]);
 
-            const producto = appState.collections[COLLECTIONS.PRODUCTOS].find(p => p.id === productId);
-            if (producto) {
+            // Fetch the full product document to ensure 'estructura' is present
+            const productDoc = await getDoc(doc(db, COLLECTIONS.PRODUCTOS, productId));
+
+            if (productDoc.exists()) {
+                const producto = { ...productDoc.data(), docId: productDoc.id };
                 state.selectedProduct = producto;
+
+                // Also update the local collections cache for consistency,
+                // replacing the potentially partial data with the full document.
+                const productIndex = appState.collections[COLLECTIONS.PRODUCTOS].findIndex(p => p.id === productId);
+                if (productIndex !== -1) {
+                    appState.collections[COLLECTIONS.PRODUCTOS][productIndex] = producto;
+                } else {
+                    appState.collections[COLLECTIONS.PRODUCTOS].push(producto);
+                }
+
                 renderReportView();
             } else {
-                showToast("Error: Producto no encontrado.", "error");
+                showToast("Error: Producto no encontrado en la base de datos.", "error");
                 renderInitialView();
             }
         } catch (error) {
