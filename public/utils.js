@@ -123,20 +123,3 @@ export function loadEcrFormFromLocalStorage(formContainer, storageKey, populateF
     const data = JSON.parse(savedData);
     populateFormFn(formContainer, data);
 }
-
-/**
- * Calculates the required linear meters from a given area in square meters and a roll width.
- * @param {number} squareMeters - The total area required in m².
- * @param {number} rollWidth - The width of the material roll in meters.
- * @returns {number|null} - The calculated linear meters, or null if inputs are invalid.
- */
-export function calculateLinearMeters(squareMeters, rollWidth) {
-    const m2 = parseFloat(squareMeters);
-    const width = parseFloat(rollWidth);
-
-    if (isNaN(m2) || isNaN(width) || m2 < 0 || width <= 0) {
-        return null; // Return null for invalid or non-physical inputs
-    }
-
-    return m2 / width;
-}
