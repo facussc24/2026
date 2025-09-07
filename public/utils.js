@@ -149,3 +149,52 @@ export function flattenEstructura(nodes) {
     traverse(nodes);
     return Array.from(idSet);
 }
+
+/**
+ * Transforms flattened BOM data into a format suitable for jspdf-autotable.
+ * @param {Array<Object>} flattenedData - The array of data from getFlattenedData.
+ * @param {Object} collectionsById - The map of collections for resolving IDs.
+ * @returns {{head: Array<Array<string>>, body: Array<Array<string>>}} - The headers and rows for the table.
+ */
+export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
+    const head = [['Nivel', 'Descripción', 'Código', 'Versión', 'Proceso', 'Cantidad', 'Unidad', 'Comentarios']];
+    const body = flattenedData.map(rowData => {
+        const { node, item, level, isLast, lineage } = rowData;
+
+        // Create the indented description
+        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│  ' : '   ').join('');
+        if (level > 0) {
+            prefix += isLast ? '└─ ' : '├─ ';
+        }
+        const descripcion = `${prefix}${item.descripcion || item.nombre || ''}`;
+
+        // Get process description
+        let proceso = 'N/A';
+        if (item.proceso && collectionsById[COLLECTIONS.PROCESOS]) {
+            const procesoData = collectionsById[COLLECTIONS.PROCESOS].get(item.proceso);
+            proceso = procesoData ? procesoData.descripcion : item.proceso;
+        }
+
+        // Get unit description
+        let unidad = '';
+        if (node.tipo === 'insumo' && item.unidad_medida && collectionsById[COLLECTIONS.UNIDADES]) {
+            const unidadData = collectionsById[COLLECTIONS.UNIDADES].get(item.unidad_medida);
+            unidad = unidadData ? unidadData.id : item.unidad_medida;
+        }
+
+        const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? 'N/A');
+
+        return [
+            level,
+            descripcion,
+            item.id || 'N/A',
+            item.version || 'N/A',
+            proceso,
+            cantidad,
+            unidad,
+            node.comment || ''
+        ];
+    });
+
+    return { head, body };
+}

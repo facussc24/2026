@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable } from './utils.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
@@ -10499,216 +10499,80 @@ async function exportSinopticoTabularToPdf() {
         return;
     }
 
-    const tableElement = document.getElementById('sinoptico-tabular-container');
-    if (!tableElement) {
-        showToast('Error: No se encontró el contenedor de la tabla para exportar.', 'error');
-        return;
-    }
-
-    showToast('Generando PDF híbrido...', 'info');
+    showToast('Generando PDF de alta calidad...', 'info');
     dom.loadingOverlay.style.display = 'flex';
-    dom.loadingOverlay.querySelector('p').textContent = 'Generando PDF... (1/2)';
 
     try {
-        // --- 1. Create PDF and Draw Manual Header ---
-        const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         const logoBase64 = await getLogoBase64();
-        const PAGE_MARGIN = 10; // Reduced margin for wider content
+        const PAGE_MARGIN = 10;
         const PAGE_WIDTH = doc.internal.pageSize.width;
-        let cursorY = 10;
-
-        // --- Styled Header ---
-        const titleBarHeight = 10;
-        doc.setFillColor('#3B82F6'); // Blue background for title
-        doc.rect(PAGE_MARGIN, cursorY, PAGE_WIDTH - (PAGE_MARGIN * 2), titleBarHeight, 'F');
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(16);
-        doc.setTextColor('#FFFFFF'); // White text
-        doc.text('COMPOSICIÓN DE PIEZAS - BOM', PAGE_WIDTH / 2, cursorY + titleBarHeight / 2, { align: 'center', baseline: 'middle' });
-        cursorY += titleBarHeight + 3;
-
-        // Logo and Product Info Box
-        if (logoBase64) {
-            const img = new Image();
-            img.src = logoBase64;
-            await new Promise(resolve => {
-                if (img.complete) {
-                    resolve();
-                } else {
-                    img.onload = resolve;
-                }
-            });
-
-            const logoWidth = 35;
-            const logoAspectRatio = img.naturalWidth / img.naturalHeight;
-            const logoHeight = logoWidth / logoAspectRatio;
-
-            const boxHeight = 28;
-            const logoY = cursorY + (boxHeight - logoHeight) / 2; // Center logo vertically in the box
-
-            doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, logoY, logoWidth, logoHeight);
-        }
-
-        const boxX = PAGE_MARGIN + 40;
-        const boxWidth = PAGE_WIDTH - boxX - PAGE_MARGIN;
-        const boxY = cursorY;
         const NA = 'N/A';
-        const createdAt = product.createdAt ? new Date(product.createdAt.seconds * 1000).toLocaleDateString('es-AR') : NA;
 
-        // --- New 3-Column Layout Logic ---
-        const PADDING = 4;
-        const LINE_HEIGHT = 4.5;
-        const ROW_SPACING = 4;
-        const COL_GAP = 8;
-        let currentY = boxY + PADDING;
+        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
 
-        // Set a fixed total height that is likely large enough to avoid pre-calculation complexity.
-        const totalHeight = 40;
-        doc.setFillColor('#44546A');
-        doc.rect(boxX, boxY, boxWidth, totalHeight, 'F');
-        doc.setTextColor('#FFFFFF');
+        doc.autoTable({
+            head: head,
+            body: body,
+            startY: 55, // Start table after the header
+            margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
+            theme: 'grid',
+            styles: {
+                font: 'helvetica',
+                fontSize: 8,
+                cellPadding: 2,
+                overflow: 'linebreak'
+            },
+            headStyles: {
+                fillColor: '#44546A',
+                textColor: '#FFFFFF',
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 10 }, // Nivel
+                1: { cellWidth: 80 }, // Descripción
+                2: { cellWidth: 25 }, // Código
+                3: { halign: 'center', cellWidth: 15 }, // Versión
+                4: { cellWidth: 30 }, // Proceso
+                5: { halign: 'right', cellWidth: 15 }, // Cantidad
+                6: { halign: 'center', cellWidth: 15 }, // Unidad
+                7: { cellWidth: 'auto' } // Comentarios
+            },
+            didDrawPage: (data) => {
+                // --- Header ---
+                doc.setFontSize(18);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor('#3B82F6');
+                doc.text('Reporte de Estructura de Producto (BOM)', PAGE_WIDTH / 2, 15, { align: 'center' });
 
-        // 1. Draw Product Title (larger font, full width)
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.text('PRODUCTO:', boxX + PADDING, currentY + 3);
-        doc.setFontSize(11); // Increased font size for the title
-        const productTitleLines = doc.splitTextToSize(product.descripcion || NA, boxWidth - PADDING * 2 - 20); // Give it more space
-        doc.text(productTitleLines, boxX + PADDING + 20, currentY + 3);
-        currentY += (productTitleLines.length * (LINE_HEIGHT - 0.5)) + ROW_SPACING;
-
-        // 2. Separator Line
-        doc.setDrawColor('#6b7280');
-        doc.line(boxX + PADDING, currentY, boxX + boxWidth - PADDING, currentY);
-        currentY += ROW_SPACING;
-
-        // 3. Draw remaining data in a 3-column layout
-        const colWidth = (boxWidth - (PADDING * 2) - (COL_GAP * 2)) / 3;
-        const col1X = boxX + PADDING;
-        const col2X = col1X + colWidth + COL_GAP;
-        const col3X = col2X + colWidth + COL_GAP;
-
-        doc.setFontSize(8);
-
-        // Row 1
-        let row1Y = currentY;
-        doc.setFont('helvetica', 'bold');
-        doc.text('NÚMERO DE PIEZA:', col1X, row1Y);
-        doc.text('REALIZÓ:', col2X, row1Y);
-        doc.text('FECHA DE CREACIÓN:', col3X, row1Y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(product.id || NA, col1X, row1Y + LINE_HEIGHT);
-        doc.text(product.lastUpdatedBy || NA, col2X, row1Y + LINE_HEIGHT);
-        doc.text(createdAt, col3X, row1Y + LINE_HEIGHT);
-
-        // Row 2
-        let row2Y = row1Y + (LINE_HEIGHT * 2) + ROW_SPACING;
-        doc.setFont('helvetica', 'bold');
-        doc.text('VERSIÓN:', col1X, row2Y);
-        doc.text('APROBÓ:', col2X, row2Y);
-        doc.text('FECHA DE REVISIÓN:', col3X, row2Y);
-        doc.setFont('helvetica', 'normal');
-        doc.text(product.version || NA, col1X, row2Y + LINE_HEIGHT);
-        doc.text(product.aprobadoPor || NA, col2X, row2Y + LINE_HEIGHT);
-        doc.text(product.fechaRevision || NA, col3X, row2Y + LINE_HEIGHT);
-
-        cursorY += totalHeight + 7; // Move main cursor down
-
-        // --- 2. Capture Table with html2canvas (Intelligent Mode) ---
-        dom.loadingOverlay.querySelector('p').textContent = 'Capturando tabla... (2/2)';
-
-        const styleId = 'pdf-export-styles';
-        const tempStyle = document.createElement('style');
-        tempStyle.id = styleId;
-        // These styles make the table more compact for the screenshot, preventing overflow.
-        tempStyle.innerHTML = `
-            .pdf-export-mode table {
-                font-size: 9px !important; /* Smaller font for export */
-            }
-            .pdf-export-mode td, .pdf-export-mode th {
-                padding: 3px 5px !important; /* Reduced padding for export */
-                white-space: normal !important; /* Allow text wrapping */
-                overflow-wrap: break-word;
-            }
-            /* Hide columns that are not essential for the PDF version */
-            .pdf-export-mode .col-acciones,
-            .pdf-export-mode .col-aspecto {
-                 display: none !important;
-            }
-        `;
-
-        const originalBoxShadow = tableElement.style.boxShadow;
-        let canvas;
-
-        // --- Fix for sticky header rendering in html2canvas ---
-        const thElements = tableElement.querySelectorAll('th');
-        const originalStyles = new Map();
-
-        try {
-            // Store original styles and apply temporary ones for capture
-            thElements.forEach(th => {
-                originalStyles.set(th, {
-                    position: th.style.position,
-                    verticalAlign: th.style.verticalAlign
-                });
-                th.style.position = 'static'; // Disable sticky position
-                th.style.verticalAlign = 'middle'; // Explicitly set vertical alignment
-            });
-
-            // Apply temporary styles for capture
-            document.head.appendChild(tempStyle);
-            tableElement.classList.add('pdf-export-mode');
-            tableElement.style.boxShadow = 'none';
-
-            canvas = await html2canvas(tableElement, {
-                scale: 2.5, // Higher scale for better resolution
-                useCORS: true,
-                logging: false,
-            });
-        } finally {
-            // Restore original styles
-            thElements.forEach(th => {
-                const styles = originalStyles.get(th);
-                if (styles) {
-                    th.style.position = styles.position;
-                    th.style.verticalAlign = styles.verticalAlign;
+                if (logoBase64) {
+                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 35, 12);
                 }
-            });
 
-            // ALWAYS remove temporary styles, even if html2canvas fails
-            tableElement.classList.remove('pdf-export-mode');
-            const styleElement = document.getElementById(styleId);
-            if (styleElement) {
-                styleElement.remove();
+                doc.setFontSize(9);
+                doc.setTextColor(100);
+                const headerTextX = PAGE_WIDTH - PAGE_MARGIN;
+                doc.text(`Producto: ${product.descripcion || NA}`, headerTextX, 24, { align: 'right' });
+                doc.text(`Código: ${product.id || NA}`, headerTextX, 28, { align: 'right' });
+                const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
+                doc.text(`Cliente: ${client?.descripcion || NA}`, headerTextX, 32, { align: 'right' });
+
+                // --- Footer ---
+                const pageCount = doc.internal.getNumberOfPages();
+                doc.setFontSize(8);
+                doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+                doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, doc.internal.pageSize.height - 10);
             }
-            tableElement.style.boxShadow = originalBoxShadow;
-        }
+        });
 
-        const imgData = canvas.toDataURL('image/png');
-        const imgProps = doc.getImageProperties(imgData);
-
-        // --- 3. Add Table Image to PDF with Scaling ---
-        const availableWidth = PAGE_WIDTH - (PAGE_MARGIN * 2);
-        const availableHeight = doc.internal.pageSize.height - cursorY - PAGE_MARGIN;
-
-        const imgAspectRatio = imgProps.width / imgProps.height;
-
-        const finalImgWidth = availableWidth;
-        const finalImgHeight = finalImgWidth / imgAspectRatio;
-
-        // Add the image, scaled to the full width of the page.
-        // The height will adjust proportionally. This might make the content very small
-        // if the table is long, but it will always use the full width as requested.
-        doc.addImage(imgData, 'PNG', PAGE_MARGIN, cursorY, finalImgWidth, finalImgHeight);
-
-        // --- 4. Save PDF ---
         const fileName = `Reporte_BOM_${product.id.replace(/[^a-z0-9]/gi, '_')}.pdf`;
         doc.save(fileName);
-        showToast('PDF híbrido generado con éxito.', 'success');
+        showToast('PDF generado con éxito.', 'success');
 
     } catch (error) {
-        console.error("Error exporting hybrid PDF:", error);
+        console.error("Error exporting native PDF:", error);
         showToast('Error al generar el PDF.', 'error');
     } finally {
         dom.loadingOverlay.style.display = 'none';
