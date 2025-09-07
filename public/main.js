@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura } from './utils.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
@@ -1053,6 +1053,10 @@ async function seedDatabase() {
 
         buildTree(rootNode, 1);
         productoData.estructura = [rootNode];
+
+        // Add the flattened component ID list for efficient querying
+        productoData.component_ids = flattenEstructura(productoData.estructura);
+
         generated.productos.push(productoData);
         setInBatch(COLLECTIONS.PRODUCTOS, productoData);
     }
@@ -6850,8 +6854,13 @@ async function guardarEstructura(button) {
     try {
         // Ahora, appState.arbolActivo.docId es el ID del documento en la colección 'productos'.
         const productoRef = doc(db, COLLECTIONS.PRODUCTOS, appState.arbolActivo.docId);
+
+        // Generate the flattened list of component IDs for efficient querying
+        const componentIds = flattenEstructura(appState.arbolActivo.estructura);
+
         await updateDoc(productoRef, {
             estructura: appState.arbolActivo.estructura,
+            component_ids: componentIds, // Save the flattened list
             lastUpdated: new Date(),
             lastUpdatedBy: appState.currentUser.name
         });
@@ -11583,6 +11592,8 @@ export async function cloneProduct(product = null) {
         if (newProduct.estructura[0] && newProduct.estructura[0].tipo === 'producto') {
             newProduct.estructura[0].refId = newId;
         }
+        // Generate the flattened component ID list for the new clone
+        newProduct.component_ids = flattenEstructura(newProduct.estructura);
     }
 
     try {

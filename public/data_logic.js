@@ -4,7 +4,7 @@ import { getUniqueKeyForCollection } from './utils.js';
 
 export async function deleteProductAndOrphanedSubProducts(productDocId, db, firestore, COLLECTIONS, uiCallbacks) {
     // Destructure the required firestore functions from the passed-in object
-    const { doc, getDoc, getDocs, deleteDoc, collection, query, where } = firestore;
+    const { doc, getDoc, getDocs, deleteDoc, collection, query, where, limit } = firestore;
     const { showToast, runTableLogic } = uiCallbacks;
 
     showToast('Iniciando eliminación de producto y componentes...', 'info');
@@ -49,40 +49,26 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
 
         showToast(`Verificando ${subComponentRefs.size} sub-componentes...`, 'info');
 
-        const allProductsSnap = await getDocs(collection(db, COLLECTIONS.PRODUCTOS));
-        const allOtherProducts = [];
-        allProductsSnap.docs.forEach(doc => {
-            if (doc.id !== productDocId) {
-                allOtherProducts.push(doc.data());
-            }
-        });
-
         let deletedCount = 0;
+        const productsRef = collection(db, COLLECTIONS.PRODUCTOS);
+
+        // This is now an efficient loop. It performs one quick, indexed query per sub-component.
         for (const [subComponentId, subComponentType] of subComponentRefs.entries()) {
-            let isUsedElsewhere = false;
-            for (const otherProduct of allOtherProducts) {
-                function isSubComponentInStructure(nodes) {
-                    if (!nodes) return false;
-                    for (const node of nodes) {
-                        if (node.refId === subComponentId) {
-                            return true;
-                        }
-                        if (node.children && isSubComponentInStructure(node.children)) {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
+            // Query to see if any *other* product uses this sub-component.
+            const q = query(
+                productsRef,
+                where('component_ids', 'array-contains', subComponentId),
+                limit(1)
+            );
 
-                if (isSubComponentInStructure(otherProduct.estructura)) {
-                    isUsedElsewhere = true;
-                    break;
-                }
-            }
+            const usageSnap = await getDocs(q);
 
-            if (!isUsedElsewhere) {
+            // If the query returns no documents, the component is an orphan.
+            if (usageSnap.empty) {
                 const collectionName = subComponentType === 'insumo' ? COLLECTIONS.INSUMOS : COLLECTIONS.SEMITERMINADOS;
                 const subProductDocRef = doc(db, collectionName, subComponentId);
+
+                // It's good practice to check if the document still exists before deleting.
                 const subProductDocSnap = await getDoc(subProductDocRef);
                 if (subProductDocSnap.exists()) {
                     await deleteDoc(subProductDocRef);

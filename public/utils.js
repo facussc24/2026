@@ -123,3 +123,29 @@ export function loadEcrFormFromLocalStorage(formContainer, storageKey, populateF
     const data = JSON.parse(savedData);
     populateFormFn(formContainer, data);
 }
+
+/**
+ * Recursively traverses a product structure and returns a flat array of unique component reference IDs.
+ * @param {Array} nodes - The array of nodes (the 'estructura' field) to process.
+ * @returns {Array<string>} - A flat array of unique refIds.
+ */
+export function flattenEstructura(nodes) {
+    const idSet = new Set();
+
+    function traverse(nodeArray) {
+        if (!nodeArray) return;
+        for (const node of nodeArray) {
+            // Add the component's own refId (if it's not the main product)
+            if (node.tipo !== 'producto') {
+                idSet.add(node.refId);
+            }
+            // Recurse into children
+            if (node.children) {
+                traverse(node.children);
+            }
+        }
+    }
+
+    traverse(nodes);
+    return Array.from(idSet);
+}
