@@ -9270,12 +9270,24 @@ function renderNodo(nodo) {
 
     const isDraggable = nodo.tipo !== 'producto';
 
-    const quantityText = '';
+    let quantityText = '';
+    if (nodo.tipo === 'insumo') {
+        const merma = nodo.consumoTeorico > 0 ? ((nodo.consumoReal - nodo.consumoTeorico) / nodo.consumoTeorico) * 100 : 0;
+        const mermaClass = merma > 0 ? 'text-red-600' : 'text-green-600';
+        quantityText = `
+            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0" title="Cantidad por Conjunto">x${nodo.quantity || 0}</span>
+            <span class="text-xs text-gray-500 bg-blue-100 px-2 py-0.5 rounded-full flex-shrink-0" title="Consumo Real por Unidad">${nodo.consumoReal || 0} ${nodo.unidadConsumo || ''}</span>
+            <span class="text-xs ${mermaClass} bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0" title="Merma de Proceso">${merma.toFixed(2)}%</span>
+        `;
+    } else if (nodo.tipo !== 'producto') {
+         quantityText = `<span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0">x${nodo.quantity || 1}</span>`;
+    }
+
 
     const commentText = nodo.comment ? `<p class="pl-8 text-sm text-slate-500 italic flex items-center gap-2"><i data-lucide="message-square" class="w-3.5 h-3.5"></i>${nodo.comment}</p>` : '';
 
     const editButton = (checkUserPermission('edit') && nodo.tipo !== 'producto') ? `
-        <button data-action="edit-node-details" data-node-id="${nodo.id}" class="text-blue-600 hover:text-blue-700" title="Editar Cantidad/Comentario">
+        <button data-action="edit-node-details" data-node-id="${nodo.id}" class="text-blue-600 hover:text-blue-700" title="Editar Atributos">
             <i data-lucide="pencil" class="h-4 w-4 pointer-events-none"></i>
         </button>
     ` : '';
@@ -9286,6 +9298,8 @@ function renderNodo(nodo) {
                         <i data-lucide="${nodo.icon}" class="h-5 w-5 text-gray-600 flex-shrink-0"></i>
                         <span class="font-semibold truncate" title="${item.descripcion}">${item.descripcion}</span>
                         <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0">${nodo.tipo}</span>
+                    </div>
+                     <div class="flex items-center gap-2 flex-shrink-0">
                         ${quantityText}
                     </div>
                     <div class="flex items-center space-x-2 flex-shrink-0">
@@ -9459,15 +9473,23 @@ function findNodeByRefId(refId, arbol) {
 }
 
 function crearComponente(tipo, datos) {
-    return { 
-        id: `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, 
-        refId: datos.id, 
-        tipo: tipo, 
+    const baseComponent = {
+        id: `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        refId: datos.id,
+        tipo: tipo,
         icon: { producto: 'package', semiterminado: 'box', insumo: 'beaker' }[tipo],
-        children: [], 
-        quantity: 1,
+        children: [],
+        quantity: 1, // This now means "Cantidad por Conjunto"
         comment: ''
     };
+
+    if (tipo === 'insumo') {
+        baseComponent.consumoTeorico = 0;
+        baseComponent.consumoReal = 0;
+        baseComponent.unidadConsumo = '';
+    }
+
+    return baseComponent;
 }
 
 function handleComponentSelect(padreId, itemId, itemType) {
@@ -9728,47 +9750,115 @@ function openSinopticoEditModal(nodeId) {
     if (!node) return;
 
     const itemData = appState.collectionsById[node.tipo + 's']?.get(node.refId);
-
     const modalId = `sinoptico-edit-modal-${Date.now()}`;
-    const modalHTML = `
-        <div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col m-4 modal-content">
-                <div class="flex justify-between items-center p-5 border-b">
-                    <h3 class="text-xl font-bold">Editar: ${itemData.descripcion}</h3>
-                    <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
-                </div>
-                <form id="sinoptico-edit-form" class="p-6 overflow-y-auto space-y-4" novalidate>
-                    <input type="hidden" name="nodeId" value="${nodeId}">
-                    <div>
-                        <label for="sinoptico-quantity" class="block text-sm font-medium text-gray-700 mb-1">Cantidad</label>
-                        <input type="number" id="sinoptico-quantity" name="quantity" value="${node.quantity ?? 1}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" step="any" min="0">
+    let modalHTML = '';
+
+    if (node.tipo === 'insumo') {
+        modalHTML = `
+            <div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 modal-content">
+                    <div class="flex justify-between items-center p-5 border-b">
+                        <h3 class="text-xl font-bold">Editar Insumo: ${itemData.descripcion}</h3>
+                        <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
                     </div>
-                    <div>
-                        <label for="sinoptico-comment" class="block text-sm font-medium text-gray-700 mb-1">Comentario</label>
-                        <textarea id="sinoptico-comment" name="comment" rows="3" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" maxlength="140">${node.comment || ''}</textarea>
-                        <p class="text-xs text-gray-500 mt-1 text-right"><span id="comment-char-count">0</span> / 140</p>
+                    <form id="sinoptico-edit-form" class="p-6 overflow-y-auto space-y-6" novalidate>
+                        <input type="hidden" name="nodeId" value="${nodeId}">
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="quantity" class="block text-sm font-medium text-gray-700 mb-1">Cantidad por Conjunto</label>
+                                <input type="number" id="quantity" name="quantity" value="${node.quantity ?? 1}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" step="any" min="0">
+                            </div>
+                            <div>
+                                <label for="unidadConsumo" class="block text-sm font-medium text-gray-700 mb-1">Unidad de Consumo</label>
+                                <input type="text" id="unidadConsumo" name="unidadConsumo" value="${node.unidadConsumo || ''}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Ej: cm², kg, m">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                             <div>
+                                <label for="consumoTeorico" class="block text-sm font-medium text-gray-700 mb-1">Consumo Teórico (por unidad)</label>
+                                <input type="number" id="consumoTeorico" name="consumoTeorico" value="${node.consumoTeorico || 0}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" step="any" min="0">
+                            </div>
+                            <div>
+                                <label for="consumoReal" class="block text-sm font-medium text-gray-700 mb-1">Consumo Real (por unidad)</label>
+                                <input type="number" id="consumoReal" name="consumoReal" value="${node.consumoReal || 0}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" step="any" min="0">
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 p-4 rounded-lg border">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Merma de Proceso (%)</label>
+                            <p id="merma-calculada" class="text-lg font-bold text-gray-800">0.00%</p>
+                            <p class="text-xs text-gray-500">Calculado a partir del consumo teórico y real.</p>
+                        </div>
+
+                        <div>
+                            <label for="sinoptico-comment" class="block text-sm font-medium text-gray-700 mb-1">Comentario</label>
+                            <textarea id="sinoptico-comment" name="comment" rows="3" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" maxlength="140">${node.comment || ''}</textarea>
+                        </div>
+                    </form>
+                    <div class="flex justify-end items-center p-4 border-t bg-gray-50 space-x-3">
+                        <button data-action="close" type="button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
+                        <button type="submit" form="sinoptico-edit-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Cambios</button>
                     </div>
-                </form>
-                <div class="flex justify-end items-center p-4 border-t bg-gray-50 space-x-3">
-                    <button data-action="close" type="button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
-                    <button type="submit" form="sinoptico-edit-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Cambios</button>
                 </div>
             </div>
-        </div>
-    `;
+        `;
+    } else {
+        // Fallback for non-insumo types (original modal)
+        modalHTML = `
+            <div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
+                <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col m-4 modal-content">
+                    <div class="flex justify-between items-center p-5 border-b">
+                        <h3 class="text-xl font-bold">Editar: ${itemData.descripcion}</h3>
+                        <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
+                    </div>
+                    <form id="sinoptico-edit-form" class="p-6 overflow-y-auto space-y-4" novalidate>
+                        <input type="hidden" name="nodeId" value="${nodeId}">
+                        <div>
+                            <label for="sinoptico-quantity" class="block text-sm font-medium text-gray-700 mb-1">Cantidad</label>
+                            <input type="number" id="sinoptico-quantity" name="quantity" value="${node.quantity ?? 1}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" step="any" min="0">
+                        </div>
+                        <div>
+                            <label for="sinoptico-comment" class="block text-sm font-medium text-gray-700 mb-1">Comentario</label>
+                            <textarea id="sinoptico-comment" name="comment" rows="3" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" maxlength="140">${node.comment || ''}</textarea>
+                        </div>
+                    </form>
+                    <div class="flex justify-end items-center p-4 border-t bg-gray-50 space-x-3">
+                        <button data-action="close" type="button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
+                        <button type="submit" form="sinoptico-edit-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Cambios</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 
     dom.modalContainer.innerHTML = modalHTML;
     lucide.createIcons();
     const modalElement = document.getElementById(modalId);
-    const commentTextarea = modalElement.querySelector('#sinoptico-comment');
-    const charCountSpan = modalElement.querySelector('#comment-char-count');
 
-    const updateCharCount = () => {
-        charCountSpan.textContent = commentTextarea.value.length;
-    };
+    if (node.tipo === 'insumo') {
+        const consumoTeoricoInput = modalElement.querySelector('#consumoTeorico');
+        const consumoRealInput = modalElement.querySelector('#consumoReal');
+        const mermaDisplay = modalElement.querySelector('#merma-calculada');
 
-    commentTextarea.addEventListener('input', updateCharCount);
-    updateCharCount(); // Initial count
+        const calculateMerma = () => {
+            const teorico = parseFloat(consumoTeoricoInput.value) || 0;
+            const real = parseFloat(consumoRealInput.value) || 0;
+            if (teorico > 0) {
+                const merma = ((real - teorico) / teorico) * 100;
+                mermaDisplay.textContent = `${merma.toFixed(2)}%`;
+                 mermaDisplay.className = `text-lg font-bold ${merma < 0 ? 'text-green-600' : 'text-red-600'}`;
+            } else {
+                mermaDisplay.textContent = 'N/A';
+                mermaDisplay.className = 'text-lg font-bold text-gray-800';
+            }
+        };
+
+        consumoTeoricoInput.addEventListener('input', calculateMerma);
+        consumoRealInput.addEventListener('input', calculateMerma);
+        calculateMerma(); // Initial calculation
+    }
 
     modalElement.querySelector('form').addEventListener('submit', handleSinopticoFormSubmit);
     modalElement.addEventListener('click', e => {
@@ -9782,27 +9872,13 @@ async function handleSinopticoFormSubmit(e) {
     e.preventDefault();
     const form = e.target;
     const nodeId = form.querySelector('[name="nodeId"]').value;
-    const newQuantity = parseFloat(form.querySelector('[name="quantity"]').value);
-    const newComment = form.querySelector('[name="comment"]').value;
-
-    if (isNaN(newQuantity) || newQuantity < 0) {
-        showToast('Por favor, ingrese una cantidad válida.', 'error');
-        return;
-    }
 
     let activeProductDocId;
     switch (appState.currentView) {
-        case 'arboles':
-            activeProductDocId = appState.arbolActivo?.docId;
-            break;
-        case 'sinoptico_tabular':
-            activeProductDocId = appState.sinopticoTabularState?.selectedProduct?.docId;
-            break;
-        case 'sinoptico':
-            activeProductDocId = appState.sinopticoState?.activeTreeDocId;
-            break;
-        default:
-            activeProductDocId = null;
+        case 'arboles': activeProductDocId = appState.arbolActivo?.docId; break;
+        case 'sinoptico_tabular': activeProductDocId = appState.sinopticoTabularState?.selectedProduct?.docId; break;
+        case 'sinoptico': activeProductDocId = appState.sinopticoState?.activeTreeDocId; break;
+        default: activeProductDocId = null;
     }
 
     if (!activeProductDocId) {
@@ -9810,16 +9886,24 @@ async function handleSinopticoFormSubmit(e) {
         return;
     }
     const product = appState.collections[COLLECTIONS.PRODUCTOS].find(p => p.docId === activeProductDocId);
-
     if (!product) {
-        showToast('Error: No se pudo encontrar el producto activo.', 'error');
+        showToast('Error: Producto no encontrado en la colección.', 'error');
         return;
     }
     const nodeToUpdate = findNode(nodeId, product.estructura);
 
     if (nodeToUpdate) {
-        nodeToUpdate.quantity = newQuantity;
-        nodeToUpdate.comment = newComment;
+        // Update common fields
+        nodeToUpdate.quantity = parseFloat(form.querySelector('[name="quantity"]').value) || 0;
+        const commentEl = form.querySelector('[name="comment"]');
+        if (commentEl) nodeToUpdate.comment = commentEl.value;
+
+        // Update insumo-specific fields
+        if (nodeToUpdate.tipo === 'insumo') {
+            nodeToUpdate.unidadConsumo = form.querySelector('[name="unidadConsumo"]').value;
+            nodeToUpdate.consumoTeorico = parseFloat(form.querySelector('[name="consumoTeorico"]').value) || 0;
+            nodeToUpdate.consumoReal = parseFloat(form.querySelector('[name="consumoReal"]').value) || 0;
+        }
 
         const saveButton = form.closest('.modal-content').querySelector('button[type="submit"]');
         saveButton.disabled = true;
@@ -9838,7 +9922,7 @@ async function handleSinopticoFormSubmit(e) {
                     renderArbolDetalle(nodeId);
                     break;
                 case 'sinoptico_tabular':
-                    if(appState.sinopticoTabularState.selectedProduct && appState.sinopticoTabularState.selectedProduct.docId === product.docId) {
+                     if(appState.sinopticoTabularState.selectedProduct && appState.sinopticoTabularState.selectedProduct.docId === product.docId) {
                         appState.sinopticoTabularState.selectedProduct.estructura = product.estructura;
                     }
                     runSinopticoTabularLogic();
