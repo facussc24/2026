@@ -77,24 +77,25 @@ describe('prepareDataForPdfAutoTable', () => {
         // 3. Check the content and metadata of specific objects in the body
         const [productoRow, semiRow, insumo1Row, insumo2Row] = body;
 
-        // Row 1: Producto (Root)
-        expect(productoRow.level).toBe(0);
+        // Row 1: Producto (Root) - Note: All display values are now strings
+        expect(productoRow.level).toBe('0');
         expect(productoRow.descripcion).toBe('Producto de Prueba');
         expect(productoRow.isLast).toBe(true);
         expect(productoRow.lineage).toEqual([]); // Root has no lineage
 
         // Row 2: Semiterminado (Child of Root)
-        expect(semiRow.level).toBe(1);
+        expect(semiRow.level).toBe('1');
+        expect(semiRow.cantidad).toBe('2');
         expect(semiRow.isLast).toBe(false); // Not the last child of the product
         expect(semiRow.lineage).toEqual([false]); // Its parent (root) was the last child, so no vertical line needed
 
         // Row 3: Insumo (Child of Semiterminado)
-        expect(insumo1Row.level).toBe(2);
+        expect(insumo1Row.level).toBe('2');
         expect(insumo1Row.isLast).toBe(true); // Last (and only) child of the semiterminado
         expect(insumo1Row.lineage).toEqual([false, true]); // Root was last, Semiterminado was not
 
         // Row 4: Insumo (Child of Root)
-        expect(insumo2Row.level).toBe(1);
+        expect(insumo2Row.level).toBe('1');
         expect(insumo2Row.isLast).toBe(true); // Is the last child of the product
         expect(insumo2Row.lineage).toEqual([false]); // Its parent (root) was the last child
     });

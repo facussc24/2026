@@ -178,15 +178,16 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
         const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? 'N/A');
 
         // Return a full object. The keys here will be used as `dataKey` in autoTable.
+        // Explicitly convert all display values to strings to prevent jsPDF errors.
         return {
-            level: level,
-            descripcion: descripcion,
-            codigo: item.id || 'N/A',
-            version: item.version || 'N/A',
-            proceso: proceso,
-            cantidad: cantidad,
-            unidad: unidad,
-            comentarios: node.comment || '',
+            level: String(level),
+            descripcion: String(descripcion),
+            codigo: String(item.id || 'N/A'),
+            version: String(item.version || 'N/A'),
+            proceso: String(proceso),
+            cantidad: String(cantidad),
+            unidad: String(unidad),
+            comentarios: String(node.comment || ''),
             // Pass through the raw data needed for drawing
             isLast: isLast,
             lineage: lineage
