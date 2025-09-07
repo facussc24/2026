@@ -152,26 +152,23 @@ export function flattenEstructura(nodes) {
 
 /**
  * Transforms flattened BOM data into a format suitable for jspdf-autotable.
+ * This version returns an array of objects to preserve metadata for custom drawing.
  * @param {Array<Object>} flattenedData - The array of data from getFlattenedData.
  * @param {Object} collectionsById - The map of collections for resolving IDs.
- * @returns {{head: Array<Array<string>>, body: Array<Array<string>>}} - The headers and rows for the table.
+ * @returns {{body: Array<Object>}} - An object containing the body as an array of processed objects.
  */
 export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
-    const head = [['Nivel', 'Descripción', 'Código', 'Versión', 'Proceso', 'Cantidad', 'Unidad', 'Comentarios']];
     const body = flattenedData.map(rowData => {
         const { node, item, level, isLast, lineage } = rowData;
 
-        // The description is now clean, as the hierarchy will be drawn graphically.
         const descripcion = item.descripcion || item.nombre || '';
 
-        // Get process description
         let proceso = 'N/A';
         if (item.proceso && collectionsById[COLLECTIONS.PROCESOS]) {
             const procesoData = collectionsById[COLLECTIONS.PROCESOS].get(item.proceso);
             proceso = procesoData ? procesoData.descripcion : item.proceso;
         }
 
-        // Get unit description
         let unidad = '';
         if (node.tipo === 'insumo' && item.unidad_medida && collectionsById[COLLECTIONS.UNIDADES]) {
             const unidadData = collectionsById[COLLECTIONS.UNIDADES].get(item.unidad_medida);
@@ -180,17 +177,23 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
 
         const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? 'N/A');
 
-        return [
-            level,
-            descripcion,
-            item.id || 'N/A',
-            item.version || 'N/A',
-            proceso,
-            cantidad,
-            unidad,
-            node.comment || ''
-        ];
+        // Return a full object. The keys here will be used as `dataKey` in autoTable.
+        return {
+            level: level,
+            descripcion: descripcion,
+            codigo: item.id || 'N/A',
+            version: item.version || 'N/A',
+            proceso: proceso,
+            cantidad: cantidad,
+            unidad: unidad,
+            comentarios: node.comment || '',
+            // Pass through the raw data needed for drawing
+            isLast: isLast,
+            lineage: lineage
+        };
     });
 
-    return { head, body };
+    // The `columns` will now be defined in the caller `exportSinopticoTabularToPdf`
+    // to keep this function focused on data transformation.
+    return { body };
 }
