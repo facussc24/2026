@@ -5254,6 +5254,15 @@ function handleViewContentActions(e) {
                 clearOtherUsers
             );
         },
+        'clone-product-from-table': () => {
+            const productDocId = button.dataset.docId;
+            const productToClone = appState.currentData.find(p => p.docId === productDocId);
+            if (productToClone) {
+                cloneProduct(productToClone);
+            } else {
+                showToast('Error: No se pudo encontrar el producto para clonar.', 'error');
+            }
+        },
         'clone-product': () => cloneProduct(),
         'view-history': () => showToast('La función de historial de cambios estará disponible próximamente.', 'info'),
     };
@@ -6091,8 +6100,13 @@ function renderTable(data, config) {
                 const titleValue = String(value).replace(/"/g, '&quot;');
                 tableHTML += `<td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap" title="${titleValue}">${value}</td>`;
             });
+            const cloneButtonHTML = (config.dataKey === COLLECTIONS.PRODUCTOS && checkUserPermission('create', item))
+                ? `<button data-action="clone-product-from-table" data-doc-id="${item.docId}" class="text-gray-500 hover:text-purple-600" title="Clonar"><i data-lucide="copy" class="h-5 w-5 pointer-events-none"></i></button>`
+                : '';
+
             tableHTML += `<td class="px-6 py-4 flex items-center justify-end space-x-3">
                 <button data-action="details" data-id="${item.id}" data-doc-id="${item.docId}" class="text-gray-500 hover:text-blue-600" title="Ver Detalles"><i data-lucide="info" class="h-5 w-5 pointer-events-none"></i></button>
+                ${cloneButtonHTML}
                 ${checkUserPermission('edit', item) ? `<button data-action="edit" data-id="${item.id}" data-doc-id="${item.docId}" class="text-gray-500 hover:text-green-600" title="Editar"><i data-lucide="edit" class="h-5 w-5 pointer-events-none"></i></button>` : ''}
                 ${checkUserPermission('delete', item) ? `<button data-action="delete" data-id="${item.id}" data-doc-id="${item.docId}" class="text-gray-500 hover:text-red-600" title="Eliminar"><i data-lucide="trash-2" class="h-5 w-5 pointer-events-none"></i></button>` : ''}
             </td></tr>`;
@@ -11532,8 +11546,8 @@ export function regenerateNodeIds(nodes) {
     processNodes(nodes);
 }
 
-export async function cloneProduct() {
-    const productToClone = appState.sinopticoTabularState.selectedProduct;
+export async function cloneProduct(product = null) {
+    const productToClone = product || appState.sinopticoTabularState?.selectedProduct;
     if (!productToClone) {
         showToast('No hay un producto seleccionado para clonar.', 'error');
         return;
