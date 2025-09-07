@@ -10054,7 +10054,11 @@ export const getFlattenedData = (product, levelFilters) => {
             const collectionName = node.tipo + 's';
             const item = appState.collectionsById[collectionName]?.get(node.refId);
             if (item) {
-                // `level` is the visual display level, `node.originalLevel` is the true level.
+                // BUGFIX: The object passed for rendering must use the calculated
+                // `displayLevel`, not the node's original level. The test
+                // `sinoptico_tabular_level_display_bug.spec.js` verifies this.
+                // The `level` property was being incorrectly shadowed by `node.level`
+                // if it existed, but the main bug is that it should be `displayLevel`.
                 result.push({ node, item, level: displayLevel, isLast, lineage });
                 if (node.children) {
                     result.push(...flatten(node.children, displayLevel + 1, [...lineage, !isLast]));
