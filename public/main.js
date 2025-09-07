@@ -10523,19 +10523,10 @@ async function exportSinopticoTabularToPdf() {
         const NA = 'N/A';
 
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+        const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
 
         doc.autoTable({
-            columns: [
-                { header: 'Nivel', dataKey: 'level' },
-                { header: 'Descripción', dataKey: 'descripcion' },
-                { header: 'Código', dataKey: 'codigo' },
-                { header: 'Versión', dataKey: 'version' },
-                { header: 'Proceso', dataKey: 'proceso' },
-                { header: 'Cantidad', dataKey: 'cantidad' },
-                { header: 'Unidad', dataKey: 'unidad' },
-                { header: 'Comentarios', dataKey: 'comentarios' },
-            ],
+            head: head,
             body: body,
             startY: 55,
             margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
@@ -10554,9 +10545,9 @@ async function exportSinopticoTabularToPdf() {
                 halign: 'center',
             },
             columnStyles: {
-                level: { halign: 'center', cellWidth: 15 }, // Centered and wider
+                nivel: { halign: 'center', cellWidth: 10 },
                 descripcion: { cellWidth: 80 },
-                codigo: { halign: 'center', cellWidth: 25 }, // Centered
+                codigo_pieza: { cellWidth: 25 },
                 version: { halign: 'center', cellWidth: 15 },
                 proceso: { cellWidth: 30 },
                 cantidad: { halign: 'right', cellWidth: 15 },
@@ -10565,94 +10556,74 @@ async function exportSinopticoTabularToPdf() {
             },
             willDrawCell: (data) => {
                 if (data.column.dataKey === 'descripcion') {
-                    const metadata = rawData[data.row.index];
-                    const level = metadata.level || 0;
+                    const level = data.row.raw.level || 0;
                     const INDENT = 4;
                     const PADDING = 2;
-                    data.cell.styles.cellPadding.left = PADDING + (level * INDENT);
+                    // Dynamically set left padding for the description cell to make space for tree lines
+                    data.cell.styles.cellPadding.left = PADDING + level * INDENT;
                 }
             },
             didDrawCell: (data) => {
+                // We only want to draw lines in the 'description' column, and only for the table body
                 if (data.section === 'body' && data.column.dataKey === 'descripcion') {
-                    const metadata = rawData[data.row.index];
-                    if (!metadata) return;
-
-                    const { level, isLast, lineage } = metadata;
-                    if (level === 0) return;
+                    const { level, isLast, lineage } = data.row.raw;
+                    if (level === 0) return; // No lines for root element
 
                     const cell = data.cell;
                     const x = cell.x;
                     const y = cell.y;
-                    const INDENT = 4;
-                    const PADDING = 2;
+                    const INDENT = 4; // Should match the indent in willDrawCell
+                    const PADDING = 2; // Should match the padding in willDrawCell
 
-                    doc.setDrawColor(180);
+                    doc.setDrawColor(180); // Set line color to a light gray
                     doc.setLineWidth(0.2);
 
-                    lineage.forEach((isParentNotLast, i) => {
-                        if (isParentNotLast) {
-                            const lineX = x + PADDING + i * INDENT + INDENT / 2;
+                    // Draw vertical lines for all parent levels
+                    for (let i = 0; i < level; i++) {
+                        // The 'lineage' array tells us if the parent at this level is the last one.
+                        // If it's not the last one, we need to draw a continuous vertical line.
+                        if (lineage[i]) {
+                            const lineX = x + PADDING + i * INDENT - INDENT / 2;
                             doc.line(lineX, y, lineX, y + cell.height);
                         }
-                    });
+                    }
 
+                    // Draw the connector for the current node (e.g., '├─' or '└─')
                     const connectorY = y + cell.height / 2;
-                    const connectorStartX = x + PADDING + (level - 1) * INDENT + INDENT / 2;
-                    const connectorEndX = connectorStartX + INDENT / 2;
-                    doc.line(connectorStartX, connectorY, connectorEndX, connectorY);
+                    const connectorStartX = x + PADDING + (level - 1) * INDENT - INDENT / 2;
+                    const connectorEndX = connectorStartX + INDENT;
+
+                    doc.line(connectorStartX, connectorY, connectorEndX, connectorY); // Horizontal part
 
                     if (isLast) {
+                        // If it's the last node, draw a '└' shape
                         doc.line(connectorStartX, y, connectorStartX, connectorY);
                     } else {
+                        // If it's not the last node, draw a '├' shape
                         doc.line(connectorStartX, y, connectorStartX, y + cell.height);
                     }
                 }
             },
             didDrawPage: (data) => {
-                // Carátula / Header
-                doc.setFillColor('#44546A');
-                doc.rect(PAGE_MARGIN, 10, PAGE_WIDTH - (PAGE_MARGIN * 2), 30, 'F');
+                doc.setFontSize(18);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor('#3B82F6');
+                doc.text('Reporte de Estructura de Producto (BOM)', PAGE_WIDTH / 2, 15, { align: 'center' });
 
                 if (logoBase64) {
-                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN + 2, 12, 40, 15);
+                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
                 }
 
-                doc.setFontSize(16);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor('#FFFFFF');
-                doc.text('COMPOSICIÓN DE PIEZAS - BOM', PAGE_WIDTH - PAGE_MARGIN - 2, 18, { align: 'right' });
-
                 doc.setFontSize(9);
-                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(100);
+                const headerTextX = PAGE_WIDTH - PAGE_MARGIN;
+                doc.text(`Producto: ${product.descripcion || NA}`, headerTextX, 24, { align: 'right' });
+                doc.text(`Código: ${product.id || NA}`, headerTextX, 28, { align: 'right' });
                 const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
-                const headerTextX = PAGE_WIDTH - PAGE_MARGIN - 2;
+                doc.text(`Cliente: ${client?.descripcion || NA}`, headerTextX, 32, { align: 'right' });
 
-                const fields = [
-                    { label: 'PRODUCTO', value: product.descripcion },
-                    { label: 'NÚMERO DE PIEZA', value: product.id },
-                    { label: 'CLIENTE', value: client?.descripcion },
-                    { label: 'FECHA REVISIÓN', value: product.fechaRevision },
-                    { label: 'REALIZÓ', value: product.lastUpdatedBy },
-                    { label: 'APROBÓ', value: product.aprobadoPor }
-                ];
-
-                let fieldY = 25;
-                fields.forEach((field, index) => {
-                    const xPos = index % 2 === 0 ? 120 : headerTextX;
-                    if (index > 0 && index % 2 === 0) {
-                        fieldY += 5;
-                    }
-                    doc.setFont('helvetica', 'bold');
-                    doc.text(String(field.label || NA), xPos, fieldY, { align: 'right', 'maxWidth': 40 });
-                    doc.setFont('helvetica', 'normal');
-                    doc.text(String(field.value || NA), xPos + 2, fieldY, { align: 'left' });
-                });
-
-
-                // Page Footer
                 const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(8);
-                doc.setTextColor(100);
                 doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, doc.internal.pageSize.height - 10, { align: 'center' });
                 doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, doc.internal.pageSize.height - 10);
             }
