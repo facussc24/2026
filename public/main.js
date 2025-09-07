@@ -11507,17 +11507,23 @@ function exportSinopticoPdf(activeFilters) {
  * @param {Array} nodes - The array of root nodes of the structure to process.
  * @returns {void} - The function modifies the nodes in place.
  */
+// Global counter to ensure uniqueness across rapid function calls.
+let regenerateNodeIdsCounter = 0;
+
 export function regenerateNodeIds(nodes) {
     if (!nodes) return;
 
-    // Use a more unique prefix for each batch of nodes
-    const prefix = `comp_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    let counter = 0;
+    // Increment the global counter for each main call to the function.
+    regenerateNodeIdsCounter++;
+
+    // The prefix now includes the global counter, guaranteeing uniqueness even if Date.now() is the same.
+    const prefix = `comp_${Date.now()}_${regenerateNodeIdsCounter}`;
+    let nodeCounter = 0; // Local counter for nodes within this specific tree
 
     function processNodes(nodeArray) {
         nodeArray.forEach(node => {
             // The combination of the unique prefix and an incrementing counter ensures uniqueness.
-            node.id = `${prefix}_${counter++}`;
+            node.id = `${prefix}_${nodeCounter++}`;
             if (node.children) {
                 processNodes(node.children);
             }
