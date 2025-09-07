@@ -57,36 +57,45 @@ describe('prepareDataForPdfAutoTable', () => {
         };
     });
 
-    test('should transform flattened data into head and body arrays for jspdf-autotable', () => {
+    test('should transform flattened data into an array of objects for jspdf-autotable', () => {
         // --- ARRANGE ---
-        // getFlattenedData uses the global appState which is set up in beforeEach
         const flattenedData = getFlattenedData(appState.sinopticoTabularState.selectedProduct, new Set());
 
         // --- ACT ---
         const result = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
 
         // --- ASSERT ---
-        // 1. Check Headers
-        const expectedHead = [['Nivel', 'Descripción', 'Código', 'Versión', 'Proceso', 'Cantidad', 'Unidad', 'Comentarios']];
-        expect(result.head).toEqual(expectedHead);
+        // 1. Check the overall structure
+        expect(result).toHaveProperty('body');
+        expect(result.head).toBeUndefined();
 
-        // 2. Check Body length (should be 4 rows for our mock data)
-        expect(result.body).toHaveLength(4);
+        // 2. Check Body length
+        const { body } = result;
+        expect(body).toBeInstanceOf(Array);
+        expect(body).toHaveLength(4);
 
-        // 3. Check content of specific rows
-        const [productoRow, semiRow, insumo1Row, insumo2Row] = result.body;
+        // 3. Check the content and metadata of specific objects in the body
+        const [productoRow, semiRow, insumo1Row, insumo2Row] = body;
 
-        // Row 1: Producto
-        expect(productoRow[1]).toBe('Producto de Prueba'); // Descripción (limpia, sin prefijo)
+        // Row 1: Producto (Root)
+        expect(productoRow.level).toBe(0);
+        expect(productoRow.descripcion).toBe('Producto de Prueba');
+        expect(productoRow.isLast).toBe(true);
+        expect(productoRow.lineage).toEqual([]); // Root has no lineage
 
-        // Row 2: Semiterminado
-        expect(semiRow[1]).toBe('Semiterminado Principal'); // Descripción (limpia, sin prefijo)
+        // Row 2: Semiterminado (Child of Root)
+        expect(semiRow.level).toBe(1);
+        expect(semiRow.isLast).toBe(false); // Not the last child of the product
+        expect(semiRow.lineage).toEqual([false]); // Its parent (root) was the last child, so no vertical line needed
 
-        // Row 3: Insumo anidado
-        expect(insumo1Row[1]).toBe('Insumo A'); // Descripción (limpia, sin prefijo)
-        expect(insumo1Row[7]).toBe('Comentario de prueba'); // Comentarios
+        // Row 3: Insumo (Child of Semiterminado)
+        expect(insumo1Row.level).toBe(2);
+        expect(insumo1Row.isLast).toBe(true); // Last (and only) child of the semiterminado
+        expect(insumo1Row.lineage).toEqual([false, true]); // Root was last, Semiterminado was not
 
-        // Row 4: Último insumo
-        expect(insumo2Row[1]).toBe('Insumo B'); // Descripción (limpia, sin prefijo)
+        // Row 4: Insumo (Child of Root)
+        expect(insumo2Row.level).toBe(1);
+        expect(insumo2Row.isLast).toBe(true); // Is the last child of the product
+        expect(insumo2Row.lineage).toEqual([false]); // Its parent (root) was the last child
     });
 });
