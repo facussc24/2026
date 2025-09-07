@@ -10562,8 +10562,8 @@ async function exportSinopticoTabularToPdf() {
                 }
             },
             didDrawCell: (data) => {
-                // We only want to draw lines in the 'description' column
-                if (data.column.dataKey === 'descripcion') {
+                // We only want to draw lines in the 'description' column, and only for the table body
+                if (data.section === 'body' && data.column.dataKey === 'descripcion') {
                     const { level, isLast, lineage } = data.row.raw;
                     if (level === 0) return; // No lines for root element
 
