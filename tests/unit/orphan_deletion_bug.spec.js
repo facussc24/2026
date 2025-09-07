@@ -11,8 +11,10 @@ const mockDeleteDoc = jest.fn();
 const mockCollection = jest.fn((db, name) => name);
 const mockQuery = jest.fn();
 const mockWhere = jest.fn();
+const mockLimit = jest.fn();
 const mockDoc = jest.fn((db, collection, id) => ({ path: `${collection}/${id}` }));
 
+// The mockFirestore object now includes 'limit'
 const mockFirestore = {
     doc: mockDoc,
     getDoc: mockGetDoc,
@@ -21,6 +23,7 @@ const mockFirestore = {
     collection: mockCollection,
     query: mockQuery,
     where: mockWhere,
+    limit: mockLimit,
 };
 
 const mockUiCallbacks = {
@@ -28,13 +31,22 @@ const mockUiCallbacks = {
     runTableLogic: mockRunTableLogic,
 };
 
-describe('deleteProductAndOrphanedSubProducts', () => {
+describe('deleteProductAndOrphanedSubProducts (Optimized)', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        // Link the mock implementations together to simulate the query chain
+        // We return a unique object for each mock so we can identify it later.
+        mockWhere.mockImplementation((field, op, value) => ({ type: 'where', value }));
+        mockLimit.mockImplementation(limit => ({ type: 'limit', value: limit }));
+        mockQuery.mockImplementation((collection, ...constraints) => ({
+            type: 'query',
+            collection,
+            constraints
+        }));
     });
 
-    test('[FIX] should delete an orphaned sub-component when its parent product is deleted', async () => {
+    test('[FIX] should delete an orphaned sub-component using an efficient query', async () => {
         // --- ARRANGE ---
         const mainProductId = 'PRODUCT-MAIN-123';
         const orphanSubProductId = 'SUBPROD-ORPHAN-456';
@@ -44,41 +56,35 @@ describe('deleteProductAndOrphanedSubProducts', () => {
             id: mainProductId,
             codigo_pieza: 'P-001',
             estructura: [
-                { tipo: 'semiterminado', refId: orphanSubProductId },
-                { tipo: 'semiterminado', refId: usedSubProductId }
+                { tipo: 'semiterminado', refId: orphanSubProductId, quantity: 1 },
+                { tipo: 'semiterminado', refId: usedSubProductId, quantity: 1 }
             ]
         };
 
-        const otherProductData = {
-            id: 'PRODUCT-OTHER-XYZ',
-            codigo_pieza: 'P-002',
-            estructura: [
-                { tipo: 'semiterminado', refId: usedSubProductId }
-            ]
-        };
-
-        // Mock for getDocs to fetch all products for dependency checking.
-        const allProductsSnapshot = {
-            docs: [
-                { id: 'PRODUCT-OTHER-XYZ', data: () => otherProductData },
-                { id: mainProductId, data: () => mainProductData }
-            ]
-        };
-        mockGetDocs.mockResolvedValue(allProductsSnapshot);
-
-        // Mock for getDoc. It needs to handle three cases now:
-        // 1. Fetching the main product to be deleted.
-        // 2. The new logic checking if the orphan exists before deleting it.
-        // 3. The new logic checking if the used sub-product exists (it shouldn't get this far, but good to be robust).
+        // Mock for getDoc to fetch the main product and the sub-products before deletion.
         mockGetDoc.mockImplementation(async (docRef) => {
             if (docRef.path === `productos/${mainProductId}`) {
                 return { exists: () => true, data: () => mainProductData };
             }
             if (docRef.path === `semiterminados/${orphanSubProductId}`) {
-                return { exists: () => true, data: () => ({ id: orphanSubProductId, codigo_pieza: 'SP-ORPHAN' }) };
+                return { exists: () => true, data: () => ({ id: orphanSubProductId }) };
             }
-            // For any other doc, say it doesn't exist.
             return { exists: () => false, data: () => null };
+        });
+
+        // Mock for getDocs to simulate the result of the 'array-contains' query.
+        mockGetDocs.mockImplementation(async (queryInstance) => {
+            // This mock is now more robust. It checks the content of the query it receives.
+            const hasOrphan = queryInstance.constraints.some(c => c.type === 'where' && c.value === orphanSubProductId);
+            const hasUsed = queryInstance.constraints.some(c => c.type === 'where' && c.value === usedSubProductId);
+
+            if (hasOrphan) {
+                return { empty: true, docs: [] }; // The orphan is not used elsewhere.
+            }
+            if (hasUsed) {
+                return { empty: false, docs: [{ id: 'some-other-product' }] }; // The used component is found in another product.
+            }
+            return { empty: true, docs: [] };
         });
 
         // --- ACT ---
@@ -86,40 +92,34 @@ describe('deleteProductAndOrphanedSubProducts', () => {
 
         // --- ASSERT ---
         // 1. The main product should have been deleted.
-        const mainProductDocRef = { path: 'productos/PRODUCT-MAIN-123' };
-        expect(mockDeleteDoc).toHaveBeenCalledWith(mainProductDocRef);
+        expect(mockDeleteDoc).toHaveBeenCalledWith(expect.objectContaining({ path: `productos/${mainProductId}` }));
 
-        // 2. The code should no longer be using a `where` query for this.
-        expect(mockWhere).not.toHaveBeenCalled();
+        // 2. The code should use `where` and `limit` for its queries.
+        expect(mockQuery).toHaveBeenCalledTimes(2);
+        expect(mockWhere).toHaveBeenCalledWith('component_ids', 'array-contains', orphanSubProductId);
+        expect(mockWhere).toHaveBeenCalledWith('component_ids', 'array-contains', usedSubProductId);
+        expect(mockLimit).toHaveBeenCalledWith(1);
+        expect(mockLimit).toHaveBeenCalledTimes(2);
 
-        // 3. CRITICAL: Because the code is now fixed, it should find the orphan via getDoc
-        // and then call deleteDoc on it. This assertion now verifies the fix.
-        const orphanSubProductDocRef = { path: 'semiterminados/SUBPROD-ORPHAN-456' };
-        expect(mockDeleteDoc).toHaveBeenCalledWith(orphanSubProductDocRef);
+        // 3. The orphaned sub-product should be deleted.
+        expect(mockDeleteDoc).toHaveBeenCalledWith(expect.objectContaining({ path: `semiterminados/${orphanSubProductId}` }));
 
-        // 4. The used sub-product should NOT have been deleted.
-        const usedSubProductDocRef = { path: 'semiterminados/SUBPROD-USED-789' };
-        expect(mockDeleteDoc).not.toHaveBeenCalledWith(usedSubProductDocRef);
+        // 4. The sub-product that is still in use should NOT be deleted.
+        expect(mockDeleteDoc).not.toHaveBeenCalledWith(expect.objectContaining({ path: `semiterminados/${usedSubProductId}` }));
 
         // 5. Verify delete was called exactly twice (main product + orphan)
         expect(mockDeleteDoc).toHaveBeenCalledTimes(2);
     });
 
-    test('[NEW] should delete an orphaned insumo component', async () => {
+    test('[NEW] should delete an orphaned insumo component using an efficient query', async () => {
         // --- ARRANGE ---
         const mainProductId = 'PROD-MAIN-INSU';
         const orphanInsumoId = 'INSU-ORPHAN-123';
 
         const mainProductData = {
             id: mainProductId,
-            estructura: [
-                { tipo: 'insumo', refId: orphanInsumoId }
-            ]
+            estructura: [{ tipo: 'insumo', refId: orphanInsumoId, quantity: 1 }]
         };
-
-        // Mock for getDocs to fetch all products for dependency checking.
-        // No other products exist, so the insumo is an orphan.
-        mockGetDocs.mockResolvedValue({ docs: [] });
 
         mockGetDoc.mockImplementation(async (docRef) => {
             if (docRef.path === `productos/${mainProductId}`) {
@@ -131,14 +131,23 @@ describe('deleteProductAndOrphanedSubProducts', () => {
             return { exists: () => false, data: () => null };
         });
 
+        // The query for the insumo should return an empty snapshot, indicating it's an orphan.
+        mockGetDocs.mockResolvedValue({ empty: true, docs: [] });
+
         // --- ACT ---
         await deleteProductAndOrphanedSubProducts(mainProductId, 'mockDb', mockFirestore, COLLECTIONS, mockUiCallbacks);
 
         // --- ASSERT ---
-        // Verify that deleteDoc was called for both the product and the orphaned insumo
+        // 1. Verify the correct query was made for the insumo.
+        expect(mockWhere).toHaveBeenCalledWith('component_ids', 'array-contains', orphanInsumoId);
+        expect(mockLimit).toHaveBeenCalledWith(1);
+
+        // 2. Verify that deleteDoc was called for both the product and the orphaned insumo.
         expect(mockDeleteDoc).toHaveBeenCalledTimes(2);
         expect(mockDeleteDoc).toHaveBeenCalledWith(expect.objectContaining({ path: `productos/${mainProductId}` }));
         expect(mockDeleteDoc).toHaveBeenCalledWith(expect.objectContaining({ path: `insumos/${orphanInsumoId}` }));
+
+        // 3. Check for the correct success message.
         expect(mockShowToast).toHaveBeenCalledWith('1 sub-componentes huérfanos eliminados.', 'success');
     });
 });
