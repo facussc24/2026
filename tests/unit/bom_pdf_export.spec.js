@@ -57,7 +57,7 @@ describe('prepareDataForPdfAutoTable', () => {
         };
     });
 
-    test('should transform flattened data into an array of objects for jspdf-autotable', () => {
+    test('should separate display data from metadata', () => {
         // --- ARRANGE ---
         const flattenedData = getFlattenedData(appState.sinopticoTabularState.selectedProduct, new Set());
 
@@ -67,36 +67,66 @@ describe('prepareDataForPdfAutoTable', () => {
         // --- ASSERT ---
         // 1. Check the overall structure
         expect(result).toHaveProperty('body');
-        expect(result.head).toBeUndefined();
+        expect(result).toHaveProperty('rawData');
 
-        // 2. Check Body length
-        const { body } = result;
+        // 2. Check Body and rawData length
+        const { body, rawData } = result;
         expect(body).toBeInstanceOf(Array);
         expect(body).toHaveLength(4);
+        expect(rawData).toBeInstanceOf(Array);
+        expect(rawData).toHaveLength(4);
 
-        // 3. Check the content and metadata of specific objects in the body
-        const [productoRow, semiRow, insumo1Row, insumo2Row] = body;
+        // 3. Check the DISPLAY data (body) - should only contain strings for the PDF
+        const [productoBody, semiBody, insumo1Body, insumo2Body] = body;
 
-        // Row 1: Producto (Root) - Note: All display values are now strings
-        expect(productoRow.level).toBe('0');
-        expect(productoRow.descripcion).toBe('Producto de Prueba');
-        expect(productoRow.isLast).toBe(true);
-        expect(productoRow.lineage).toEqual([]); // Root has no lineage
+        // Row 1: Producto
+        expect(productoBody.level).toBe('0');
+        expect(productoBody.descripcion).toBe('Producto de Prueba');
+        expect(productoBody.version).toBe('1.0');
+        expect(productoBody.proceso).toBe('Ensamblaje Final');
+        expect(productoBody.cantidad).toBe('1');
+        expect(productoBody).not.toHaveProperty('isLast'); // Metadata should be gone
+
+        // Row 2: Semiterminado
+        expect(semiBody.level).toBe('1');
+        expect(semiBody.descripcion).toBe('Semiterminado Principal');
+        expect(semiBody.cantidad).toBe('2');
+        expect(semiBody.proceso).toBe('Mecanizado CNC');
+
+        // Row 3: Insumo 1
+        expect(insumo1Body.level).toBe('2');
+        expect(insumo1Body.descripcion).toBe('Insumo A');
+        expect(insumo1Body.cantidad).toBe('5');
+        expect(insumo1Body.unidad).toBe('kg');
+        expect(insumo1Body.comentarios).toBe('Comentario de prueba');
+
+        // Row 4: Insumo 2
+        expect(insumo2Body.level).toBe('1');
+        expect(insumo2Body.descripcion).toBe('Insumo B');
+        expect(insumo2Body.cantidad).toBe('10');
+        expect(insumo2Body.unidad).toBe('m');
+
+        // 4. Check the METADATA (rawData) - should contain the raw values for drawing
+        const [productoRaw, semiRaw, insumo1Raw, insumo2Raw] = rawData;
+
+        // Row 1: Producto (Root)
+        expect(productoRaw.level).toBe(0);
+        expect(productoRaw.isLast).toBe(true);
+        expect(productoRaw.lineage).toEqual([]);
 
         // Row 2: Semiterminado (Child of Root)
-        expect(semiRow.level).toBe('1');
-        expect(semiRow.cantidad).toBe('2');
-        expect(semiRow.isLast).toBe(false); // Not the last child of the product
-        expect(semiRow.lineage).toEqual([false]); // Its parent (root) was the last child, so no vertical line needed
+        expect(semiRaw.level).toBe(1);
+        expect(semiRaw.isLast).toBe(false);
+        expect(semiRaw.lineage).toEqual([false]);
 
         // Row 3: Insumo (Child of Semiterminado)
-        expect(insumo1Row.level).toBe('2');
-        expect(insumo1Row.isLast).toBe(true); // Last (and only) child of the semiterminado
-        expect(insumo1Row.lineage).toEqual([false, true]); // Root was last, Semiterminado was not
+        expect(insumo1Raw.level).toBe(2);
+        expect(insumo1Raw.isLast).toBe(true);
+        expect(insumo1Raw.lineage).toEqual([false, true]);
 
         // Row 4: Insumo (Child of Root)
-        expect(insumo2Row.level).toBe('1');
-        expect(insumo2Row.isLast).toBe(true); // Is the last child of the product
-        expect(insumo2Row.lineage).toEqual([false]); // Its parent (root) was the last child
+        expect(insumo2Raw.level).toBe(1);
+        expect(insumo2Raw.isLast).toBe(true);
+        expect(insumo2Raw.lineage).toEqual([false]);
     });
 });
