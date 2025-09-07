@@ -443,12 +443,19 @@ async function saveDocument(collectionName, data, docId = null) {
 
     try {
         if (docId) {
-            // Logic for updating an existing document remains the same.
+            // Logic for updating an existing document
+            if (collectionName === COLLECTIONS.PRODUCTOS) {
+                data.fecha_modificacion = new Date();
+            }
             const docRef = doc(db, collectionName, docId);
             await updateDoc(docRef, data);
             showToast('Registro actualizado con éxito.', 'success', { toastId });
         } else {
-            // Logic for creating a new document, now using a transaction.
+            // Logic for creating a new document
+            if (collectionName === COLLECTIONS.PRODUCTOS) {
+                data.createdAt = new Date();
+                data.fecha_modificacion = new Date();
+            }
             const uniqueKeyField = getUniqueKeyForCollection(collectionName);
             const uniqueKeyValue = data[uniqueKeyField];
 
@@ -5262,12 +5269,26 @@ function handleViewContentActions(e) {
             const productDocId = button.dataset.docId;
             const productToClone = appState.currentData.find(p => p.docId === productDocId);
             if (productToClone) {
-                cloneProduct(productToClone);
+                const deps = {
+                    db,
+                    firestore: { query, collection, where, getDocs, addDoc },
+                    ui: { showToast, showPromptModal },
+                    appState
+                };
+                cloneProduct(deps, productToClone);
             } else {
                 showToast('Error: No se pudo encontrar el producto para clonar.', 'error');
             }
         },
-        'clone-product': () => cloneProduct(),
+        'clone-product': () => {
+            const deps = {
+                db,
+                firestore: { query, collection, where, getDocs, addDoc },
+                ui: { showToast, showPromptModal },
+                appState
+            };
+            cloneProduct(deps);
+        },
         'view-history': () => showToast('La función de historial de cambios estará disponible próximamente.', 'info'),
     };
     
@@ -11555,7 +11576,11 @@ export function regenerateNodeIds(nodes) {
     processNodes(nodes);
 }
 
-export async function cloneProduct(product = null) {
+export async function cloneProduct(dependencies, product = null) {
+    const { db, firestore, ui, appState } = dependencies;
+    const { query, collection, where, getDocs, addDoc } = firestore;
+    const { showToast, showPromptModal } = ui;
+
     const productToClone = product || appState.sinopticoTabularState?.selectedProduct;
     if (!productToClone) {
         showToast('No hay un producto seleccionado para clonar.', 'error');
@@ -11583,8 +11608,12 @@ export async function cloneProduct(product = null) {
     delete newProduct.lastUpdated;
     delete newProduct.lastUpdatedBy;
     delete newProduct.reviewedBy;
+    delete newProduct.fecha_modificacion; // Remove old stringified date
+    delete newProduct.createdAt; // Remove old stringified date
+
     newProduct.id = newId;
     newProduct.createdAt = new Date();
+    newProduct.fecha_modificacion = new Date();
 
     if (newProduct.estructura) {
         regenerateNodeIds(newProduct.estructura);
