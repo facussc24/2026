@@ -10523,7 +10523,7 @@ async function exportSinopticoTabularToPdf() {
         const NA = 'N/A';
 
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const { body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
 
         doc.autoTable({
             columns: [
@@ -10565,8 +10565,8 @@ async function exportSinopticoTabularToPdf() {
             },
             willDrawCell: (data) => {
                 if (data.column.dataKey === 'descripcion') {
-                    // Now `data.row.raw` is the full object, so we can access `level`.
-                    const level = data.row.raw.level || 0;
+                    const metadata = rawData[data.row.index];
+                    const level = metadata.level || 0;
                     const INDENT = 4;
                     const PADDING = 2;
                     data.cell.styles.cellPadding.left = PADDING + (level * INDENT);
@@ -10574,7 +10574,10 @@ async function exportSinopticoTabularToPdf() {
             },
             didDrawCell: (data) => {
                 if (data.section === 'body' && data.column.dataKey === 'descripcion') {
-                    const { level, isLast, lineage } = data.row.raw;
+                    const metadata = rawData[data.row.index];
+                    if (!metadata) return;
+
+                    const { level, isLast, lineage } = metadata;
                     if (level === 0) return;
 
                     const cell = data.cell;

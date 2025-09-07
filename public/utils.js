@@ -158,12 +158,14 @@ export function flattenEstructura(nodes) {
  * @returns {{body: Array<Object>}} - An object containing the body as an array of processed objects.
  */
 export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
-    const body = flattenedData.map(rowData => {
-        const { node, item, level, isLast, lineage } = rowData;
+    const body = [];
+    const rawData = []; // This will hold the metadata for the draw hooks
 
-        const descripcion = item.descripcion || item.nombre || '';
+    flattenedData.forEach(row => {
+        const { node, item, level, isLast, lineage } = row;
+        const NA = 'N/A';
 
-        let proceso = 'N/A';
+        let proceso = NA;
         if (item.proceso && collectionsById[COLLECTIONS.PROCESOS]) {
             const procesoData = collectionsById[COLLECTIONS.PROCESOS].get(item.proceso);
             proceso = procesoData ? procesoData.descripcion : item.proceso;
@@ -175,26 +177,30 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
             unidad = unidadData ? unidadData.id : item.unidad_medida;
         }
 
-        const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? 'N/A');
+        const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? NA);
 
-        // Return a full object. The keys here will be used as `dataKey` in autoTable.
-        // Explicitly convert all display values to strings to prevent jsPDF errors.
-        return {
+        // This object contains ONLY what will be displayed in the table.
+        // All values are cast to strings to prevent jsPDF errors.
+        const displayRow = {
             level: String(level),
-            descripcion: String(descripcion),
-            codigo: String(item.id || 'N/A'),
-            version: String(item.version || 'N/A'),
+            descripcion: String(item.descripcion || item.nombre || ''),
+            codigo: String(item.id || NA),
+            version: String(item.version || NA),
             proceso: String(proceso),
             cantidad: String(cantidad),
             unidad: String(unidad),
             comentarios: String(node.comment || ''),
-            // Pass through the raw data needed for drawing
-            isLast: isLast,
-            lineage: lineage
         };
+        body.push(displayRow);
+
+        // This object contains the metadata needed for custom drawing.
+        const metadataRow = {
+            level,
+            isLast,
+            lineage
+        };
+        rawData.push(metadataRow);
     });
 
-    // The `columns` will now be defined in the caller `exportSinopticoTabularToPdf`
-    // to keep this function focused on data transformation.
-    return { body };
+    return { body, rawData };
 }
