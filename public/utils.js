@@ -161,12 +161,8 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
     const body = flattenedData.map(rowData => {
         const { node, item, level, isLast, lineage } = rowData;
 
-        // Create the indented description
-        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│  ' : '   ').join('');
-        if (level > 0) {
-            prefix += isLast ? '└─ ' : '├─ ';
-        }
-        const descripcion = `${prefix}${item.descripcion || item.nombre || ''}`;
+        // The description is now clean, as the hierarchy will be drawn graphically.
+        const descripcion = item.descripcion || item.nombre || '';
 
         // Get process description
         let proceso = 'N/A';

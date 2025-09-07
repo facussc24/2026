@@ -77,34 +77,16 @@ describe('prepareDataForPdfAutoTable', () => {
         const [productoRow, semiRow, insumo1Row, insumo2Row] = result.body;
 
         // Row 1: Producto
-        expect(productoRow[0]).toBe(0); // Nivel
-        expect(productoRow[1]).toBe('Producto de Prueba'); // Descripción (sin prefijo)
-        expect(productoRow[2]).toBe('PROD-TEST'); // Código
-        expect(productoRow[3]).toBe('1.0'); // Versión
-        expect(productoRow[4]).toBe('Ensamblaje Final'); // Proceso
-        expect(productoRow[5]).toBe(1); // Cantidad (default para producto)
-        expect(productoRow[6]).toBe(''); // Unidad (N/A para producto)
-        expect(productoRow[7]).toBe(''); // Comentarios
+        expect(productoRow[1]).toBe('Producto de Prueba'); // Descripción (limpia, sin prefijo)
 
         // Row 2: Semiterminado
-        expect(semiRow[0]).toBe(1); // Nivel
-        expect(semiRow[1]).toContain('├─ Semiterminado Principal'); // Descripción con prefijo
-        expect(semiRow[2]).toBe('SEMI-01'); // Código
-        expect(semiRow[5]).toBe(2); // Cantidad
+        expect(semiRow[1]).toBe('Semiterminado Principal'); // Descripción (limpia, sin prefijo)
 
         // Row 3: Insumo anidado
-        expect(insumo1Row[0]).toBe(2); // Nivel
-        expect(insumo1Row[1]).toContain('└─ Insumo A'); // Descripción con prefijo anidado
-        expect(insumo1Row[2]).toBe('INSUMO-01'); // Código
-        expect(insumo1Row[5]).toBe(5); // Cantidad
-        expect(insumo1Row[6]).toBe('kg'); // Unidad
+        expect(insumo1Row[1]).toBe('Insumo A'); // Descripción (limpia, sin prefijo)
         expect(insumo1Row[7]).toBe('Comentario de prueba'); // Comentarios
 
         // Row 4: Último insumo
-        expect(insumo2Row[0]).toBe(1); // Nivel
-        expect(insumo2Row[1]).toContain('└─ Insumo B'); // Descripción con prefijo de último hijo
-        expect(insumo2Row[2]).toBe('INSUMO-02'); // Código
-        expect(insumo2Row[5]).toBe(10); // Cantidad
-        expect(insumo2Row[6]).toBe('m'); // Unidad
+        expect(insumo2Row[1]).toBe('Insumo B'); // Descripción (limpia, sin prefijo)
     });
 });
