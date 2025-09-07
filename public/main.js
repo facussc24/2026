@@ -10523,22 +10523,11 @@ async function exportSinopticoTabularToPdf() {
         const NA = 'N/A';
 
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const { rawBody } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
-
-        const columns = [
-            { header: 'Nivel', dataKey: 'nivel' },
-            { header: 'Descripción', dataKey: 'descripcion' },
-            { header: 'Código', dataKey: 'codigo_pieza' },
-            { header: 'Versión', dataKey: 'version' },
-            { header: 'Proceso', dataKey: 'proceso' },
-            { header: 'Cantidad', dataKey: 'cantidad' },
-            { header: 'Unidad', dataKey: 'unidad' },
-            { header: 'Comentarios', dataKey: 'comentarios' },
-        ];
+        const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
 
         doc.autoTable({
-            columns: columns,
-            body: rawBody,
+            head: head,
+            body: body,
             startY: 55,
             margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
@@ -10622,7 +10611,7 @@ async function exportSinopticoTabularToPdf() {
                 doc.text('Reporte de Estructura de Producto (BOM)', PAGE_WIDTH / 2, 15, { align: 'center' });
 
                 if (logoBase64) {
-                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 35, 12);
+                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
                 }
 
                 doc.setFontSize(9);
