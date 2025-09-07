@@ -10618,10 +10618,10 @@ async function exportSinopticoTabularToPdf() {
                 doc.setFontSize(9);
                 doc.setTextColor(100);
                 const headerTextX = PAGE_WIDTH - PAGE_MARGIN;
-                doc.text(`Producto: ${product.descripcion || NA}`, headerTextX, 24, { align: 'right' });
-                doc.text(`Código: ${product.id || NA}`, headerTextX, 28, { align: 'right' });
+                doc.text(String(`Producto: ${product.descripcion || NA}`), headerTextX, 24, { align: 'right' });
+                doc.text(String(`Código: ${product.id || NA}`), headerTextX, 28, { align: 'right' });
                 const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
-                doc.text(`Cliente: ${client?.descripcion || NA}`, headerTextX, 32, { align: 'right' });
+                doc.text(String(`Cliente: ${client?.descripcion || NA}`), headerTextX, 32, { align: 'right' });
 
                 const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(8);
