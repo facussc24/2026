@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, calculateLinearMeters } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage } from './utils.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
@@ -156,7 +156,6 @@ const viewConfig = {
             { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
             { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
             { key: 'unidad_medida', label: 'Unidad de Medida', type: 'select', searchKey: COLLECTIONS.UNIDADES, required: true },
-            { key: 'ancho_m', label: 'Ancho (m)', type: 'number' },
         ]
     },
     clientes: { title: 'Clientes', singular: 'Cliente', dataKey: COLLECTIONS.CLIENTES, columns: [ { key: 'id', label: 'Código' }, { key: 'descripcion', label: 'Descripción' } ], fields: [ { key: 'id', label: 'Código', type: 'text', required: true }, { key: 'descripcion', label: 'Descripción', type: 'text', required: true } ] },
@@ -950,25 +949,18 @@ async function seedDatabase() {
     // Generar Insumos (20) - Reducido de 200
     for (let i = 1; i <= 20; i++) {
         const id = `INS${String(i).padStart(4, '0')}`;
-        const unidad = getRandomItem(generated.unidades).id;
-        const insumoData = {
+        generated.insumos.push({
             id, codigo_pieza: id, lc_kd: getRandomItem(['LC', 'KD']),
             descripcion: `${getRandomItem(materialTypes)} de ${getRandomItem(materials)}`,
             version: `${Math.floor(Math.random() * 3) + 1}.${Math.floor(Math.random() * 10)}`,
             proveedor: getRandomItem(generated.proveedores).id,
-            unidad_medida: unidad,
+            unidad_medida: getRandomItem(generated.unidades).id,
             costo: parseFloat((Math.random() * 100).toFixed(2)),
             fecha_modificacion: getRandomDate(new Date(2022, 0, 1), new Date()),
             imagen: getRandomItem(imageUrls),
             codigo_materia_prima: `MP-${String(i).padStart(4, '0')}`,
             proveedor_materia_prima: getRandomItem(generated.proveedores).id,
-        };
-
-        if (unidad === 'm2') {
-            insumoData.ancho_m = parseFloat((Math.random() * 2 + 0.5).toFixed(2)); // Ancho aleatorio entre 0.5m y 2.5m
-        }
-
-        generated.insumos.push(insumoData);
+        });
     }
     generated.insumos.forEach(ins => setInBatch(COLLECTIONS.INSUMOS, ins));
 
@@ -9985,7 +9977,6 @@ export function runSinopticoTabularLogic() {
             <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Proveedor Materia Prima</th>
             <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Cantidad / Pieza</th>
             <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Unidad</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Consumo Lineal (m)</th>
             <th scope="col" class="px-4 py-3 align-middle col-comentarios">Comentarios</th>
             <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap col-acciones">Acciones</th>
         </tr></thead><tbody>`;
@@ -10040,19 +10031,6 @@ export function runSinopticoTabularLogic() {
                 unidad_medida = unidadData ? unidadData.id : item.unidad_medida;
             }
 
-            let consumoLinealCell = `<td class="px-4 py-2 text-center align-middle">${NA}</td>`;
-            if (node.tipo === 'insumo' && unidad_medida === 'm2') {
-                const defaultWidth = item.ancho_m || '';
-                consumoLinealCell = `
-                    <td class="px-4 py-2 align-middle">
-                        <div class="flex items-center gap-2">
-                            <input type="number" class="roll-width-input w-20 border rounded px-1 py-0.5" placeholder="Ancho" value="${defaultWidth}" data-sqm="${cantidad}">
-                            <span class="linear-meter-result font-semibold text-blue-600"></span>
-                        </div>
-                    </td>
-                `;
-            }
-
             const comentarios = node.comment ? `<span class="whitespace-normal">${node.comment}</span>` : NA;
             const actionsHTML = checkUserPermission('edit') ? `<button data-action="edit-tabular-node" data-node-id="${node.id}" class="p-1 text-blue-600 hover:bg-blue-100 rounded-md" title="Editar"><i data-lucide="pencil" class="w-4 h-4 pointer-events-none"></i></button>` : '';
 
@@ -10072,7 +10050,6 @@ export function runSinopticoTabularLogic() {
                 <td class="px-4 py-2 text-center align-middle">${proveedor_materia_prima}</td>
                 <td class="px-4 py-2 text-center align-middle">${cantidad}</td>
                 <td class="px-4 py-2 text-center align-middle">${unidad_medida}</td>
-                ${consumoLinealCell}
                 <td class="px-4 py-2 align-middle col-comentarios">${comentarios}</td>
                 <td class="px-4 py-2 text-center align-middle col-acciones">${actionsHTML}</td>
             </tr>`;
@@ -10145,32 +10122,6 @@ export function runSinopticoTabularLogic() {
 
         renderCaratula(product, client);
         lucide.createIcons();
-
-        // Add event listener for the calculator
-        const tableContainer = document.getElementById('sinoptico-tabular-container');
-        if (tableContainer) {
-            tableContainer.addEventListener('input', (e) => {
-                if (e.target.classList.contains('roll-width-input')) {
-                    const input = e.target;
-                    const row = input.closest('tr');
-                    const resultSpan = row.querySelector('.linear-meter-result');
-                    const squareMeters = parseFloat(input.dataset.sqm);
-                    const rollWidth = parseFloat(input.value);
-
-                    const linearMeters = calculateLinearMeters(squareMeters, rollWidth);
-
-                    if (linearMeters !== null) {
-                        resultSpan.textContent = `~ ${linearMeters.toFixed(3)} m`;
-                    } else {
-                        resultSpan.textContent = '';
-                    }
-                }
-            });
-             // Trigger initial calculation for any pre-filled values
-            tableContainer.querySelectorAll('.roll-width-input').forEach(input => {
-                input.dispatchEvent(new Event('input'));
-            });
-        }
     };
 
     // --- Event Handlers ---
