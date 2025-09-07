@@ -10510,38 +10510,99 @@ async function exportSinopticoTabularToPdf() {
         const NA = 'N/A';
 
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+        const { rawBody } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+
+        const columns = [
+            { header: 'Nivel', dataKey: 'nivel' },
+            { header: 'Descripción', dataKey: 'descripcion' },
+            { header: 'Código', dataKey: 'codigo_pieza' },
+            { header: 'Versión', dataKey: 'version' },
+            { header: 'Proceso', dataKey: 'proceso' },
+            { header: 'Cantidad', dataKey: 'cantidad' },
+            { header: 'Unidad', dataKey: 'unidad' },
+            { header: 'Comentarios', dataKey: 'comentarios' },
+        ];
 
         doc.autoTable({
-            head: head,
-            body: body,
-            startY: 55, // Start table after the header
+            columns: columns,
+            body: rawBody,
+            startY: 55,
             margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
             styles: {
                 font: 'helvetica',
                 fontSize: 8,
                 cellPadding: 2,
-                overflow: 'linebreak'
+                overflow: 'linebreak',
+                valign: 'middle',
             },
             headStyles: {
                 fillColor: '#44546A',
                 textColor: '#FFFFFF',
                 fontStyle: 'bold',
-                halign: 'center'
+                halign: 'center',
             },
             columnStyles: {
-                0: { halign: 'center', cellWidth: 10 }, // Nivel
-                1: { cellWidth: 80 }, // Descripción
-                2: { cellWidth: 25 }, // Código
-                3: { halign: 'center', cellWidth: 15 }, // Versión
-                4: { cellWidth: 30 }, // Proceso
-                5: { halign: 'right', cellWidth: 15 }, // Cantidad
-                6: { halign: 'center', cellWidth: 15 }, // Unidad
-                7: { cellWidth: 'auto' } // Comentarios
+                nivel: { halign: 'center', cellWidth: 10 },
+                descripcion: { cellWidth: 80 },
+                codigo_pieza: { cellWidth: 25 },
+                version: { halign: 'center', cellWidth: 15 },
+                proceso: { cellWidth: 30 },
+                cantidad: { halign: 'right', cellWidth: 15 },
+                unidad: { halign: 'center', cellWidth: 15 },
+                comentarios: { cellWidth: 'auto' },
+            },
+            willDrawCell: (data) => {
+                if (data.column.dataKey === 'descripcion') {
+                    const level = data.row.raw.level || 0;
+                    const INDENT = 4;
+                    const PADDING = 2;
+                    // Dynamically set left padding for the description cell to make space for tree lines
+                    data.cell.styles.cellPadding.left = PADDING + level * INDENT;
+                }
+            },
+            didDrawCell: (data) => {
+                // We only want to draw lines in the 'description' column
+                if (data.column.dataKey === 'descripcion') {
+                    const { level, isLast, lineage } = data.row.raw;
+                    if (level === 0) return; // No lines for root element
+
+                    const cell = data.cell;
+                    const x = cell.x;
+                    const y = cell.y;
+                    const INDENT = 4; // Should match the indent in willDrawCell
+                    const PADDING = 2; // Should match the padding in willDrawCell
+
+                    doc.setDrawColor(180); // Set line color to a light gray
+                    doc.setLineWidth(0.2);
+
+                    // Draw vertical lines for all parent levels
+                    for (let i = 0; i < level; i++) {
+                        // The 'lineage' array tells us if the parent at this level is the last one.
+                        // If it's not the last one, we need to draw a continuous vertical line.
+                        if (lineage[i]) {
+                            const lineX = x + PADDING + i * INDENT - INDENT / 2;
+                            doc.line(lineX, y, lineX, y + cell.height);
+                        }
+                    }
+
+                    // Draw the connector for the current node (e.g., '├─' or '└─')
+                    const connectorY = y + cell.height / 2;
+                    const connectorStartX = x + PADDING + (level - 1) * INDENT - INDENT / 2;
+                    const connectorEndX = connectorStartX + INDENT;
+
+                    doc.line(connectorStartX, connectorY, connectorEndX, connectorY); // Horizontal part
+
+                    if (isLast) {
+                        // If it's the last node, draw a '└' shape
+                        doc.line(connectorStartX, y, connectorStartX, connectorY);
+                    } else {
+                        // If it's not the last node, draw a '├' shape
+                        doc.line(connectorStartX, y, connectorStartX, y + cell.height);
+                    }
+                }
             },
             didDrawPage: (data) => {
-                // --- Header ---
                 doc.setFontSize(18);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor('#3B82F6');
@@ -10559,7 +10620,6 @@ async function exportSinopticoTabularToPdf() {
                 const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
                 doc.text(`Cliente: ${client?.descripcion || NA}`, headerTextX, 32, { align: 'right' });
 
-                // --- Footer ---
                 const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(8);
                 doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, doc.internal.pageSize.height - 10, { align: 'center' });
