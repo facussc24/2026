@@ -10522,7 +10522,7 @@ async function exportSinopticoTabularToPdf() {
 
         const columns = [
             { header: 'Descripción', dataKey: 'descripcion' },
-            { header: 'Nivel', dataKey: 'level' },
+            { header: 'Nivel', dataKey: 'levelForDisplay' },
             { header: 'LC / KD', dataKey: 'lc_kd' },
             { header: 'Código de pieza', dataKey: 'codigo_pieza' },
             { header: 'Versión', dataKey: 'version' },
