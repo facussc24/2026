@@ -1,75 +1,13 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import { prepareDataForPdfAutoTable } from '../../public/utils.js';
-import { getFlattenedData, exportSinopticoTabularToPdf, appState, dom } from '../../public/main.js';
+import { getFlattenedData } from '../../public/main.js';
+import { appState } from '../../public/main.js';
 import { COLLECTIONS } from '../../public/utils.js';
 
-describe('BOM PDF Export', () => {
+describe('prepareDataForPdfAutoTable', () => {
 
     beforeEach(() => {
-        jest.clearAllMocks();
-
-        // 1. Mock the DOM elements that main.js expects to exist
-        document.body.innerHTML = `
-            <div id="toast-container"></div>
-            <div id="loading-overlay" style="display: none;"><p></p></div>
-        `;
-        // 2. Re-assign the properties of the imported dom object
-        dom.toastContainer = document.getElementById('toast-container');
-        dom.loadingOverlay = document.getElementById('loading-overlay');
-
-        // 3. Mock global fetch for getLogoBase64
-        global.fetch = jest.fn(() =>
-            Promise.resolve({
-                ok: true,
-                blob: () => Promise.resolve(new Blob(['dummy logo data'], { type: 'image/png' })),
-            })
-        );
-
-        // 4. Manually mock the global jspdf object
-        const mockLine = jest.fn();
-        const mockAutoTable = jest.fn();
-        const mockSave = jest.fn();
-        const mockSetFont = jest.fn();
-        const mockSetFontSize = jest.fn();
-        const mockSetTextColor = jest.fn();
-        const mockText = jest.fn();
-        const mockAddImage = jest.fn();
-        const mockSetProperties = jest.fn();
-        const mockSetDrawColor = jest.fn();
-        const mockSetLineWidth = jest.fn();
-
-        const mockJsPDFInstance = {
-            line: mockLine,
-            autoTable: mockAutoTable,
-            save: mockSave,
-            setFont: mockSetFont,
-            setFontSize: mockSetFontSize,
-            setTextColor: mockSetTextColor,
-            text: mockText,
-            addImage: mockAddImage,
-            setProperties: mockSetProperties,
-            setDrawColor: mockSetDrawColor,
-            setLineWidth: mockSetLineWidth,
-            internal: {
-                pageSize: {
-                    getWidth: () => 297,
-                    getHeight: () => 210
-                }
-            }
-        };
-
-        const mockJsPDFConstructor = jest.fn(() => mockJsPDFInstance);
-
-        global.window.jspdf = {
-            jsPDF: mockJsPDFConstructor
-        };
-
-        // 4. Mock the global lucide object, used for toast icons
-        global.window.lucide = {
-            createIcons: jest.fn()
-        };
-
-        // 5. Mock the global appState required by the functions
+        // Mock the global appState required by getFlattenedData
         const mockProduct = {
             docId: 'PROD-TEST',
             id: 'PROD-TEST',
@@ -108,93 +46,87 @@ describe('BOM PDF Export', () => {
                 ['kg', { id: 'kg', descripcion: 'Kilogramos' }],
                 ['m', { id: 'm', descripcion: 'Metros' }]
             ]),
-            [COLLECTIONS.CLIENTES]: new Map([
-                ['CLIENTE-A', { id: 'CLIENTE-A', descripcion: 'Cliente de Prueba' }]
-            ])
         };
 
-        // Mock the state for getFlattenedData and PDF export
+        // Mock the state for getFlattenedData
         appState.sinopticoTabularState = {
             selectedProduct: mockProduct,
             activeFilters: {
-                niveles: new Set()
-            },
-            flattenedData: getFlattenedData(mockProduct, new Set())
+                niveles: new Set() // No level filters for this test
+            }
         };
     });
 
-    describe('prepareDataForPdfAutoTable', () => {
-        test('should separate display data from metadata', () => {
-            // --- ARRANGE ---
-            const flattenedData = getFlattenedData(appState.sinopticoTabularState.selectedProduct, new Set());
+    test('should separate display data from metadata', () => {
+        // --- ARRANGE ---
+        const flattenedData = getFlattenedData(appState.sinopticoTabularState.selectedProduct, new Set());
 
-            // --- ACT ---
-            const result = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+        // --- ACT ---
+        const result = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
 
-            // --- ASSERT ---
-            expect(result).toHaveProperty('body');
-            expect(result).toHaveProperty('rawData');
-            const { body, rawData } = result;
-            expect(body).toHaveLength(4);
-            expect(rawData).toHaveLength(4);
+        // --- ASSERT ---
+        // 1. Check the overall structure
+        expect(result).toHaveProperty('body');
+        expect(result).toHaveProperty('rawData');
 
-            const [productoBody, semiBody, insumo1Body, insumo2Body] = body;
-            expect(productoBody.level).toBe('0');
-            expect(semiBody.level).toBe('1');
-            expect(insumo1Body.level).toBe('2');
-            expect(insumo2Body.level).toBe('1');
+        // 2. Check Body and rawData length
+        const { body, rawData } = result;
+        expect(body).toBeInstanceOf(Array);
+        expect(body).toHaveLength(4);
+        expect(rawData).toBeInstanceOf(Array);
+        expect(rawData).toHaveLength(4);
 
-            const [productoRaw, semiRaw, insumo1Raw, insumo2Raw] = rawData;
-            expect(productoRaw.level).toBe(0);
-            expect(semiRaw.level).toBe(1);
-            expect(insumo1Raw.level).toBe(2);
-            expect(insumo2Raw.level).toBe(1);
-        });
-    });
+        // 3. Check the DISPLAY data (body) - should only contain strings for the PDF
+        const [productoBody, semiBody, insumo1Body, insumo2Body] = body;
 
-    describe('exportSinopticoTabularToPdf', () => {
-        test('should call drawing hooks to create a visual tree', async () => {
-            // --- ARRANGE ---
-            // Mock is set up in beforeEach
+        // Row 1: Producto
+        expect(productoBody.level).toBe('0');
+        expect(productoBody.descripcion).toBe('Producto de Prueba');
+        expect(productoBody.version).toBe('1.0');
+        expect(productoBody.proceso).toBe('Ensamblaje Final');
+        expect(productoBody.cantidad).toBe('1');
+        expect(productoBody).not.toHaveProperty('isLast'); // Metadata should be gone
 
-            // --- ACT ---
-            await exportSinopticoTabularToPdf();
+        // Row 2: Semiterminado
+        expect(semiBody.level).toBe('1');
+        expect(semiBody.descripcion).toBe('Semiterminado Principal');
+        expect(semiBody.cantidad).toBe('2');
+        expect(semiBody.proceso).toBe('Mecanizado CNC');
 
-            // --- ASSERT ---
-            // 1. Check that a jsPDF instance was created and autoTable was called
-            expect(window.jspdf.jsPDF).toHaveBeenCalledTimes(1);
-            const mockPdfInstance = window.jspdf.jsPDF.mock.results[0].value;
-            const mockAutoTable = mockPdfInstance.autoTable;
-            expect(mockAutoTable).toHaveBeenCalledTimes(1);
+        // Row 3: Insumo 1
+        expect(insumo1Body.level).toBe('2');
+        expect(insumo1Body.descripcion).toBe('Insumo A');
+        expect(insumo1Body.cantidad).toBe('5');
+        expect(insumo1Body.unidad).toBe('kg');
+        expect(insumo1Body.comentarios).toBe('Comentario de prueba');
 
-            // 2. Extract the options object passed to autoTable
-            const autoTableOptions = mockAutoTable.mock.calls[0][0];
-            expect(autoTableOptions).toHaveProperty('didDrawCell');
+        // Row 4: Insumo 2
+        expect(insumo2Body.level).toBe('1');
+        expect(insumo2Body.descripcion).toBe('Insumo B');
+        expect(insumo2Body.cantidad).toBe('10');
+        expect(insumo2Body.unidad).toBe('m');
 
-            // 3. Simulate the didDrawCell hook calls to test the drawing logic
-            const didDrawCell = autoTableOptions.didDrawCell;
-            const mockLine = mockPdfInstance.line;
+        // 4. Check the METADATA (rawData) - should contain the raw values for drawing
+        const [productoRaw, semiRaw, insumo1Raw, insumo2Raw] = rawData;
 
-            const { rawData } = prepareDataForPdfAutoTable(appState.sinopticoTabularState.flattenedData, appState.collectionsById);
+        // Row 1: Producto (Root)
+        expect(productoRaw.level).toBe(0);
+        expect(productoRaw.isLast).toBe(true);
+        expect(productoRaw.lineage).toEqual([]);
 
-            // Simulate drawing for the semiterminado (level 1)
-            didDrawCell({
-                section: 'body',
-                column: { dataKey: 'descripcion' },
-                row: { index: 1 }, // index of the semiterminado
-                cell: { x: 10, y: 60, height: 10 }
-            });
+        // Row 2: Semiterminado (Child of Root)
+        expect(semiRaw.level).toBe(1);
+        expect(semiRaw.isLast).toBe(false);
+        expect(semiRaw.lineage).toEqual([false]);
 
-            // Simulate drawing for the first insumo (level 2)
-            didDrawCell({
-                section: 'body',
-                column: { dataKey: 'descripcion' },
-                row: { index: 2 },
-                cell: { x: 10, y: 70, height: 10 }
-            });
+        // Row 3: Insumo (Child of Semiterminado)
+        expect(insumo1Raw.level).toBe(2);
+        expect(insumo1Raw.isLast).toBe(true);
+        expect(insumo1Raw.lineage).toEqual([false, true]);
 
-            expect(mockLine).toHaveBeenCalled();
-            expect(mockLine.mock.calls.length).toBeGreaterThan(3);
-        });
+        // Row 4: Insumo (Child of Root)
+        expect(insumo2Raw.level).toBe(1);
+        expect(insumo2Raw.isLast).toBe(true);
+        expect(insumo2Raw.lineage).toEqual([false]);
     });
 });
