@@ -1,77 +1,506 @@
-body {
-    font-family: 'Inter', sans-serif;
+/* Estilos para el indicador de God Mode */
+.god-mode-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* 8px */
+    background-color: #fef3c7; /* yellow-100 */
+    color: #92400e; /* yellow-800 */
+    font-size: 0.875rem; /* 14px */
+    font-weight: 600; /* semibold */
+    padding: 0.5rem 0.75rem; /* 8px 12px */
+    border-radius: 9999px; /* rounded-full */
+    border: 1px solid #fde68a; /* yellow-200 */
+    animation: fadeIn 0.3s ease-out forwards;
 }
 
-#hotspot-container {
-    position: relative;
-    width: 100%;
-    max-width: 1200px;
-    margin: auto;
-}
+body { font-family: 'Inter', sans-serif; background-color: #ffffff; color: #1e293b; -webkit-font-smoothing: antialiased; }
+.custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
 
-#hotspot-container img {
-    display: block;
-    width: 100%;
-    height: auto;
+/* --- Animaciones --- */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+@keyframes highlight { 
+    0% { background-color: #dcfce7; } /* green-100 */
+    100% { background-color: transparent; }
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-#hotspot-svg {
+.animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+.animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
+.animate-scale-in { animation: scaleIn 0.3s ease-out forwards; }
+.highlight-new-node { animation: highlight 1.5s ease-out forwards; }
+.modal-backdrop { background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+.modal-content { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+.sr-only {
     position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+.toast { display: flex; align-items: center; padding: 12px 20px; border-radius: 8px; color: white; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.2); z-index: 1100; opacity: 0; transform: translateX(100%); transition: all 0.4s cubic-bezier(0.215, 0.610, 0.355, 1.000); }
+.toast.show { opacity: 1; transform: translateX(0); }
+.toast.success { background-color: #16a34a; } .toast.error { background-color: #dc2626; } .toast.info { background-color: #2563eb; }
+.toast i { margin-right: 10px; }
+
+/* --- Barra de Navegación Superior --- */
+body {
+    background-color: #f1f5f9; /* slate-100 */
+}
+
+.nav-link.active {
+    background-color: #eef2ff; /* indigo-50 */
+    color: #3730a3; /* indigo-800 */
+    font-weight: 600;
+}
+
+/* Estilos para el menú desplegable de navegación */
+.nav-dropdown .dropdown-menu {
+    display: none;
+    transform-origin: top right;
+    right: 0;
+    z-index: 50;
+}
+
+.nav-dropdown.open .dropdown-menu {
+    display: block;
+    animation: dropdown-show 0.1s ease-out forwards;
+}
+
+/* Ajuste del logo para la nueva barra de navegación */
+.logo-img {
+    max-height: 40px; /* Reducir la altura máxima para la barra superior */
+    width: auto;
+}
+
+/* --- Estilos de Árboles (Gestión y Sinóptico) --- */
+.tree ul { padding-left: 28px; position: relative; margin: 4px 0; border-radius: 8px; }
+.tree li { list-style-type: none; position: relative; padding: 2px 0 2px 25px; }
+.tree li::before, .tree li::after { content: ''; position: absolute; left: 0; }
+.tree li::before { border-left: 1px solid #d1d5db; height: 100%; top: 0; width: 1px; }
+.tree li:last-child::before { height: 22px; }
+.tree li::after { border-top: 1px solid #d1d5db; height: 1px; top: 22px; width: 20px; }
+.node-content { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-radius: 8px; transition: background-color 0.2s; cursor: grab; border: 1px solid transparent;}
+.node-content:hover { background-color: #f3f4f6; }
+.node-content:active { cursor: grabbing; }
+
+/* Estilos Drag & Drop Mejorados */
+.sortable-ghost {
+    background: #dbeafe; /* blue-100 */
+    border: 2px dashed #60a5fa; /* blue-400 */
+    border-radius: 8px;
+    opacity: 0.6;
+    height: 54px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+.sortable-ghost > * {
+    visibility: hidden;
+}
+ul.sortable-drag-over {
+    background-color: #eff6ff; /* blue-50 */
+    outline: 1px dashed #93c5fd; /* blue-300 */
+}
+.sortable-drag { opacity: 1 !important; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); transform: scale(1.02); background-color: white; }
+.sinoptico-sidebar-sticky { position: sticky; top: 1.5rem; height: calc(100vh - 9rem); }
+.sinoptico-tree-item-content.active { background-color: #dbeafe; color: #1e40af; font-weight: 600; }
+.sinoptico-tree-item .lucide-chevron-right { transition: transform 0.2s ease-in-out; }
+.sinoptico-tree-item.expanded > .sinoptico-tree-item-content .lucide-chevron-right { transform: rotate(90deg); }
+.sinoptico-tree-container ul { position: relative; padding-left: 1.25rem; }
+.sinoptico-tree-container li { position: relative; list-style: none; }
+.sinoptico-tree-container li::before { content: ''; position: absolute; top: 0; left: -0.625rem; width: 1px; height: 100%; background-color: #cbd5e1; }
+.sinoptico-tree-container li::after { content: ''; position: absolute; top: 1.375rem; left: -0.625rem; width: 0.625rem; height: 1px; background-color: #cbd5e1; }
+.sinoptico-tree-container li.is-last::before { height: 1.375rem; }
+#sinoptico-tree-container > li { padding-left: 0; }
+#sinoptico-tree-container > li::before, #sinoptico-tree-container > li::after { display: none; }
+.sinoptico-detail-section-header { font-size: 0.75rem; font-weight: 600; color: #475569; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.5rem; margin-top: 1.5rem; margin-bottom: 1rem; }
+
+@keyframes dropdown-show { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+.dropdown-menu { animation: dropdown-show 0.15s ease-out forwards; }
+.loading-spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border-left-color: #2563eb;
+    animation: spin 1s ease-in-out infinite;
+}
+
+/* --- Mejora de Espaciado Visual en Árbol Sinóptico --- */
+.sinoptico-tree-container > li > ul > .sinoptico-tree-item:not(:last-child) {
+    margin-bottom: 1rem; /* 16px de espacio entre productos principales */
+}
+.sinoptico-tree-item[data-type="semiterminado"] {
+    padding-top: 0.5rem; /* 8px de espacio sobre cada semiterminado */
+}
+.sinoptico-tree-item[data-type="semiterminado"] > .sinoptico-tree-item-content + ul {
+    padding-top: 0.5rem; /* Espacio entre un semiterminado y sus hijos */
+}
+
+/* Help Tooltip Styles */
+.help-tooltip-container {
+    display: inline-block;
+    position: relative;
+    cursor: help;
+}
+
+.help-icon {
+    width: 1rem;
+    height: 1rem;
+    color: #94a3b8; /* slate-400 */
+    vertical-align: middle;
+    transition: color 0.2s ease-in-out;
+}
+
+.help-tooltip-container:hover .help-icon,
+.help-tooltip-container:focus .help-icon {
+    color: #3b82f6; /* blue-500 */
+}
+
+.help-tooltip-content {
+    visibility: hidden;
+    opacity: 0;
+    width: 280px;
+    background-color: #1e293b; /* slate-800 */
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 12px;
+    position: absolute;
+    z-index: 10;
+    bottom: 150%;
+    left: 50%;
+    margin-left: -140px; /* Half of the width */
+    transition: opacity 0.3s, visibility 0.3s;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.help-tooltip-content::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #1e293b transparent transparent transparent;
+}
+
+.help-tooltip-container:hover .help-tooltip-content,
+.help-tooltip-container:focus .help-tooltip-content,
+.help-tooltip-container:focus-within .help-tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+
+.toast-link {
+    display: inline-block;
+    margin-left: 1rem;
+    padding: 0.25rem 0.75rem;
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border-radius: 9999px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+.toast-link:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+/* --- VISTA SINÓPTICA MEJORADA --- */
+#sinoptico-layout-container {
+    display: flex;
+    gap: 1.5rem; /* 24px */
+    height: calc(100vh - 8rem);
+}
+#sinoptico-main-view {
+    width: 66.66%;
+}
+#sinoptico-details-container {
+    width: 33.33%;
+}
+
+/* Aumento de sangría en el árbol sinóptico */
+.sinoptico-tree-container ul {
+    padding-left: 1.75rem; /* 28px */
+}
+
+/* --- Estilos de Nodos con Colores por Tipo --- */
+.node-content[data-type="producto"],
+.sinoptico-tree-item-content[data-type="producto"] {
+    border-left: 4px solid #3b82f6 !important; /* blue-500 */
+}
+
+.node-content[data-type="semiterminado"],
+.sinoptico-tree-item-content[data-type="semiterminado"] {
+    border-left: 4px solid #22c55e !important; /* green-500 */
+}
+
+.node-content[data-type="insumo"],
+.sinoptico-tree-item-content[data-type="insumo"] {
+    border-left: 4px solid #9ca3af !important; /* gray-400 */
+}
+
+/* --- Estilos de Modales Mejorados --- */
+.modal-content {
+    width: 100%;
+    max-width: 42rem; /* Aumentado para más espacio */
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+.modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+.modal-header h3 {
+    font-size: 1.25rem; /* text-xl */
+    font-weight: 600; /* font-semibold */
+    color: #1e293b; /* slate-800 */
+}
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e2e8f0; /* slate-200 */
+    background-color: #f8fafc; /* slate-50 */
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem; /* space-x-3 */
+    flex-shrink: 0;
+    border-bottom-left-radius: 0.75rem;
+    border-bottom-right-radius: 0.75rem;
+}
+
+/* --- Estilos de Tablas --- */
+.table-container {
+    overflow-x: auto;
+    border: 1px solid #e2e8f0; /* slate-200 */
+    border-radius: 0.75rem; /* rounded-xl */
+}
+table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem; /* text-sm */
+}
+table.data-table thead {
+    background-color: #f8fafc; /* slate-50 */
+}
+table.data-table th {
+    padding: 0.75rem 1.5rem; /* py-3 px-6 */
+    text-align: left;
+    font-weight: 600; /* font-semibold */
+    color: #475569; /* slate-600 */
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid #e2e8f0; /* slate-200 */
+}
+table.data-table tbody tr {
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+}
+table.data-table tbody tr:last-child {
+    border-bottom: none;
+}
+table.data-table tbody tr:hover {
+    background-color: #f8fafc; /* slate-50 */
+}
+table.data-table td {
+    padding: 0.75rem 1.5rem; /* py-3 px-6 */
+    color: #334155; /* slate-700 */
+}
+table.data-table .actions-cell {
+    text-align: right;
+}
+table.data-table .actions-cell button {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    transition: background-color 0.2s;
+}
+table.data-table .actions-cell button:hover {
+    background-color: #e2e8f0; /* slate-200 */
+}
+
+/* --- VISTA SINÓPTICO TABULAR --- */
+#sinoptico-tabular-container table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+#sinoptico-tabular-container th {
+    position: sticky;
     top: 0;
-    left: 0;
+    background-color: #f1f5f9; /* slate-200 */
+}
+
+#sinoptico-tabular-container td, #sinoptico-tabular-container th {
+    border-bottom: 1px solid #e2e8f0; /* slate-200 */
+}
+
+#sinoptico-tabular-container .text-slate-400 {
+    font-style: italic;
+}
+
+/* --- Estilos para Vis.js Timeline --- */
+.vis-timeline {
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    font-family: 'Inter', sans-serif;
+    position: relative; /* Corregir el contexto de posicionamiento */
+}
+.vis-item {
+    border-radius: 0.375rem;
+    box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06);
+    padding: 8px 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+.vis-item.vis-selected {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+}
+
+/* Colores por prioridad */
+.vis-item.priority-high {
+    background-color: #fee2e2; /* red-100 */
+    border-color: #ef4444; /* red-500 */
+    color: #991b1b; /* red-800 */
+}
+.vis-item.priority-medium {
+    background-color: #fef3c7; /* yellow-100 */
+    border-color: #f59e0b; /* amber-500 */
+    color: #92400e; /* amber-800 */
+}
+.vis-item.priority-low {
+    background-color: #f1f5f9; /* slate-100 */
+    border-color: #64748b; /* slate-500 */
+    color: #334155; /* slate-700 */
+}
+.vis-current-time {
+    background-color: #ef4444; /* red-500 */
+    width: 2px;
+}
+
+/* --- Estilos para Pestañas (Tabs) --- */
+.admin-task-tab {
+    border-color: transparent;
+    color: #475569; /* slate-600 */
+}
+.admin-task-tab:hover {
+    border-color: #d1d5db; /* gray-300 */
+    color: #1f2937; /* gray-800 */
+}
+.admin-task-tab.active-tab {
+    border-color: #2563eb; /* blue-600 */
+    color: #1e40af; /* blue-800 */
+    font-weight: 700;
+}
+.admin-task-tab .lucide {
+    color: #64748b; /* slate-500 */
+    transition: color 0.2s;
+}
+.admin-task-tab:hover .lucide {
+    color: #334155; /* slate-700 */
+}
+.admin-task-tab.active-tab .lucide {
+    color: #1e40af; /* blue-800 */
+}
+
+/* --- Custom Timeline Item Styles --- */
+.timeline-item-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     height: 100%;
 }
 
-.hotspot-polygon {
-    fill: rgba(29, 78, 216, 0.3); /* blue-700 with 30% opacity */
-    stroke: rgba(59, 130, 246, 0.9); /* blue-500 */
-    stroke-width: 4;
-    transition: fill 0.2s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: pointer;
+.timeline-item-title {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.hotspot-polygon:hover {
-    fill: rgba(29, 78, 216, 0.5); /* blue-700 with 50% opacity */
-    stroke-width: 5;
+.timeline-item-avatar {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
-.hotspot-polygon.active {
-    fill: rgba(239, 68, 68, 0.5); /* red-500 with 50% opacity */
-    stroke: rgba(239, 68, 68, 0.9); /* red-500 */
+.timeline-item-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
 }
 
-#side-panel {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: translateX(100%);
+/* Status colors for the dot indicator */
+.timeline-item-status.status-todo { background-color: #f59e0b; } /* amber-500 */
+.timeline-item-status.status-inprogress { background-color: #3b82f6; } /* blue-500 */
+.timeline-item-status.status-done { background-color: #22c55e; } /* green-500 */
+
+/* Overriding vis-item styles based on status */
+.vis-item.status-done {
+    background-color: #f1f5f9; /* slate-100 */
+    border-color: #e2e8f0; /* slate-200 */
+    color: #64748b; /* slate-500 */
 }
 
-#side-panel.open {
-    transform: translateX(0);
+.vis-item.status-done .timeline-item-title {
+    text-decoration: line-through;
 }
 
-/* Editor-specific styles */
-#editor-panel {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: translateX(100%);
+/* Style for overdue tasks */
+.vis-item.overdue {
+    background-color: #fff1f2; /* red-50 */
+    border-color: #fca5a5; /* red-300 */
+}
+.vis-item.overdue::before {
+    content: '❗';
+    position: absolute;
+    top: 50%;
+    left: -20px;
+    transform: translateY(-50%);
+    font-size: 14px;
 }
 
-#editor-panel.open {
-    transform: translateX(0);
-}
-
-.handle {
-    fill: #f97316; /* orange-500 */
-    stroke: #ea580c; /* orange-600 */
-    stroke-width: 1;
-    cursor: move;
-}
-
-#hotspot-svg.drawing-mode {
-    cursor: crosshair;
-}
-
-/* Additional utility styles */
-.hidden {
+/* --- Kanban Column Collapsing --- */
+.task-column.collapsed .task-list {
     display: none;
+}
+
+.task-column.collapsed .kanban-toggle-btn .lucide {
+    transform: rotate(-90deg);
+}
+
+/* --- Mejora de Espaciado Visual en Árbol Sinóptico --- */
+.sinoptico-tree-container > li > ul > .sinoptico-tree-item:not(:last-child) {
+    margin-bottom: 1rem; /* 16px de espacio entre productos principales */
+}
+.sinoptico-tree-item[data-type="semiterminado"] {
+    padding-top: 0.5rem; /* 8px de espacio sobre cada semiterminado */
+}
+.sinoptico-tree-item[data-type="semiterminado"] > .sinoptico-tree-item-content + ul {
+    padding-top: 0.5rem; /* Espacio entre un semiterminado y sus hijos */
 }

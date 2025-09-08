@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Hotspots de Vehículo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        #hotspot-container {
+            position: relative;
+            width: 100%;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        #hotspot-container img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        #hotspot-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .hotspot-polygon {
+            fill: rgba(29, 78, 216, 0.3); /* blue-700 with 30% opacity */
+            stroke: rgba(59, 130, 246, 0.9); /* blue-500 */
+            stroke-width: 2;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+        }
+
+        .hotspot-polygon:hover {
+            fill: rgba(29, 78, 216, 0.5); /* blue-700 with 50% opacity */
+        }
+
+        .hotspot-polygon.active {
+            fill: rgba(239, 68, 68, 0.5); /* red-500 with 50% opacity */
+            stroke: rgba(239, 68, 68, 0.9); /* red-500 */
+        }
+
+        #side-panel {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(100%);
+        }
+
+        #side-panel.open {
+            transform: translateX(0);
+        }
+
+        /* Editor-specific styles */
+        #editor-panel {
+            transition: transform 0.3s ease-in-out;
+            transform: translateX(100%);
+        }
+
+        #editor-panel.open {
+            transform: translateX(0);
+        }
+
+        .handle {
+            fill: #f97316; /* orange-500 */
+            stroke: #ea580c; /* orange-600 */
+            stroke-width: 1;
+            cursor: move;
+        }
+
+        #hotspot-svg.drawing-mode {
+            cursor: crosshair;
+        }
+
+        /* Additional utility styles */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div class="flex h-screen overflow-hidden">
+        <!-- Main content -->
+        <main class="flex-1 flex flex-col items-center justify-center p-4">
+            <div class="w-full max-w-6xl flex justify-end mb-2">
+                <button id="edit-mode-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                    Modo Editor
+                </button>
+            </div>
+            <div id="hotspot-container">
+                <img id="vehicle-image" src="/Maxus.jpg" alt="Imagen del vehículo">
+                <svg id="hotspot-svg" preserveAspectRatio="none"></svg>
+            </div>
+        </main>
+
+        <!-- Viewer Side Panel -->
+        <aside id="side-panel" class="w-96 bg-white shadow-lg p-6 fixed top-0 right-0 h-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Detalles de la Pieza</h2>
+                <button id="close-panel-btn" class="text-gray-500 hover:text-gray-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div id="panel-content">
+                <!-- Content will be injected here -->
+            </div>
+        </aside>
+
+        <!-- Editor Side Panel -->
+        <aside id="editor-panel" class="w-96 bg-gray-800 text-white shadow-lg p-6 fixed top-0 right-0 h-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold">Panel de Edición</h2>
+                <button id="close-editor-btn" class="text-gray-400 hover:text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <div class="space-y-4 mb-6">
+                <button id="add-hotspot-btn" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600">Añadir Hotspot</button>
+                <button id="finish-hotspot-btn" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 hidden">Finalizar Hotspot</button>
+                <button id="delete-hotspot-btn" class="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 hidden">Eliminar Hotspot</button>
+            </div>
+
+            <div id="hotspot-list-container" class="mb-6">
+                <h3 class="text-lg font-semibold mb-2">Hotspots</h3>
+                <div id="hotspot-list" class="max-h-60 overflow-y-auto bg-gray-700 p-2 rounded"></div>
+            </div>
+
+            <div id="json-editor-container">
+                <h3 class="text-lg font-semibold mb-2">Configuración JSON</h3>
+                <textarea id="json-config" class="w-full h-32 bg-gray-900 text-sm p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                <div class="flex gap-2 mt-2">
+                    <button id="import-json-btn" class="flex-1 bg-purple-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-600">Importar</button>
+                    <button id="export-json-btn" class="flex-1 bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-600">Exportar</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Hotspot Data Form (inline in the editor panel) -->
+    <div id="hotspot-form-container" class="bg-gray-700 p-4 rounded mt-4 hidden">
+        <h3 class="text-lg font-semibold mb-3">Editar Hotspot</h3>
+        <form id="hotspot-form" class="space-y-3">
+            <input type="hidden" id="hotspot-id">
+            <div>
+                <label for="hotspot-name" class="block text-sm font-medium">Nombre</label>
+                <input type="text" id="hotspot-name" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500" required>
+            </div>
+            <div>
+                <label for="hotspot-partNumber" class="block text-sm font-medium">Número de Parte</label>
+                <input type="text" id="hotspot-partNumber" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div>
+                <label for="hotspot-description" class="block text-sm font-medium">Descripción</label>
+                <textarea id="hotspot-description" rows="3" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            <div>
+                <label for="hotspot-imageUrl" class="block text-sm font-medium">URL de Imagen</label>
+                <input type="text" id="hotspot-imageUrl" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" id="cancel-edit-btn" class="px-4 py-2 bg-gray-600 rounded-md hover:bg-gray-500">Cancelar</button>
+                <button type="submit" id="save-hotspot-btn" class="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700">Guardar Cambios</button>
+            </div>
+        </form>
+    </div>
+
+
+    <script>
+    // IIFE to encapsulate the module
+    (function() {
+        document.addEventListener('DOMContentLoaded', () => {
+            const vehicleImage = document.getElementById('vehicle-image');
+            const hotspotSvg = document.getElementById('hotspot-svg');
+            const sidePanel = document.getElementById('side-panel');
+            const panelContent = document.getElementById('panel-content');
+            const closePanelBtn = document.getElementById('close-panel-btn');
+
+            // --- Editor DOM Elements ---
+            const editModeBtn = document.getElementById('edit-mode-btn');
+            const editorPanel = document.getElementById('editor-panel');
+            const closeEditorBtn = document.getElementById('close-editor-btn');
+            const addHotspotBtn = document.getElementById('add-hotspot-btn');
+            const finishHotspotBtn = document.getElementById('finish-hotspot-btn');
+            const deleteHotspotBtn = document.getElementById('delete-hotspot-btn');
+            const hotspotList = document.getElementById('hotspot-list');
+            const jsonConfig = document.getElementById('json-config');
+            const importJsonBtn = document.getElementById('import-json-btn');
+            const exportJsonBtn = document.getElementById('export-json-btn');
+            const hotspotFormContainer = document.getElementById('hotspot-form-container');
+            const hotspotForm = document.getElementById('hotspot-form');
+            const cancelEditBtn = document.getElementById('cancel-edit-btn');
+            const saveHotspotBtn = document.getElementById('save-hotspot-btn');
+
+
+            // --- Editor State ---
+            let isEditMode = false;
+            let isDrawing = false;
+            let currentPoints = [];
+            let selectedHotspotId = null;
+            let tempPolygon = null;
+
+
+            // --- Hotspot Data ---
+            // using normalized coordinates (0 to 1)
+            let hotspots = [
+                {
+                    id: 'apoyacabezas',
+                    name: 'Apoyacabezas',
+                    partNumber: 'V-102-3C',
+                    description: 'Apoyacabezas de cuero sintético, ajustable en altura y ángulo.',
+                    imageUrl: 'https://via.placeholder.com/300x200.png?text=Apoyacabezas',
+                    points: [
+                        { x: 0.496, y: 0.222 },
+                        { x: 0.560, y: 0.246 },
+                        { x: 0.538, y: 0.334 },
+                        { x: 0.478, y: 0.304 }
+                    ]
+                },
+                {
+                    id: 'apoyabrazos',
+                    name: 'Apoyabrazos Central',
+                    partNumber: 'V-105-1A',
+                    description: 'Consola de apoyabrazos central con compartimento de almacenamiento.',
+                    imageUrl: 'https://via.placeholder.com/300x200.png?text=Apoyabrazos',
+                    points: [
+                        { x: 0.458, y: 0.505 },
+                        { x: 0.528, y: 0.508 },
+                        { x: 0.530, y: 0.558 },
+                        { x: 0.459, y: 0.556 }
+                    ]
+                }
+            ];
+
+            function drawHotspots() {
+                const imageWidth = vehicleImage.width;
+                const imageHeight = vehicleImage.height;
+
+                if (imageWidth === 0 || imageHeight === 0) return;
+
+                hotspotSvg.innerHTML = ''; // Clear previous hotspots
+
+                hotspots.forEach(hotspot => {
+                    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+
+                    const pointsStr = hotspot.points
+                        .map(p => `${p.x * imageWidth},${p.y * imageHeight}`)
+                        .join(' ');
+
+                    polygon.setAttribute('points', pointsStr);
+                    polygon.setAttribute('class', 'hotspot-polygon');
+                    polygon.dataset.id = hotspot.id;
+
+                    hotspotSvg.appendChild(polygon);
+                });
+            }
+
+            function openPanel(hotspot) {
+                // Highlight active hotspot
+                document.querySelectorAll('.hotspot-polygon').forEach(p => {
+                    p.classList.remove('active');
+                });
+                document.querySelector(`.hotspot-polygon[data-id="${hotspot.id}"]`).classList.add('active');
+
+                // Populate and show panel
+                panelContent.innerHTML = `
+                    <img src="${hotspot.imageUrl}" alt="${hotspot.name}" class="w-full h-48 object-cover rounded-lg mb-4">
+                    <h3 class="text-xl font-bold text-gray-900">${hotspot.name}</h3>
+                    <p class="text-sm text-gray-500 mb-2">N/P: ${hotspot.partNumber}</p>
+                    <p class="text-gray-700">${hotspot.description}</p>
+                `;
+                sidePanel.classList.add('open');
+            }
+
+            function closePanel() {
+                sidePanel.classList.remove('open');
+                document.querySelectorAll('.hotspot-polygon').forEach(p => {
+                    p.classList.remove('active');
+                });
+            }
+
+            // --- Event Listeners ---
+            hotspotSvg.addEventListener('click', (e) => {
+                if (isEditMode && isDrawing) {
+                    addPointToCurrentHotspot(e);
+                    return;
+                }
+
+                if (isEditMode && e.target.classList.contains('hotspot-polygon')) {
+                    selectHotspot(e.target.dataset.id);
+                    return;
+                }
+
+                if (e.target.classList.contains('hotspot-polygon')) {
+                    const hotspotId = e.target.dataset.id;
+                    const hotspotData = hotspots.find(h => h.id === hotspotId);
+                    if (hotspotData) {
+                        openPanel(hotspotData);
+                    }
+                }
+            });
+
+            hotspotSvg.addEventListener('dblclick', (e) => {
+                if (isEditMode && isDrawing) {
+                    finishDrawing();
+                }
+            });
+
+            let draggingHandle = null;
+
+            hotspotSvg.addEventListener('mousedown', (e) => {
+                if (isEditMode && e.target.classList.contains('handle')) {
+                    draggingHandle = {
+                        element: e.target,
+                        hotspotId: e.target.dataset.hotspotId,
+                        pointIndex: parseInt(e.target.dataset.pointIndex, 10)
+                    };
+                    e.stopPropagation();
+                }
+            });
+
+            hotspotSvg.addEventListener('mousemove', (e) => {
+                if (!draggingHandle) return;
+
+                const rect = vehicleImage.getBoundingClientRect();
+                const imageWidth = vehicleImage.width;
+                const imageHeight = vehicleImage.height;
+
+                let x = e.clientX - rect.left;
+                let y = e.clientY - rect.top;
+
+                // Clamp coordinates to be within the image bounds
+                x = Math.max(0, Math.min(x, imageWidth));
+                y = Math.max(0, Math.min(y, imageHeight));
+
+
+                const { element, hotspotId, pointIndex } = draggingHandle;
+
+                // Update handle position
+                element.setAttribute('cx', x);
+                element.setAttribute('cy', y);
+
+                // Update polygon points
+                const hotspot = hotspots.find(h => h.id === hotspotId);
+                hotspot.points[pointIndex] = { x: x / imageWidth, y: y / imageHeight };
+
+                const polygon = document.querySelector(`.hotspot-polygon[data-id="${hotspotId}"]`);
+                const pointsStr = hotspot.points
+                    .map(p => `${p.x * imageWidth},${p.y * imageHeight}`)
+                    .join(' ');
+                polygon.setAttribute('points', pointsStr);
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                draggingHandle = null;
+            });
+
+
+            function addPointToCurrentHotspot(e) {
+                const rect = vehicleImage.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                currentPoints.push({ x, y });
+
+                if (!tempPolygon) {
+                    tempPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    tempPolygon.setAttribute('class', 'hotspot-polygon active');
+                    hotspotSvg.appendChild(tempPolygon);
+                }
+
+                const pointsStr = currentPoints.map(p => `${p.x},${p.y}`).join(' ');
+                tempPolygon.setAttribute('points', pointsStr);
+            }
+
+            function finishDrawing() {
+                if (currentPoints.length < 3) {
+                    alert('Se necesitan al menos 3 puntos para crear un hotspot.');
+                    resetDrawingState();
+                    return;
+                }
+
+                const imageWidth = vehicleImage.width;
+                const imageHeight = vehicleImage.height;
+
+                const newHotspot = {
+                    id: `hotspot_${Date.now()}`,
+                    name: 'Nuevo Hotspot',
+                    partNumber: '',
+                    description: '',
+                    imageUrl: '',
+                    points: currentPoints.map(p => ({
+                        x: p.x / imageWidth,
+                        y: p.y / imageHeight
+                    }))
+                };
+
+                hotspots.push(newHotspot);
+                resetDrawingState();
+                drawHotspots();
+                // In a real app, you'd probably want to open the editor for the new hotspot here
+            }
+
+            function resetDrawingState() {
+                isDrawing = false;
+                currentPoints = [];
+                if (tempPolygon) {
+                    tempPolygon.remove();
+                    tempPolygon = null;
+                }
+                hotspotSvg.classList.remove('drawing-mode');
+                // Update UI buttons
+                addHotspotBtn.classList.remove('hidden');
+                finishHotspotBtn.classList.add('hidden');
+            }
+
+            function selectHotspot(hotspotId) {
+                selectedHotspotId = hotspotId;
+                // de-select any active polygons
+                document.querySelectorAll('.hotspot-polygon').forEach(p => {
+                    p.classList.remove('active');
+                });
+                if (hotspotId) {
+                    document.querySelector(`.hotspot-polygon[data-id="${hotspotId}"]`).classList.add('active');
+                }
+                drawHandles();
+            }
+
+            function drawHandles() {
+                // Clear existing handles
+                document.querySelectorAll('.handle').forEach(h => h.remove());
+
+                if (!selectedHotspotId) return;
+
+                const hotspot = hotspots.find(h => h.id === selectedHotspotId);
+                if (!hotspot) return;
+
+                const imageWidth = vehicleImage.width;
+                const imageHeight = vehicleImage.height;
+
+                hotspot.points.forEach((point, index) => {
+                    const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    handle.setAttribute('cx', point.x * imageWidth);
+                    handle.setAttribute('cy', point.y * imageHeight);
+                    handle.setAttribute('r', 5);
+                    handle.setAttribute('class', 'handle');
+                    handle.dataset.hotspotId = selectedHotspotId;
+                    handle.dataset.pointIndex = index;
+                    hotspotSvg.appendChild(handle);
+                });
+            }
+
+
+            function toggleEditMode() {
+                isEditMode = !isEditMode;
+                editorPanel.classList.toggle('open');
+                if (!isEditMode) {
+                    // Exit any ongoing drawing
+                    if (isDrawing) {
+                        resetDrawingState();
+                    }
+                    selectHotspot(null);
+                }
+                updateHotspotList();
+            }
+
+            function updateHotspotList() {
+                hotspotList.innerHTML = '';
+                if (hotspots.length === 0) {
+                    hotspotList.innerHTML = '<p class="text-gray-400">No hay hotspots.</p>';
+                    return;
+                }
+
+                hotspots.forEach(hotspot => {
+                    const item = document.createElement('div');
+                    item.className = `p-2 rounded cursor-pointer hover:bg-gray-600 ${selectedHotspotId === hotspot.id ? 'bg-blue-800' : ''}`;
+                    item.textContent = hotspot.name;
+                    item.dataset.id = hotspot.id;
+                    item.addEventListener('click', () => {
+                        selectHotspot(hotspot.id);
+                        showHotspotForm(hotspot.id);
+                    });
+                    hotspotList.appendChild(item);
+                });
+            }
+
+            function showHotspotForm(hotspotId) {
+                const hotspot = hotspots.find(h => h.id === hotspotId);
+                if (!hotspot) return;
+
+                document.getElementById('hotspot-id').value = hotspot.id;
+                document.getElementById('hotspot-name').value = hotspot.name;
+                document.getElementById('hotspot-partNumber').value = hotspot.partNumber;
+                document.getElementById('hotspot-description').value = hotspot.description;
+                document.getElementById('hotspot-imageUrl').value = hotspot.imageUrl;
+
+                // Prepend the form to the editor panel for visibility
+                const editorPanelContent = editorPanel.querySelector('.space-y-4.mb-6');
+                editorPanel.insertBefore(hotspotFormContainer, editorPanelContent.nextSibling);
+
+                hotspotFormContainer.classList.remove('hidden');
+                deleteHotspotBtn.classList.remove('hidden');
+            }
+
+            function hideHotspotForm() {
+                hotspotFormContainer.classList.add('hidden');
+                deleteHotspotBtn.classList.add('hidden');
+                document.getElementById('hotspot-form').reset();
+            }
+
+
+            closePanelBtn.addEventListener('click', closePanel);
+            editModeBtn.addEventListener('click', toggleEditMode);
+            closeEditorBtn.addEventListener('click', toggleEditMode);
+
+            hotspotForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = document.getElementById('hotspot-id').value;
+                const hotspot = hotspots.find(h => h.id === id);
+                if (hotspot) {
+                    hotspot.name = document.getElementById('hotspot-name').value;
+                    hotspot.partNumber = document.getElementById('hotspot-partNumber').value;
+                    hotspot.description = document.getElementById('hotspot-description').value;
+                    hotspot.imageUrl = document.getElementById('hotspot-imageUrl').value;
+                }
+                hideHotspotForm();
+                updateHotspotList();
+            });
+
+            cancelEditBtn.addEventListener('click', hideHotspotForm);
+
+            deleteHotspotBtn.addEventListener('click', () => {
+                if (!selectedHotspotId) return;
+
+                if (confirm('¿Estás seguro de que quieres eliminar este hotspot?')) {
+                    hotspots = hotspots.filter(h => h.id !== selectedHotspotId);
+                    selectHotspot(null);
+                    hideHotspotForm();
+                    drawHotspots();
+                    updateHotspotList();
+                }
+            });
+
+            addHotspotBtn.addEventListener('click', () => {
+                isDrawing = true;
+                hotspotSvg.classList.add('drawing-mode');
+                addHotspotBtn.classList.add('hidden');
+                finishHotspotBtn.classList.remove('hidden');
+            });
+
+            finishHotspotBtn.addEventListener('click', finishDrawing);
+
+            exportJsonBtn.addEventListener('click', () => {
+                const jsonString = JSON.stringify(hotspots, null, 2);
+                jsonConfig.value = jsonString;
+            });
+
+            importJsonBtn.addEventListener('click', () => {
+                try {
+                    const newHotspots = JSON.parse(jsonConfig.value);
+                    if (Array.isArray(newHotspots)) {
+                        hotspots = newHotspots;
+                        drawHotspots();
+                        updateHotspotList();
+                        selectHotspot(null);
+                        hideHotspotForm();
+                        alert('Configuración importada con éxito.');
+                    } else {
+                        alert('El JSON importado no es un array válido.');
+                    }
+                } catch (error) {
+                    alert('Error al parsear el JSON: ' + error.message);
+                }
+            });
+
+
+            // --- Initialization ---
+            function init() {
+                if (vehicleImage.complete) {
+                    drawHotspots();
+                } else {
+                    vehicleImage.onload = drawHotspots;
+                }
+            }
+
+            window.addEventListener('resize', drawHotspots);
+
+            init();
+        });
+    })();
+    </script>
+</body>
+</html>
