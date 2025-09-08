@@ -197,6 +197,7 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById, produ
             isLast,
             lineage,
             // Display data
+            levelForDisplay: toStr(level),
             descripcion: toStr(item.descripcion || item.nombre),
             lc_kd: toStr(item.lc_kd),
             codigo_pieza: toStr(item.codigo_pieza),
