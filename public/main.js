@@ -10004,7 +10004,8 @@ function runSinopticoLogic() {
 export const getFlattenedData = (product, levelFilters) => {
     if (!product || !product.estructura) return [];
 
-    // Pass 1: Traverse the original tree and tag every node with its original level.
+    // Pass 1: Tag every node with its original level in the hierarchy.
+    // This is crucial for filtering, as the display level might change.
     const tagLevels = (nodes, level) => {
         if (!nodes) return [];
         return nodes.map(node => {
@@ -10017,58 +10018,52 @@ export const getFlattenedData = (product, levelFilters) => {
     };
     const taggedStructure = tagLevels(product.estructura, 0);
 
-    // Pass 2: Filter the tagged tree if a filter is active.
-    const filterTree = (nodes) => {
+    // Pass 2: Recursively flatten the tree. If filters are active, apply them
+    // during the flattening process. This ensures that the `lineage` and `displayLevel`
+    // are calculated correctly based on the final, filtered structure.
+    const flattenAndFilter = (nodes, displayLevel, lineage) => {
         if (!nodes) return [];
-        return nodes.reduce((acc, node) => {
-            // A node is kept if its level is in the filter set.
-            if (levelFilters.has(node.originalLevel.toString())) {
-                const newNode = { ...node };
-                if (node.children) {
-                    // Its children are the result of filtering its original children.
-                    newNode.children = filterTree(node.children);
-                }
-                acc.push(newNode);
-            } else {
-                // If the node itself is filtered out, its children might not be.
-                // So we filter its children and add them to the current accumulator,
-                // effectively "promoting" them.
-                if (node.children) {
-                    acc.push(...filterTree(node.children));
-                }
-            }
-            return acc;
-        }, []);
-    };
 
-    const finalStructure = (!levelFilters || levelFilters.size === 0)
-        ? taggedStructure
-        : filterTree(taggedStructure);
-
-    // Pass 3: Flatten the final (potentially filtered) tree for rendering.
-    const flatten = (nodes, displayLevel, lineage) => {
-        if (!nodes) return [];
         let result = [];
-        nodes.forEach((node, index) => {
-            const isLast = index === nodes.length - 1;
+        const useFilter = levelFilters && levelFilters.size > 0;
+
+        // Filter nodes at the current level *before* processing them.
+        const nodesToProcess = useFilter
+            ? nodes.filter(node => levelFilters.has(node.originalLevel.toString()))
+            : nodes;
+
+        nodesToProcess.forEach((node, index) => {
+            const isLast = index === nodesToProcess.length - 1;
             const collectionName = node.tipo + 's';
             const item = appState.collectionsById[collectionName]?.get(node.refId);
+
             if (item) {
-                // BUGFIX: The object passed for rendering must use the calculated
-                // `displayLevel`, not the node's original level. The test
-                // `sinoptico_tabular_level_display_bug.spec.js` verifies this.
-                // The `level` property was being incorrectly shadowed by `node.level`
-                // if it existed, but the main bug is that it should be `displayLevel`.
+                // This node is visible, so we add it to the result list.
                 result.push({ node, item, level: displayLevel, isLast, lineage });
+
+                // Recursively process its children, incrementing the display level.
                 if (node.children) {
-                    result.push(...flatten(node.children, displayLevel + 1, [...lineage, !isLast]));
+                    result.push(...flattenAndFilter(node.children, displayLevel + 1, [...lineage, !isLast]));
                 }
             }
         });
+
+        // Handle "promoted" children from nodes that were filtered out at this level.
+        if (useFilter) {
+            const filteredOutNodes = nodes.filter(node => !levelFilters.has(node.originalLevel.toString()));
+            filteredOutNodes.forEach(node => {
+                if (node.children) {
+                    // These children are "promoted". They are processed at the current
+                    // displayLevel with the current lineage, as their parent is invisible.
+                    result.push(...flattenAndFilter(node.children, displayLevel, lineage));
+                }
+            });
+        }
+
         return result;
     };
 
-    return flatten(finalStructure, 0, []);
+    return flattenAndFilter(taggedStructure, 0, []);
 };
 
 export function runSinopticoTabularLogic() {
@@ -10582,9 +10577,16 @@ async function exportSinopticoTabularToPdf() {
                 }
             },
             didDrawCell: (data) => {
+                // Dibuja las líneas de conexión del árbol jerárquico.
                 if (data.section === 'body' && data.column.dataKey === 'descripcion') {
+                    // BUGFIX: Se ha añadido una guarda para el objeto 'lineage'.
+                    // Ocasionalmente, al filtrar por niveles, algunos nodos "promovidos"
+                    // no recibían un objeto 'lineage' válido, lo que causaba un error
+                    // al intentar acceder a `lineage[i]`. Esta comprobación previene
+                    // el error al omitir el dibujo de las líneas para nodos sin lineage,
+                    // lo que permite que la exportación finalice correctamente.
                     const { level, isLast, lineage } = data.row.raw;
-                    if (level === 0) return;
+                    if (level === 0 || !lineage) return;
 
                     const cell = data.cell;
                     const x = cell.x;
@@ -10595,8 +10597,10 @@ async function exportSinopticoTabularToPdf() {
                     doc.setDrawColor(180);
                     doc.setLineWidth(0.2);
 
+                    // Dibuja las líneas verticales para los niveles padres.
                     for (let i = 0; i < level; i++) {
-                        if (lineage && lineage[i]) {
+                        // Solo se dibuja la línea si el padre no es el último de su lista.
+                        if (lineage[i]) {
                             const lineX = x + PADDING + i * INDENT - INDENT / 2;
                             doc.line(lineX, y, lineX, y + cell.height);
                         }
@@ -10606,11 +10610,15 @@ async function exportSinopticoTabularToPdf() {
                     const connectorStartX = x + PADDING + (level - 1) * INDENT - INDENT / 2;
                     const connectorEndX = connectorStartX + INDENT;
 
+                    // Dibuja la línea horizontal que conecta con el nodo actual.
                     doc.line(connectorStartX, connectorY, connectorEndX, connectorY);
 
+                    // Dibuja la conexión vertical desde el padre.
                     if (isLast) {
+                        // Si es el último, la línea llega hasta la mitad.
                         doc.line(connectorStartX, y, connectorStartX, connectorY);
                     } else {
+                        // Si no, la línea continúa hacia abajo para el siguiente hermano.
                         doc.line(connectorStartX, y, connectorStartX, y + cell.height);
                     }
                 }
