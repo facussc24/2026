@@ -56,7 +56,7 @@ const PREDEFINED_AVATARS = [
 // --- Configuración de Vistas ---
 const viewConfig = {
     dashboard: { title: 'Dashboard', singular: 'Dashboard' },
-    sinoptico_tabular: { title: 'Reporte BOM (Tabular)', singular: 'Reporte BOM (Tabular)' },
+    sinoptico_tabular: { title: 'Lista de Materiales (Tabular)', singular: 'Lista de Materiales (Tabular)' },
     eco_form: { title: 'ECO de Producto / Proceso', singular: 'Formulario ECO' },
     eco: { title: 'Gestión de ECO', singular: 'ECO' },
     ecr: { title: 'Gestión de ECR', singular: 'ECR' },
@@ -75,7 +75,7 @@ const viewConfig = {
     indicadores_ecm_view: { title: 'Indicadores ECM', singular: 'Indicador' },
     eco_form_mock_for_tutorial: { title: 'Plan de Acción (Ejemplo)', singular: 'Plan de Acción' },
     flujograma: { title: 'Flujograma de Procesos', singular: 'Flujograma' },
-    arboles: { title: 'Editor de Árboles', singular: 'Árbol' },
+    arboles: { title: 'Editor de Estructura de Producto', singular: 'Árbol' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
     tareas: { title: 'Gestor de Tareas', singular: 'Tarea' },
     proyectos: {
@@ -9732,7 +9732,7 @@ function renderCaratula(producto, cliente) {
 
         container.innerHTML = `
         <div class="bg-white rounded-xl shadow-lg animate-fade-in-up overflow-hidden">
-            <h3 class="text-center font-bold text-xl py-3 bg-blue-600 text-white">COMPOSICIÓN DE PIEZAS - BOM</h3>
+            <h3 class="text-center font-bold text-xl py-3 bg-blue-600 text-white">COMPOSICIÓN DE PIEZAS</h3>
             <div class="flex">
                 <div class="w-1/3 bg-white flex items-center justify-center p-4 border-r border-slate-200">
                     <img src="barack_logo.png" alt="Logo" class="max-h-20">
@@ -10381,7 +10381,7 @@ export function runSinopticoTabularLogic() {
 
     const handleProductSelect = async (productId) => {
         try {
-            // Ensure all collections needed for the BOM are loaded
+            // Ensure all collections needed for the Bill of Materials are loaded
             await ensureCollectionsAreLoaded([
                 COLLECTIONS.SEMITERMINADOS,
                 COLLECTIONS.INSUMOS,
@@ -10421,7 +10421,7 @@ export function runSinopticoTabularLogic() {
     const renderInitialView = () => {
         dom.viewContent.innerHTML = `<div class="flex flex-col items-center justify-center h-full bg-white rounded-xl shadow-lg p-6 text-center animate-fade-in-up">
             <i data-lucide="file-search-2" class="h-24 w-24 text-gray-300 mb-6"></i>
-            <h3 class="text-2xl font-bold">Reporte BOM (Tabular)</h3>
+            <h3 class="text-2xl font-bold">Reporte de Estructura de Producto (Tabular)</h3>
             <p class="text-gray-500 mt-2 mb-8 max-w-lg">Para comenzar, busque y seleccione el producto principal que desea consultar.</p>
             <button data-action="open-product-search-modal-tabular" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 text-lg font-semibold shadow-lg transition-transform transform hover:scale-105">
                 <i data-lucide="search" class="inline-block mr-2 -mt-1"></i>Seleccionar Producto
@@ -10627,7 +10627,7 @@ async function exportSinopticoTabularToPdf() {
                 doc.setFontSize(18);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor('#3B82F6');
-                doc.text('Reporte de Estructura de Producto (BOM)', PAGE_WIDTH / 2, 15, { align: 'center' });
+                doc.text('Reporte de Estructura de Producto', PAGE_WIDTH / 2, 15, { align: 'center' });
 
                 if (logoBase64) {
                     doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
@@ -10648,7 +10648,7 @@ async function exportSinopticoTabularToPdf() {
             }
         });
 
-        const fileName = `Reporte_BOM_${product.id.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+        const fileName = `Reporte_Estructura_Producto_${product.id.replace(/[^a-z0-9]/gi, '_')}.pdf`;
         doc.save(fileName);
         showToast('PDF generado con éxito.', 'success');
 
