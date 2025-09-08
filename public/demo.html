@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo del Módulo de Hotspots</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Assuming TailwindCSS is available in the project -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+
+    <div class="flex h-screen overflow-hidden">
+        <!-- Main content -->
+        <main class="flex-1 flex flex-col items-center justify-center p-4">
+            <div class="w-full max-w-6xl flex justify-end mb-2">
+                <button id="edit-mode-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors" aria-label="Activar modo editor">
+                    Modo Editor
+                </button>
+            </div>
+            <!-- This is the container for the hotspot module -->
+            <div id="hotspot-container" class="vhm-container">
+                <img id="vehicle-image" class="vhm-image" src="/Maxus.jpg" alt="Imagen del vehículo">
+                <svg id="hotspot-svg" class="vhm-svg" preserveAspectRatio="none"></svg>
+            </div>
+        </main>
+
+        <!-- Viewer Side Panel (Managed by the application) -->
+        <aside id="side-panel" class="w-96 bg-white shadow-lg p-6 fixed top-0 right-0 h-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-gray-800">Detalles de la Pieza</h2>
+                <button id="close-panel-btn" class="text-gray-500 hover:text-gray-800" aria-label="Cerrar panel de detalles">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div id="panel-content">
+                <p class="text-gray-500">Seleccione un hotspot para ver los detalles.</p>
+            </div>
+        </aside>
+
+        <!-- Editor Side Panel (Managed by the application) -->
+        <aside id="editor-panel" class="w-96 bg-gray-800 text-white shadow-lg p-6 fixed top-0 right-0 h-full" role="dialog" aria-modal="true" aria-labelledby="editor-panel-title">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="editor-panel-title" class="text-2xl font-bold">Panel de Edición</h2>
+                <button id="close-editor-btn" class="text-gray-400 hover:text-white" aria-label="Cerrar panel de edición">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <div class="space-y-4 mb-6">
+                <button id="add-hotspot-btn" class="w-full bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600" aria-label="Añadir nuevo hotspot">Añadir Hotspot</button>
+                <button id="finish-hotspot-btn" class="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 hidden" aria-label="Finalizar hotspot actual">Finalizar Hotspot</button>
+                <button id="delete-hotspot-btn" class="w-full bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 hidden" aria-label="Eliminar hotspot seleccionado">Eliminar Hotspot</button>
+            </div>
+
+            <div id="hotspot-list-container" class="mb-6">
+                <h3 class="text-lg font-semibold mb-2">Hotspots</h3>
+                <div id="hotspot-list" class="max-h-60 overflow-y-auto bg-gray-700 p-2 rounded"></div>
+            </div>
+
+            <!-- Hotspot Data Form (inline in the editor panel) -->
+            <div id="hotspot-form-container" class="bg-gray-700 p-4 rounded mt-4 hidden">
+                <h3 class="text-lg font-semibold mb-3">Editar Hotspot</h3>
+                <form id="hotspot-form" class="space-y-3">
+                    <input type="hidden" id="hotspot-id">
+                    <div>
+                        <label for="hotspot-name" class="block text-sm font-medium">Nombre</label>
+                        <input type="text" id="hotspot-name" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500" required>
+                    </div>
+                    <div>
+                        <label for="hotspot-partNumber" class="block text-sm font-medium">Número de Parte</label>
+                        <input type="text" id="hotspot-partNumber" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="hotspot-description" class="block text-sm font-medium">Descripción</label>
+                        <textarea id="hotspot-description" rows="3" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <label for="hotspot-imageUrl" class="block text-sm font-medium">URL de Imagen</label>
+                        <input type="text" id="hotspot-imageUrl" class="mt-1 block w-full bg-gray-900 rounded-md border-gray-600 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" id="cancel-edit-btn" class="px-4 py-2 bg-gray-600 rounded-md hover:bg-gray-500" aria-label="Cancelar edición">Cancelar</button>
+                        <button type="submit" id="save-hotspot-btn" class="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700" aria-label="Guardar cambios del hotspot">Guardar</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="json-editor-container" class="mt-6">
+                <h3 class="text-lg font-semibold mb-2">Configuración JSON</h3>
+                <textarea id="json-config" class="w-full h-32 bg-gray-900 text-sm p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                <div class="flex gap-2 mt-2">
+                    <button id="import-json-btn" class="flex-1 bg-purple-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-600" aria-label="Importar configuración desde JSON">Importar</button>
+                    <button id="export-json-btn" class="flex-1 bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-600" aria-label="Exportar configuración actual a JSON">Exportar</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Application-level script to integrate the module -->
+    <script type="module">
+        import HotspotModule from './hotspot-module.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element Cache ---
+            const sidePanel = document.getElementById('side-panel');
+            const panelContent = document.getElementById('panel-content');
+            const closePanelBtn = document.getElementById('close-panel-btn');
+            const editModeBtn = document.getElementById('edit-mode-btn');
+            const editorPanel = document.getElementById('editor-panel');
+            const closeEditorBtn = document.getElementById('close-editor-btn');
+            const addHotspotBtn = document.getElementById('add-hotspot-btn');
+            const finishHotspotBtn = document.getElementById('finish-hotspot-btn');
+            const deleteHotspotBtn = document.getElementById('delete-hotspot-btn');
+            const hotspotList = document.getElementById('hotspot-list');
+            const jsonConfig = document.getElementById('json-config');
+            const importJsonBtn = document.getElementById('import-json-btn');
+            const exportJsonBtn = document.getElementById('export-json-btn');
+            const hotspotFormContainer = document.getElementById('hotspot-form-container');
+            const hotspotForm = document.getElementById('hotspot-form');
+            const cancelEditBtn = document.getElementById('cancel-edit-btn');
+
+            // --- Initial Data ---
+            const initialHotspots = [
+                 {
+                    id: 'apoyacabezas',
+                    name: 'Apoyacabezas',
+                    partNumber: 'V-102-3C',
+                    description: 'Apoyacabezas de cuero sintético, ajustable en altura y ángulo.',
+                    imageUrl: 'https://via.placeholder.com/300x200.png?text=Apoyacabezas',
+                    points: [ { x: 0.496, y: 0.222 }, { x: 0.56, y: 0.246 }, { x: 0.538, y: 0.334 }, { x: 0.478, y: 0.304 }]
+                },
+                {
+                    id: 'apoyabrazos',
+                    name: 'Apoyabrazos Central',
+                    partNumber: 'V-105-1A',
+                    description: 'Consola de apoyabrazos central con compartimento de almacenamiento.',
+                    imageUrl: 'https://via.placeholder.com/300x200.png?text=Apoyabrazos',
+                    points: [ { x: 0.458, y: 0.505 }, { x: 0.528, y: 0.508 }, { x: 0.53, y: 0.558 }, { x: 0.459, y: 0.556 }]
+                }
+            ];
+
+            // --- Module Initialization ---
+            HotspotModule.init('#hotspot-container', {
+                imageSelector: '.vhm-image',
+                svgSelector: '.vhm-svg'
+            });
+            HotspotModule.loadHotspots(initialHotspots);
+
+            // --- Application Logic ---
+            function openViewerPanel(hotspot) {
+                if (hotspot) {
+                    panelContent.innerHTML = `
+                        <img src="${hotspot.imageUrl || ''}" alt="${hotspot.name}" class="w-full h-48 object-cover rounded-lg mb-4 bg-gray-200">
+                        <h3 class="text-xl font-bold text-gray-900">${hotspot.name}</h3>
+                        <p class="text-sm text-gray-500 mb-2">N/P: ${hotspot.partNumber}</p>
+                        <p class="text-gray-700">${hotspot.description}</p>
+                    `;
+                    sidePanel.classList.add('open');
+                } else {
+                    closeViewerPanel();
+                }
+            }
+
+            function closeViewerPanel() {
+                sidePanel.classList.remove('open');
+            }
+
+            function toggleEditorPanel(show) {
+                editorPanel.classList.toggle('open', show);
+            }
+
+            function updateHotspotListUI() {
+                const { hotspots, selectedHotspotId } = HotspotModule.getState();
+                hotspotList.innerHTML = '';
+                if (hotspots.length === 0) {
+                    hotspotList.innerHTML = '<p class="text-gray-400">No hay hotspots.</p>';
+                    return;
+                }
+                hotspots.forEach(hotspot => {
+                    const item = document.createElement('div');
+                    item.className = `p-2 rounded cursor-pointer hover:bg-gray-600 ${selectedHotspotId === hotspot.id ? 'bg-blue-800' : ''}`;
+                    item.textContent = hotspot.name;
+                    item.dataset.id = hotspot.id;
+                    item.addEventListener('click', () => {
+                        // This interaction is now handled by the module, just need to update UI
+                    });
+                    hotspotList.appendChild(item);
+                });
+            }
+
+            function showHotspotForm(hotspot) {
+                if (!hotspot) {
+                    hotspotFormContainer.classList.add('hidden');
+                    return;
+                }
+                document.getElementById('hotspot-id').value = hotspot.id;
+                document.getElementById('hotspot-name').value = hotspot.name;
+                document.getElementById('hotspot-partNumber').value = hotspot.partNumber;
+                document.getElementById('hotspot-description').value = hotspot.description;
+                document.getElementById('hotspot-imageUrl').value = hotspot.imageUrl;
+                hotspotFormContainer.classList.remove('hidden');
+                deleteHotspotBtn.classList.remove('hidden');
+            }
+
+            // --- Event Listeners from Module ---
+            HotspotModule.on('select', (hotspot) => {
+                const state = HotspotModule.getState();
+                if (!state.isEditMode) {
+                    openViewerPanel(hotspot);
+                } else {
+                    showHotspotForm(hotspot);
+                    updateHotspotListUI(); // To update selection highlight
+                }
+            });
+
+            HotspotModule.on('change', () => {
+                updateHotspotListUI();
+            });
+
+            HotspotModule.on('editModeEnter', () => {
+                toggleEditorPanel(true);
+                closeViewerPanel();
+                editModeBtn.textContent = "Modo Visualizador";
+                updateHotspotListUI();
+            });
+
+            HotspotModule.on('editModeExit', () => {
+                toggleEditorPanel(false);
+                showHotspotForm(null);
+                editModeBtn.textContent = "Modo Editor";
+            });
+
+            // --- UI Event Listeners ---
+            closePanelBtn.addEventListener('click', closeViewerPanel);
+
+            editModeBtn.addEventListener('click', () => {
+                const state = HotspotModule.getState();
+                if (state.isEditMode) {
+                    HotspotModule.exitEditMode();
+                } else {
+                    HotspotModule.enterEditMode();
+                }
+            });
+
+            closeEditorBtn.addEventListener('click', () => HotspotModule.exitEditMode());
+
+            addHotspotBtn.addEventListener('click', () => {
+                HotspotModule.startDrawing();
+                addHotspotBtn.classList.add('hidden');
+                finishHotspotBtn.classList.remove('hidden');
+            });
+
+            finishHotspotBtn.addEventListener('click', () => {
+                HotspotModule.finishDrawing();
+                addHotspotBtn.classList.remove('hidden');
+                finishHotspotBtn.classList.add('hidden');
+            });
+
+            deleteHotspotBtn.addEventListener('click', () => {
+                const { selectedHotspotId } = HotspotModule.getState();
+                if (selectedHotspotId && confirm('¿Estás seguro?')) {
+                    HotspotModule.deleteHotspot(selectedHotspotId);
+                    showHotspotForm(null);
+                }
+            });
+
+            hotspotForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = document.getElementById('hotspot-id').value;
+                const data = {
+                    name: document.getElementById('hotspot-name').value,
+                    partNumber: document.getElementById('hotspot-partNumber').value,
+                    description: document.getElementById('hotspot-description').value,
+                    imageUrl: document.getElementById('hotspot-imageUrl').value,
+                };
+                HotspotModule.updateHotspot(id, data);
+                hotspotFormContainer.classList.add('hidden');
+            });
+
+            cancelEditBtn.addEventListener('click', () => {
+                hotspotFormContainer.classList.add('hidden');
+            });
+
+            exportJsonBtn.addEventListener('click', () => {
+                jsonConfig.value = HotspotModule.exportJSON();
+            });
+
+            importJsonBtn.addEventListener('click', () => {
+                HotspotModule.importJSON(jsonConfig.value);
+            });
+        });
+    </script>
+</body>
+</html>

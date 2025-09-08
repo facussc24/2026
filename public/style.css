@@ -2,20 +2,21 @@ body {
     font-family: 'Inter', sans-serif;
 }
 
-#hotspot-container {
+/* Styles for the container that the module will be initialized in */
+.vhm-container {
     position: relative;
     width: 100%;
     max-width: 1200px;
     margin: auto;
 }
 
-#hotspot-container img {
+.vhm-container .vhm-image {
     display: block;
     width: 100%;
     height: auto;
 }
 
-#hotspot-svg {
+.vhm-container .vhm-svg {
     position: absolute;
     top: 0;
     left: 0;
@@ -23,7 +24,8 @@ body {
     height: 100%;
 }
 
-.hotspot-polygon {
+/* Styles for module-generated elements */
+.vhm-hotspot-polygon {
     fill: rgba(29, 78, 216, 0.3); /* blue-700 with 30% opacity */
     stroke: rgba(59, 130, 246, 0.9); /* blue-500 */
     stroke-width: 4;
@@ -31,16 +33,28 @@ body {
     cursor: pointer;
 }
 
-.hotspot-polygon:hover {
+.vhm-hotspot-polygon:hover {
     fill: rgba(29, 78, 216, 0.5); /* blue-700 with 50% opacity */
     stroke-width: 5;
 }
 
-.hotspot-polygon.active {
+.vhm-hotspot-polygon.active {
     fill: rgba(239, 68, 68, 0.5); /* red-500 with 50% opacity */
     stroke: rgba(239, 68, 68, 0.9); /* red-500 */
 }
 
+.vhm-handle {
+    fill: #f97316; /* orange-500 */
+    stroke: #ea580c; /* orange-600 */
+    stroke-width: 1;
+    cursor: move;
+}
+
+.vhm-svg.vhm-drawing-mode {
+    cursor: crosshair;
+}
+
+/* Application-level styles (can be moved to a separate file) */
 #side-panel {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transform: translateX(100%);
@@ -50,7 +64,6 @@ body {
     transform: translateX(0);
 }
 
-/* Editor-specific styles */
 #editor-panel {
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transform: translateX(100%);
@@ -60,18 +73,6 @@ body {
     transform: translateX(0);
 }
 
-.handle {
-    fill: #f97316; /* orange-500 */
-    stroke: #ea580c; /* orange-600 */
-    stroke-width: 1;
-    cursor: move;
-}
-
-#hotspot-svg.drawing-mode {
-    cursor: crosshair;
-}
-
-/* Additional utility styles */
 .hidden {
     display: none;
 }
