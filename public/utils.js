@@ -152,24 +152,19 @@ export function flattenEstructura(nodes) {
 
 /**
  * Transforms flattened BOM data into a format suitable for jspdf-autotable.
- * This refactored version embeds the visual tree structure directly into the
- * description, simplifying the PDF rendering logic.
+ * This version returns an array of objects to preserve metadata for custom drawing.
  * @param {Array<Object>} flattenedData - The array of data from getFlattenedData.
  * @param {Object} collectionsById - The map of collections for resolving IDs.
- * @returns {{body: Array<Object>}} - An object containing the body as a single processed array.
+ * @returns {{body: Array<Object>}} - An object containing the body as an array of processed objects.
  */
 export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
-    const body = flattenedData.map(row => {
+    const body = [];
+    const rawData = []; // This will hold the metadata for the draw hooks
+
+    flattenedData.forEach(row => {
         const { node, item, level, isLast, lineage } = row;
         const NA = 'N/A';
 
-        // Build the tree prefix string (e.g., '├─ ', '└─ ', '│  ')
-        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│  ' : '   ').join('');
-        if (level > 0) {
-            prefix += isLast ? '└─ ' : '├─ ';
-        }
-
-        // Resolve related data
         let proceso = NA;
         if (item.proceso && collectionsById[COLLECTIONS.PROCESOS]) {
             const procesoData = collectionsById[COLLECTIONS.PROCESOS].get(item.proceso);
@@ -184,10 +179,11 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
 
         const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? NA);
 
-        // Return the final row object with the prefixed description
-        return {
+        // This object contains ONLY what will be displayed in the table.
+        // All values are cast to strings to prevent jsPDF errors.
+        const displayRow = {
             level: String(level),
-            descripcion: `${prefix}${item.descripcion || item.nombre || ''}`,
+            descripcion: String(item.descripcion || item.nombre || ''),
             codigo: String(item.id || NA),
             version: String(item.version || NA),
             proceso: String(proceso),
@@ -195,8 +191,16 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
             unidad: String(unidad),
             comentarios: String(node.comment || ''),
         };
+        body.push(displayRow);
+
+        // This object contains the metadata needed for custom drawing.
+        const metadataRow = {
+            level,
+            isLast,
+            lineage
+        };
+        rawData.push(metadataRow);
     });
 
-    // The function now returns a single object, simplifying the call site.
-    return { body };
+    return { body, rawData };
 }
