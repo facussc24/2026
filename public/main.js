@@ -10210,6 +10210,7 @@ export function runSinopticoTabularLogic() {
         };
 
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        state.flattenedData = flattenedData; // Store for PDF export
         const tableHTML = renderTabularTable(flattenedData);
 
         const maxLevel = getOriginalMaxDepth(product.estructura);
@@ -10502,7 +10503,7 @@ export function runSinopticoTabularLogic() {
     };
 }
 
-async function exportSinopticoTabularToPdf() {
+export async function exportSinopticoTabularToPdf() {
     const { jsPDF } = window.jspdf;
     const state = appState.sinopticoTabularState;
     const product = state.selectedProduct;
@@ -10522,13 +10523,26 @@ async function exportSinopticoTabularToPdf() {
         const PAGE_WIDTH = doc.internal.pageSize.width;
         const NA = 'N/A';
 
-        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+        const flattenedData = state.flattenedData || getFlattenedData(product, state.activeFilters.niveles);
+        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+
+        // Define headers dynamically for flexibility
+        const head = [
+            { level: 'Nivel', descripcion: 'Descripción', codigo: 'Código', version: 'Versión', proceso: 'Proceso', cantidad: 'Cantidad', unidad: 'Unidad', comentarios: 'Comentarios' }
+        ];
 
         doc.autoTable({
             head: head,
             body: body,
             startY: 55,
+            willDrawCell: (data) => {
+                if (data.column.dataKey === 'descripcion' && data.section === 'body') {
+                    const { level } = rawData[data.row.index];
+                    const INDENT = 4;
+                    const PADDING = 2;
+                    data.cell.styles.cellPadding.left = PADDING + level * INDENT;
+                }
+            },
             margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
             styles: {
@@ -10545,11 +10559,11 @@ async function exportSinopticoTabularToPdf() {
                 halign: 'center',
             },
             columnStyles: {
-                nivel: { halign: 'center', cellWidth: 10 },
-                descripcion: { cellWidth: 80 },
-                codigo_pieza: { cellWidth: 25 },
+                level: { halign: 'center', cellWidth: 10 },
+                descripcion: { cellWidth: 100 },
+                codigo: { cellWidth: 25 },
                 version: { halign: 'center', cellWidth: 15 },
-                proceso: { cellWidth: 30 },
+                proceso: { cellWidth: 25 },
                 cantidad: { halign: 'right', cellWidth: 15 },
                 unidad: { halign: 'center', cellWidth: 15 },
                 comentarios: { cellWidth: 'auto' },
@@ -10566,7 +10580,7 @@ async function exportSinopticoTabularToPdf() {
             didDrawCell: (data) => {
                 // We only want to draw lines in the 'description' column, and only for the table body
                 if (data.section === 'body' && data.column.dataKey === 'descripcion') {
-                    const { level, isLast, lineage } = data.row.raw;
+                    const { level, isLast, lineage } = rawData[data.row.index];
                     if (level === 0) return; // No lines for root element
 
                     const cell = data.cell;
@@ -10605,19 +10619,18 @@ async function exportSinopticoTabularToPdf() {
                 }
             },
             didDrawPage: (data) => {
+                // Header
                 doc.setFontSize(18);
-                doc.setFont('times', 'bold');
+                doc.setFont('helvetica', 'bold');
                 doc.setTextColor('#000000');
                 doc.text('LISTA DE MATERIALES / BILL OF MATERIALS', PAGE_WIDTH / 2, 15, { align: 'center' });
 
                 if (logoBase64) {
-                    doc.setFillColor(255, 255, 255);
-                    doc.rect(PAGE_MARGIN, 22, 30, 15, 'F');
                     doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
                 }
 
                 doc.setFontSize(9);
-                doc.setFont('times', 'normal');
+                doc.setFont('helvetica', 'normal');
                 doc.setTextColor(100);
                 const headerTextX = PAGE_WIDTH - PAGE_MARGIN;
                 doc.text(`Producto: ${product.descripcion || NA}`, headerTextX, 24, { align: 'right' });
@@ -10625,8 +10638,10 @@ async function exportSinopticoTabularToPdf() {
                 const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
                 doc.text(`Cliente: ${client?.descripcion || NA}`, headerTextX, 32, { align: 'right' });
 
+                // Footer
                 const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(8);
+                doc.setTextColor(150);
                 doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, doc.internal.pageSize.height - 10, { align: 'center' });
                 doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, doc.internal.pageSize.height - 10);
             }
