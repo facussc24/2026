@@ -159,10 +159,13 @@ export function flattenEstructura(nodes) {
  */
 export function prepareDataForPdfAutoTable(flattenedData, collectionsById, product) {
     const body = [];
+    const NA = 'N/A';
+
+    // Helper to ensure value is a printable string, avoiding "null" or "undefined".
+    const toStr = (value) => String(value ?? NA);
 
     flattenedData.forEach(row => {
         const { node, item, level, isLast, lineage } = row;
-        const NA = 'N/A';
 
         let proceso = NA;
         if (item.proceso && collectionsById[COLLECTIONS.PROCESOS]) {
@@ -182,30 +185,33 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById, produ
             proveedor_materia_prima = provMP ? provMP.descripcion : item.proveedor_materia_prima;
         }
 
-        const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? NA);
+        const cantidad = node.tipo === 'producto' ? 1 : node.quantity;
 
         // Combine display data and metadata into a single object.
+        // BUGFIX: Every value passed to the body must be a string. The jsPDF library
+        // throws an "Invalid arguments" error if it receives null or undefined.
+        // The `toStr` helper ensures all data is safely converted.
         body.push({
             // Metadata for drawing hooks
             level,
             isLast,
             lineage,
-            // Display data (cast to string for safety)
-            descripcion: String(item.descripcion || item.nombre || ''),
-            lc_kd: String(item.lc_kd || NA),
-            codigo_pieza: String(item.codigo_pieza || NA),
-            version: String(item.version || NA),
-            proceso: String(proceso),
-            aspecto: String(item.aspecto || NA),
-            peso: String(item.peso_gr || NA),
-            color: String(product?.color || NA),
-            piezas_por_vehiculo: String(product?.piezas_por_vehiculo || NA),
-            material: String(product?.material_separar ? 'Sí' : 'No'),
-            codigo_materia_prima: String(item.codigo_materia_prima || NA),
-            proveedor_materia_prima,
-            cantidad: String(cantidad),
-            unidad: String(unidad),
-            comentarios: String(node.comment || ''),
+            // Display data
+            descripcion: toStr(item.descripcion || item.nombre),
+            lc_kd: toStr(item.lc_kd),
+            codigo_pieza: toStr(item.codigo_pieza),
+            version: toStr(item.version),
+            proceso: toStr(proceso),
+            aspecto: toStr(item.aspecto),
+            peso: toStr(item.peso_gr),
+            color: toStr(product?.color),
+            piezas_por_vehiculo: toStr(product?.piezas_por_vehiculo),
+            material: product?.material_separar ? 'Sí' : 'No',
+            codigo_materia_prima: toStr(item.codigo_materia_prima),
+            proveedor_materia_prima: toStr(proveedor_materia_prima),
+            cantidad: toStr(cantidad),
+            unidad: toStr(unidad),
+            comentarios: node.comment ? String(node.comment) : '', // Comments can be an empty string
         });
     });
 
