@@ -57,76 +57,54 @@ describe('prepareDataForPdfAutoTable', () => {
         };
     });
 
-    test('should separate display data from metadata', () => {
+    test('should return a single array with combined display and metadata', () => {
         // --- ARRANGE ---
         const flattenedData = getFlattenedData(appState.sinopticoTabularState.selectedProduct, new Set());
+        const product = appState.sinopticoTabularState.selectedProduct;
 
         // --- ACT ---
-        const result = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+        const result = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
 
         // --- ASSERT ---
-        // 1. Check the overall structure
-        expect(result).toHaveProperty('body');
-        expect(result).toHaveProperty('rawData');
+        // 1. Check the overall structure and length
+        expect(result).toBeInstanceOf(Array);
+        expect(result).toHaveLength(4);
 
-        // 2. Check Body and rawData length
-        const { body, rawData } = result;
-        expect(body).toBeInstanceOf(Array);
-        expect(body).toHaveLength(4);
-        expect(rawData).toBeInstanceOf(Array);
-        expect(rawData).toHaveLength(4);
-
-        // 3. Check the DISPLAY data (body) - should only contain strings for the PDF
-        const [productoBody, semiBody, insumo1Body, insumo2Body] = body;
+        // 2. Check the combined data in each object
+        const [producto, semi, insumo1, insumo2] = result;
 
         // Row 1: Producto
-        expect(productoBody.level).toBe('0');
-        expect(productoBody.descripcion).toBe('Producto de Prueba');
-        expect(productoBody.version).toBe('1.0');
-        expect(productoBody.proceso).toBe('Ensamblaje Final');
-        expect(productoBody.cantidad).toBe('1');
-        expect(productoBody).not.toHaveProperty('isLast'); // Metadata should be gone
+        expect(producto).toHaveProperty('level', 0);
+        expect(producto).toHaveProperty('isLast', true);
+        expect(producto).toHaveProperty('lineage', []);
+        expect(producto).toHaveProperty('descripcion', 'Producto de Prueba');
+        expect(producto).toHaveProperty('version', '1.0');
+        expect(producto).toHaveProperty('proceso', 'Ensamblaje Final');
+        expect(producto).toHaveProperty('cantidad', '1');
 
         // Row 2: Semiterminado
-        expect(semiBody.level).toBe('1');
-        expect(semiBody.descripcion).toBe('Semiterminado Principal');
-        expect(semiBody.cantidad).toBe('2');
-        expect(semiBody.proceso).toBe('Mecanizado CNC');
+        expect(semi).toHaveProperty('level', 1);
+        expect(semi).toHaveProperty('isLast', false);
+        expect(semi).toHaveProperty('lineage', [false]);
+        expect(semi).toHaveProperty('descripcion', 'Semiterminado Principal');
+        expect(semi).toHaveProperty('cantidad', '2');
+        expect(semi).toHaveProperty('proceso', 'Mecanizado CNC');
 
         // Row 3: Insumo 1
-        expect(insumo1Body.level).toBe('2');
-        expect(insumo1Body.descripcion).toBe('Insumo A');
-        expect(insumo1Body.cantidad).toBe('5');
-        expect(insumo1Body.unidad).toBe('kg');
-        expect(insumo1Body.comentarios).toBe('Comentario de prueba');
+        expect(insumo1).toHaveProperty('level', 2);
+        expect(insumo1).toHaveProperty('isLast', true);
+        expect(insumo1).toHaveProperty('lineage', [false, true]);
+        expect(insumo1).toHaveProperty('descripcion', 'Insumo A');
+        expect(insumo1).toHaveProperty('cantidad', '5');
+        expect(insumo1).toHaveProperty('unidad', 'kg');
+        expect(insumo1).toHaveProperty('comentarios', 'Comentario de prueba');
 
         // Row 4: Insumo 2
-        expect(insumo2Body.level).toBe('1');
-        expect(insumo2Body.descripcion).toBe('Insumo B');
-        expect(insumo2Body.cantidad).toBe('10');
-        expect(insumo2Body.unidad).toBe('m');
-
-        // 4. Check the METADATA (rawData) - should contain the raw values for drawing
-        const [productoRaw, semiRaw, insumo1Raw, insumo2Raw] = rawData;
-
-        // Row 1: Producto (Root)
-        expect(productoRaw.level).toBe(0);
-        expect(productoRaw.isLast).toBe(true);
-        expect(productoRaw.lineage).toEqual([]);
-
-        // Row 2: Semiterminado (Child of Root)
-        expect(semiRaw.level).toBe(1);
-        expect(semiRaw.isLast).toBe(false);
-        expect(semiRaw.lineage).toEqual([false]);
-
-        // Row 3: Insumo (Child of Semiterminado)
-        expect(insumo1Raw.level).toBe(2);
-        expect(insumo1Raw.isLast).toBe(true);
-        expect(insumo1Raw.lineage).toEqual([false, true]);
-
-        // Row 4: Insumo (Child of Root)
-        expect(insumo2Raw.level).toBe(1);
-        expect(insumo2Raw.isLast).toBe(true);
-        expect(insumo2Raw.lineage).toEqual([false]);
+        expect(insumo2).toHaveProperty('level', 1);
+        expect(insumo2).toHaveProperty('isLast', true);
+        expect(insumo2).toHaveProperty('lineage', [false]);
+        expect(insumo2).toHaveProperty('descripcion', 'Insumo B');
+        expect(insumo2).toHaveProperty('cantidad', '10');
+        expect(insumo2).toHaveProperty('unidad', 'm');
     });
 });
