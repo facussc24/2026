@@ -10532,7 +10532,7 @@ async function exportSinopticoTabularToPdf() {
             margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
             styles: {
-                font: 'helvetica',
+                font: 'times',
                 fontSize: 8,
                 cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
                 overflow: 'linebreak',
@@ -10575,8 +10575,8 @@ async function exportSinopticoTabularToPdf() {
                     const INDENT = 4; // Should match the indent in willDrawCell
                     const PADDING = 2; // Should match the padding in willDrawCell
 
-                    doc.setDrawColor(180); // Set line color to a light gray
-                    doc.setLineWidth(0.2);
+                    doc.setDrawColor(120); // Set line color to a darker gray
+                    doc.setLineWidth(0.25);
 
                     // Draw vertical lines for all parent levels
                     for (let i = 0; i < level; i++) {
@@ -10606,15 +10606,18 @@ async function exportSinopticoTabularToPdf() {
             },
             didDrawPage: (data) => {
                 doc.setFontSize(18);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor('#3B82F6');
-                doc.text('Reporte de Estructura de Producto (BOM)', PAGE_WIDTH / 2, 15, { align: 'center' });
+                doc.setFont('times', 'bold');
+                doc.setTextColor('#000000');
+                doc.text('LISTA DE MATERIALES / BILL OF MATERIALS', PAGE_WIDTH / 2, 15, { align: 'center' });
 
                 if (logoBase64) {
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(PAGE_MARGIN, 22, 30, 15, 'F');
                     doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
                 }
 
                 doc.setFontSize(9);
+                doc.setFont('times', 'normal');
                 doc.setTextColor(100);
                 const headerTextX = PAGE_WIDTH - PAGE_MARGIN;
                 doc.text(`Producto: ${product.descripcion || NA}`, headerTextX, 24, { align: 'right' });
