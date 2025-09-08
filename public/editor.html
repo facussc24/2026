@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editor de Hotspots de Vehículo</title>
 
-    <!-- Bootstrap for styling -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- jQuery UI for draggable/resizable -->
+    <!-- Bootstrap for styling from a CSP-approved CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
+    <!-- jQuery UI CSS from a CSP-approved CDN -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="hotspot_editor.css">
+    <link rel="stylesheet" href="editor.css">
 </head>
 <body>
 
@@ -41,7 +41,7 @@
                                         <thead>
                                             <tr>
                                                 <th scope="col">#</th>
-                                                <th scope="col">Título / Enlace</th>
+                                                <th scope="col">Título de la Pieza</th>
                                                 <th scope="col">Acción</th>
                                             </tr>
                                         </thead>
@@ -49,7 +49,7 @@
                                             <!-- Template for new rows -->
                                             <tr class="item-###" style="display: none;">
                                                 <th scope="row">###</th>
-                                                <td><input type="text" class="form-control form-control-sm area-href" placeholder="Ej: Capó, Puerta..."></td>
+                                                <td><input type="text" class="form-control form-control-sm area-title" placeholder="Ej: Capó, Puerta..."></td>
                                                 <td><button type="button" class="btn btn-danger btn-sm btn-delete">Eliminar</button></td>
                                             </tr>
                                         </tbody>
@@ -68,20 +68,45 @@
                 <p class="mb-0"><strong>Instrucciones:</strong></p>
                 <ol class="mb-0 pl-3">
                     <li>Haz clic en "Añadir Nueva Zona". Aparecerá un cuadrado semitransparente sobre la imagen.</li>
-                    <li>Arrastra el cuadrado a la posición deseada.</li>
-                    <li>Redimensiona el cuadrado desde sus esquinas para que cubra la pieza del vehículo.</li>
-                    <li>En el "Panel de Control", asigna un título o enlace a la zona que acabas de crear.</li>
-                    <li>Repite el proceso para todas las zonas que quieras añadir.</li>
-                    <li>Al finalizar, haz clic en "Obtener Código HTML" para ver el código `<map>` generado.</li>
+                    <li>Arrastra el cuadrado a la posición deseada y redimensiónalo.</li>
+                    <li>En el "Panel de Control", asigna un título a la zona (este título se usará en el visualizador).</li>
+                    <li>Al finalizar, haz clic en "Obtener Código HTML" y copia el código `<map>...</map>` generado.</li>
                 </ol>
             </div>
         </div>
     </div>
 
-    <!-- jQuery and jQuery UI -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <!-- Modal for displaying the generated code -->
+    <div class="modal fade" id="codeModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Código HTML Generado</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>Copia y pega este código en la página del visualizador (`viewer.html`):</p>
+                    <pre><code id="generated-code" class="language-html"></code></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- jQuery from a CSP-approved CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <!-- jQuery UI from a CSP-approved CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
-    <!-- The plugin -->
+    <!-- Bootstrap JS from a CSP-approved CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <!-- The local plugin -->
     <script src="jquery.imagemaps.js"></script>
 
     <script>
@@ -90,64 +115,33 @@
             $('.imagemaps-wrapper').imageMaps({
                 addBtn: '.btn-add-map',
                 output: '.imagemaps-output',
-                stopCallBack: function(active, coords) {
-                    console.log('Active area:', active);
-                    console.log('Coordinates:', coords);
-                }
+                areaHref: '.area-title', // Use the input field to store the title
             });
 
             // Handle the "Get Code" button
             $('.btn-get-map').on('click', function() {
-                let oParent = $(this).closest('.imagemaps-control').parent().parent();
+                let oParent = $(this).closest('.card-body');
                 let result = oParent.find('.imagemaps-wrapper').clone();
 
                 // Clean up the result for display
                 result.find('div[id^=imagemaps-rect]').remove(); // Remove the draggable divs
+
+                // Add title and data-part-key attributes for easier use in the viewer
+                result.find('area').each(function() {
+                    let title = $(this).attr('href'); // The title is stored in the href attribute by the plugin
+                    let key = title.toLowerCase().replace(/\\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                    $(this).attr('title', title);
+                    $(this).attr('data-part-key', key);
+                    $(this).attr('href', '#'); // Set a dummy href for the final code
+                });
+
                 let generatedCode = result.html().trim();
 
-                // Display the code in a modal
-                let modalContent = `
-                    <div class="modal fade" id="codeModal" tabindex="-1" role="dialog">
-                        <div class="modal-dialog modal-lg" role="document">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Código HTML Generado</h5>
-                                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                                        <span aria-hidden="true">&times;</span>
-                                    </button>
-                                </div>
-                                <div class="modal-body">
-                                    <p>Copia y pega este código en tu página de visualización:</p>
-                                    <pre><code class="language-html">${escapeHtml(generatedCode)}</code></pre>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>`;
-
-                // Add modal to body and show it
-                $('body').append(modalContent);
+                // Display the code in a modal, pretty-printed
+                $('#generated-code').text(generatedCode.replace(/><area/g, '>\n    <area'));
                 $('#codeModal').modal('show');
-                // Clean up the modal from the DOM after it's hidden
-                $('#codeModal').on('hidden.bs.modal', function () {
-                    $(this).remove();
-                });
             });
-
-            function escapeHtml(unsafe) {
-                return unsafe
-                     .replace(/&/g, "&amp;")
-                     .replace(/</g, "&lt;")
-                     .replace(/>/g, "&gt;")
-                     .replace(/"/g, "&quot;")
-                     .replace(/'/g, "&#039;");
-             }
         });
     </script>
-    <!-- Bootstrap JS for modal functionality -->
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>

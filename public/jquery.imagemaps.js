@@ -21,20 +21,6 @@
 (function($) {
     "use strict";
 
-    /*
-        Basic Usage:
-        -----------
-
-        $('.imagemaps-wrapper').imageMaps({
-            addBtn: '.btn-add-map',
-            output: '.imagemaps-output',
-            stopCallBack: function(active, coords){
-                // console.log(active);
-                console.log(coords);
-            }
-        });
-    */
-
     $.fn.imageMaps = function(options) {
         if(options===undefined) options = {};
 
@@ -64,9 +50,7 @@
         options.draggableOptions = $.extend(defaults.draggableOptions, options.draggableOptions);
         options.resizableOptions = $.extend(defaults.resizableOptions, options.resizableOptions);
 
-        // 当前热区
         let active = null;
-        // 当前热区的坐标值
         let coords = {
             x1: 0,
             y1: 0,
@@ -74,26 +58,22 @@
             y2: options.rectHeight,
         };
 
-        // 模板
         let itemTemplate = localStorage.getItem('imageMapsItemTemplate') || $(options.output+':eq(0)').html();
         localStorage.setItem('imageMapsItemTemplate', itemTemplate);
         $(options.output).html('');
 
-        // 设置当前热区的坐标
         let setCoords = function(_this, doingRecover=false){
             if(_this){
                 coords.x1 = parseInt(_this.css('left'));
                 coords.y1  = parseInt(_this.css('top'));
                 coords.x2  = coords.x1 + parseInt(_this.width());
                 coords.y2  = coords.y1 + parseInt(_this.height());
-
                 active = _this;
             }
 
             let index  = parseInt( active.attr('data-index') );
             let oArea  = active.parent().find('.imagemaps .imagemaps-area'+index);
             let output = $(options.output+':eq('+ active.parent().attr('data-index') +')');
-            // 缩放比例
             let oImg   = active.parent().children('img');
             let ratio  = oImg.width()/oImg.get(0).naturalWidth;
 
@@ -105,7 +85,6 @@
             if(options.stopCallBack) options.stopCallBack(active, coords);
         };
 
-        // 支持多图片同时操作
         this.each(function(i, item){
             let _this  = $(this);
             _this.attr('data-index', i);
@@ -125,7 +104,6 @@
                 doingRecover = true;
             }
 
-            // 缩放比例
             let oImg   = _this.children('img');
             let ratio  = oImg.width()/oImg.get(0).naturalWidth;
 
@@ -161,7 +139,6 @@
                 active = oDiv;
                 setCoords(null, doingRecover);
 
-                // 更新热区链接和打开方式
                 oTr.find(options.areaHref+','+options.areaTarget).on('change', function(){
                     active       = $(`#imagemaps-rect-${i}-${index}`);
                     let oWrapper = active.parent();
@@ -172,7 +149,6 @@
                     oArea.attr('target', output.find(`.item-${index+1} `+options.areaTarget).val());
                 });
 
-                // 删除热区
                 oTr.find(options.btnDelete).unbind('click').on('click', function(){
                     active       = $(`#imagemaps-rect-${i}-${index}`);
                     let oWrapper = active.parent();
@@ -192,16 +168,13 @@
                 });
             });
 
-            // 恢复数据
             if(doingRecover==true)
             {
                 let itemLen = _this.find('.imagemaps area').length;
-
                 for(let ii=0; ii<itemLen; ii++){
                     $(options.addBtn+':eq('+ i +')').trigger('click');
                 }
             }
-
             doingRecover = false;
         });
     };

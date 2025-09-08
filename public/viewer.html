@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador de Demo de Hotspots</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="viewer.css">
+</head>
+<body>
+
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Demostración Interactiva de Piezas</h1>
+
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="image-container mx-auto">
+                    <img id="vehicle-image" src="Maxus.jpg" usemap="#vehicle-map" class="img-fluid">
+
+                    <!--
+                        INSTRUCCIONES:
+                        1. Vaya al "Editor de Hotspots".
+                        2. Cree las zonas deseadas y haga clic en "Obtener Código HTML".
+                        3. Copie el código <map>...</map> completo.
+                        4. Pegue ese código aquí debajo, reemplazando este comentario y el <map> de ejemplo.
+                    -->
+                    <map name="vehicle-map">
+                        <!-- Pegue aquí el código del editor -->
+                        <area shape="rect" coords="381,288,514,367" href="#" title="Ejemplo: Capó Delantero">
+                    </map>
+                </div>
+            </div>
+            <div class="card-footer text-muted">
+                Pase el cursor sobre las áreas del vehículo para ver el título. Para definir nuevas áreas, use el <a href="editor.html" target="_blank">Editor de Hotspots</a>.
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery from a CSP-approved CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+    <!-- Maphilight Plugin from a CSP-approved CDN for hover effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/maphilight/1.4.0/jquery.maphilight.min.js"></script>
+
+    <script>
+        $(function() {
+            // Initialize the maphilight plugin
+            $('#vehicle-image').maphilight({
+                fillColor: 'FFFF00',
+                fillOpacity: 0.4,
+                strokeColor: 'FFFF00',
+                strokeOpacity: 0.8,
+                strokeWidth: 2,
+                fade: true,
+                alwaysOn: false,
+                neverOn: false,
+                groupBy: false,
+                wrapClass: true,
+                shadow: false,
+                shadowX: 0,
+                shadowY: 0,
+                shadowRadius: 6,
+                shadowColor: '000000',
+                shadowOpacity: 0.8,
+                shadowPosition: 'outside',
+                shadowFrom: false
+            });
+        });
+    </script>
+</body>
+</html>
