@@ -10524,23 +10524,29 @@ export async function exportSinopticoTabularToPdf() {
         const NA = 'N/A';
 
         const flattenedData = state.flattenedData || getFlattenedData(product, state.activeFilters.niveles);
-        // The new prepareDataForPdfAutoTable returns a single { body } object.
-        const { body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
+        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById);
 
         // Define headers dynamically for flexibility
         const head = [
-            // Level is no longer needed as it's part of the description's indentation
-            { descripcion: 'Descripción', codigo: 'Código', version: 'Versión', proceso: 'Proceso', cantidad: 'Cantidad', unidad: 'Unidad', comentarios: 'Comentarios' }
+            { level: 'Nivel', descripcion: 'Descripción', codigo: 'Código', version: 'Versión', proceso: 'Proceso', cantidad: 'Cantidad', unidad: 'Unidad', comentarios: 'Comentarios' }
         ];
 
         doc.autoTable({
             head: head,
             body: body,
-            startY: 55, // Leave space for the header
+            startY: 55,
+            willDrawCell: (data) => {
+                if (data.column.dataKey === 'descripcion' && data.section === 'body') {
+                    const { level } = rawData[data.row.index];
+                    const INDENT = 4;
+                    const PADDING = 2;
+                    data.cell.styles.cellPadding.left = PADDING + level * INDENT;
+                }
+            },
             margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
             styles: {
-                font: 'helvetica', // Using a standard font for better compatibility
+                font: 'times',
                 fontSize: 8,
                 cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
                 overflow: 'linebreak',
@@ -10553,8 +10559,8 @@ export async function exportSinopticoTabularToPdf() {
                 halign: 'center',
             },
             columnStyles: {
-                // The 'level' column is removed. 'descripcion' now holds the tree.
-                descripcion: { cellWidth: 120 }, // Give description more space
+                level: { halign: 'center', cellWidth: 10 },
+                descripcion: { cellWidth: 100 },
                 codigo: { cellWidth: 25 },
                 version: { halign: 'center', cellWidth: 15 },
                 proceso: { cellWidth: 25 },
@@ -10562,7 +10568,56 @@ export async function exportSinopticoTabularToPdf() {
                 unidad: { halign: 'center', cellWidth: 15 },
                 comentarios: { cellWidth: 'auto' },
             },
-            // The complex didDrawCell and willDrawCell hooks are no longer needed.
+            willDrawCell: (data) => {
+                if (data.column.dataKey === 'descripcion') {
+                    const level = data.row.raw.level || 0;
+                    const INDENT = 4;
+                    const PADDING = 2;
+                    // Dynamically set left padding for the description cell to make space for tree lines
+                    data.cell.styles.cellPadding.left = PADDING + level * INDENT;
+                }
+            },
+            didDrawCell: (data) => {
+                // We only want to draw lines in the 'description' column, and only for the table body
+                if (data.section === 'body' && data.column.dataKey === 'descripcion') {
+                    const { level, isLast, lineage } = rawData[data.row.index];
+                    if (level === 0) return; // No lines for root element
+
+                    const cell = data.cell;
+                    const x = cell.x;
+                    const y = cell.y;
+                    const INDENT = 4; // Should match the indent in willDrawCell
+                    const PADDING = 2; // Should match the padding in willDrawCell
+
+                    doc.setDrawColor(120); // Set line color to a darker gray
+                    doc.setLineWidth(0.25);
+
+                    // Draw vertical lines for all parent levels
+                    for (let i = 0; i < level; i++) {
+                        // The 'lineage' array tells us if the parent at this level is the last one.
+                        // If it's not the last one, we need to draw a continuous vertical line.
+                        if (lineage[i]) {
+                            const lineX = x + PADDING + i * INDENT - INDENT / 2;
+                            doc.line(lineX, y, lineX, y + cell.height);
+                        }
+                    }
+
+                    // Draw the connector for the current node (e.g., '├─' or '└─')
+                    const connectorY = y + cell.height / 2;
+                    const connectorStartX = x + PADDING + (level - 1) * INDENT - INDENT / 2;
+                    const connectorEndX = connectorStartX + INDENT;
+
+                    doc.line(connectorStartX, connectorY, connectorEndX, connectorY); // Horizontal part
+
+                    if (isLast) {
+                        // If it's the last node, draw a '└' shape
+                        doc.line(connectorStartX, y, connectorStartX, connectorY);
+                    } else {
+                        // If it's not the last node, draw a '├' shape
+                        doc.line(connectorStartX, y, connectorStartX, y + cell.height);
+                    }
+                }
+            },
             didDrawPage: (data) => {
                 // Header
                 doc.setFontSize(18);
