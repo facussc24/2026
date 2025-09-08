@@ -10561,10 +10561,12 @@ async function exportSinopticoTabularToPdf() {
         const TABLE_START_X = PAGE_MARGIN + TREE_COLUMN_WIDTH;
 
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const body = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
+        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
 
-        // Remove the 'descripcion' and 'level' columns as they will be drawn manually
+
+        // Redefine columns for the PDF, including the new description
         const columns = [
+            { header: 'Componente', dataKey: 'descripcion' },
             { header: 'LC/KD', dataKey: 'lc_kd' },
             { header: 'Código', dataKey: 'codigo_pieza' },
             { header: 'Versión', dataKey: 'version' },
@@ -10584,23 +10586,38 @@ async function exportSinopticoTabularToPdf() {
         doc.autoTable({
             columns: columns,
             body: body,
-            startY: 55,
-            margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: TABLE_START_X },
+            startY: 45,
+            margin: { top: 45, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
             styles: {
-                font: 'helvetica', fontSize: 7, cellPadding: 1.5, overflow: 'linebreak', valign: 'middle',
+                font: 'helvetica',
+                fontSize: 6, // Smaller font for more data
+                cellPadding: 1.5,
+                overflow: 'linebreak',
+                valign: 'middle',
             },
             headStyles: {
-                fillColor: '#44546A', textColor: '#FFFFFF', fontStyle: 'bold', halign: 'center', fontSize: 7,
+                fillColor: '#44546A',
+                textColor: '#FFFFFF',
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 6,
+            },
+            columnStyles: {
+                descripcion: { cellWidth: 70, font: 'courier', fontStyle: 'normal' }, // Use a monospaced font for the tree
+                peso: { halign: 'right' },
+                cantidad: { halign: 'right' },
+                piezas_por_vehiculo: { halign: 'center' },
+                comentarios: { cellWidth: 30 }
             },
             didDrawPage: (data) => {
-                // --- Phase 1: Draw Headers & Footers ---
-                doc.setFontSize(18);
+                // --- Draw Headers & Footers ---
+                doc.setFontSize(16);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor('#3B82F6');
                 doc.text('Reporte de Estructura de Producto', PAGE_WIDTH / 2, 15, { align: 'center' });
 
-                if (logoBase64) doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
+                if (logoBase64) doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 25, 12);
 
                 doc.setFontSize(9);
                 doc.setTextColor(100);
@@ -10614,63 +10631,6 @@ async function exportSinopticoTabularToPdf() {
                 doc.setFontSize(8);
                 doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, PAGE_HEIGHT - 10, { align: 'center' });
                 doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, PAGE_HEIGHT - 10);
-
-                // --- Phase 2: Draw Tree Structure (Left Column) ---
-                const table = data.table;
-                doc.setFontSize(8);
-                doc.setTextColor(0, 0, 0);
-
-                // Draw Tree Header
-                doc.setFont('helvetica', 'bold');
-                doc.setFillColor(239, 246, 255); // bg-blue-50
-                doc.rect(PAGE_MARGIN, table.startY, TREE_COLUMN_WIDTH - PAGE_MARGIN, table.head[0].height, 'F');
-                doc.text('Componente', PAGE_MARGIN + 2, table.startY + table.head[0].height / 2, { baseline: 'middle' });
-
-                // Draw Tree Rows
-                table.body.forEach((row, rowIndex) => {
-                    const rowData = flattenedData[row.index];
-                    if (!rowData) return;
-
-                    const { level, isLast, lineage, item } = rowData;
-                    const INDENT = 5;
-                    const PADDING = 2;
-                    const x = PAGE_MARGIN;
-                    const y = row.y;
-                    const cellHeight = row.height;
-
-                    doc.setDrawColor(150, 150, 150);
-                    doc.setLineWidth(0.2);
-
-                    // Draw parent vertical lines
-                    for (let i = 0; i < level; i++) {
-                        if (lineage[i]) {
-                            const lineX = x + PADDING + (i * INDENT) + (INDENT / 2);
-                            doc.line(lineX, y, lineX, y + cellHeight);
-                        }
-                    }
-
-                    const connectorY = y + cellHeight / 2;
-                    const connectorStartX = x + PADDING + ((level - 1) * INDENT) + (INDENT / 2);
-                    const textX = x + PADDING + (level * INDENT);
-                    const connectorEndX = textX - 1;
-
-                    // Draw horizontal connector
-                    if (level > 0) {
-                        doc.line(connectorStartX, connectorY, connectorEndX, connectorY);
-                    }
-
-                    // Draw vertical connector from parent
-                    if (level > 0) {
-                        if (isLast) {
-                            doc.line(connectorStartX, y, connectorStartX, connectorY);
-                        } else {
-                            doc.line(connectorStartX, y, connectorStartX, y + cellHeight);
-                        }
-                    }
-
-                    // Draw node text
-                    doc.text(item.descripcion, textX, y + cellHeight / 2, { baseline: 'middle' });
-                });
             }
         });
 

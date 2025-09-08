@@ -24,5 +24,20 @@
         ]
       }
     ]
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 9080
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    }
   }
 }

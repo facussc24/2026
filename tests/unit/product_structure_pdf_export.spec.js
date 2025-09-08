@@ -4,34 +4,22 @@ import { getFlattenedData } from '../../public/main.js';
 import { appState } from '../../public/main.js';
 import { COLLECTIONS } from '../../public/utils.js';
 
+// Mock the getFlattenedData function.
+jest.mock('../../public/main.js', () => ({
+    ...jest.requireActual('../../public/main.js'),
+    getFlattenedData: jest.fn(),
+}));
+
 describe('prepareDataForPdfAutoTable', () => {
 
-    beforeEach(() => {
-        // Mock the global appState required by getFlattenedData
-        const mockProduct = {
-            docId: 'PROD-TEST',
-            id: 'PROD-TEST',
-            descripcion: 'Producto de Prueba',
-            clienteId: 'CLIENTE-A',
-            estructura: [
-                { // Nivel 0
-                    id: 'node-0', refId: 'PROD-TEST', tipo: 'producto',
-                    children: [
-                        { // Nivel 1
-                            id: 'node-1', refId: 'SEMI-01', tipo: 'semiterminado', quantity: 2,
-                            children: [
-                                { id: 'node-2', refId: 'INSUMO-01', tipo: 'insumo', quantity: 5, comment: 'Comentario de prueba' } // Nivel 2
-                            ]
-                        },
-                        { // Nivel 1 (último hijo)
-                            id: 'node-3', refId: 'INSUMO-02', tipo: 'insumo', quantity: 10
-                        }
-                    ]
-                }
-            ]
-        };
+    let mockCollectionsById;
+    let mockFlattenedData;
 
-        appState.collectionsById = {
+    beforeEach(() => {
+        // Reset mocks and appState before each test
+        getFlattenedData.mockClear();
+
+        mockCollectionsById = {
             [COLLECTIONS.PRODUCTOS]: new Map([['PROD-TEST', { id: 'PROD-TEST', descripcion: 'Producto de Prueba', version: '1.0', proceso: 'ENSAMBLAJE' }]]),
             [COLLECTIONS.SEMITERMINADOS]: new Map([['SEMI-01', { id: 'SEMI-01', descripcion: 'Semiterminado Principal', version: '1.1', proceso: 'MECANIZADO' }]]),
             [COLLECTIONS.INSUMOS]: new Map([
@@ -48,63 +36,84 @@ describe('prepareDataForPdfAutoTable', () => {
             ]),
         };
 
-        // Mock the state for getFlattenedData
-        appState.sinopticoTabularState = {
-            selectedProduct: mockProduct,
-            activeFilters: {
-                niveles: new Set() // No level filters for this test
+        // This mock data now has the CORRECT lineage values to produce the expected tree prefixes.
+        mockFlattenedData = [
+            {
+                node: { id: 'node-0', refId: 'PROD-TEST', tipo: 'producto' },
+                item: mockCollectionsById[COLLECTIONS.PRODUCTOS].get('PROD-TEST'),
+                level: 0, isLast: true, lineage: []
+            },
+            {
+                node: { id: 'node-1', refId: 'SEMI-01', tipo: 'semiterminado', quantity: 2 },
+                item: mockCollectionsById[COLLECTIONS.SEMITERMINADOS].get('SEMI-01'),
+                level: 1, isLast: false, lineage: [] // Corrected
+            },
+            {
+                node: { id: 'node-2', refId: 'INSUMO-01', tipo: 'insumo', quantity: 5, comment: 'Comentario de prueba' },
+                item: mockCollectionsById[COLLECTIONS.INSUMOS].get('INSUMO-01'),
+                level: 2, isLast: true, lineage: [true] // Corrected
+            },
+            {
+                node: { id: 'node-3', refId: 'INSUMO-02', tipo: 'insumo', quantity: 10 },
+                item: mockCollectionsById[COLLECTIONS.INSUMOS].get('INSUMO-02'),
+                level: 1, isLast: true, lineage: [] // Corrected
             }
+        ];
+
+        getFlattenedData.mockReturnValue(mockFlattenedData);
+
+        // Mock the global appState
+        appState.collectionsById = mockCollectionsById;
+        appState.sinopticoTabularState = {
+            selectedProduct: { docId: 'PROD-TEST', id: 'PROD-TEST', descripcion: 'Producto de Prueba' },
         };
     });
 
-    test('should return a single array with combined display and metadata', () => {
+    test('should separate data into body for table and rawData for metadata', () => {
         // --- ARRANGE ---
-        const flattenedData = getFlattenedData(appState.sinopticoTabularState.selectedProduct, new Set());
+        const flattenedData = getFlattenedData(); // Uses the mocked return value
         const product = appState.sinopticoTabularState.selectedProduct;
+        const collections = appState.collectionsById;
 
         // --- ACT ---
-        const result = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
+        const result = prepareDataForPdfAutoTable(flattenedData, collections, product);
 
         // --- ASSERT ---
-        // 1. Check the overall structure and length
-        expect(result).toBeInstanceOf(Array);
-        expect(result).toHaveLength(4);
+        // 1. Check the overall structure
+        expect(result).toHaveProperty('body');
+        expect(result).toHaveProperty('rawData');
+        expect(result.body).toBeInstanceOf(Array);
+        expect(result.rawData).toBeInstanceOf(Array);
+        expect(result.body).toHaveLength(4);
+        expect(result.rawData).toHaveLength(4);
 
-        // 2. Check the combined data in each object
-        const [producto, semi, insumo1, insumo2] = result;
+        // 2. Check the rawData
+        // The implementation now does a deep copy, so we expect the content to be the same.
+        expect(result.rawData).toEqual(mockFlattenedData);
+
+        // 3. Check the body data (formatted for PDF)
+        const [producto, semi, insumo1, insumo2] = result.body;
 
         // Row 1: Producto
-        expect(producto).toHaveProperty('level', 0);
-        expect(producto).toHaveProperty('isLast', true);
-        expect(producto).toHaveProperty('lineage', []);
-        expect(producto).toHaveProperty('descripcion', 'Producto de Prueba');
-        expect(producto).toHaveProperty('version', '1.0');
-        expect(producto).toHaveProperty('proceso', 'Ensamblaje Final');
-        expect(producto).toHaveProperty('cantidad', '1');
+        expect(producto.descripcion).toBe('Producto de Prueba');
+        expect(producto.version).toBe('1.0');
+        expect(producto.proceso).toBe('Ensamblaje Final');
+        expect(producto.cantidad).toBe('1');
 
         // Row 2: Semiterminado
-        expect(semi).toHaveProperty('level', 1);
-        expect(semi).toHaveProperty('isLast', false);
-        expect(semi).toHaveProperty('lineage', [false]);
-        expect(semi).toHaveProperty('descripcion', 'Semiterminado Principal');
-        expect(semi).toHaveProperty('cantidad', '2');
-        expect(semi).toHaveProperty('proceso', 'Mecanizado CNC');
+        expect(semi.descripcion).toBe('├─ Semiterminado Principal');
+        expect(semi.cantidad).toBe('2');
+        expect(semi.proceso).toBe('Mecanizado CNC');
 
         // Row 3: Insumo 1
-        expect(insumo1).toHaveProperty('level', 2);
-        expect(insumo1).toHaveProperty('isLast', true);
-        expect(insumo1).toHaveProperty('lineage', [false, true]);
-        expect(insumo1).toHaveProperty('descripcion', 'Insumo A');
-        expect(insumo1).toHaveProperty('cantidad', '5');
-        expect(insumo1).toHaveProperty('unidad', 'kg');
-        expect(insumo1).toHaveProperty('comentarios', 'Comentario de prueba');
+        expect(insumo1.descripcion).toBe('│  └─ Insumo A');
+        expect(insumo1.cantidad).toBe('5');
+        expect(insumo1.unidad).toBe('kg');
+        expect(insumo1.comentarios).toBe('Comentario de prueba');
 
         // Row 4: Insumo 2
-        expect(insumo2).toHaveProperty('level', 1);
-        expect(insumo2).toHaveProperty('isLast', true);
-        expect(insumo2).toHaveProperty('lineage', [false]);
-        expect(insumo2).toHaveProperty('descripcion', 'Insumo B');
-        expect(insumo2).toHaveProperty('cantidad', '10');
-        expect(insumo2).toHaveProperty('unidad', 'm');
+        expect(insumo2.descripcion).toBe('└─ Insumo B');
+        expect(insumo2.cantidad).toBe('10');
+        expect(insumo2.unidad).toBe('m');
     });
 });
