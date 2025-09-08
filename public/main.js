@@ -10555,26 +10555,28 @@ async function exportSinopticoTabularToPdf() {
         const logoBase64 = await getLogoBase64();
         const PAGE_MARGIN = 10;
         const PAGE_WIDTH = doc.internal.pageSize.width;
+        const PAGE_HEIGHT = doc.internal.pageSize.height;
         const NA = 'N/A';
+        const TREE_COLUMN_WIDTH = 80; // Reserve 80mm for the tree on the left
+        const TABLE_START_X = PAGE_MARGIN + TREE_COLUMN_WIDTH;
 
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
         const body = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
 
+        // Remove the 'descripcion' and 'level' columns as they will be drawn manually
         const columns = [
-            { header: 'Descripción', dataKey: 'descripcion' },
-            { header: 'Nivel', dataKey: 'levelForDisplay' },
-            { header: 'LC / KD', dataKey: 'lc_kd' },
-            { header: 'Código de pieza', dataKey: 'codigo_pieza' },
+            { header: 'LC/KD', dataKey: 'lc_kd' },
+            { header: 'Código', dataKey: 'codigo_pieza' },
             { header: 'Versión', dataKey: 'version' },
             { header: 'Proceso', dataKey: 'proceso' },
             { header: 'Aspecto', dataKey: 'aspecto' },
             { header: 'Peso (gr)', dataKey: 'peso' },
             { header: 'Color', dataKey: 'color' },
-            { header: 'Piezas por Vehículo (Un.)', dataKey: 'piezas_por_vehiculo' },
+            { header: 'Pzas/Vh', dataKey: 'piezas_por_vehiculo' },
             { header: 'Material', dataKey: 'material' },
-            { header: 'Código Materia Prima', dataKey: 'codigo_materia_prima' },
-            { header: 'Proveedor Materia Prima', dataKey: 'proveedor_materia_prima' },
-            { header: 'Cantidad / Pieza', dataKey: 'cantidad' },
+            { header: 'Cód. Mat. Prima', dataKey: 'codigo_materia_prima' },
+            { header: 'Prov. Mat. Prima', dataKey: 'proveedor_materia_prima' },
+            { header: 'Cant/Pza', dataKey: 'cantidad' },
             { header: 'Unidad', dataKey: 'unidad' },
             { header: 'Comentarios', dataKey: 'comentarios' },
         ];
@@ -10583,90 +10585,22 @@ async function exportSinopticoTabularToPdf() {
             columns: columns,
             body: body,
             startY: 55,
-            margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
+            margin: { top: 55, right: PAGE_MARGIN, bottom: 20, left: TABLE_START_X },
             theme: 'grid',
             styles: {
-                font: 'helvetica',
-                fontSize: 8,
-                cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
-                overflow: 'linebreak',
-                valign: 'middle',
+                font: 'helvetica', fontSize: 7, cellPadding: 1.5, overflow: 'linebreak', valign: 'middle',
             },
             headStyles: {
-                fillColor: '#44546A',
-                textColor: '#FFFFFF',
-                fontStyle: 'bold',
-                halign: 'center',
-            },
-            columnStyles: {
-                level: { halign: 'center', cellWidth: 10 },
-                descripcion: { cellWidth: 60 },
-                codigo_pieza: { cellWidth: 20 },
-                version: { halign: 'center', cellWidth: 15 },
-                proceso: { cellWidth: 20 },
-                cantidad: { halign: 'right', cellWidth: 15 },
-                unidad: { halign: 'center', cellWidth: 15 },
-                comentarios: { cellWidth: 'auto' },
-            },
-            willDrawCell: (data) => {
-                if (data.column.dataKey === 'descripcion') {
-                    const level = data.row.raw.level || 0;
-                    const INDENT = 4;
-                    const PADDING = 2;
-                    data.cell.styles.cellPadding.left = PADDING + level * INDENT;
-                }
-            },
-            didDrawCell: (data) => {
-                // Dibuja las líneas de conexión del árbol jerárquico.
-                if (data.section === 'body' && data.column.dataKey === 'descripcion') {
-                    const { level, isLast, lineage } = data.row.raw;
-                    if (level === 0 || !lineage) return;
-
-                    const cell = data.cell;
-                    const x = cell.x;
-                    const y = cell.y;
-                    const INDENT = 7; // Aumentado para más espacio
-                    const PADDING = 2; // Relleno izquierdo de la celda
-
-                    doc.setDrawColor(100, 100, 100); // Color más oscuro
-                    doc.setLineWidth(0.3); // Línea más gruesa
-
-                    // Dibuja las líneas verticales para los niveles padres.
-                    for (let i = 0; i < level; i++) {
-                        if (lineage[i]) {
-                            const lineX = x + PADDING + (i * INDENT) + (INDENT / 2);
-                            doc.line(lineX, y, lineX, y + cell.height);
-                        }
-                    }
-
-                    const connectorY = y + cell.height / 2;
-                    // Comienza desde la línea vertical del padre.
-                    const connectorStartX = x + PADDING + ((level - 1) * INDENT) + (INDENT / 2);
-                    // Termina justo antes del inicio del texto/ícono del nodo actual.
-                    const connectorEndX = x + PADDING + (level * INDENT);
-
-                    // Dibuja la línea horizontal que conecta con el nodo actual.
-                    doc.line(connectorStartX, connectorY, connectorEndX, connectorY);
-
-                    // Dibuja la conexión vertical desde el padre.
-                    if (isLast) {
-                        // Si es el último, la línea llega solo hasta la mitad.
-                        doc.line(connectorStartX, y, connectorStartX, connectorY);
-                    } else {
-                        // Si no, la línea continúa hacia abajo para el siguiente hermano.
-                        doc.line(connectorStartX, y, connectorStartX, y + cell.height);
-                    }
-                }
+                fillColor: '#44546A', textColor: '#FFFFFF', fontStyle: 'bold', halign: 'center', fontSize: 7,
             },
             didDrawPage: (data) => {
+                // --- Phase 1: Draw Headers & Footers ---
                 doc.setFontSize(18);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor('#3B82F6');
                 doc.text('Reporte de Estructura de Producto', PAGE_WIDTH / 2, 15, { align: 'center' });
 
-                if (logoBase64) {
-                    doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
-                }
+                if (logoBase64) doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 30, 15);
 
                 doc.setFontSize(9);
                 doc.setTextColor(100);
@@ -10678,8 +10612,65 @@ async function exportSinopticoTabularToPdf() {
 
                 const pageCount = doc.internal.getNumberOfPages();
                 doc.setFontSize(8);
-                doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, doc.internal.pageSize.height - 10, { align: 'center' });
-                doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, doc.internal.pageSize.height - 10);
+                doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, PAGE_HEIGHT - 10, { align: 'center' });
+                doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, PAGE_HEIGHT - 10);
+
+                // --- Phase 2: Draw Tree Structure (Left Column) ---
+                const table = data.table;
+                doc.setFontSize(8);
+                doc.setTextColor(0, 0, 0);
+
+                // Draw Tree Header
+                doc.setFont('helvetica', 'bold');
+                doc.setFillColor(239, 246, 255); // bg-blue-50
+                doc.rect(PAGE_MARGIN, table.startY, TREE_COLUMN_WIDTH - PAGE_MARGIN, table.head[0].height, 'F');
+                doc.text('Componente', PAGE_MARGIN + 2, table.startY + table.head[0].height / 2, { baseline: 'middle' });
+
+                // Draw Tree Rows
+                table.body.forEach((row, rowIndex) => {
+                    const rowData = flattenedData[row.index];
+                    if (!rowData) return;
+
+                    const { level, isLast, lineage, item } = rowData;
+                    const INDENT = 5;
+                    const PADDING = 2;
+                    const x = PAGE_MARGIN;
+                    const y = row.y;
+                    const cellHeight = row.height;
+
+                    doc.setDrawColor(150, 150, 150);
+                    doc.setLineWidth(0.2);
+
+                    // Draw parent vertical lines
+                    for (let i = 0; i < level; i++) {
+                        if (lineage[i]) {
+                            const lineX = x + PADDING + (i * INDENT) + (INDENT / 2);
+                            doc.line(lineX, y, lineX, y + cellHeight);
+                        }
+                    }
+
+                    const connectorY = y + cellHeight / 2;
+                    const connectorStartX = x + PADDING + ((level - 1) * INDENT) + (INDENT / 2);
+                    const textX = x + PADDING + (level * INDENT);
+                    const connectorEndX = textX - 1;
+
+                    // Draw horizontal connector
+                    if (level > 0) {
+                        doc.line(connectorStartX, connectorY, connectorEndX, connectorY);
+                    }
+
+                    // Draw vertical connector from parent
+                    if (level > 0) {
+                        if (isLast) {
+                            doc.line(connectorStartX, y, connectorStartX, connectorY);
+                        } else {
+                            doc.line(connectorStartX, y, connectorStartX, y + cellHeight);
+                        }
+                    }
+
+                    // Draw node text
+                    doc.text(item.descripcion, textX, y + cellHeight / 2, { baseline: 'middle' });
+                });
             }
         });
 
