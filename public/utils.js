@@ -158,14 +158,19 @@ export function flattenEstructura(nodes) {
  * @returns {{body: Array<Object>}} - An object containing the body as an array of processed objects.
  */
 export function prepareDataForPdfAutoTable(flattenedData, collectionsById, product) {
+    // Create a true copy of the original data to be returned as `rawData`.
+    // JSON stringify/parse is a simple way to do a deep copy.
+    const rawData = JSON.parse(JSON.stringify(flattenedData));
     const body = [];
     const NA = 'N/A';
 
-    // Helper to ensure value is a printable string, avoiding "null" or "undefined".
     const toStr = (value) => String(value ?? NA);
 
     flattenedData.forEach(row => {
         const { node, item, level, isLast, lineage } = row;
+
+        // Note: The original `rawData.push` line was removed as it was incorrect.
+        // We now rely on the deep copy created at the start of the function.
 
         let proceso = NA;
         if (item.proceso && collectionsById[COLLECTIONS.PROCESOS]) {
@@ -187,18 +192,19 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById, produ
 
         const cantidad = node.tipo === 'producto' ? 1 : node.quantity;
 
-        // Combine display data and metadata into a single object.
-        // BUGFIX: Every value passed to the body must be a string. The jsPDF library
-        // throws an "Invalid arguments" error if it receives null or undefined.
-        // The `toStr` helper ensures all data is safely converted.
+        // --- START: Tree Prefix Generation ---
+        // This logic is now moved here from the HTML rendering to be used in the PDF.
+        // It uses proper Unicode characters for tree lines.
+        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│  ' : '   ').join('');
+        if (level > 0) {
+            prefix += isLast ? '└─ ' : '├─ ';
+        }
+        // --- END: Tree Prefix Generation ---
+
         body.push({
-            // Metadata for drawing hooks
-            level,
-            isLast,
-            lineage,
-            // Display data
-            levelForDisplay: toStr(level),
-            descripcion: toStr(item.descripcion || item.nombre),
+            // The description now includes the tree structure.
+            descripcion: prefix + toStr(item.descripcion || item.nombre),
+            levelForDisplay: toStr(level), // Keep level for potential filtering, but it's not drawn.
             lc_kd: toStr(item.lc_kd),
             codigo_pieza: toStr(item.codigo_pieza),
             version: toStr(item.version),
@@ -212,9 +218,9 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById, produ
             proveedor_materia_prima: toStr(proveedor_materia_prima),
             cantidad: toStr(cantidad),
             unidad: toStr(unidad),
-            comentarios: node.comment ? String(node.comment) : '', // Comments can be an empty string
+            comentarios: node.comment ? String(node.comment) : '',
         });
     });
 
-    return body;
+    return { body, rawData };
 }
