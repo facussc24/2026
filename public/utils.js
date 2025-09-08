@@ -151,7 +151,7 @@ export function flattenEstructura(nodes) {
 }
 
 /**
- * Transforms flattened BOM data into a format suitable for jspdf-autotable.
+ * Transforms flattened Product Structure data into a format suitable for jspdf-autotable.
  * This version returns an array of objects to preserve metadata for custom drawing.
  * @param {Array<Object>} flattenedData - The array of data from getFlattenedData.
  * @param {Object} collectionsById - The map of collections for resolving IDs.

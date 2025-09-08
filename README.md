@@ -35,12 +35,12 @@ El proyecto ha evolucionado desde un prototipo hasta convertirse en una aplicaci
 - **Selectores de Búsqueda Inteligentes:** Se reemplazaron los campos de texto libre por modales de búsqueda controlados, eliminando errores de tipeo y estandarizando la entrada de datos.
 - **Gestión Avanzada de Árboles de Producto:** Interfaz con Drag and Drop para construir y modificar las estructuras jerárquicas de los productos.
 - **Vista Sinóptica Mejorada:** Una vista interactiva para explorar la estructura completa de todos los productos, con edición de cantidades en contexto y diferenciación visual de componentes.
-- **Exportación de BOM a PDF Profesional:** Se ha implementado una función de exportación que genera un listado de materiales (BOM) en formato PDF tabular. El reporte se presenta en formato horizontal e incluye columnas detalladas para Nivel, Descripción, Código, Cantidad y Unidad de Medida.
+- **Exportación de Estructura de Producto a PDF Profesional:** Se ha implementado una función de exportación que genera un listado de materiales (Estructura de Producto) en formato PDF tabular. El reporte se presenta en formato horizontal e incluye columnas detalladas para Nivel, Descripción, Código, Cantidad y Unidad de Medida.
 - **Próximamente: Flujograma de Procesos:** Se está implementando una nueva vista dedicada que leerá la información de los árboles de producto para generar automáticamente un flujograma visual del proceso de fabricación completo.
 
 ### Lecciones Aprendidas: Depuración del Módulo de Exportación a PDF
 
-Durante el desarrollo de la funcionalidad de exportación de la lista de materiales (BOM) a PDF, se encontró y solucionó un error persistente que impedía la generación del documento. La lección aprendida es crucial para futuras implementaciones que involucren librerías de generación de archivos.
+Durante el desarrollo de la funcionalidad de exportación de la lista de materiales (Estructura de Producto) a PDF, se encontró y solucionó un error persistente que impedía la generación del documento. La lección aprendida es crucial para futuras implementaciones que involucren librerías de generación de archivos.
 
 -   **El Problema:** Al intentar generar el PDF, la consola arrojaba un error `Error: Invalid arguments passed to jsPDF.text`. Este error indicaba que la librería `jspdf-autotable` estaba intentando renderizar un valor que no era una cadena de texto (string) o un número, como `undefined` o un objeto.
 
