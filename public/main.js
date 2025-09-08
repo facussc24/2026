@@ -10004,66 +10004,106 @@ function runSinopticoLogic() {
 export const getFlattenedData = (product, levelFilters) => {
     if (!product || !product.estructura) return [];
 
-    // Pass 1: Tag every node with its original level in the hierarchy.
-    // This is crucial for filtering, as the display level might change.
-    const tagLevels = (nodes, level) => {
-        if (!nodes) return [];
-        return nodes.map(node => {
-            const newNode = { ...node, originalLevel: level };
-            if (node.children) {
-                newNode.children = tagLevels(node.children, level + 1);
-            }
-            return newNode;
-        });
-    };
-    const taggedStructure = tagLevels(product.estructura, 0);
+    const useFilter = levelFilters && levelFilters.size > 0;
 
-    // Pass 2: Recursively flatten the tree. If filters are active, apply them
-    // during the flattening process. This ensures that the `lineage` and `displayLevel`
-    // are calculated correctly based on the final, filtered structure.
-    const flattenAndFilter = (nodes, displayLevel, lineage) => {
-        if (!nodes) return [];
-
-        let result = [];
-        const useFilter = levelFilters && levelFilters.size > 0;
-
-        // Filter nodes at the current level *before* processing them.
-        const nodesToProcess = useFilter
-            ? nodes.filter(node => levelFilters.has(node.originalLevel.toString()))
-            : nodes;
-
-        nodesToProcess.forEach((node, index) => {
-            const isLast = index === nodesToProcess.length - 1;
-            const collectionName = node.tipo + 's';
-            const item = appState.collectionsById[collectionName]?.get(node.refId);
-
-            if (item) {
-                // This node is visible, so we add it to the result list.
-                result.push({ node, item, level: displayLevel, isLast, lineage });
-
-                // Recursively process its children, incrementing the display level.
-                if (node.children) {
-                    result.push(...flattenAndFilter(node.children, displayLevel + 1, [...lineage, !isLast]));
-                }
-            }
-        });
-
-        // Handle "promoted" children from nodes that were filtered out at this level.
-        if (useFilter) {
-            const filteredOutNodes = nodes.filter(node => !levelFilters.has(node.originalLevel.toString()));
-            filteredOutNodes.forEach(node => {
-                if (node.children) {
-                    // These children are "promoted". They are processed at the current
-                    // displayLevel with the current lineage, as their parent is invisible.
-                    result.push(...flattenAndFilter(node.children, displayLevel, lineage));
+    // --- Sub-function to flatten the entire tree, adding originalLevel ---
+    const getUnfilteredFlatList = () => {
+        const list = [];
+        const flatten = (nodes, level, lineage) => {
+            if (!nodes) return;
+            nodes.forEach((node, index) => {
+                const isLast = index === nodes.length - 1;
+                const collectionName = node.tipo + 's';
+                const item = appState.collectionsById[collectionName]?.get(node.refId);
+                if (item) {
+                    node.originalLevel = level; // Tag node with its original level
+                    list.push({ node, item, level, isLast, lineage });
+                    if (node.children) {
+                        flatten(node.children, level + 1, [...lineage, !isLast]);
+                    }
                 }
             });
-        }
-
-        return result;
+        };
+        flatten(product.estructura, 0, []);
+        return list;
     };
 
-    return flattenAndFilter(taggedStructure, 0, []);
+    // If no filters are applied, return the simple flattened list.
+    if (!useFilter) {
+        return getUnfilteredFlatList();
+    }
+
+    // --- Logic for when filters ARE applied ---
+
+    // 1. Get a simple list of all nodes with their original levels.
+    const allNodesWithOriginalLevel = [];
+    const recordOriginalLevels = (nodes, level) => {
+        nodes.forEach(node => {
+            node.originalLevel = level;
+            allNodesWithOriginalLevel.push(node);
+            if (node.children) {
+                recordOriginalLevels(node.children, level + 1);
+            }
+        });
+    };
+    recordOriginalLevels(product.estructura, 0);
+
+    // 2. Determine which nodes will be visible based on the filter.
+    const visibleNodeIds = new Set(
+        allNodesWithOriginalLevel
+            .filter(node => levelFilters.has(node.originalLevel.toString()))
+            .map(node => node.id)
+    );
+
+    // 3. Recursively build the final list, calculating new visual levels and properties.
+    const finalList = [];
+    const buildFinalList = (nodes, currentVisualLevel, parentLineage) => {
+        // From the current set of siblings, find which ones are visible.
+        const visibleSiblings = nodes.filter(sibling => visibleNodeIds.has(sibling.id));
+
+        // Process each of the original siblings.
+        nodes.forEach(node => {
+            const isVisible = visibleNodeIds.has(node.id);
+
+            if (isVisible) {
+                const collectionName = node.tipo + 's';
+                const item = appState.collectionsById[collectionName]?.get(node.refId);
+
+                if (item) {
+                    // A node is the "last" if it's the last one in the list of *visible* siblings.
+                    const isLast = node.id === visibleSiblings[visibleSiblings.length - 1]?.id;
+
+                    finalList.push({
+                        node: node, // The node object now correctly includes .originalLevel
+                        item: item,
+                        level: currentVisualLevel, // This is the new, calculated visual level
+                        isLast: isLast,
+                        lineage: parentLineage,
+                    });
+                }
+            }
+
+            // Always recurse into children.
+            if (node.children && node.children.length > 0) {
+                // If the current node was visible, its children are one level deeper visually.
+                const nextVisualLevel = isVisible ? currentVisualLevel + 1 : currentVisualLevel;
+
+                // The lineage array tracks the vertical lines. A "true" means a line should be drawn.
+                // This depends on the visibility of the parent and whether it's the last visible sibling.
+                let nextLineage = parentLineage;
+                if (isVisible) {
+                    const lastVisibleParent = visibleSiblings[visibleSiblings.length - 1];
+                    const isParentLast = node.id === lastVisibleParent?.id;
+                    nextLineage = [...parentLineage, !isParentLast];
+                }
+
+                buildFinalList(node.children, nextVisualLevel, nextLineage);
+            }
+        });
+    };
+
+    buildFinalList(product.estructura, 0, []);
+    return finalList;
 };
 
 export function runSinopticoTabularLogic() {
@@ -10600,8 +10640,10 @@ async function exportSinopticoTabularToPdf() {
                     }
 
                     const connectorY = y + cell.height / 2;
+                    // Comienza desde la línea vertical del padre.
                     const connectorStartX = x + PADDING + ((level - 1) * INDENT) + (INDENT / 2);
-                    const connectorEndX = connectorStartX + INDENT;
+                    // Termina justo antes del inicio del texto/ícono del nodo actual.
+                    const connectorEndX = x + PADDING + (level * INDENT);
 
                     // Dibuja la línea horizontal que conecta con el nodo actual.
                     doc.line(connectorStartX, connectorY, connectorEndX, connectorY);
