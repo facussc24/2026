@@ -1,0 +1,70 @@
+body {
+    font-family: sans-serif;
+    margin: 20px;
+    background-color: #f4f4f4;
+}
+
+h1 {
+    text-align: center;
+}
+
+.demo-container {
+    display: flex;
+    max-width: 1200px;
+    margin: 0 auto;
+    border: 1px solid #ccc;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+.image-container {
+    position: relative;
+    flex-basis: 70%;
+}
+
+.image-container img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+.part-info-container {
+    flex-basis: 30%;
+    padding: 20px;
+    background-color: #fff;
+    border-left: 1px solid #ccc;
+    transition: opacity 0.3s ease;
+}
+
+.part-info-container.is-updating {
+    opacity: 0;
+}
+
+#part-info h2 {
+    margin-top: 0;
+}
+
+#part-info img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 15px;
+}
+
+/* Hotspot styles */
+.hotspot {
+    fill: rgba(0, 119, 255, 0.5); /* Semi-transparent blue */
+    stroke: #0056b3;
+    stroke-width: 2px;
+    cursor: pointer;
+    transition: fill 0.3s ease;
+}
+
+.hotspot:hover {
+    fill: rgba(255, 165, 0, 0.7); /* Brighter orange on hover */
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .demo-container {
+        flex-direction: column;
+    }
+}
