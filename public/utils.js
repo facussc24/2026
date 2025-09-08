@@ -157,9 +157,8 @@ export function flattenEstructura(nodes) {
  * @param {Object} collectionsById - The map of collections for resolving IDs.
  * @returns {{body: Array<Object>}} - An object containing the body as an array of processed objects.
  */
-export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
+export function prepareDataForPdfAutoTable(flattenedData, collectionsById, product) {
     const body = [];
-    const rawData = []; // This will hold the metadata for the draw hooks
 
     flattenedData.forEach(row => {
         const { node, item, level, isLast, lineage } = row;
@@ -177,30 +176,38 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById) {
             unidad = unidadData ? unidadData.id : item.unidad_medida;
         }
 
+        let proveedor_materia_prima = NA;
+        if (node.tipo === 'insumo' && item.proveedor_materia_prima && collectionsById[COLLECTIONS.PROVEEDORES]) {
+            const provMP = collectionsById[COLLECTIONS.PROVEEDORES].get(item.proveedor_materia_prima);
+            proveedor_materia_prima = provMP ? provMP.descripcion : item.proveedor_materia_prima;
+        }
+
         const cantidad = node.tipo === 'producto' ? 1 : (node.quantity ?? NA);
 
-        // This object contains ONLY what will be displayed in the table.
-        // All values are cast to strings to prevent jsPDF errors.
-        const displayRow = {
-            level: String(level),
+        // Combine display data and metadata into a single object.
+        body.push({
+            // Metadata for drawing hooks
+            level,
+            isLast,
+            lineage,
+            // Display data (cast to string for safety)
             descripcion: String(item.descripcion || item.nombre || ''),
-            codigo: String(item.id || NA),
+            lc_kd: String(item.lc_kd || NA),
+            codigo_pieza: String(item.codigo_pieza || NA),
             version: String(item.version || NA),
             proceso: String(proceso),
+            aspecto: String(item.aspecto || NA),
+            peso: String(item.peso_gr || NA),
+            color: String(product?.color || NA),
+            piezas_por_vehiculo: String(product?.piezas_por_vehiculo || NA),
+            material: String(product?.material_separar ? 'Sí' : 'No'),
+            codigo_materia_prima: String(item.codigo_materia_prima || NA),
+            proveedor_materia_prima,
             cantidad: String(cantidad),
             unidad: String(unidad),
             comentarios: String(node.comment || ''),
-        };
-        body.push(displayRow);
-
-        // This object contains the metadata needed for custom drawing.
-        const metadataRow = {
-            level,
-            isLast,
-            lineage
-        };
-        rawData.push(metadataRow);
+        });
     });
 
-    return { body, rawData };
+    return body;
 }
