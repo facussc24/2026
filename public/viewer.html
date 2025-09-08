@@ -3,69 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizador de Demo de Hotspots</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="viewer.css">
+    <title>Demostración Interactiva de Vehículo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #canvas-container {
+            position: relative;
+            width: fit-content;
+        }
+        #viewer-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        #info-panel {
+            transition: all 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .info-content-item {
+             animation: fadeIn 0.5s ease-in-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
 </head>
-<body>
+<body class="bg-gray-900 text-white font-sans overflow-hidden">
 
-    <div class="container mt-5">
-        <h1 class="text-center mb-4">Demostración Interactiva de Piezas</h1>
-
-        <div class="card">
-            <div class="card-body text-center">
-                <div class="image-container mx-auto">
-                    <img id="vehicle-image" src="Maxus.jpg" usemap="#vehicle-map" class="img-fluid">
-
-                    <!--
-                        INSTRUCCIONES:
-                        1. Vaya al "Editor de Hotspots".
-                        2. Cree las zonas deseadas y haga clic en "Obtener Código HTML".
-                        3. Copie el código <map>...</map> completo.
-                        4. Pegue ese código aquí debajo, reemplazando este comentario y el <map> de ejemplo.
-                    -->
-                    <map name="vehicle-map">
-                        <!-- Pegue aquí el código del editor -->
-                        <area shape="rect" coords="381,288,514,367" href="#" title="Ejemplo: Capó Delantero">
-                    </map>
-                </div>
+    <div class="flex flex-col lg:flex-row h-screen">
+        <!-- Main Content: Image and Canvas -->
+        <main class="flex-grow flex flex-col items-center justify-center p-4 lg:p-8 bg-black relative">
+            <div class="absolute top-4 left-4">
+                <label for="json-upload" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg cursor-pointer transition-colors shadow-lg">
+                    Cargar Configuración (.json)
+                </label>
+                <input type="file" id="json-upload" class="hidden" accept=".json">
             </div>
-            <div class="card-footer text-muted">
-                Pase el cursor sobre las áreas del vehículo para ver el título. Para definir nuevas áreas, use el <a href="editor.html" target="_blank">Editor de Hotspots</a>.
+            <div id="canvas-container" class="mx-auto shadow-2xl rounded-lg overflow-hidden border-4 border-gray-700">
+                <img id="vehicle-image" src="Maxus.jpg" alt="Vehículo" class="block max-w-full h-auto" style="max-height: 85vh;">
+                <canvas id="viewer-canvas"></canvas>
             </div>
-        </div>
+            <p id="initial-message" class="mt-4 text-gray-400">Por favor, cargue un archivo `hotspots.json` creado con el editor para comenzar la demostración.</p>
+        </main>
+
+        <!-- Sidebar: Information Panel -->
+        <aside id="info-panel" class="w-full lg:w-1/3 xl:w-1/4 bg-gray-800 p-8 shadow-lg overflow-y-auto flex flex-col justify-center transform lg:translate-x-0">
+            <div id="info-content">
+                <h2 class="text-3xl font-bold text-blue-400 border-b-2 border-blue-500 pb-2 mb-6">Demostración Interactiva</h2>
+                <p class="text-gray-300">Pase el cursor sobre una zona activa en la imagen después de cargar un archivo de configuración.</p>
+                <hr class="border-gray-600 my-6">
+                <p class="text-sm text-gray-500">Para crear o modificar zonas, use el <a href="editor.html" target="_blank" class="text-blue-400 hover:underline">Editor de Hotspots</a>.</p>
+            </div>
+        </aside>
     </div>
 
-    <!-- jQuery from a CSP-approved CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-
-    <!-- Maphilight Plugin from a CSP-approved CDN for hover effects -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/maphilight/1.4.0/jquery.maphilight.min.js"></script>
-
-    <script>
-        $(function() {
-            // Initialize the maphilight plugin
-            $('#vehicle-image').maphilight({
-                fillColor: 'FFFF00',
-                fillOpacity: 0.4,
-                strokeColor: 'FFFF00',
-                strokeOpacity: 0.8,
-                strokeWidth: 2,
-                fade: true,
-                alwaysOn: false,
-                neverOn: false,
-                groupBy: false,
-                wrapClass: true,
-                shadow: false,
-                shadowX: 0,
-                shadowY: 0,
-                shadowRadius: 6,
-                shadowColor: '000000',
-                shadowOpacity: 0.8,
-                shadowPosition: 'outside',
-                shadowFrom: false
-            });
-        });
-    </script>
+    <script src="viewer.js"></script>
 </body>
 </html>
