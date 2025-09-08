@@ -10568,6 +10568,54 @@ async function exportSinopticoTabularToPdf() {
                 unidad: { halign: 'center', cellWidth: 15 },
                 comentarios: { cellWidth: 'auto' },
             },
+            willDrawCell: (data) => {
+                if (data.column.dataKey === 'descripcion') {
+                    const level = data.row.raw.level || 0;
+                    const INDENT = 4;
+                    const PADDING = 2;
+                    data.cell.styles.cellPadding.left = PADDING + level * INDENT;
+                }
+            },
+            didDrawCell: (data) => {
+                // Dibuja las líneas de conexión del árbol jerárquico.
+                if (data.section === 'body' && data.column.dataKey === 'descripcion') {
+                    const { level, isLast, lineage } = data.row.raw;
+                    if (level === 0 || !lineage) return;
+
+                    const cell = data.cell;
+                    const x = cell.x;
+                    const y = cell.y;
+                    const INDENT = 7; // Aumentado para más espacio
+                    const PADDING = 2; // Relleno izquierdo de la celda
+
+                    doc.setDrawColor(100, 100, 100); // Color más oscuro
+                    doc.setLineWidth(0.3); // Línea más gruesa
+
+                    // Dibuja las líneas verticales para los niveles padres.
+                    for (let i = 0; i < level; i++) {
+                        if (lineage[i]) {
+                            const lineX = x + PADDING + (i * INDENT) + (INDENT / 2);
+                            doc.line(lineX, y, lineX, y + cell.height);
+                        }
+                    }
+
+                    const connectorY = y + cell.height / 2;
+                    const connectorStartX = x + PADDING + ((level - 1) * INDENT) + (INDENT / 2);
+                    const connectorEndX = connectorStartX + INDENT;
+
+                    // Dibuja la línea horizontal que conecta con el nodo actual.
+                    doc.line(connectorStartX, connectorY, connectorEndX, connectorY);
+
+                    // Dibuja la conexión vertical desde el padre.
+                    if (isLast) {
+                        // Si es el último, la línea llega solo hasta la mitad.
+                        doc.line(connectorStartX, y, connectorStartX, connectorY);
+                    } else {
+                        // Si no, la línea continúa hacia abajo para el siguiente hermano.
+                        doc.line(connectorStartX, y, connectorStartX, y + cell.height);
+                    }
+                }
+            },
             didDrawPage: (data) => {
                 doc.setFontSize(18);
                 doc.setFont('helvetica', 'bold');

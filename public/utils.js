@@ -187,30 +187,18 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById, produ
 
         const cantidad = node.tipo === 'producto' ? 1 : node.quantity;
 
-        // --- HIERARCHY PREFIX ---
-        // This is the new logic to create the text-based tree structure.
-        let prefix = '';
-        if (level > 0 && lineage) {
-            // The `lineage` array tells us if an ancestor was the last of its siblings.
-            // `true` means the ancestor was NOT the last, so we need a continuing line `│`.
-            // `false` means it WAS the last, so we just need empty space.
-            prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│   ' : '    ').join('');
-            prefix += isLast ? '└── ' : '├── ';
-        }
-
         // Combine display data and metadata into a single object.
         // BUGFIX: Every value passed to the body must be a string. The jsPDF library
         // throws an "Invalid arguments" error if it receives null or undefined.
         // The `toStr` helper ensures all data is safely converted.
         body.push({
-            // Metadata for drawing hooks (kept for potential future use, but not for drawing)
+            // Metadata for drawing hooks
             level,
             isLast,
             lineage,
             // Display data
             levelForDisplay: toStr(level),
-            // The description now includes the text-based tree structure.
-            descripcion: prefix + toStr(item.descripcion || item.nombre),
+            descripcion: toStr(item.descripcion || item.nombre),
             lc_kd: toStr(item.lc_kd),
             codigo_pieza: toStr(item.codigo_pieza),
             version: toStr(item.version),
