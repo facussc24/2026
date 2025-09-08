@@ -57,7 +57,7 @@ describe('prepareDataForPdfAutoTable', () => {
         };
     });
 
-    test('should correctly format data and add hierarchy prefixes to descriptions', () => {
+    test('should return a single array with combined display and metadata', () => {
         // --- ARRANGE ---
         const flattenedData = getFlattenedData(appState.sinopticoTabularState.selectedProduct, new Set());
         const product = appState.sinopticoTabularState.selectedProduct;
@@ -70,43 +70,40 @@ describe('prepareDataForPdfAutoTable', () => {
         expect(result).toBeInstanceOf(Array);
         expect(result).toHaveLength(4);
 
-        // 2. Check the combined data in each object, focusing on the prefixed description
+        // 2. Check the combined data in each object
         const [producto, semi, insumo1, insumo2] = result;
 
-        // Row 1: Producto (Level 0, no prefix)
+        // Row 1: Producto
         expect(producto).toHaveProperty('level', 0);
+        expect(producto).toHaveProperty('isLast', true);
+        expect(producto).toHaveProperty('lineage', []);
         expect(producto).toHaveProperty('descripcion', 'Producto de Prueba');
         expect(producto).toHaveProperty('version', '1.0');
         expect(producto).toHaveProperty('proceso', 'Ensamblaje Final');
         expect(producto).toHaveProperty('cantidad', '1');
 
-        // Row 2: Semiterminado (Level 1, first child)
+        // Row 2: Semiterminado
         expect(semi).toHaveProperty('level', 1);
         expect(semi).toHaveProperty('isLast', false);
-        // Lineage [false] means its parent (the product) was the last child in its list (which is true).
-        // The prefix should be '    ├── '
-        expect(semi).toHaveProperty('descripcion', '    ├── Semiterminado Principal');
+        expect(semi).toHaveProperty('lineage', [false]);
+        expect(semi).toHaveProperty('descripcion', 'Semiterminado Principal');
         expect(semi).toHaveProperty('cantidad', '2');
         expect(semi).toHaveProperty('proceso', 'Mecanizado CNC');
 
-        // Row 3: Insumo 1 (Level 2, only child of the semiterminado)
+        // Row 3: Insumo 1
         expect(insumo1).toHaveProperty('level', 2);
         expect(insumo1).toHaveProperty('isLast', true);
-        // Lineage [false, true] means:
-        // - Parent's parent (product) was a last child (no │).
-        // - Parent (semi) was NOT a last child (so, │).
-        // The prefix should be '    │   └── '
-        expect(insumo1).toHaveProperty('descripcion', '    │   └── Insumo A');
+        expect(insumo1).toHaveProperty('lineage', [false, true]);
+        expect(insumo1).toHaveProperty('descripcion', 'Insumo A');
         expect(insumo1).toHaveProperty('cantidad', '5');
         expect(insumo1).toHaveProperty('unidad', 'kg');
         expect(insumo1).toHaveProperty('comentarios', 'Comentario de prueba');
 
-        // Row 4: Insumo 2 (Level 1, last child of the product)
+        // Row 4: Insumo 2
         expect(insumo2).toHaveProperty('level', 1);
         expect(insumo2).toHaveProperty('isLast', true);
-        // Lineage [false] is the same as the semiterminado, as they are siblings.
-        // The prefix should be '    └── '
-        expect(insumo2).toHaveProperty('descripcion', '    └── Insumo B');
+        expect(insumo2).toHaveProperty('lineage', [false]);
+        expect(insumo2).toHaveProperty('descripcion', 'Insumo B');
         expect(insumo2).toHaveProperty('cantidad', '10');
         expect(insumo2).toHaveProperty('unidad', 'm');
     });
