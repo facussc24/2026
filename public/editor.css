@@ -17,6 +17,7 @@ body {
     border: 1px solid #dee2e6;
     border-radius: .25rem;
     overflow: hidden; /* Ensures the draggable divs don't go outside */
+    cursor: crosshair;
 }
 
 /* Style for the draggable/resizable rectangles */
@@ -55,4 +56,6 @@ body {
     border-radius: 5px;
     max-height: 400px;
     overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }

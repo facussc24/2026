@@ -1,0 +1,17 @@
+body {
+    background-color: #f4f7f6;
+}
+
+.image-container {
+    position: relative;
+    display: inline-block; /* To wrap the container around the image */
+}
+
+/* Maphilight generates a canvas for the highlights.
+   This makes sure it's positioned correctly. */
+.maphilighted {
+    position: absolute;
+    left: 0;
+    top: 0;
+    pointer-events: none;
+}
