@@ -9009,17 +9009,26 @@ onAuthStateChanged(auth, async (user) => {
             showAuthScreen('verify-email');
         }
     } else {
-        dom.loadingOverlay.style.display = 'none';
-        const wasLoggedIn = !!appState.currentUser;
-        stopRealtimeListeners();
-        appState.currentUser = null;
-        dom.authContainer.classList.remove('hidden');
-        dom.appView.classList.add('hidden');
-        updateNavForRole();
-        showAuthScreen('login');
-        if (wasLoggedIn) {
-            showToast(`Sesión cerrada.`, 'info');
-        }
+        // Add a small delay to prevent login screen flashing for authenticated users on refresh.
+        // This gives onAuthStateChanged time to get the cached user.
+        setTimeout(() => {
+            // Re-check the auth state after the delay. If a user is found, do nothing.
+            if (auth.currentUser) {
+                return;
+            }
+
+            dom.loadingOverlay.style.display = 'none';
+            const wasLoggedIn = !!appState.currentUser;
+            stopRealtimeListeners();
+            appState.currentUser = null;
+            dom.authContainer.classList.remove('hidden');
+            dom.appView.classList.add('hidden');
+            updateNavForRole();
+            showAuthScreen('login');
+            if (wasLoggedIn) {
+                showToast(`Sesión cerrada.`, 'info');
+            }
+        }, 200); // A 200ms delay is usually sufficient.
     }
 });
 
@@ -10106,6 +10115,110 @@ export const getFlattenedData = (product, levelFilters) => {
     return finalList;
 };
 
+function renderTabularTable(data) {
+    const state = appState.sinopticoTabularState;
+    const selectedProduct = state.selectedProduct;
+
+    if (data.length === 0) return `<p class="text-slate-500 p-4 text-center">El producto seleccionado no tiene una estructura definida.</p>`;
+
+    let tableHTML = `<table class="w-full text-sm text-left text-gray-600">`;
+    tableHTML += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr>
+        <th scope="col" class="px-4 py-3 align-middle" style="min-width: 400px;">Descripción</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Nivel</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">LC / KD</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Código de pieza</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Versión</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Proceso</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap col-aspecto">Aspecto</th>
+        <th scope="col" class="px-4 py-3 text-right align-middle whitespace-nowrap">Peso (gr)</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Color</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Piezas por Vehículo (Un.)</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Material</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Código Materia Prima</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Proveedor Materia Prima</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Cantidad / Pieza</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Unidad</th>
+        <th scope="col" class="px-4 py-3 align-middle col-comentarios">Comentarios</th>
+        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap col-acciones">Acciones</th>
+    </tr></thead><tbody>`;
+
+    data.forEach(rowData => {
+        const { node, item, level, isLast, lineage } = rowData;
+        const NA = '<span class="text-slate-400">N/A</span>';
+
+        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;').join('');
+        if (level > 0)  prefix += isLast ? '└─ ' : '├─ ';
+        const descripcion = `<span class="font-sans">${prefix}</span>${item.descripcion || item.nombre || ''}`;
+        const nivel = level;
+        const lc_kd = item.lc_kd || NA;
+        const codigo_pieza = item.codigo_pieza || NA;
+        const version = item.version || NA;
+
+        let proceso = NA;
+        if (item.proceso) {
+            const procesoData = appState.collectionsById[COLLECTIONS.PROCESOS]?.get(item.proceso);
+            proceso = procesoData ? procesoData.descripcion : item.proceso;
+        }
+
+        const aspecto = item.aspecto || NA;
+
+        let peso_display = NA;
+        if (node.tipo === 'semiterminado' && item.peso_gr) {
+            peso_display = item.peso_gr;
+            if (item.tolerancia_gr) {
+                peso_display += ` ± ${item.tolerancia_gr}`;
+            }
+        }
+
+        const color = selectedProduct.color || NA;
+        const piezas_por_vehiculo = selectedProduct.piezas_por_vehiculo || NA;
+        const material = selectedProduct.material_separar ? 'Sí' : 'No';
+
+        let codigo_materia_prima = NA;
+        let proveedor_materia_prima = NA;
+        if (node.tipo === 'insumo') {
+            codigo_materia_prima = item.codigo_materia_prima || NA;
+            if (item.proveedor_materia_prima) {
+                const provMP = appState.collectionsById[COLLECTIONS.PROVEEDORES]?.get(item.proveedor_materia_prima);
+                proveedor_materia_prima = provMP ? provMP.descripcion : item.proveedor_materia_prima;
+            }
+        }
+
+        const cantidad = node.quantity ?? NA;
+
+        let unidad_medida = NA;
+        if (node.tipo === 'insumo' && item.unidad_medida) {
+            const unidadData = appState.collectionsById[COLLECTIONS.UNIDADES]?.get(item.unidad_medida);
+            unidad_medida = unidadData ? unidadData.id : item.unidad_medida;
+        }
+
+        const comentarios = node.comment ? `<span class="whitespace-normal">${node.comment}</span>` : NA;
+        const actionsHTML = checkUserPermission('edit') ? `<button data-action="edit-tabular-node" data-node-id="${node.id}" class="p-1 text-blue-600 hover:bg-blue-100 rounded-md" title="Editar"><i data-lucide="pencil" class="w-4 h-4 pointer-events-none"></i></button>` : '';
+
+        tableHTML += `<tr class="bg-white border-b hover:bg-gray-100" data-node-id="${node.id}">
+            <td class="px-4 py-2 font-mono font-medium text-gray-900 align-middle" style="min-width: 400px;">${descripcion}</td>
+            <td class="px-4 py-2 text-center align-middle">${nivel}</td>
+            <td class="px-4 py-2 text-center align-middle">${lc_kd}</td>
+            <td class="px-4 py-2 text-center align-middle">${codigo_pieza}</td>
+            <td class="px-4 py-2 text-center align-middle">${version}</td>
+            <td class="px-4 py-2 text-center align-middle">${proceso}</td>
+            <td class="px-4 py-2 text-center align-middle col-aspecto">${aspecto}</td>
+            <td class="px-4 py-2 text-right align-middle">${peso_display}</td>
+            <td class="px-4 py-2 text-center align-middle">${color}</td>
+            <td class="px-4 py-2 text-center align-middle">${piezas_por_vehiculo}</td>
+            <td class="px-4 py-2 text-center align-middle">${material}</td>
+            <td class="px-4 py-2 text-center align-middle">${codigo_materia_prima}</td>
+            <td class="px-4 py-2 text-center align-middle">${proveedor_materia_prima}</td>
+            <td class="px-4 py-2 text-center align-middle">${cantidad}</td>
+            <td class="px-4 py-2 text-center align-middle">${unidad_medida}</td>
+            <td class="px-4 py-2 align-middle col-comentarios">${comentarios}</td>
+            <td class="px-4 py-2 text-center align-middle col-acciones">${actionsHTML}</td>
+        </tr>`;
+    });
+    tableHTML += `</tbody></table>`;
+    return tableHTML;
+}
+
 export function runSinopticoTabularLogic() {
     // Initialize state for the view
     if (!appState.sinopticoTabularState) {
@@ -10120,110 +10233,6 @@ export function runSinopticoTabularLogic() {
     const state = appState.sinopticoTabularState;
 
     // --- RENDER FUNCTIONS ---
-
-    const renderTabularTable = (data) => {
-        const state = appState.sinopticoTabularState;
-        const selectedProduct = state.selectedProduct;
-
-        if (data.length === 0) return `<p class="text-slate-500 p-4 text-center">El producto seleccionado no tiene una estructura definida.</p>`;
-
-        let tableHTML = `<table class="w-full text-sm text-left text-gray-600">`;
-        tableHTML += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr>
-            <th scope="col" class="px-4 py-3 align-middle" style="min-width: 400px;">Descripción</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Nivel</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">LC / KD</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Código de pieza</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Versión</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Proceso</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap col-aspecto">Aspecto</th>
-            <th scope="col" class="px-4 py-3 text-right align-middle whitespace-nowrap">Peso (gr)</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Color</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Piezas por Vehículo (Un.)</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Material</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Código Materia Prima</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Proveedor Materia Prima</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Cantidad / Pieza</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Unidad</th>
-            <th scope="col" class="px-4 py-3 align-middle col-comentarios">Comentarios</th>
-            <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap col-acciones">Acciones</th>
-        </tr></thead><tbody>`;
-
-        data.forEach(rowData => {
-            const { node, item, level, isLast, lineage } = rowData;
-            const NA = '<span class="text-slate-400">N/A</span>';
-
-            let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;').join('');
-            if (level > 0)  prefix += isLast ? '└─ ' : '├─ ';
-            const descripcion = `<span class="font-sans">${prefix}</span>${item.descripcion || item.nombre || ''}`;
-            const nivel = level;
-            const lc_kd = item.lc_kd || NA;
-            const codigo_pieza = item.codigo_pieza || NA;
-            const version = item.version || NA;
-
-            let proceso = NA;
-            if (item.proceso) {
-                const procesoData = appState.collectionsById[COLLECTIONS.PROCESOS]?.get(item.proceso);
-                proceso = procesoData ? procesoData.descripcion : item.proceso;
-            }
-
-            const aspecto = item.aspecto || NA;
-
-            let peso_display = NA;
-            if (node.tipo === 'semiterminado' && item.peso_gr) {
-                peso_display = item.peso_gr;
-                if (item.tolerancia_gr) {
-                    peso_display += ` ± ${item.tolerancia_gr}`;
-                }
-            }
-
-            const color = selectedProduct.color || NA;
-            const piezas_por_vehiculo = selectedProduct.piezas_por_vehiculo || NA;
-            const material = selectedProduct.material_separar ? 'Sí' : 'No';
-
-            let codigo_materia_prima = NA;
-            let proveedor_materia_prima = NA;
-            if (node.tipo === 'insumo') {
-                codigo_materia_prima = item.codigo_materia_prima || NA;
-                if (item.proveedor_materia_prima) {
-                    const provMP = appState.collectionsById[COLLECTIONS.PROVEEDORES]?.get(item.proveedor_materia_prima);
-                    proveedor_materia_prima = provMP ? provMP.descripcion : item.proveedor_materia_prima;
-                }
-            }
-
-            const cantidad = node.quantity ?? NA;
-
-            let unidad_medida = NA;
-            if (node.tipo === 'insumo' && item.unidad_medida) {
-                const unidadData = appState.collectionsById[COLLECTIONS.UNIDADES]?.get(item.unidad_medida);
-                unidad_medida = unidadData ? unidadData.id : item.unidad_medida;
-            }
-
-            const comentarios = node.comment ? `<span class="whitespace-normal">${node.comment}</span>` : NA;
-            const actionsHTML = checkUserPermission('edit') ? `<button data-action="edit-tabular-node" data-node-id="${node.id}" class="p-1 text-blue-600 hover:bg-blue-100 rounded-md" title="Editar"><i data-lucide="pencil" class="w-4 h-4 pointer-events-none"></i></button>` : '';
-
-            tableHTML += `<tr class="bg-white border-b hover:bg-gray-100" data-node-id="${node.id}">
-                <td class="px-4 py-2 font-mono font-medium text-gray-900 align-middle" style="min-width: 400px;">${descripcion}</td>
-                <td class="px-4 py-2 text-center align-middle">${nivel}</td>
-                <td class="px-4 py-2 text-center align-middle">${lc_kd}</td>
-                <td class="px-4 py-2 text-center align-middle">${codigo_pieza}</td>
-                <td class="px-4 py-2 text-center align-middle">${version}</td>
-                <td class="px-4 py-2 text-center align-middle">${proceso}</td>
-                <td class="px-4 py-2 text-center align-middle col-aspecto">${aspecto}</td>
-                <td class="px-4 py-2 text-right align-middle">${peso_display}</td>
-                <td class="px-4 py-2 text-center align-middle">${color}</td>
-                <td class="px-4 py-2 text-center align-middle">${piezas_por_vehiculo}</td>
-                <td class="px-4 py-2 text-center align-middle">${material}</td>
-                <td class="px-4 py-2 text-center align-middle">${codigo_materia_prima}</td>
-                <td class="px-4 py-2 text-center align-middle">${proveedor_materia_prima}</td>
-                <td class="px-4 py-2 text-center align-middle">${cantidad}</td>
-                <td class="px-4 py-2 text-center align-middle">${unidad_medida}</td>
-                <td class="px-4 py-2 align-middle col-comentarios">${comentarios}</td>
-                <td class="px-4 py-2 text-center align-middle col-acciones">${actionsHTML}</td>
-            </tr>`;
-        });
-        tableHTML += `</tbody></table>`;
-        return tableHTML;
-    };
 
     const renderReportView = () => {
         const product = state.selectedProduct;
