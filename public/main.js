@@ -10538,7 +10538,6 @@ export function runSinopticoTabularLogic() {
 }
 
 async function exportSinopticoTabularToPdf() {
-    const { jsPDF } = window.jspdf;
     const state = appState.sinopticoTabularState;
     const product = state.selectedProduct;
 
@@ -10547,100 +10546,23 @@ async function exportSinopticoTabularToPdf() {
         return;
     }
 
-    showToast('Generando PDF de alta calidad...', 'info');
+    showToast('Generando PDF...', 'info');
     dom.loadingOverlay.style.display = 'flex';
 
+    const element = dom.viewContent.querySelector('.animate-fade-in-up');
+    const opt = {
+        margin:       5,
+        filename:     `Reporte_Estructura_${product.id}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'mm', format: 'a2', orientation: 'landscape' }
+    };
+
     try {
-        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-        doc.setFont('DejaVu Sans Mono'); // Establecer la fuente que admite los caracteres
-        const logoBase64 = await getLogoBase64();
-        const PAGE_MARGIN = 10;
-        const PAGE_WIDTH = doc.internal.pageSize.width;
-        const PAGE_HEIGHT = doc.internal.pageSize.height;
-        const NA = 'N/A';
-        const TREE_COLUMN_WIDTH = 80; // Reserve 80mm for the tree on the left
-        const TABLE_START_X = PAGE_MARGIN + TREE_COLUMN_WIDTH;
-
-        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
-
-
-        // Redefine columns for the PDF, including the new description
-        const columns = [
-            { header: 'Componente', dataKey: 'descripcion' },
-            { header: 'LC/KD', dataKey: 'lc_kd' },
-            { header: 'Código', dataKey: 'codigo_pieza' },
-            { header: 'Versión', dataKey: 'version' },
-            { header: 'Proceso', dataKey: 'proceso' },
-            { header: 'Aspecto', dataKey: 'aspecto' },
-            { header: 'Peso (gr)', dataKey: 'peso' },
-            { header: 'Color', dataKey: 'color' },
-            { header: 'Pzas/Vh', dataKey: 'piezas_por_vehiculo' },
-            { header: 'Material', dataKey: 'material' },
-            { header: 'Cód. Mat. Prima', dataKey: 'codigo_materia_prima' },
-            { header: 'Prov. Mat. Prima', dataKey: 'proveedor_materia_prima' },
-            { header: 'Cant/Pza', dataKey: 'cantidad' },
-            { header: 'Unidad', dataKey: 'unidad' },
-            { header: 'Comentarios', dataKey: 'comentarios' },
-        ];
-
-        doc.autoTable({
-            columns: columns,
-            body: body,
-            startY: 45,
-            margin: { top: 45, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
-            theme: 'grid',
-            styles: {
-                font: 'helvetica',
-                fontSize: 6, // Smaller font for more data
-                cellPadding: 1.5,
-                overflow: 'linebreak',
-                valign: 'middle',
-            },
-            headStyles: {
-                fillColor: '#44546A',
-                textColor: '#FFFFFF',
-                fontStyle: 'bold',
-                halign: 'center',
-                fontSize: 6,
-            },
-            columnStyles: {
-                descripcion: { cellWidth: 70, font: 'courier', fontStyle: 'normal' }, // Use a monospaced font for the tree
-                peso: { halign: 'right' },
-                cantidad: { halign: 'right' },
-                piezas_por_vehiculo: { halign: 'center' },
-                comentarios: { cellWidth: 30 }
-            },
-            didDrawPage: (data) => {
-                // --- Draw Headers & Footers ---
-                doc.setFontSize(16);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor('#3B82F6');
-                doc.text('Reporte de Estructura de Producto', PAGE_WIDTH / 2, 15, { align: 'center' });
-
-                if (logoBase64) doc.addImage(logoBase64, 'PNG', PAGE_MARGIN, 22, 25, 12);
-
-                doc.setFontSize(9);
-                doc.setTextColor(100);
-                const headerTextX = PAGE_WIDTH - PAGE_MARGIN;
-                doc.text(`Producto: ${product.descripcion || NA}`, headerTextX, 24, { align: 'right' });
-                doc.text(`Código: ${product.id || NA}`, headerTextX, 28, { align: 'right' });
-                const client = appState.collectionsById[COLLECTIONS.CLIENTES]?.get(product.clienteId);
-                doc.text(`Cliente: ${client?.descripcion || NA}`, headerTextX, 32, { align: 'right' });
-
-                const pageCount = doc.internal.getNumberOfPages();
-                doc.setFontSize(8);
-                doc.text(`Página ${data.pageNumber} de ${pageCount}`, PAGE_WIDTH / 2, PAGE_HEIGHT - 10, { align: 'center' });
-                doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, PAGE_MARGIN, PAGE_HEIGHT - 10);
-            }
-        });
-
-        const fileName = `Reporte_Estructura_Producto_${product.id.replace(/[^a-z0-9]/gi, '_')}.pdf`;
-        doc.save(fileName);
+        await html2pdf().from(element).set(opt).save();
         showToast('PDF generado con éxito.', 'success');
-
     } catch (error) {
-        console.error("Error exporting native PDF:", error);
+        console.error("Error exporting with html2pdf:", error);
         showToast('Error al generar el PDF.', 'error');
     } finally {
         dom.loadingOverlay.style.display = 'none';
