@@ -10590,7 +10590,7 @@ async function exportSinopticoTabularToPdf() {
             margin: { top: 45, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
             styles: {
-                font: 'helvetica',
+                font: 'DejaVu Sans Mono',
                 fontSize: 6, // Smaller font for more data
                 cellPadding: 1.5,
                 overflow: 'linebreak',
@@ -10604,7 +10604,7 @@ async function exportSinopticoTabularToPdf() {
                 fontSize: 6,
             },
             columnStyles: {
-                descripcion: { cellWidth: 70, font: 'courier', fontStyle: 'normal' }, // Use a monospaced font for the tree
+                descripcion: { cellWidth: 70, font: 'DejaVu Sans Mono', fontStyle: 'normal' }, // Use a monospaced font for the tree
                 peso: { halign: 'right' },
                 cantidad: { halign: 'right' },
                 piezas_por_vehiculo: { halign: 'center' },
