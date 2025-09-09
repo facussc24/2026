@@ -10578,72 +10578,99 @@ async function exportSinopticoTabularToPdf() {
         return;
     }
 
-    // 1. Create a single, visible overlay for loading message and rendering
-    const pdfOverlay = document.createElement('div');
-    pdfOverlay.id = 'pdf-export-overlay';
-    // This overlay is visible and on top of all other content.
-    pdfOverlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.9); z-index: 1000; display: flex; align-items: center; justify-content: center;';
-
-    // 2. Add the loading message to the overlay
-    pdfOverlay.innerHTML = `
-        <div class="text-center">
-            <i data-lucide="loader" class="animate-spin h-12 w-12 text-blue-600 mx-auto"></i>
-            <p class="mt-4 font-semibold text-lg text-slate-700">Generando PDF, por favor espere...</p>
-            <p class="text-sm text-slate-500">Este proceso puede tardar unos segundos.</p>
-        </div>
-    `;
-
-    // 3. Create the printable area, but make it visually hidden inside the overlay
-    const printableArea = document.createElement('div');
-    printableArea.id = 'printable-sinoptico-area';
-    // Style it to be in the DOM layout but not visible to the user
-    printableArea.style.cssText = 'position: absolute; opacity: 0; z-index: -1; width: 2000px;';
+    showToast('Generando PDF...', 'loading', { duration: 0 });
 
     try {
-        // 4. Populate the printable area with content
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+        const logoBase64 = await getLogoBase64();
+        if (logoBase64) {
+            doc.addImage(logoBase64, 'PNG', 15, 12, 30, 11.25);
+        }
+
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('COMPOSICIÓN DE PIEZAS', doc.internal.pageSize.getWidth() / 2, 20, { align: 'center' });
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        const createdAt = product.createdAt ? new Date(product.createdAt.seconds * 1000).toLocaleDateString('es-AR') : 'N/A';
+        const proyecto = appState.collectionsById[COLLECTIONS.PROYECTOS]?.get(product.proyectoId);
+
+        let headerY = 35;
+        doc.text(`PRODUCTO: ${product.descripcion || 'N/A'}`, 15, headerY);
+        doc.text(`NÚMERO DE PIEZA: ${product.id || 'N/A'}`, 15, headerY + 5);
+        doc.text(`VERSIÓN: ${product.version || 'N/A'}`, 15, headerY + 10);
+        doc.text(`PROYECTO: ${proyecto?.nombre || 'N/A'}`, 15, headerY + 15);
+
+        doc.text(`FECHA DE CREACIÓN: ${createdAt}`, 150, headerY);
+        doc.text(`FECHA DE REVISIÓN: ${product.fechaRevision || 'N/A'}`, 150, headerY + 5);
+        doc.text(`REALIZÓ: ${product.lastUpdatedBy || 'N/A'}`, 150, headerY + 10);
+        doc.text(`APROBÓ: ${product.aprobadoPor || 'N/A'}`, 150, headerY + 15);
+
+
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const caratulaContainer = document.getElementById('caratula-container');
-        const caratulaHTML = caratulaContainer ? caratulaContainer.innerHTML : '';
-        const tableHTML = renderTabularTable(flattenedData);
+        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
 
-        printableArea.innerHTML = `
-            <div class="p-6 bg-white">
-                ${caratulaHTML}
-                <div class="bg-white p-6 rounded-xl mt-6">
-                    <h3 class="text-xl font-bold text-slate-800 mb-4">Detalle de: ${product.descripcion}</h3>
-                    <div class="overflow-x-auto">${tableHTML}</div>
-                </div>
-            </div>
-        `;
+        const head = [[
+            'Descripción', 'Nivel', 'LC/KD', 'Código', 'Versión', 'Proceso',
+            'Aspecto', 'Peso', 'Color', 'Pzas/Vehic.', 'Material',
+            'Cód. MP', 'Prov. MP', 'Cant.', 'Unidad', 'Comentarios'
+        ]];
 
-        // 5. Append both the overlay and the printable area to the body
-        pdfOverlay.appendChild(printableArea);
-        document.body.appendChild(pdfOverlay);
-        lucide.createIcons({ nodes: pdfOverlay.querySelectorAll('[data-lucide]') });
+        const bodyRows = body.map(row => [
+            row.descripcion,
+            row.levelForDisplay,
+            row.lc_kd,
+            row.codigo_pieza,
+            row.version,
+            row.proceso,
+            row.aspecto,
+            row.peso,
+            row.color,
+            row.piezas_por_vehiculo,
+            row.material,
+            row.codigo_materia_prima,
+            row.proveedor_materia_prima,
+            row.cantidad,
+            row.unidad,
+            row.comentarios
+        ]);
 
-        // 6. Give the browser a moment to render everything
-        await new Promise(resolve => setTimeout(resolve, 100));
+        doc.autoTable({
+            head: head,
+            body: bodyRows,
+            startY: headerY + 25,
+            theme: 'grid',
+            styles: {
+                fontSize: 6,
+                cellPadding: 1,
+            },
+            headStyles: {
+                fillColor: [41, 104, 217],
+                textColor: 255,
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 70 }, // Descripcion
+                15: { cellWidth: 30 }, // Comentarios
+            },
+            didDrawPage: function(data) {
+                // Footer
+                const pageCount = doc.internal.getNumberOfPages();
+                doc.setFontSize(8);
+                doc.text(`Página ${data.pageNumber} de ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
+            }
+        });
 
-        // 7. Configure and run html2pdf
-        const opt = {
-            margin: 5,
-            filename: `Reporte_Estructura_${product.id}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, width: printableArea.scrollWidth, windowWidth: printableArea.scrollWidth },
-            jsPDF: { unit: 'mm', format: 'a2', orientation: 'landscape' }
-        };
-
-        await html2pdf().from(printableArea).set(opt).save();
+        doc.save(`Reporte_Estructura_${product.id}.pdf`);
         showToast('PDF generado con éxito.', 'success');
 
     } catch (error) {
-        console.error("Error exporting with html2pdf:", error);
+        console.error("Error exporting with jsPDF-AutoTable:", error);
         showToast('Error al generar el PDF.', 'error');
-    } finally {
-        // 8. Cleanup: remove the entire overlay
-        if (pdfOverlay) {
-            pdfOverlay.remove();
-        }
     }
 }
 
