@@ -3,28 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Barack Ingeniería - Soluciones de gestión de ingeniería para optimizar el ciclo de vida de productos, desde el diseño hasta la implementación.">
     <title>Barack Ingeniería</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <!-- Dependencias -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <!-- Preconnect to CDNs for faster resource fetching -->
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="forms.css">
-    <link rel="stylesheet" href="eco_form.css">
-    <link rel="stylesheet" href="ecr_form.css">
-    <link rel="stylesheet" href="ecr_table.css">
-    <link rel="stylesheet" href="ecr_seguimiento.css">
-    <link rel="stylesheet" href="seguimiento_ecr_eco.css">
-    <link rel="stylesheet" href="tutorial.css">
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+
+    <!-- Deferred Scripts -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
+    <!-- Async CSS -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+    <link rel="preload" href="style.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="style.css"></noscript>
+    <link rel="preload" href="forms.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="forms.css"></noscript>
+    <link rel="preload" href="eco_form.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="eco_form.css"></noscript>
+    <link rel="preload" href="ecr_form.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="ecr_form.css"></noscript>
+    <link rel="preload" href="ecr_table.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="ecr_table.css"></noscript>
+    <link rel="preload" href="ecr_seguimiento.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="ecr_seguimiento.css"></noscript>
+    <link rel="preload" href="seguimiento_ecr_eco.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="seguimiento_ecr_eco.css"></noscript>
+    <link rel="preload" href="tutorial.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="tutorial.css"></noscript>
 </head>
 <body class="bg-white">
 
@@ -40,7 +58,7 @@
         <!-- Panel de Login -->
         <div id="login-panel" class="p-8 bg-white shadow-2xl rounded-2xl">
             <div class="text-center">
-                <img src="barack_logo.png" alt="Logo" class="logo-img mx-auto">
+                <img src="barack_logo.png" alt="Logo" class="logo-img mx-auto" loading="lazy">
                 <p class="text-slate-500 mt-2 mb-8">Inicie sesión para continuar.</p>
             </div>
             <form id="login-form" class="space-y-4">
@@ -136,7 +154,7 @@
             <div class="flex items-center space-x-8">
                 <!-- Logo -->
                 <div class="flex-shrink-0">
-                    <img src="barack_logo.png" alt="Logo" class="h-10 w-auto">
+                    <img src="barack_logo.png" alt="Logo" class="h-10 w-auto" loading="lazy">
                 </div>
                 <!-- Navegación -->
                 <nav id="main-nav" class="hidden md:flex items-center space-x-2">
