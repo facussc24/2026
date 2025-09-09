@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
@@ -10571,106 +10571,83 @@ export function runSinopticoTabularLogic() {
 
 async function exportSinopticoTabularToPdf() {
     const state = appState.sinopticoTabularState;
-    const product = state.selectedProduct;
-
-    if (!product) {
+    if (!state || !state.selectedProduct) {
         showToast('No hay producto seleccionado para exportar.', 'error');
         return;
     }
+    const product = state.selectedProduct;
 
-    showToast('Generando PDF...', 'loading', { duration: 0 });
+    showToast('Generando PDF de estructura...', 'info');
+    dom.loadingOverlay.style.display = 'flex';
+    dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
+
+    // Create a temporary, off-screen container for rendering
+    const printContainer = document.createElement('div');
+    printContainer.id = 'temp-print-container';
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    printContainer.style.width = '210mm'; // A4 width
+    printContainer.style.backgroundColor = 'white';
+    document.body.appendChild(printContainer);
 
     try {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-        const logoBase64 = await getLogoBase64();
-        if (logoBase64) {
-            doc.addImage(logoBase64, 'PNG', 15, 12, 30, 11.25);
-        }
-
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text('COMPOSICIÓN DE PIEZAS', doc.internal.pageSize.getWidth() / 2, 20, { align: 'center' });
-
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        const createdAt = product.createdAt ? new Date(product.createdAt.seconds * 1000).toLocaleDateString('es-AR') : 'N/A';
-        const proyecto = appState.collectionsById[COLLECTIONS.PROYECTOS]?.get(product.proyectoId);
-
-        let headerY = 35;
-        doc.text(`PRODUCTO: ${product.descripcion || 'N/A'}`, 15, headerY);
-        doc.text(`NÚMERO DE PIEZA: ${product.id || 'N/A'}`, 15, headerY + 5);
-        doc.text(`VERSIÓN: ${product.version || 'N/A'}`, 15, headerY + 10);
-        doc.text(`PROYECTO: ${proyecto?.nombre || 'N/A'}`, 15, headerY + 15);
-
-        doc.text(`FECHA DE CREACIÓN: ${createdAt}`, 150, headerY);
-        doc.text(`FECHA DE REVISIÓN: ${product.fechaRevision || 'N/A'}`, 150, headerY + 5);
-        doc.text(`REALIZÓ: ${product.lastUpdatedBy || 'N/A'}`, 150, headerY + 10);
-        doc.text(`APROBÓ: ${product.aprobadoPor || 'N/A'}`, 150, headerY + 15);
-
-
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const { body, rawData } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
+        const logoBase64 = await getLogoBase64();
 
-        const head = [[
-            'Descripción', 'Nivel', 'LC/KD', 'Código', 'Versión', 'Proceso',
-            'Aspecto', 'Peso', 'Color', 'Pzas/Vehic.', 'Material',
-            'Cód. MP', 'Prov. MP', 'Cant.', 'Unidad', 'Comentarios'
-        ]];
+        const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
+        printContainer.innerHTML = reportHTML;
 
-        const bodyRows = body.map(row => [
-            row.descripcion,
-            row.levelForDisplay,
-            row.lc_kd,
-            row.codigo_pieza,
-            row.version,
-            row.proceso,
-            row.aspecto,
-            row.peso,
-            row.color,
-            row.piezas_por_vehiculo,
-            row.material,
-            row.codigo_materia_prima,
-            row.proveedor_materia_prima,
-            row.cantidad,
-            row.unidad,
-            row.comentarios
-        ]);
+        // Wait for images (like the logo) to load
+        await waitForImages(printContainer);
 
-        doc.autoTable({
-            head: head,
-            body: bodyRows,
-            startY: headerY + 25,
-            theme: 'grid',
-            styles: {
-                fontSize: 6,
-                cellPadding: 1,
-            },
-            headStyles: {
-                fillColor: [41, 104, 217],
-                textColor: 255,
-                fontStyle: 'bold',
-                halign: 'center'
-            },
-            columnStyles: {
-                0: { cellWidth: 70 }, // Descripcion
-                15: { cellWidth: 30 }, // Comentarios
-            },
-            didDrawPage: function(data) {
-                // Footer
-                const pageCount = doc.internal.getNumberOfPages();
-                doc.setFontSize(8);
-                doc.text(`Página ${data.pageNumber} de ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
-            }
+        // Use html2canvas to render the single long element
+        const canvas = await html2canvas(printContainer, {
+            scale: 2,
+            useCORS: true,
+            logging: false
         });
 
-        doc.save(`Reporte_Estructura_${product.id}.pdf`);
-        showToast('PDF generado con éxito.', 'success');
+        dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
+
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const imgProperties = pdf.getImageProperties(imgData);
+        const imgWidth = imgProperties.width;
+        const imgHeight = imgProperties.height;
+        const imgAspectRatio = imgWidth / imgHeight;
+
+        const finalCanvasWidth = pdfWidth;
+        const finalCanvasHeight = finalCanvasWidth / imgAspectRatio;
+
+        const totalPages = Math.ceil(finalCanvasHeight / pdfHeight);
+
+        for (let i = 0; i < totalPages; i++) {
+            if (i > 0) pdf.addPage();
+
+            const yPos = -(pdfHeight * i);
+            pdf.addImage(imgData, 'PNG', 0, yPos, finalCanvasWidth, finalCanvasHeight);
+
+            // Add footer to each page
+            pdf.setFontSize(8);
+            pdf.setTextColor('#888');
+            pdf.text(`Página ${i + 1} de ${totalPages}`, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
+        }
+
+        pdf.save(`Estructura_${product.id}.pdf`);
+        showToast('PDF de estructura generado con éxito.', 'success');
 
     } catch (error) {
-        console.error("Error exporting with jsPDF-AutoTable:", error);
+        console.error("Error al exportar la estructura del producto a PDF:", error);
         showToast('Error al generar el PDF.', 'error');
+    } finally {
+        dom.loadingOverlay.style.display = 'none';
+        if (document.getElementById('temp-print-container')) {
+            document.getElementById('temp-print-container').remove();
+        }
     }
 }
 
