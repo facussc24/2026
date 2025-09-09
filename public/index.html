@@ -237,7 +237,6 @@
     AHORA SE CARGA DESDE EL ARCHIVO EXTERNO main.js
 -->
 <!-- Library Scripts -->
-<script defer src="https://cdn.tailwindcss.com"></script>
 <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -245,7 +244,6 @@
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <!-- jsPDF and its dependencies, loaded via onload callback to ensure order -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onload="loadJsPdfPlugins()"></script>
 <script>
   function loadJsPdfPlugins() {
     const pluginScripts = [
@@ -259,6 +257,7 @@
     });
   }
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onload="loadJsPdfPlugins()"></script>
 
 <!-- Firebase Hosting Scripts -->
 <script type="module" src="main.js"></script>
