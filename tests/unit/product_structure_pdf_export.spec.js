@@ -1,17 +1,16 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import { prepareDataForPdfAutoTable } from '../../public/utils.js';
-import { getFlattenedData } from '../../public/main.js';
-import { appState } from '../../public/main.js';
+import { getFlattenedData, appState } from '../../public/main.js';
 import { COLLECTIONS } from '../../public/utils.js';
 
-// Mock the getFlattenedData function.
+// Mock the getFlattenedData function using the CommonJS-style requireActual
+// because babel-jest is transforming the modules.
 jest.mock('../../public/main.js', () => ({
     ...jest.requireActual('../../public/main.js'),
     getFlattenedData: jest.fn(),
 }));
 
 describe('prepareDataForPdfAutoTable', () => {
-
     let mockCollectionsById;
     let mockFlattenedData;
 

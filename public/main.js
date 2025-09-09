@@ -5793,32 +5793,6 @@ async function generateFichaPdf(fichaId) {
     showToast('PDF generado.', 'success');
 }
 
-
-/**
- * Waits for all images within a given element to load.
- * This is crucial for ensuring that canvas-based renderings, like those for PDFs,
- * capture all content correctly.
- * @param {HTMLElement} element - The container element to search for images.
- * @returns {Promise<void>} A promise that resolves when all images are loaded or have failed.
- */
-function waitForImages(element) {
-    const images = Array.from(element.getElementsByTagName('img'));
-    const promises = images.map(img => {
-        return new Promise((resolve) => {
-            if (img.complete) {
-                // If the image is already loaded (e.g., from cache), resolve immediately.
-                resolve();
-            } else {
-                // Otherwise, wait for the load or error event.
-                img.addEventListener('load', resolve, { once: true });
-                img.addEventListener('error', resolve, { once: true }); // Resolve on error too, so it doesn't hang forever.
-            }
-        });
-    });
-    return Promise.all(promises);
-}
-
-
 async function exportEcrToPdf(ecrId) {
     if (!ecrId) {
         showToast('No se ha proporcionado un ID de ECR para exportar.', 'error');
