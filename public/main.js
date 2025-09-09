@@ -10578,10 +10578,13 @@ async function exportSinopticoTabularToPdf() {
         return;
     }
 
-    // Use a visible overlay instead of the main loading overlay
+    // 1. Create a single, visible overlay for loading message and rendering
     const pdfOverlay = document.createElement('div');
     pdfOverlay.id = 'pdf-export-overlay';
+    // This overlay is visible and on top of all other content.
     pdfOverlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.9); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+
+    // 2. Add the loading message to the overlay
     pdfOverlay.innerHTML = `
         <div class="text-center">
             <i data-lucide="loader" class="animate-spin h-12 w-12 text-blue-600 mx-auto"></i>
@@ -10589,17 +10592,15 @@ async function exportSinopticoTabularToPdf() {
             <p class="text-sm text-slate-500">Este proceso puede tardar unos segundos.</p>
         </div>
     `;
-    document.body.appendChild(pdfOverlay);
-    lucide.createIcons({ nodes: pdfOverlay.querySelectorAll('[data-lucide]') });
 
-    // Create the container for the actual printable content, but keep it off-screen
+    // 3. Create the printable area, but make it visually hidden inside the overlay
     const printableArea = document.createElement('div');
     printableArea.id = 'printable-sinoptico-area';
-    printableArea.style.position = 'absolute';
-    printableArea.style.left = '-9999px';
-    printableArea.style.width = '2000px'; // Wide width for the table
+    // Style it to be in the DOM layout but not visible to the user
+    printableArea.style.cssText = 'position: absolute; opacity: 0; z-index: -1; width: 2000px;';
 
     try {
+        // 4. Populate the printable area with content
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
         const caratulaContainer = document.getElementById('caratula-container');
         const caratulaHTML = caratulaContainer ? caratulaContainer.innerHTML : '';
@@ -10614,12 +10615,16 @@ async function exportSinopticoTabularToPdf() {
                 </div>
             </div>
         `;
-        document.body.appendChild(printableArea);
-        lucide.createIcons({ nodes: printableArea.querySelectorAll('[data-lucide]') });
 
-        // Add a small delay to ensure the browser has rendered the content
+        // 5. Append both the overlay and the printable area to the body
+        pdfOverlay.appendChild(printableArea);
+        document.body.appendChild(pdfOverlay);
+        lucide.createIcons({ nodes: pdfOverlay.querySelectorAll('[data-lucide]') });
+
+        // 6. Give the browser a moment to render everything
         await new Promise(resolve => setTimeout(resolve, 100));
 
+        // 7. Configure and run html2pdf
         const opt = {
             margin: 5,
             filename: `Reporte_Estructura_${product.id}.pdf`,
@@ -10635,10 +10640,7 @@ async function exportSinopticoTabularToPdf() {
         console.error("Error exporting with html2pdf:", error);
         showToast('Error al generar el PDF.', 'error');
     } finally {
-        // Cleanup
-        if (printableArea) {
-            printableArea.remove();
-        }
+        // 8. Cleanup: remove the entire overlay
         if (pdfOverlay) {
             pdfOverlay.remove();
         }
