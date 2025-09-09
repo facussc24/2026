@@ -10642,8 +10642,6 @@ async function exportSinopticoTabularToPdf() {
         // We need to re-run lucide to render icons in the off-screen element
         lucide.createIcons({ nodes: printableArea.querySelectorAll('[data-lucide]') });
 
-        // Wait for images to load before generating the PDF
-        await waitForImages(printableArea);
 
         // 5. Configure and run html2pdf on the temporary container
         const opt = {
