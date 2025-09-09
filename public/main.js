@@ -10578,33 +10578,35 @@ async function exportSinopticoTabularToPdf() {
         return;
     }
 
-    showToast('Generando PDF con filtros aplicados...', 'info');
-    dom.loadingOverlay.style.display = 'flex';
-    dom.loadingOverlay.querySelector('p').textContent = 'Preparando datos para el reporte...';
+    // Use a visible overlay instead of the main loading overlay
+    const pdfOverlay = document.createElement('div');
+    pdfOverlay.id = 'pdf-export-overlay';
+    pdfOverlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.9); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+    pdfOverlay.innerHTML = `
+        <div class="text-center">
+            <i data-lucide="loader" class="animate-spin h-12 w-12 text-blue-600 mx-auto"></i>
+            <p class="mt-4 font-semibold text-lg text-slate-700">Generando PDF, por favor espere...</p>
+            <p class="text-sm text-slate-500">Este proceso puede tardar unos segundos.</p>
+        </div>
+    `;
+    document.body.appendChild(pdfOverlay);
+    lucide.createIcons({ nodes: pdfOverlay.querySelectorAll('[data-lucide]') });
+
+    // Create the container for the actual printable content, but keep it off-screen
+    const printableArea = document.createElement('div');
+    printableArea.id = 'printable-sinoptico-area';
+    printableArea.style.position = 'absolute';
+    printableArea.style.left = '-9999px';
+    printableArea.style.width = '2000px'; // Wide width for the table
 
     try {
-        // 1. Get the filtered data, same as the view logic
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-
-        // 2. Create a temporary, off-screen container for the printable content
-        const printableArea = document.createElement('div');
-        printableArea.id = 'printable-sinoptico-area';
-        printableArea.style.position = 'absolute';
-        printableArea.style.left = '-9999px'; // Move it off-screen
-        printableArea.style.width = '2000px'; // Give it a wide width to prevent unwanted wrapping
-
-        // 3. Get the HTML for the header (caratula) and the filtered table
         const caratulaContainer = document.getElementById('caratula-container');
         const caratulaHTML = caratulaContainer ? caratulaContainer.innerHTML : '';
-
-        // We need a reference to the renderTabularTable function.
-        // Since it's not exported, we'll have to rely on it being available in this scope.
-        // If it were in another module, we'd import it.
         const tableHTML = renderTabularTable(flattenedData);
 
-        // 4. Populate the temporary container
         printableArea.innerHTML = `
-            <div class="p-6"> <!-- Add some padding similar to the on-screen view -->
+            <div class="p-6 bg-white">
                 ${caratulaHTML}
                 <div class="bg-white p-6 rounded-xl mt-6">
                     <h3 class="text-xl font-bold text-slate-800 mb-4">Detalle de: ${product.descripcion}</h3>
@@ -10613,11 +10615,11 @@ async function exportSinopticoTabularToPdf() {
             </div>
         `;
         document.body.appendChild(printableArea);
-        // We need to re-run lucide to render icons in the off-screen element
         lucide.createIcons({ nodes: printableArea.querySelectorAll('[data-lucide]') });
 
+        // Add a small delay to ensure the browser has rendered the content
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-        // 5. Configure and run html2pdf on the temporary container
         const opt = {
             margin: 5,
             filename: `Reporte_Estructura_${product.id}.pdf`,
@@ -10626,21 +10628,20 @@ async function exportSinopticoTabularToPdf() {
             jsPDF: { unit: 'mm', format: 'a2', orientation: 'landscape' }
         };
 
-        dom.loadingOverlay.querySelector('p').textContent = 'Generando archivo PDF...';
         await html2pdf().from(printableArea).set(opt).save();
-
         showToast('PDF generado con éxito.', 'success');
 
     } catch (error) {
         console.error("Error exporting with html2pdf:", error);
         showToast('Error al generar el PDF.', 'error');
     } finally {
-        // 6. Clean up: remove the temporary container and hide the overlay
-        const tempArea = document.getElementById('printable-sinoptico-area');
-        if (tempArea) {
-            tempArea.remove();
+        // Cleanup
+        if (printableArea) {
+            printableArea.remove();
         }
-        dom.loadingOverlay.style.display = 'none';
+        if (pdfOverlay) {
+            pdfOverlay.remove();
+        }
     }
 }
 
