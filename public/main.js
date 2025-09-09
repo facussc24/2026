@@ -5843,56 +5843,27 @@ async function exportEcrToPdf(ecrId) {
     document.head.appendChild(tempStyle);
 
     try {
-        await html2canvas(formElement, {
-            scale: 2, // Increase resolution
-            useCORS: true,
-            windowWidth: formElement.scrollWidth,
-            windowHeight: formElement.scrollHeight,
-            onclone: (document) => {
-                // This ensures all styles are applied in the cloned document
-                // that html2canvas uses for rendering.
-                const clonedStyle = document.createElement('style');
-                clonedStyle.innerHTML = tempStyle.innerHTML;
-                document.head.appendChild(clonedStyle);
-            }
-        }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            const { jsPDF } = window.jspdf;
-
-            const pdf = new jsPDF({
-                orientation: 'p',
-                unit: 'px',
-                format: 'a4'
-            });
-
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const canvasWidth = canvas.width;
-            const canvasHeight = canvas.height;
-            const canvasAspectRatio = canvasWidth / canvasHeight;
-            const pdfAspectRatio = pdfWidth / pdfHeight;
-
-            let finalCanvasWidth, finalCanvasHeight;
-
-            // Fit canvas to page width
-            finalCanvasWidth = pdfWidth;
-            finalCanvasHeight = finalCanvasWidth / canvasAspectRatio;
-
-            // If the height is still too large, it means we need multiple pages
-            const totalPages = Math.ceil(finalCanvasHeight / pdfHeight);
-
-            for (let i = 0; i < totalPages; i++) {
-                if (i > 0) {
-                    pdf.addPage();
+        const opt = {
+            margin: 0,
+            filename: `ECR_${ecrId}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: true,
+                onclone: (clonedDoc) => {
+                    const clonedStyle = clonedDoc.createElement('style');
+                    clonedStyle.innerHTML = tempStyle.innerHTML;
+                    clonedDoc.head.appendChild(clonedStyle);
                 }
-                // Calculate the y position of the image slice for the current page
-                const yPos = -(pdfHeight * i);
-                pdf.addImage(imgData, 'PNG', 0, yPos, finalCanvasWidth, finalCanvasHeight);
-            }
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css'], after: '.ecr-page' }
+        };
 
-            pdf.save(`ECR_${ecrId}.pdf`);
-            showToast('ECR exportado a PDF con éxito.', 'success');
-        });
+        await html2pdf().from(formElement).set(opt).save();
+
+        showToast('ECR exportado a PDF con éxito.', 'success');
+
     } catch (error) {
         console.error("Error exporting ECR to PDF:", error);
         showToast('Error al exportar el PDF.', 'error');
@@ -10581,12 +10552,11 @@ async function exportSinopticoTabularToPdf() {
     dom.loadingOverlay.style.display = 'flex';
     dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
 
-    // Create a temporary, off-screen container for rendering
     const printContainer = document.createElement('div');
     printContainer.id = 'temp-print-container';
     printContainer.style.position = 'absolute';
     printContainer.style.left = '-9999px';
-    printContainer.style.width = '210mm'; // A4 width
+    printContainer.style.width = '210mm';
     printContainer.style.backgroundColor = 'white';
     document.body.appendChild(printContainer);
 
@@ -10597,47 +10567,21 @@ async function exportSinopticoTabularToPdf() {
         const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
         printContainer.innerHTML = reportHTML;
 
-        // Wait for images (like the logo) to load
         await waitForImages(printContainer);
-
-        // Use html2canvas to render the single long element
-        const canvas = await html2canvas(printContainer, {
-            scale: 2,
-            useCORS: true,
-            logging: false
-        });
-
         dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
 
-        const imgData = canvas.toDataURL('image/png');
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+        const opt = {
+            margin:       [15, 15, 15, 15],
+            filename:     `Estructura_${product.id}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: 'css', after: '.pdf-page' }
+        };
 
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgProperties = pdf.getImageProperties(imgData);
-        const imgWidth = imgProperties.width;
-        const imgHeight = imgProperties.height;
-        const imgAspectRatio = imgWidth / imgHeight;
+        // Use html2pdf() to generate the PDF
+        await html2pdf().from(printContainer).set(opt).save();
 
-        const finalCanvasWidth = pdfWidth;
-        const finalCanvasHeight = finalCanvasWidth / imgAspectRatio;
-
-        const totalPages = Math.ceil(finalCanvasHeight / pdfHeight);
-
-        for (let i = 0; i < totalPages; i++) {
-            if (i > 0) pdf.addPage();
-
-            const yPos = -(pdfHeight * i);
-            pdf.addImage(imgData, 'PNG', 0, yPos, finalCanvasWidth, finalCanvasHeight);
-
-            // Add footer to each page
-            pdf.setFontSize(8);
-            pdf.setTextColor('#888');
-            pdf.text(`Página ${i + 1} de ${totalPages}`, pdfWidth / 2, pdfHeight - 10, { align: 'center' });
-        }
-
-        pdf.save(`Estructura_${product.id}.pdf`);
         showToast('PDF de estructura generado con éxito.', 'success');
 
     } catch (error) {
