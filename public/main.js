@@ -10552,6 +10552,7 @@ async function exportSinopticoTabularToPdf() {
 
     try {
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        doc.setFont('DejaVu Sans Mono'); // Establecer la fuente que admite los caracteres
         const logoBase64 = await getLogoBase64();
         const PAGE_MARGIN = 10;
         const PAGE_WIDTH = doc.internal.pageSize.width;
@@ -10590,7 +10591,7 @@ async function exportSinopticoTabularToPdf() {
             margin: { top: 45, right: PAGE_MARGIN, bottom: 20, left: PAGE_MARGIN },
             theme: 'grid',
             styles: {
-                font: 'DejaVu Sans Mono',
+                font: 'helvetica',
                 fontSize: 6, // Smaller font for more data
                 cellPadding: 1.5,
                 overflow: 'linebreak',
@@ -10604,7 +10605,7 @@ async function exportSinopticoTabularToPdf() {
                 fontSize: 6,
             },
             columnStyles: {
-                descripcion: { cellWidth: 70, font: 'DejaVu Sans Mono', fontStyle: 'normal' }, // Use a monospaced font for the tree
+                descripcion: { cellWidth: 70, font: 'courier', fontStyle: 'normal' }, // Use a monospaced font for the tree
                 peso: { halign: 'right' },
                 cantidad: { halign: 'right' },
                 piezas_por_vehiculo: { halign: 'center' },
