@@ -35,6 +35,12 @@ This file contains guidelines and lessons learned for AI agents working on this 
 
 ## Important Technical Details
 
+*   **PDF Generation Standard: Use `html2pdf.js`**
+    *   **Directive:** All client-side PDF generation must be implemented using the `html2pdf.js` library. The direct use of `jsPDF` and its plugins (like `jsPDF-AutoTable`) is **deprecated**.
+    *   **Reasoning:** The manual `jsPDF` implementation was prone to script loading race conditions, environmental inconsistencies, and was overly complex to maintain. `html2pdf.js` solves these problems by providing a robust, simple, and maintainable API that converts HTML elements directly to PDF.
+    *   **How it works:** `html2pdf.js` is a wrapper around `jsPDF` and `html2canvas`. It is distributed as a single bundle, which eliminates dependency issues. The primary method is to pass an HTML element to the function and call `.save()`.
+    *   **Example:** The `exportSinopticoTabularToPdf` function was refactored to use this library. This is the model to follow for any new PDF export features.
+
 *   **Note on E2E Testing with Playwright (As of 2025-09-02):** The Playwright E2E test suite has been temporarily disabled by renaming `playwright.config.js` to `playwright.config.js.disabled`.
     *   **Reason:** The tests were running against a live, data-heavy Firebase instance, causing them to be extremely slow and unreliable. This was causing significant developer friction.
     *   **Do not re-enable without a proper test data strategy.**
