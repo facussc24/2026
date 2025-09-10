@@ -133,6 +133,14 @@ function initThreeScene() {
     loader.load('auto.glb', (gltf) => {
         updateStatus('Processing model...');
         const model = gltf.scene;
+
+        // --- FIX: Remove camera from loaded model ---
+        const modelCamera = model.getObjectByProperty('type', 'PerspectiveCamera');
+        if (modelCamera) {
+            console.log("Removing camera from loaded GLB model.");
+            modelCamera.parent.remove(modelCamera);
+        }
+
         scene.add(model);
 
         // Center the model
@@ -272,7 +280,8 @@ function onPointerDown(event) {
 
     if (intersects.length > 0) {
         const firstIntersected = intersects[0].object;
-        if (firstIntersected.isMesh && firstIntersected.name.toLowerCase().startsWith('asiento_')) {
+        // The console log revealed seats are named like 'Car_Cloth_shader'
+        if (firstIntersected.isMesh && firstIntersected.name.toLowerCase().includes('cloth')) {
             selectObject(firstIntersected);
         } else {
             selectObject(null); // Deselect if clicking on non-seat part
@@ -288,7 +297,8 @@ function toggleTransparency() {
     // First time, find and store exterior materials
     if (exteriorMaterials.length === 0 && scene) {
         scene.traverse((child) => {
-            if (child.isMesh && child.name.toLowerCase().startsWith('carroceria')) {
+            const name = child.name.toLowerCase();
+            if (child.isMesh && (name.startsWith('paint_') || name.startsWith('glass_'))) {
                 const material = child.material;
                 // Ensure material is not an array
                 if (!Array.isArray(material)) {
@@ -400,8 +410,7 @@ function setupVisor3dEventListeners() {
                 const partName = button.dataset.partName;
                 const partToSelect = modelParts.find(p => p.name === partName);
                 if (partToSelect) {
-                    // For now, we only allow selecting seats from the list
-                    if (partToSelect.name.toLowerCase().startsWith('asiento_')) {
+                    if (partToSelect.name.toLowerCase().includes('cloth')) {
                         selectObject(partToSelect);
                     } else {
                         selectObject(null);
