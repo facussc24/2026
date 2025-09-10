@@ -10547,51 +10547,97 @@ async function exportSinopticoTabularToPdf() {
         return;
     }
     const product = state.selectedProduct;
+    const client = appState.collectionsById[COLLECTIONS.CLIENTES].get(product.clienteId);
 
     showToast('Generando PDF de estructura...', 'info');
     dom.loadingOverlay.style.display = 'flex';
-    dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
-
-    const printContainer = document.createElement('div');
-    printContainer.id = 'temp-print-container';
-    printContainer.style.position = 'absolute';
-    printContainer.style.left = '-9999px';
-    printContainer.style.width = '210mm'; // A4 width
-    printContainer.style.backgroundColor = 'white';
-    document.body.appendChild(printContainer);
+    dom.loadingOverlay.querySelector('p').textContent = 'Procesando datos...';
 
     try {
-        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4'); // Landscape mode
         const logoBase64 = await getLogoBase64();
 
-        const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
-        printContainer.innerHTML = reportHTML;
+        const addPageNumbers = () => {
+            const pageCount = doc.internal.getNumberOfPages();
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                const text = `Página ${i} de ${pageCount}`;
+                const textWidth = doc.getStringUnitWidth(text) * doc.internal.getFontSize() / doc.internal.scaleFactor;
+                doc.text(text, doc.internal.pageSize.width - 15 - textWidth, doc.internal.pageSize.height - 10);
 
-        await waitForImages(printContainer);
-        dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
-
-        const opt = {
-            margin:       [15, 15, 15, 15],
-            filename:     `Estructura_${product.id}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css'], after: '.pdf-page' }
+                const generatedText = `Generado el ${new Date().toLocaleDateString('es-AR')} por ${appState.currentUser.name}`;
+                doc.text(generatedText, 15, doc.internal.pageSize.height - 10);
+            }
         };
 
-        // Use html2pdf() to generate the PDF
-        await html2pdf().from(printContainer).set(opt).save();
+        // --- Cover Page ---
+        if (logoBase64) {
+            doc.addImage(logoBase64, 'PNG', doc.internal.pageSize.width / 2 - 30, 40, 60, 25);
+        }
+        doc.setFontSize(28);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Reporte de Estructura de Producto', doc.internal.pageSize.width / 2, 90, { align: 'center' });
 
-        showToast('PDF de estructura generado con éxito.', 'success');
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Producto: ${product.descripcion}`, doc.internal.pageSize.width / 2, 120, { align: 'center' });
+        doc.text(`Código: ${product.id}`, doc.internal.pageSize.width / 2, 128, { align: 'center' });
+        doc.text(`Cliente: ${client?.descripcion || 'N/A'}`, doc.internal.pageSize.width / 2, 136, { align: 'center' });
+
+        // --- Data Table Page ---
+        doc.addPage();
+        dom.loadingOverlay.querySelector('p').textContent = 'Generando tabla...';
+
+        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
+
+        doc.autoTable({
+            head: head,
+            body: body,
+            startY: 20,
+            theme: 'grid',
+            styles: {
+                fontSize: 7,
+                cellPadding: 1.5,
+                overflow: 'linebreak'
+            },
+            headStyles: {
+                fillColor: [41, 104, 217],
+                textColor: 255,
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { cellWidth: 60 }, // Descripcion
+                1: { cellWidth: 10, halign: 'center' }, // Nivel
+                2: { cellWidth: 15, halign: 'center' }, // LC/KD
+                3: { cellWidth: 20, halign: 'center' }, // Código
+                4: { cellWidth: 15, halign: 'center' }, // Versión
+                // ... add other column widths if needed
+            },
+            didDrawPage: (data) => {
+                if (logoBase64) {
+                    doc.addImage(logoBase64, 'PNG', 15, 8, 20, 8);
+                }
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.text('Estructura de Producto', doc.internal.pageSize.width - 15, 15, { align: 'right' });
+            }
+        });
+
+        addPageNumbers();
+        doc.save(`Estructura_${product.id}.pdf`);
+        showToast('PDF generado con éxito.', 'success');
 
     } catch (error) {
-        console.error("Error al exportar la estructura del producto a PDF:", error);
-        showToast('Error al generar el PDF.', 'error');
+        console.error("Error al generar PDF con jsPDF:", error);
+        showToast(`Error al generar el PDF: ${error.message}`, 'error');
     } finally {
         dom.loadingOverlay.style.display = 'none';
-        if (document.getElementById('temp-print-container')) {
-            document.getElementById('temp-print-container').remove();
-        }
     }
 }
 
