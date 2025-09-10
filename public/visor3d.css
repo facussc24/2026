@@ -91,30 +91,49 @@ body.visor3d-active {
 
 #visor3d-piece-card {
     position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 20px;
+    right: 20px;
     background-color: white;
     border-radius: 0.75rem;
     box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    padding: 1.5rem;
+    padding: 1rem; /* A bit smaller padding */
     width: 90%;
-    max-width: 400px;
+    max-width: 450px; /* A bit wider to accommodate the new layout */
     display: none; /* Hidden by default */
-    animation: slide-up 0.3s ease-out;
+    animation: slide-in-from-right 0.4s ease-out;
+    z-index: 20; /* Ensure it's above the scene but below modals */
 }
 
-@keyframes slide-up {
+@keyframes slide-in-from-right {
     from {
-        transform: translate(-50%, 50px);
+        transform: translateX(100%);
         opacity: 0;
     }
     to {
-        transform: translateX(-50%);
+        transform: translateX(0);
         opacity: 1;
     }
 }
 
 #visor3d-piece-card.visible {
     display: block;
+}
+
+.custom-card-layout {
+    display: flex;
+    gap: 1rem; /* Space between image and text */
+    align-items: flex-start; /* Align items to the top */
+}
+
+.custom-card-image {
+    width: 120px; /* Larger image */
+    height: 120px;
+    object-fit: cover;
+    border-radius: 0.5rem;
+    flex-shrink: 0; /* Prevent image from shrinking */
+    border: 1px solid #e2e8f0;
+}
+
+.custom-card-details {
+    flex-grow: 1; /* Allow details to take up remaining space */
 }

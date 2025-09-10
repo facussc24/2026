@@ -427,18 +427,22 @@ function selectObject(objectToSelect) {
             if (displayName === 'Anodized Aluminum Brushed 90° Black #1') {
                 pieceTitle.textContent = "Headrest rear center Patagonia";
                 detailsContainer.innerHTML = `
-                   <img src="APC.jpg" alt="Headrest rear center Patagonia" class="w-full h-auto rounded-md mb-2">
-                   <div class="flex justify-between py-1 border-b border-slate-200">
-                       <span class="font-semibold text-slate-500">Description:</span>
-                       <span class="text-right text-slate-700">This is the central rear headrest for the Patagonia model.</span>
-                   </div>
-                   <div class="flex justify-between py-1 border-b border-slate-200">
-                       <span class="font-semibold text-slate-500">Material:</span>
-                       <span class="text-right text-slate-700">High-quality synthetic leather.</span>
-                   </div>
-                   <div class="flex justify-between py-1 border-b border-slate-200">
-                        <span class="font-semibold text-slate-500">Part Number:</span>
-                        <span class="text-right text-slate-700">PAT-HR-CNT-01</span>
+                   <div class="custom-card-layout">
+                       <img src="APC.jpg" alt="Headrest rear center Patagonia" class="custom-card-image">
+                       <div class="custom-card-details">
+                           <div class="flex justify-between py-1 border-b border-slate-200">
+                               <span class="font-semibold text-slate-500">Description:</span>
+                               <span class="text-right text-slate-700">This is the central rear headrest for the Patagonia model.</span>
+                           </div>
+                           <div class="flex justify-between py-1 border-b border-slate-200">
+                               <span class="font-semibold text-slate-500">Material:</span>
+                               <span class="text-right text-slate-700">High-quality synthetic leather.</span>
+                           </div>
+                           <div class="flex justify-between py-1 border-b border-slate-200">
+                               <span class="font-semibold text-slate-500">Part Number:</span>
+                               <span class="text-right text-slate-700">PAT-HR-CNT-01</span>
+                           </div>
+                       </div>
                    </div>
                 `;
            } else {
