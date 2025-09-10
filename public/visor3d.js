@@ -32,19 +32,20 @@ export function runVisor3dLogic() {
                 </div>
                 <div id="visor3d-panel">
                     <div id="visor3d-panel-header">
-                        <h3 class="text-lg font-bold">Piezas del Modelo</h3>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-bold">Piezas del Modelo</h3>
+                            <div id="visor3d-controls" class="flex items-center gap-2">
+                                <button id="transparency-btn" class="visor3d-control-btn" title="Alternar transparencia"><i data-lucide="glasses"></i></button>
+                                <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
+                                <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
+                            </div>
+                        </div>
                         <input type="text" id="visor3d-search" placeholder="Buscar pieza..." class="mt-2">
                     </div>
                     <div id="visor3d-parts-list">
                         <p class="text-sm text-slate-500 p-4">La lista de piezas aparecerá aquí.</p>
                     </div>
                 </div>
-                <div id="visor3d-controls">
-                    <button id="transparency-btn" class="visor3d-control-btn" title="Alternar transparencia"><i data-lucide="glasses"></i></button>
-                    <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
-                    <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
-                </div>
-                <button id="visor3d-help-btn" class="visor3d-control-btn" title="Ayuda"><i data-lucide="help-circle"></i></button>
                 <div id="visor3d-piece-card" class="hidden">
                     <h4 id="piece-card-title" class="text-xl font-bold mb-2">Título de la Pieza</h4>
                     <p id="piece-card-desc" class="text-sm text-slate-600 mb-4">Descripción de la pieza.</p>
@@ -105,8 +106,8 @@ function initThreeScene() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f2f5);
 
-    // Camera - Increased far clipping plane to handle potentially large models
-    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 5000);
+    // Camera - Adjusted clipping planes for large models and close-up zoom
+    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.01, 5000);
     camera.position.z = 5;
 
     // Renderer
@@ -275,6 +276,10 @@ function selectObject(objectToSelect) {
 }
 
 function onPointerDown(event) {
+    // Hide piece card on any new click to start fresh
+    const pieceCard = document.getElementById('visor3d-piece-card');
+    if (pieceCard) pieceCard.classList.add('hidden');
+
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -284,11 +289,11 @@ function onPointerDown(event) {
 
     if (intersects.length > 0) {
         const firstIntersected = intersects[0].object;
-        // The console log revealed seats are named like 'Car_Cloth_shader'
-        if (firstIntersected.isMesh && firstIntersected.name.toLowerCase().includes('cloth')) {
+        // Select any part that is a mesh and has a name
+        if (firstIntersected.isMesh && firstIntersected.name) {
             selectObject(firstIntersected);
         } else {
-            selectObject(null); // Deselect if clicking on non-seat part
+            selectObject(null);
         }
     } else {
         selectObject(null); // Deselect if clicking on empty space
@@ -301,38 +306,42 @@ function toggleTransparency() {
     // First time, find and store exterior materials
     if (exteriorMaterials.length === 0 && scene) {
         scene.traverse((child) => {
-            const name = child.name.toLowerCase();
-            if (child.isMesh && (name.startsWith('paint_') || name.startsWith('glass_'))) {
-                const material = child.material;
-                // Ensure material is not an array
-                if (!Array.isArray(material)) {
-                    exteriorMaterials.push({
-                        mesh: child,
-                        originalOpacity: material.opacity,
-                        originalTransparent: material.transparent
-                    });
-                } else {
-                    // Handle multi-material objects if necessary
-                    console.warn(`Mesh ${child.name} has multiple materials. Transparency might not work as expected.`);
+            if (child.isMesh) {
+                const name = child.name.toLowerCase();
+                // Identify exterior parts like body, paint, and glass
+                const isExterior = name.startsWith('paint_') || name.startsWith('glass_') || name.startsWith('matte_black_');
+                // Exclude parts that shouldn't be transparent, like wheels or interior trim
+                const isExcluded = name.includes('wheel') || name.includes('cloth') || name.includes('caliper');
+
+                if (isExterior && !isExcluded) {
+                    const material = child.material;
+                    if (!Array.isArray(material)) {
+                        // Store the original material state
+                        const originalMaterial = material.clone();
+                        // Create the transparent variant
+                        const transparentMaterial = material.clone();
+                        transparentMaterial.transparent = true;
+                        transparentMaterial.opacity = 0.15;
+
+                        exteriorMaterials.push({
+                            mesh: child,
+                            originalMaterial: originalMaterial,
+                            transparentMaterial: transparentMaterial
+                        });
+                    } else {
+                        console.warn(`Mesh ${child.name} has multiple materials. Transparency might not work as expected.`);
+                    }
                 }
             }
         });
     }
 
+    // Apply the correct material based on the transparency state
     exteriorMaterials.forEach(item => {
-        // Make a copy of the material to avoid sharing state
-        if (!item.transparentMaterial) {
-            item.transparentMaterial = item.mesh.material.clone();
-            item.transparentMaterial.transparent = true;
-            item.transparentMaterial.opacity = 0.2;
-        }
-
         if (isTransparent) {
             item.mesh.material = item.transparentMaterial;
         } else {
-            // Revert to original material properties
-            item.mesh.material.transparent = item.originalTransparent;
-            item.mesh.material.opacity = item.originalOpacity;
+            item.mesh.material = item.originalMaterial;
         }
         item.mesh.material.needsUpdate = true;
     });
@@ -399,7 +408,6 @@ function toggleExplodeView() {
 function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     const resetBtn = document.getElementById('reset-view-btn');
-    const helpBtn = document.getElementById('visor3d-help-btn');
     const transparencyBtn = document.getElementById('transparency-btn');
     const partsList = document.getElementById('visor3d-parts-list');
 
@@ -414,12 +422,7 @@ function setupVisor3dEventListeners() {
                 const partName = button.dataset.partName;
                 const partToSelect = modelParts.find(p => p.name === partName);
                 if (partToSelect) {
-                    if (partToSelect.name.toLowerCase().includes('cloth')) {
-                        selectObject(partToSelect);
-                    } else {
-                        selectObject(null);
-                        console.log(`Selección de la pieza '${partName}' no implementada desde la lista.`);
-                    }
+                    selectObject(partToSelect);
                 }
             }
         });
@@ -441,60 +444,4 @@ function setupVisor3dEventListeners() {
             selectObject(null);
         });
     }
-
-    if (helpBtn) {
-        helpBtn.addEventListener('click', showHelpModal);
-    }
-}
-
-function showHelpModal() {
-    const modalId = 'visor3d-help-modal';
-    // Prevent creating duplicate modals
-    if (document.getElementById(modalId)) return;
-
-    const modalHTML = `
-        <div id="${modalId}" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[1100] animate-fade-in">
-            <div class="bg-white rounded-lg shadow-2xl w-full max-w-2xl m-4 modal-content transform animate-scale-in">
-                <div class="flex justify-between items-center p-5 border-b">
-                    <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-3"><i data-lucide="help-circle" class="text-blue-500"></i>Guía del Visor 3D</h2>
-                    <button data-action="close-modal" class="text-slate-400 hover:text-slate-800 p-2 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
-                </div>
-                <div class="p-6 text-slate-700 space-y-4">
-                    <div>
-                        <h3 class="font-bold text-lg mb-2">Controles de la Cámara</h3>
-                        <ul class="list-disc list-inside space-y-1 pl-2">
-                            <li><strong>Orbitar:</strong> Mantén presionado el clic izquierdo del mouse y arrastra para girar alrededor del modelo.</li>
-                            <li><strong>Zoom:</strong> Usa la rueda del mouse para acercar o alejar.</li>
-                            <li><strong>Mover (Pan):</strong> Mantén presionado el clic derecho del mouse y arrastra para mover la cámara.</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-lg mb-2">Interactuar con el Modelo</h3>
-                        <ul class="list-disc list-inside space-y-1 pl-2">
-                            <li><strong>Seleccionar Pieza:</strong> Haz clic en cualquier pieza interior para resaltarla y ver su descripción.</li>
-                            <li><strong>Panel Lateral:</strong> Usa la lista en el panel derecho para ver todas las piezas disponibles y buscarlas por nombre.</li>
-                            <li><strong>Vista Explosionada:</strong> Usa el botón <i data-lucide="move-3d" class="inline-block w-4 h-4 -mt-1"></i> para separar las piezas y ver cómo encajan.</li>
-                        </ul>
-                    </div>
-                     <div>
-                        <h3 class="font-bold text-lg mb-2">Compartir</h3>
-                        <p class="pl-2">Para compartir una vista directa a este visor, simplemente copia y pega la URL de tu navegador. La dirección terminará en <strong>/visor3d</strong>.</p>
-                    </div>
-                </div>
-                <div class="flex justify-end p-4 bg-slate-50 border-t">
-                    <button data-action="close-modal" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Entendido</button>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    lucide.createIcons();
-
-    const modalElement = document.getElementById(modalId);
-    modalElement.addEventListener('click', (e) => {
-        if (e.target === modalElement || e.target.closest('[data-action="close-modal"]')) {
-            modalElement.remove();
-        }
-    });
 }
