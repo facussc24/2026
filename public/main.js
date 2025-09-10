@@ -10541,32 +10541,31 @@ export function runSinopticoTabularLogic() {
 }
 
 async function exportSinopticoTabularToPdf() {
-  try {
-    console.log("Jules's Test: Exporting simple PDF");
-    showToast("Jules's Test: Iniciando exportación simple...", 'info');
+    const state = appState.sinopticoTabularState;
+    if (!state || !state.selectedProduct) {
+        showToast('No hay producto seleccionado para exportar.', 'error');
+        return;
+    }
+    const product = state.selectedProduct;
 
-    // Create a simple element to export
-    const element = document.createElement('div');
-    element.innerHTML = '<h1>Hello World</h1><p>This is a test from Jules to check if html2pdf is working at all.</p>';
+    showToast('Generando HTML para depuración...', 'info');
 
-    const opt = {
-      margin:       1,
-      filename:     'test_jules.pdf',
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2 },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
+    try {
+        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        const logoBase64 = await getLogoBase64();
 
-    // Use html2pdf() to generate the PDF
-    await html2pdf().from(element).set(opt).save();
+        const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
 
-    showToast("Jules's Test: PDF simple generado con éxito.", 'success');
-    console.log("Jules's Test: Simple PDF export should be complete.");
+        console.log("--- INICIO DEL HTML GENERADO PARA EL PDF ---");
+        console.log(reportHTML);
+        console.log("--- FIN DEL HTML GENERADO PARA EL PDF ---");
 
-  } catch (error) {
-    console.error("Jules's Test: Error exporting simple PDF:", error);
-    showToast(`Jules's Test: Error al generar el PDF de prueba. ${error.message}`, 'error');
-  }
+        showToast('HTML generado. Por favor, revise la consola del navegador (F12) y envíeme el contenido.', 'success', 5000);
+
+    } catch (error) {
+        console.error("Error al generar el HTML para el PDF:", error);
+        showToast('Error al generar el HTML para depuración.', 'error');
+    }
 }
 
 function handleCaratulaClick(e) {
