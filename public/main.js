@@ -10541,32 +10541,77 @@ export function runSinopticoTabularLogic() {
 }
 
 async function exportSinopticoTabularToPdf() {
-    // --- BEGIN TEMPORARY TEST CODE ---
-    // This is a simplified test to check if html2pdf is working at all.
-    // It exports a simple "Hello World" element instead of the complex report.
-    console.log("Running simplified PDF export test...");
-    showToast('Ejecutando prueba de PDF simplificada...', 'info');
+    const state = appState.sinopticoTabularState;
+    if (!state || !state.selectedProduct) {
+        showToast('No hay producto seleccionado para exportar.', 'error');
+        return;
+    }
+    const product = state.selectedProduct;
+
+    showToast('Iniciando generación de PDF...', 'loading', { duration: 0 });
     dom.loadingOverlay.style.display = 'flex';
+    const loadingText = dom.loadingOverlay.querySelector('p');
+
+    // Use a temporary div for rendering pages off-screen
+    const printContainer = document.createElement('div');
+    printContainer.id = 'temp-print-container';
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    printContainer.style.width = '210mm'; // A4 width
+    document.body.appendChild(printContainer);
 
     try {
-        const element = document.createElement('h1');
-        element.textContent = 'Hello World - Test PDF';
+        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        const logoBase64 = await getLogoBase64();
+        const ROWS_PER_PAGE = 35; // Adjust this value based on testing
+        const totalPages = Math.ceil(flattenedData.length / ROWS_PER_PAGE);
 
         const opt = {
-            margin: 1,
-            filename: 'test_pdf.pdf',
-            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+            margin: [15, 15, 15, 15],
+            filename: `Estructura_${product.id}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true, logging: false },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        await html2pdf().from(element).set(opt).save();
-        showToast('Prueba de PDF completada.', 'success');
+        // Initialize the worker
+        const worker = html2pdf().set(opt);
+
+        // --- Page 1: Cover Page ---
+        loadingText.textContent = 'Generando carátula...';
+        const coverHTML = generateProductStructureCoverHTML(product, logoBase64, appState.collectionsById);
+        printContainer.innerHTML = coverHTML;
+        await waitForImages(printContainer);
+        await worker.from(printContainer);
+
+        // --- Subsequent Pages: Table Data ---
+        for (let i = 0; i < totalPages; i++) {
+            loadingText.textContent = `Procesando página ${i + 2} de ${totalPages + 1}...`;
+            const pageData = flattenedData.slice(i * ROWS_PER_PAGE, (i + 1) * ROWS_PER_PAGE);
+            const pageHTML = generateProductStructurePageHTML(product, pageData, i + 2, totalPages + 1, logoBase64);
+
+            printContainer.innerHTML = pageHTML;
+            await waitForImages(printContainer);
+
+            // Add a new page and render the content onto it
+            await worker.addPage().from(printContainer);
+        }
+
+        // --- Save the PDF ---
+        loadingText.textContent = 'Finalizando y guardando el PDF...';
+        await worker.save();
+
+        showToast('PDF de estructura generado con éxito.', 'success');
+
     } catch (error) {
-        console.error("Error in simplified PDF test:", error);
-        showToast('Error en la prueba de PDF simplificada.', 'error');
+        console.error("Error al exportar la estructura del producto a PDF:", error);
+        showToast('Error al generar el PDF. Verifique la consola para más detalles.', 'error');
     } finally {
         dom.loadingOverlay.style.display = 'none';
+        if (document.getElementById('temp-print-container')) {
+            document.getElementById('temp-print-container').remove();
+        }
     }
-    // --- END TEMPORARY TEST CODE ---
 }
 
 function handleCaratulaClick(e) {
