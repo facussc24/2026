@@ -57,6 +57,19 @@ This file contains guidelines and lessons learned for AI agents working on this 
 *   **Styling:** The project uses TailwindCSS. All new UI should conform to this styling.
 *   **Icons:** The project uses the Lucide icon library. Refer to the official Lucide website for a list of available icons.
 
+## Estructura del Proyecto
+
+### Módulo de Visualización 3D
+
+Para mantener el módulo de visualización 3D organizado y escalable, todos los archivos relacionados deben colocarse en la siguiente estructura de carpetas dentro de `public/modulos/visor3d/`:
+
+-   **`js/`**: Contiene los archivos JavaScript principales del visor, como `visor3d.js`.
+-   **`css/`**: Contiene las hojas de estilo específicas para el visor, como `visor3d.css`.
+-   **`modelos/`**: Almacena todos los modelos 3D (archivos `.glb`, `.gltf`, etc.). Se recomienda crear subcarpetas para una mejor organización (por ejemplo, `modelos/autos/`, `modelos/piezas/`).
+-   **`imagenes/`**: Contiene todas las imágenes y texturas utilizadas por el visor 3D.
+
+Al agregar nuevos recursos, es fundamental seguir esta estructura para asegurar que el código siga siendo fácil de mantener.
+
 ## Development Credentials
 
 To run the application and verify frontend changes, use the following credentials for login:

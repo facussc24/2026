@@ -257,7 +257,7 @@ function initThreeScene() {
 
     // GLTFLoader
     const loader = new GLTFLoader();
-    loader.load('auto.glb', (gltf) => {
+    loader.load('../modelos/auto.glb', (gltf) => {
         updateStatus('Processing model...');
         const model = gltf.scene;
 
@@ -428,7 +428,7 @@ function selectObject(objectToSelect) {
                 pieceTitle.textContent = "Headrest rear center Patagonia";
                 detailsContainer.innerHTML = `
                    <div class="custom-card-layout">
-                       <img src="APC.jpg" alt="Headrest rear center Patagonia" class="custom-card-image">
+                       <img src="../imagenes/APC.jpg" alt="Headrest rear center Patagonia" class="custom-card-image">
                        <div class="custom-card-details">
                            <div class="flex justify-between py-1 border-b border-slate-200">
                                <span class="font-semibold text-slate-500">Description:</span>

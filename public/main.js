@@ -9,7 +9,7 @@ import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequir
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
-import { runVisor3dLogic } from './visor3d.js';
+import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
 
 // NOTA DE SEGURIDAD: La configuración de Firebase no debe estar hardcodeada en el código fuente.
 // En un entorno de producción, estos valores deben cargarse de forma segura,

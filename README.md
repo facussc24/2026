@@ -209,6 +209,21 @@ En algunos entornos, el comando `firebase` puede no estar en el `PATH` del siste
     node <npm_root_g_output>/firebase-tools/lib/bin/firebase.js <comando>
     ```
 
+## Estructura del Proyecto
+
+La aplicación sigue una estructura de archivos organizada para facilitar el mantenimiento y la escalabilidad. Los archivos principales se encuentran en el directorio `public/`.
+
+### Módulo de Visualización 3D
+
+Para la gestión de los recursos del visor 3D, se ha creado una estructura de carpetas específica dentro de `public/modulos/visor3d/`:
+
+-   **`js/`**: Contiene los archivos JavaScript principales del visor.
+-   **`css/`**: Contiene las hojas de estilo específicas para el visor.
+-   **`modelos/`**: Almacena todos los modelos 3D (`.glb`, `.gltf`, etc.).
+-   **`imagenes/`**: Contiene todas las imágenes y texturas utilizadas por el visor 3D.
+
+Esta organización asegura que todos los recursos del módulo 3D estén centralizados y sean fáciles de localizar.
+
 ## Pruebas Automatizadas
 
 Para garantizar la estabilidad y calidad del código, este proyecto utiliza un sistema de pruebas automatizadas con **Jest**. Estas pruebas verifican que las funciones clave del sistema operen como se espera y ayudan a prevenir errores (regresiones) cuando se introducen nuevas funcionalidades.
