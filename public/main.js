@@ -10548,23 +10548,50 @@ async function exportSinopticoTabularToPdf() {
     }
     const product = state.selectedProduct;
 
-    showToast('Generando HTML para depuración...', 'info');
+    showToast('Generando PDF de estructura...', 'info');
+    dom.loadingOverlay.style.display = 'flex';
+    dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
+
+    const printContainer = document.createElement('div');
+    printContainer.id = 'temp-print-container';
+    printContainer.style.position = 'absolute';
+    printContainer.style.left = '-9999px';
+    printContainer.style.width = '210mm';
+    printContainer.style.backgroundColor = 'white';
+    document.body.appendChild(printContainer);
 
     try {
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
         const logoBase64 = await getLogoBase64();
 
         const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
+        printContainer.innerHTML = reportHTML;
 
-        console.log("--- INICIO DEL HTML GENERADO PARA EL PDF ---");
-        console.log(reportHTML);
-        console.log("--- FIN DEL HTML GENERADO PARA EL PDF ---");
+        await waitForImages(printContainer);
+        dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
 
-        showToast('HTML generado. Por favor, revise la consola del navegador (F12) y envíeme el contenido.', 'success', 5000);
+        const opt = {
+            margin:       [15, 15, 15, 15],
+            filename:     `Estructura_${product.id}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['css'], after: '.pdf-page' }
+        };
+
+        // Use html2pdf() to generate the PDF
+        await html2pdf().from(printContainer).set(opt).save();
+
+        showToast('PDF de estructura generado con éxito.', 'success');
 
     } catch (error) {
-        console.error("Error al generar el HTML para el PDF:", error);
-        showToast('Error al generar el HTML para depuración.', 'error');
+        console.error("Error al exportar la estructura del producto a PDF:", error);
+        showToast('Error al generar el PDF.', 'error');
+    } finally {
+        dom.loadingOverlay.style.display = 'none';
+        if (document.getElementById('temp-print-container')) {
+            document.getElementById('temp-print-container').remove();
+        }
     }
 }
 
