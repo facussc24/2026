@@ -11551,6 +11551,7 @@ export async function cloneProduct(dependencies, product = null) {
     delete newProduct.createdAt; // Remove old stringified date
 
     newProduct.id = newId;
+    newProduct.codigo_pieza = newId;
     newProduct.createdAt = new Date();
     newProduct.fecha_modificacion = new Date();
 
