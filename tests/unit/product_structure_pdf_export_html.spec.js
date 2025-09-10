@@ -47,30 +47,31 @@ describe('generateProductStructureReportHTML', () => {
         mockLogoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA';
     });
 
-    test('should generate a valid HTML report string with pagination', () => {
+    test('should generate a valid single-block HTML report string', () => {
         // --- ACT ---
         const resultHTML = generateProductStructureReportHTML(mockProduct, mockFlattenedData, mockLogoBase64, mockCollectionsById);
 
         // --- ASSERT ---
-        // 1. Check for the new paged structure
-        expect(resultHTML).toContain('<div class="pdf-page"');
+        // 1. Check that the single-page container is present and the old paged one is not.
+        expect(resultHTML).toContain('<div id="pdf-content"');
+        expect(resultHTML).not.toContain('<div class="pdf-page"');
 
         // 2. Check header content is present
         expect(resultHTML).toContain('<h1 style="font-size: 22px; font-weight: bold; margin: 0; color: #1e40af;">Composición de Piezas</h1>');
         expect(resultHTML).toContain(`<p style="font-size: 14px; margin: 0;">${mockProduct.descripcion}</p>`);
         expect(resultHTML).toContain(`<strong>Nº de Pieza:</strong> ${mockProduct.id}`);
 
-        // 3. Check table content
+        // 3. Check table content - should contain all rows in one table
         const rowCount = (resultHTML.match(/<tr/g) || []).length;
         expect(rowCount).toBe(mockFlattenedData.length + 1); // +1 for the header row
 
-        // 4. Check that the footer with page numbers is present
-        expect(resultHTML).toContain('Página 1 de 1');
+        // 4. Check that the manual footer with page numbers is NOT present
+        expect(resultHTML).not.toContain('Página 1 de');
 
         // 5. Check specific row content and tree prefixes
         expect(resultHTML).toContain('>Producto de Prueba</td>'); // Level 0 has no prefix
         expect(resultHTML).toContain('├─ Sub-ensamble A</td>');
-        expect(resultHTML).toContain('└─ Pieza X</td>');
+        // This checks a more complex prefix for a nested item
         expect(resultHTML).toContain('│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ Pieza X</td>');
 
         // 6. Check a comment
