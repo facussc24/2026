@@ -14,131 +14,28 @@ let modelParts = [];
 let isExploded = false;
 const originalPositions = new Map();
 
-// --- Base de datos simulada de características de piezas ---
-const partCharacteristics = {
-    'chassis': {
-        'ID de Pieza': 'CH-MAIN-001',
-        'Material': 'Acero de alta resistencia',
-        'Peso (kg)': 800,
-        'Tratamiento': 'Galvanizado por inmersión en caliente',
-        'Rigidez Torsional (Nm/deg)': 35000
-    },
-    'engine_block': {
-        'ID de Pieza': 'EN-BLK-001',
-        'Material': 'Aleación de Aluminio',
-        'Peso (kg)': 150,
-        'Fabricante': 'AutoParts Co.',
-        'Fecha de Fabricación': '2023-05-12'
-    },
-    'piston': {
-        'ID de Pieza': 'PS-045',
-        'Material': 'Acero Forjado',
-        'Peso (kg)': 1.2,
-        'Fabricante': 'Engine Systems',
-        'Tolerancia': '0.01mm'
-    },
-    'seat_front_left': {
-        'ID de Pieza': 'SEAT-FL-089',
-        'Material': 'Cuero sintético, Espuma de alta densidad',
-        'Peso (kg)': 25,
-        'Proveedor': 'ComfortRide Inc.',
-        'Características': 'Ajuste lumbar, Calefactable'
-    },
-    'seat_front_right': {
-        'ID de Pieza': 'SEAT-FR-090',
-        'Material': 'Cuero sintético, Espuma de alta densidad',
-        'Peso (kg)': 25,
-        'Proveedor': 'ComfortRide Inc.',
-        'Características': 'Ajuste lumbar, Calefactable'
-    },
-    'wheel_front_left': {
-        'ID de Pieza': 'WHL-FL-303',
-        'Material': 'Aleación de Magnesio',
-        'Peso (kg)': 12,
-        'Dimensiones': '18" x 8.5"',
-        'Fabricante': 'WheelPros'
-    },
-    'wheel_front_right': {
-        'ID de Pieza': 'WHL-FR-304',
-        'Material': 'Aleación de Magnesio',
-        'Peso (kg)': 12,
-        'Dimensiones': '18" x 8.5"',
-        'Fabricante': 'WheelPros'
-    },
-    'wheel_rear_left': {
-        'ID de Pieza': 'WHL-RL-305',
-        'Material': 'Aleación de Magnesio',
-        'Peso (kg)': 12,
-        'Dimensiones': '18" x 8.5"',
-        'Fabricante': 'WheelPros'
-    },
-    'wheel_rear_right': {
-        'ID de Pieza': 'WHL-RR-306',
-        'Material': 'Aleación de Magnesio',
-        'Peso (kg)': 12,
-        'Dimensiones': '18" x 8.5"',
-        'Fabricante': 'WheelPros'
-    },
-    'brake_caliper_front_left': {
-        'ID de Pieza': 'BC-FL-772',
-        'Material': 'Hierro Dúctil',
-        'Peso (kg)': 4.5,
-        'Tipo': '4 pistones',
-        'Proveedor': 'StopFast Brakes'
-    },
-    'glass_windshield': {
-        'ID de Pieza': 'GLS-WND-001',
-        'Material': 'Vidrio Laminado Acústico',
-        'Peso (kg)': 15,
-        'Proveedor': 'SafeGlass Corp.',
-        'Características': 'Filtro UV, Sensor de lluvia integrado'
-    },
-    'exhaust_system': {
-        'ID de Pieza': 'EXH-SYS-019',
-        'Material': 'Acero Inoxidable 304',
-        'Peso (kg)': 25,
-        'Fabricante': 'FlowMax',
-        'Nivel de Ruido (dB)': '85'
-    },
-    'steering_wheel': {
-        'ID de Pieza': 'STR-WHL-007',
-        'Material': 'Cuero y Aluminio',
-        'Peso (kg)': 2.5,
-        'Características': 'Controles multifunción, Airbag'
-    },
-    'dashboard': {
-        'ID de Pieza': 'DASH-001',
-        'Material': 'Polímero ABS',
-        'Peso (kg)': 18,
-        'Acabado': 'Textura suave al tacto'
-    },
-    'paint_main_body': {
-        'ID de Pieza': 'PNT-MB-01',
-        'Color': 'Blanco Perlado',
-        'Tipo': 'Tricapa',
-        'Código de Color': '#FDFDFD',
-        'Proveedor': 'ColorLux'
-    },
-    'wheel': {
-        'ID de Pieza': 'WHL-GEN-001',
-        'Material': 'Aleación',
-        'Fabricante': 'WheelPros'
-    },
-    'seat': {
-        'ID de Pieza': 'SEAT-GEN-001',
-        'Material': 'Tela y Espuma',
-        'Proveedor': 'ComfortRide Inc.'
-    },
-    'brake_caliper': {
-        'ID de Pieza': 'BC-GEN-001',
-        'Material': 'Hierro Dúctil',
-        'Proveedor': 'StopFast Brakes'
-    }
-};
+let partCharacteristics = {}; // This will be loaded from JSON
 
 // This function will be called by main.js to start the 3D viewer.
-export function runVisor3dLogic() {
+export async function runVisor3dLogic() {
     console.log("Running Visor3D logic...");
+
+    // Determine which model to load. For now, it's hardcoded to 'auto'.
+    // In the future, this could be passed as a parameter.
+    const modelId = 'auto';
+
+    try {
+        const response = await fetch(`modulos/visor3d/data/${modelId}.json`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        partCharacteristics = await response.json();
+    } catch (error) {
+        console.error("Could not load part characteristics:", error);
+        // Handle the error appropriately, maybe show a message to the user
+        partCharacteristics = {}; // Reset to avoid using stale data
+    }
+
     const container = document.getElementById('view-content');
     if (container) {
         // Clear previous view content

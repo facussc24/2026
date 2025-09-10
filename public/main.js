@@ -1392,6 +1392,31 @@ function setupGlobalEventListeners() {
     document.getElementById('reset-form')?.addEventListener('submit', handleAuthForms);
 
     document.addEventListener('click', handleGlobalClick);
+
+    // --- New Help Modal Logic ---
+    const helpBtn = document.getElementById('help-tutorial-btn');
+    const helpModal = document.getElementById('help-modal');
+
+    if (helpBtn && helpModal) {
+        const closeHelpButtons = helpModal.querySelectorAll('[data-action="close-help-modal"]');
+
+        helpBtn.addEventListener('click', () => {
+            helpModal.classList.remove('hidden');
+        });
+
+        closeHelpButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                helpModal.classList.add('hidden');
+            });
+        });
+
+        // Close modal by clicking on the backdrop
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) {
+                helpModal.classList.add('hidden');
+            }
+        });
+    }
 }
 
 async function switchView(viewName, params = null) {
