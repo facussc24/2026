@@ -10541,72 +10541,32 @@ export function runSinopticoTabularLogic() {
 }
 
 async function exportSinopticoTabularToPdf() {
-    const state = appState.sinopticoTabularState;
-    if (!state || !state.selectedProduct) {
-        showToast('No hay producto seleccionado para exportar.', 'error');
-        return;
-    }
-    const product = state.selectedProduct;
-
-    showToast('Generando PDF de estructura...', 'info');
+    // --- BEGIN TEMPORARY TEST CODE ---
+    // This is a simplified test to check if html2pdf is working at all.
+    // It exports a simple "Hello World" element instead of the complex report.
+    console.log("Running simplified PDF export test...");
+    showToast('Ejecutando prueba de PDF simplificada...', 'info');
     dom.loadingOverlay.style.display = 'flex';
-    dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
-
-    const printContainer = document.createElement('div');
-    printContainer.id = 'temp-print-container';
-    printContainer.style.position = 'absolute';
-    printContainer.style.left = '-9999px';
-    printContainer.style.width = '210mm';
-    printContainer.style.backgroundColor = 'white';
-    document.body.appendChild(printContainer);
 
     try {
-        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const logoBase64 = await getLogoBase64();
-
-        const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
-        printContainer.innerHTML = reportHTML;
-
-        await waitForImages(printContainer);
-        dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
+        const element = document.createElement('h1');
+        element.textContent = 'Hello World - Test PDF';
 
         const opt = {
-            margin:       [15, 15, 15, 15],
-            filename:     `Estructura_${product.id}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css'], after: '.pdf-page' }
+            margin: 1,
+            filename: 'test_pdf.pdf',
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
         };
 
-        // FIX: Defer PDF generation to the end of the event loop.
-        // This ensures the browser has fully rendered the off-screen `printContainer`
-        // before html2pdf tries to capture it, preventing a race condition that
-        // can lead to a blank PDF on complex or large tables.
-        setTimeout(async () => {
-            try {
-                await html2pdf().from(printContainer).set(opt).save();
-                showToast('PDF de estructura generado con éxito.', 'success');
-            } catch (pdfError) {
-                console.error("Error al generar el PDF con html2pdf:", pdfError);
-                showToast('Error al generar el PDF.', 'error');
-            } finally {
-                dom.loadingOverlay.style.display = 'none';
-                if (document.getElementById('temp-print-container')) {
-                    document.getElementById('temp-print-container').remove();
-                }
-            }
-        }, 0);
-
+        await html2pdf().from(element).set(opt).save();
+        showToast('Prueba de PDF completada.', 'success');
     } catch (error) {
-        // This outer catch handles errors from the setup (e.g., fetching data)
-        console.error("Error al preparar la exportación de la estructura del producto a PDF:", error);
-        showToast('Error al preparar la exportación del PDF.', 'error');
+        console.error("Error in simplified PDF test:", error);
+        showToast('Error en la prueba de PDF simplificada.', 'error');
+    } finally {
         dom.loadingOverlay.style.display = 'none';
-        if (document.getElementById('temp-print-container')) {
-            document.getElementById('temp-print-container').remove();
-        }
     }
+    // --- END TEMPORARY TEST CODE ---
 }
 
 function handleCaratulaClick(e) {
