@@ -33,13 +33,18 @@ This file contains guidelines and lessons learned for AI agents working on this 
 15. **Granting Collection-Wide Delete Permissions:** To allow a specific role (e.g., 'admin') to delete all documents within a collection (a "clean" operation), the Firestore security rules must explicitly grant `delete` permission on the collection's wildcard path (`/collection/{docId}`). A common mistake is to only grant `create` and `update` permissions, which will lead to "Missing or insufficient permissions" errors when a client-side cleanup function attempts to iterate and delete each document.
 16. **Workflow for Backend Configuration Changes:** When a task requires changing a backend configuration file that is not automatically deployed (e.g., `firestore.rules`), the agent's responsibility is to modify the file and commit it to the repository. The agent must then explicitly inform the user that the change has been committed and provide the necessary command-line instructions (e.g., `firebase deploy --only firestore:rules`) for the user to deploy the configuration to their own environment. The agent must not ask for verification until after the code has been committed and the user has been given deployment instructions.
 
-## Important Technical Details
+## Best Practices & Lessons Learned
 
-*   **PDF Generation Standard: Use `html2pdf.js`**
-    *   **Directive:** All client-side PDF generation must be implemented using the `html2pdf.js` library. The direct use of `jsPDF` and its plugins (like `jsPDF-AutoTable`) is **deprecated**.
-    *   **Reasoning:** The manual `jsPDF` implementation was prone to script loading race conditions, environmental inconsistencies, and was overly complex to maintain. `html2pdf.js` solves these problems by providing a robust, simple, and maintainable API that converts HTML elements directly to PDF.
-    *   **How it works:** `html2pdf.js` is a wrapper around `jsPDF` and `html2canvas`. It is distributed as a single bundle, which eliminates dependency issues. The primary method is to pass an HTML element to the function and call `.save()`.
-    *   **Example:** The `exportSinopticoTabularToPdf` function was refactored to use this library. This is the model to follow for any new PDF export features.
+### PDF Generation: `jsPDF` vs. `html2pdf.js`
+
+*   **Directive:** For generating complex, multi-page PDFs from data (especially tables), the recommended approach is to use **`jsPDF` combined with the `jspdf-autotable` plugin**. This method is more robust and avoids rendering bugs.
+*   **Warning:** The `html2pdf.js` library is **not recommended** for complex reports. It can fail silently (producing blank pages) when dealing with intricate HTML/CSS, such as elements with `position: absolute` or large base64-encoded images. Debugging these issues is time-consuming.
+*   **Workflow:**
+    1.  **Data Preparation:** Create a helper function (e.g., `prepareDataForPdfAutoTable`) to transform your data into the `head` and `body` format required by `jspdf-autotable`.
+    2.  **Programmatic Generation:** Instantiate `jsPDF` and use `doc.autoTable()` to build the table. This allows for features like cover pages, headers, and footers with page numbers to be added programmatically.
+    3.  **Dependency Check:** Always ensure that the `jspdf.umd.min.js` and `jspdf.plugin.autotable.min.js` scripts are correctly loaded in `index.html`. A `TypeError` related to an undefined `window.jspdf` object is a clear indicator that these scripts are missing.
+
+### General Technical Details
 
 *   **Note on E2E Testing with Playwright (As of 2025-09-02):** The Playwright E2E test suite has been temporarily disabled by renaming `playwright.config.js` to `playwright.config.js.disabled`.
     *   **Reason:** The tests were running against a live, data-heavy Firebase instance, causing them to be extremely slow and unreliable. This was causing significant developer friction.
