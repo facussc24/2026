@@ -424,14 +424,33 @@ function selectObject(objectToSelect) {
                         </div>`;
             }).join('');
         } else {
-            // Fallback to at least show the name if no info is found
-            detailsContainer.innerHTML = `
-                <div class="flex justify-between py-1 border-b border-slate-200">
-                    <span class="font-semibold text-slate-500">Nombre:</span>
-                    <span class="text-right text-slate-700">${displayName}</span>
-                </div>
-                <p class="text-slate-400 italic py-2 mt-2">No hay más información detallada disponible.</p>
-            `;
+            if (displayName === 'Anodized Aluminum Brushed 90° Black #1') {
+                pieceTitle.textContent = "Headrest rear center Patagonia";
+                detailsContainer.innerHTML = `
+                   <img src="APC.jpg" alt="Headrest rear center Patagonia" class="w-full h-auto rounded-md mb-2">
+                   <div class="flex justify-between py-1 border-b border-slate-200">
+                       <span class="font-semibold text-slate-500">Description:</span>
+                       <span class="text-right text-slate-700">This is the central rear headrest for the Patagonia model.</span>
+                   </div>
+                   <div class="flex justify-between py-1 border-b border-slate-200">
+                       <span class="font-semibold text-slate-500">Material:</span>
+                       <span class="text-right text-slate-700">High-quality synthetic leather.</span>
+                   </div>
+                   <div class="flex justify-between py-1 border-b border-slate-200">
+                        <span class="font-semibold text-slate-500">Part Number:</span>
+                        <span class="text-right text-slate-700">PAT-HR-CNT-01</span>
+                   </div>
+                `;
+           } else {
+                // Fallback to at least show the name if no info is found
+                detailsContainer.innerHTML = `
+                    <div class="flex justify-between py-1 border-b border-slate-200">
+                        <span class="font-semibold text-slate-500">Nombre:</span>
+                        <span class="text-right text-slate-700">${displayName}</span>
+                    </div>
+                    <p class="text-slate-400 italic py-2 mt-2">No hay más información detallada disponible.</p>
+                `;
+            }
         }
 
         pieceCard.classList.add('visible');
