@@ -25,7 +25,11 @@ export function runVisor3dLogic() {
 
         const visorHTML = `
             <div id="visor3d-container">
-                <div id="visor3d-scene-container"></div>
+                <div id="visor3d-scene-container">
+                    <div id="visor3d-status" class="absolute inset-0 flex items-center justify-center bg-slate-100/80 z-10">
+                        <p class="text-slate-600 font-semibold text-lg animate-pulse">Initializing viewer...</p>
+                    </div>
+                </div>
                 <div id="visor3d-panel">
                     <div id="visor3d-panel-header">
                         <h3 class="text-lg font-bold">Piezas del Modelo</h3>
@@ -60,6 +64,14 @@ export function runVisor3dLogic() {
 
     // Return a cleanup function
     return () => {
+        // Reset state for next time
+        modelParts = [];
+        exteriorMaterials.length = 0;
+        originalPositions.clear();
+        isExploded = false;
+        isTransparent = false;
+        selectedObject = null;
+
         console.log("Cleaning up Visor3D view.");
         document.body.classList.remove('visor3d-active');
         if (renderer) {
@@ -69,9 +81,25 @@ export function runVisor3dLogic() {
     };
 }
 
+function updateStatus(message, isError = false) {
+    const statusEl = document.getElementById('visor3d-status');
+    if (statusEl) {
+        if (message) {
+            const pulseClass = isError ? '' : 'animate-pulse';
+            const colorClass = isError ? 'text-red-500' : 'text-slate-600';
+            statusEl.innerHTML = `<p class="${colorClass} font-semibold text-lg ${pulseClass}">${message}</p>`;
+            statusEl.classList.remove('hidden');
+        } else {
+            statusEl.classList.add('hidden');
+        }
+    }
+}
+
 function initThreeScene() {
     const container = document.getElementById('visor3d-scene-container');
     if (!container) return;
+
+    updateStatus('Loading 3D model...');
 
     // Scene
     scene = new THREE.Scene();
@@ -103,6 +131,7 @@ function initThreeScene() {
     // GLTFLoader
     const loader = new GLTFLoader();
     loader.load('auto.glb', (gltf) => {
+        updateStatus('Processing model...');
         const model = gltf.scene;
         scene.add(model);
 
@@ -113,6 +142,14 @@ function initThreeScene() {
 
         // Adjust camera to fit the model
         const size = box.getSize(new THREE.Vector3());
+
+        // --- Guardian Check for model size ---
+        if (size.x === 0 && size.y === 0 && size.z === 0) {
+            console.error("Guardian Error: The model's bounding box is zero. The model may be empty or have no visible geometry.");
+            updateStatus("Error: Model is empty or invisible.", true);
+            return; // Stop further processing
+        }
+
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
 
@@ -130,22 +167,45 @@ function initThreeScene() {
             controls.update();
         }
 
-        // Explore the model's hierarchy and populate parts list
+        // --- Deep Model Inspection ---
+        console.log("--- Deep Model Inspection ---");
+        let meshFound = false;
+        model.traverse((child) => {
+            let prefix = '';
+            let current = child;
+            while (current.parent && current.parent.type !== 'Scene') {
+                prefix += '  ';
+                current = current.parent;
+            }
+            console.log(`${prefix}- Object: ${child.name || '[unnamed]'} | Type: ${child.type} | Visible: ${child.visible}`);
+            if (child.isMesh) {
+                meshFound = true;
+            }
+        });
+        if (!meshFound) {
+            console.warn("Guardian Warning: No meshes were found in the loaded model.");
+            updateStatus("Error: The loaded model does not contain any visible parts.", true);
+            return; // Stop processing if model is empty
+        }
+        console.log("--- End of Inspection ---");
+
+
+        // Populate parts list
         modelParts = []; // Clear previous parts
         const partNames = new Set();
         model.traverse((child) => {
             if (child.isMesh && child.name) {
-                // Filter out material-like names and duplicates
-                if (!child.name.includes('_shader') && !child.name.includes('_#')) {
-                    partNames.add(child.name);
-                }
+                partNames.add(child.name);
                 modelParts.push(child);
             }
         });
         renderPartsList(Array.from(partNames));
 
+        updateStatus(null); // Hide status on success
+
     }, undefined, (error) => {
         console.error('An error happened while loading the model:', error);
+        updateStatus('Error: Could not load 3D model. Check console for details.', true);
     });
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
