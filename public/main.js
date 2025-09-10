@@ -5,7 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendPasswordResetEmail, signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, sendEmailVerification, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureCoverHTML, generateProductStructurePageHTML } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
@@ -10548,64 +10548,45 @@ async function exportSinopticoTabularToPdf() {
     }
     const product = state.selectedProduct;
 
-    showToast('Iniciando generación de PDF...', 'loading', { duration: 0 });
+    showToast('Generando PDF de estructura...', 'info');
     dom.loadingOverlay.style.display = 'flex';
-    const loadingText = dom.loadingOverlay.querySelector('p');
+    dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
 
-    // Use a temporary div for rendering pages off-screen
     const printContainer = document.createElement('div');
     printContainer.id = 'temp-print-container';
     printContainer.style.position = 'absolute';
     printContainer.style.left = '-9999px';
-    printContainer.style.width = '210mm'; // A4 width
+    printContainer.style.width = '210mm';
+    printContainer.style.backgroundColor = 'white';
     document.body.appendChild(printContainer);
 
     try {
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
         const logoBase64 = await getLogoBase64();
-        const ROWS_PER_PAGE = 35; // Adjust this value based on testing
-        const totalPages = Math.ceil(flattenedData.length / ROWS_PER_PAGE);
+
+        const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
+        printContainer.innerHTML = reportHTML;
+
+        await waitForImages(printContainer);
+        dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
 
         const opt = {
-            margin: [15, 15, 15, 15],
-            filename: `Estructura_${product.id}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            margin:       [15, 15, 15, 15],
+            filename:     `Estructura_${product.id}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['css'], after: '.pdf-page' }
         };
 
-        // Initialize the worker
-        const worker = html2pdf().set(opt);
-
-        // --- Page 1: Cover Page ---
-        loadingText.textContent = 'Generando carátula...';
-        const coverHTML = generateProductStructureCoverHTML(product, logoBase64, appState.collectionsById);
-        printContainer.innerHTML = coverHTML;
-        await waitForImages(printContainer);
-        await worker.from(printContainer);
-
-        // --- Subsequent Pages: Table Data ---
-        for (let i = 0; i < totalPages; i++) {
-            loadingText.textContent = `Procesando página ${i + 2} de ${totalPages + 1}...`;
-            const pageData = flattenedData.slice(i * ROWS_PER_PAGE, (i + 1) * ROWS_PER_PAGE);
-            const pageHTML = generateProductStructurePageHTML(product, pageData, i + 2, totalPages + 1, logoBase64);
-
-            printContainer.innerHTML = pageHTML;
-            await waitForImages(printContainer);
-
-            // Add a new page and render the content onto it
-            await worker.addPage().from(printContainer);
-        }
-
-        // --- Save the PDF ---
-        loadingText.textContent = 'Finalizando y guardando el PDF...';
-        await worker.save();
+        // Use html2pdf() to generate the PDF
+        await html2pdf().from(printContainer).set(opt).save();
 
         showToast('PDF de estructura generado con éxito.', 'success');
 
     } catch (error) {
         console.error("Error al exportar la estructura del producto a PDF:", error);
-        showToast('Error al generar el PDF. Verifique la consola para más detalles.', 'error');
+        showToast('Error al generar el PDF.', 'error');
     } finally {
         dom.loadingOverlay.style.display = 'none';
         if (document.getElementById('temp-print-container')) {
