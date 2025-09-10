@@ -1,6 +1,6 @@
 /* Visor3D Styles */
 body.visor3d-active {
-    overflow: hidden;
+    /* No special overflow handling needed, allow scrolling */
 }
 
 #visor3d-container {
