@@ -21,6 +21,15 @@
     <link rel="preload" href="bundle.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="bundle.css"></noscript>
 
+    <!-- Importmap for three.js and its modules -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.132.2/build/three.module.js",
+        "three/examples/jsm/": "https://unpkg.com/three@0.132.2/examples/jsm/"
+      }
+    }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-white">
