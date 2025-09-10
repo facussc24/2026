@@ -118,6 +118,21 @@ const partCharacteristics = {
         'Tipo': 'Tricapa',
         'Código de Color': '#FDFDFD',
         'Proveedor': 'ColorLux'
+    },
+    'wheel': {
+        'ID de Pieza': 'WHL-GEN-001',
+        'Material': 'Aleación',
+        'Fabricante': 'WheelPros'
+    },
+    'seat': {
+        'ID de Pieza': 'SEAT-GEN-001',
+        'Material': 'Tela y Espuma',
+        'Proveedor': 'ComfortRide Inc.'
+    },
+    'brake_caliper': {
+        'ID de Pieza': 'BC-GEN-001',
+        'Material': 'Hierro Dúctil',
+        'Proveedor': 'StopFast Brakes'
     }
 };
 
@@ -142,7 +157,7 @@ export function runVisor3dLogic() {
                         <div class="flex justify-between items-center">
                             <h3 class="text-lg font-bold">Piezas del Modelo</h3>
                             <div id="visor3d-controls" class="flex items-center gap-2">
-                                <button id="transparency-btn" class="visor3d-control-btn" title="Modo Lupa"><i data-lucide="zoom-in"></i></button>
+                                <button id="transparency-btn" class="visor3d-control-btn" title="Vista Interior"><i data-lucide="zoom-in"></i></button>
                                 <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                                 <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                             </div>
@@ -153,7 +168,7 @@ export function runVisor3dLogic() {
                         <p class="text-sm text-slate-500 p-4">La lista de piezas aparecerá aquí.</p>
                     </div>
                 </div>
-                <div id="visor3d-piece-card" class="hidden">
+                <div id="visor3d-piece-card">
                     <div class="flex justify-between items-center mb-2">
                         <h4 id="piece-card-title" class="text-xl font-bold">Título de la Pieza</h4>
                         <button id="close-card-btn" class="p-1 leading-none rounded-full hover:bg-slate-200" title="Cerrar"><i data-lucide="x" class="h-4 w-4"></i></button>
@@ -365,7 +380,7 @@ function selectObject(objectToSelect) {
 
     const pieceCard = document.getElementById('visor3d-piece-card');
     if (!objectToSelect || !objectToSelect.isMesh) {
-        if (pieceCard) pieceCard.classList.add('hidden');
+        if (pieceCard) pieceCard.classList.remove('visible');
         return;
     }
 
@@ -391,11 +406,15 @@ function selectObject(objectToSelect) {
 
     if (pieceCard && pieceTitle && detailsContainer) {
         const partName = objectToSelect.name;
-        // Format name for display: replace underscores with spaces and capitalize words
         const displayName = partName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
         pieceTitle.textContent = displayName;
 
-        const characteristics = partCharacteristics[partName];
+        // Robust characteristics lookup
+        let characteristics = partCharacteristics[partName];
+        if (!characteristics) {
+            const genericName = partName.split('_')[0]; // e.g., "wheel_front_left" -> "wheel"
+            characteristics = partCharacteristics[genericName];
+        }
 
         if (characteristics) {
             detailsContainer.innerHTML = Object.entries(characteristics).map(([key, value]) => {
@@ -405,17 +424,24 @@ function selectObject(objectToSelect) {
                         </div>`;
             }).join('');
         } else {
-            detailsContainer.innerHTML = `<p class="text-slate-400 italic py-2">No hay información detallada disponible para esta pieza.</p>`;
+            // Fallback to at least show the name if no info is found
+            detailsContainer.innerHTML = `
+                <div class="flex justify-between py-1 border-b border-slate-200">
+                    <span class="font-semibold text-slate-500">Nombre:</span>
+                    <span class="text-right text-slate-700">${displayName}</span>
+                </div>
+                <p class="text-slate-400 italic py-2 mt-2">No hay más información detallada disponible.</p>
+            `;
         }
 
-        pieceCard.classList.remove('hidden');
+        pieceCard.classList.add('visible');
     }
 }
 
 function onPointerDown(event) {
     // Hide piece card on any new click to start fresh
     const pieceCard = document.getElementById('visor3d-piece-card');
-    if (pieceCard) pieceCard.classList.add('hidden');
+    if (pieceCard) pieceCard.classList.remove('visible');
 
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -568,7 +594,7 @@ function setupVisor3dEventListeners() {
         closeCardBtn.addEventListener('click', () => {
             const pieceCard = document.getElementById('visor3d-piece-card');
             if (pieceCard) {
-                pieceCard.classList.add('hidden');
+                pieceCard.classList.remove('visible');
             }
             // Also deselect the object
             selectObject(null);
