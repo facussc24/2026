@@ -105,8 +105,8 @@ function initThreeScene() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f2f5);
 
-    // Camera
-    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 1000);
+    // Camera - Increased far clipping plane to handle potentially large models
+    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 5000);
     camera.position.z = 5;
 
     // Renderer
@@ -161,13 +161,17 @@ function initThreeScene() {
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
 
-        let cameraZ = Math.abs(maxDim / 2 * Math.tan(fov * 2));
-        cameraZ *= 1.5; // Zoom out a bit
+        // Correct formula to fit object in view: distance = (size / 2) / tan(fov / 2)
+        const cameraDistance = (maxDim / 2) / Math.tan(fov / 2);
 
-        camera.position.z = center.z + cameraZ;
-        camera.position.y = center.y + size.y / 4;
+        // Position camera to fit the model, with a little extra distance
+        const cameraZ = center.z + cameraDistance * 1.2;
+        const cameraY = center.y + maxDim / 4; // Look from a slightly elevated angle
 
-        const lookAtVector = new THREE.Vector3(center.x, center.y, center.z);
+        camera.position.set(center.x, cameraY, cameraZ);
+
+        // Since the model has been centered at the world origin, the camera should look at (0,0,0).
+        const lookAtVector = new THREE.Vector3(0, 0, 0);
         camera.lookAt(lookAtVector);
 
         if (controls) {
