@@ -1,0 +1,169 @@
+/* Visor3D Styles */
+body.visor3d-active {
+    overflow: hidden;
+}
+
+#visor3d-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #f0f2f5;
+    z-index: 1000;
+    display: flex;
+}
+
+#visor3d-scene-container {
+    flex-grow: 1;
+    height: 100%;
+    position: relative;
+}
+
+#visor3d-panel {
+    width: 350px;
+    flex-shrink: 0;
+    background-color: #ffffff;
+    border-left: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -5px 0 15px rgba(0,0,0,0.05);
+}
+
+#visor3d-panel-header {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+#visor3d-search {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #cbd5e0;
+    border-radius: 0.5rem;
+}
+
+#visor3d-parts-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.visor3d-part-item {
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.visor3d-part-item:hover {
+    background-color: #f1f5f9;
+}
+
+.visor3d-part-item.selected {
+    background-color: #e0f2fe;
+    font-weight: 600;
+    color: #0c4a6e;
+}
+
+#visor3d-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.visor3d-control-btn {
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    transition: all 0.2s;
+}
+
+.visor3d-control-btn:hover {
+    background-color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+#visor3d-help-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+}
+
+#visor3d-piece-card {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 400px;
+    display: none; /* Hidden by default */
+    animation: slide-up 0.3s ease-out;
+}
+
+@keyframes slide-up {
+    from {
+        transform: translate(-50%, 50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(-50%);
+        opacity: 1;
+    }
+}
+
+#visor3d-piece-card.visible {
+    display: block;
+}
+
+#visor3d-help-modal {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    animation: fade-in 0.2s ease;
+}
+
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+#visor3d-help-modal .modal-content {
+    background-color: white;
+    padding: 2rem;
+    border-radius: 0.75rem;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+#visor3d-help-modal .modal-content h2 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+#visor3d-help-modal .modal-content ul {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+#visor3d-help-modal .modal-content li {
+    margin-bottom: 0.75rem;
+}

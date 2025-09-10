@@ -9,6 +9,7 @@ import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequir
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
+import { runVisor3dLogic } from './visor3d.js';
 
 // NOTA DE SEGURIDAD: La configuración de Firebase no debe estar hardcodeada en el código fuente.
 // En un entorno de producción, estos valores deben cargarse de forma segura,
@@ -55,6 +56,7 @@ const PREDEFINED_AVATARS = [
 
 // --- Configuración de Vistas ---
 const viewConfig = {
+    visor3d: { title: 'Visor 3D', singular: 'Visor 3D' },
     dashboard: { title: 'Dashboard', singular: 'Dashboard' },
     sinoptico_tabular: { title: 'Lista de Materiales (Tabular)', singular: 'Lista de Materiales (Tabular)' },
     eco_form: { title: 'ECO de Producto / Proceso', singular: 'Formulario ECO' },
@@ -1432,7 +1434,8 @@ async function switchView(viewName, params = null) {
     
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
-    if (viewName === 'dashboard') await runDashboardLogic();
+    if (viewName === 'visor3d') await runVisor3dLogic();
+    else if (viewName === 'dashboard') await runDashboardLogic();
     else if (viewName === 'sinoptico') await runSinopticoLogic();
     else if (viewName === 'sinoptico_tabular') await runSinopticoTabularLogic();
     else if (viewName === 'flujograma') await runFlujogramaLogic();
@@ -8992,6 +8995,12 @@ onAuthStateChanged(auth, async (user) => {
                 dom.loadingOverlay.style.display = 'none';
                 dom.authContainer.classList.add('hidden');
                 dom.appView.classList.remove('hidden');
+
+                // Path-based routing for /visor3d
+                if (window.location.pathname === '/visor3d') {
+                    switchView('visor3d');
+                }
+
             }, delay);
 
             if (!wasAlreadyLoggedIn && !isTestMode) {
