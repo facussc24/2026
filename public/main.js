@@ -10548,50 +10548,53 @@ async function exportSinopticoTabularToPdf() {
     }
     const product = state.selectedProduct;
 
-    showToast('Generando PDF de estructura...', 'info');
+    showToast('Iniciando diagnóstico de PDF...', 'info');
     dom.loadingOverlay.style.display = 'flex';
-    dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
-
-    const printContainer = document.createElement('div');
-    printContainer.id = 'temp-print-container';
-    printContainer.style.position = 'absolute';
-    printContainer.style.left = '-9999px';
-    printContainer.style.width = '210mm';
-    printContainer.style.backgroundColor = 'white';
-    document.body.appendChild(printContainer);
+    dom.loadingOverlay.querySelector('p').textContent = 'Capturando HTML...';
 
     try {
+        // Step 1: Generate the original, problematic HTML
         const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
         const logoBase64 = await getLogoBase64();
-
         const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
-        printContainer.innerHTML = reportHTML;
 
-        await waitForImages(printContainer);
-        dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
+        // Step 2: Log the HTML to the console for debugging
+        console.log("--- INICIO DEL HTML PARA DEPURACIÓN DE PDF ---");
+        console.log(reportHTML);
+        console.log("--- FIN DEL HTML PARA DEPURACIÓN DE PDF ---");
+
+        showToast('HTML para PDF registrado en la consola. Ahora generando un PDF de prueba.', 'info', 5000);
+
+        // Step 3: Generate a simple test PDF to confirm the library works
+        const testContent = `
+            <div style="font-family: sans-serif; padding: 20px;">
+                <h1>PDF de Prueba de Diagnóstico</h1>
+                <p>Si puede ver este PDF, la librería está funcionando correctamente.</p>
+                <p>El problema reside en el contenido HTML que se está intentando convertir. Por favor, siga estos pasos:</p>
+                <ol>
+                    <li>Abra la consola de desarrollador de su navegador (usualmente con la tecla F12).</li>
+                    <li>Busque el texto que comienza con <strong>"--- INICIO DEL HTML PARA DEPURACIÓN DE PDF ---"</strong>.</li>
+                    <li>Copie todo el bloque de código HTML que se encuentra entre las líneas de inicio y fin.</li>
+                    <li>Pegue el contenido completo en nuestra conversación para que pueda analizarlo.</li>
+                </ol>
+                <p>Gracias por su ayuda en la resolución de este problema.</p>
+            </div>
+        `;
 
         const opt = {
-            margin:       [15, 15, 15, 15],
-            filename:     `Estructura_${product.id}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css'], after: '.pdf-page' }
+            margin:       15,
+            filename:     `DIAGNOSTICO_PDF_${product.id}.pdf`,
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
-        // Use html2pdf() to generate the PDF
-        await html2pdf().from(printContainer).set(opt).save();
-
-        showToast('PDF de estructura generado con éxito.', 'success');
+        await html2pdf().from(testContent).set(opt).save();
+        showToast('PDF de diagnóstico generado.', 'success');
 
     } catch (error) {
-        console.error("Error al exportar la estructura del producto a PDF:", error);
-        showToast('Error al generar el PDF.', 'error');
+        console.error("Error durante el diagnóstico de exportación a PDF:", error);
+        showToast('Ocurrió un error durante el diagnóstico.', 'error');
     } finally {
         dom.loadingOverlay.style.display = 'none';
-        if (document.getElementById('temp-print-container')) {
-            document.getElementById('temp-print-container').remove();
-        }
     }
 }
 
