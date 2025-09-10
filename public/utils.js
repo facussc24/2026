@@ -241,7 +241,7 @@ export function generateProductStructureReportHTML(product, flattenedData, logoB
             <div class="pdf-page" style="padding: 15mm; font-family: sans-serif; color: #333; width: 210mm; height: 296mm; page-break-after: always;">
                 <!-- Header -->
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
-                    ${logoBase64 ? `<img src="${logoBase64}" style="height: 40px;">` : '<div></div>'}
+                    <div><!-- Logo removed for testing --></div>
                     <div style="text-align: right;">
                         <h1 style="font-size: 22px; font-weight: bold; margin: 0; color: #1e40af;">Composición de Piezas</h1>
                         <p style="font-size: 14px; margin: 0;">${product.descripcion}</p>
@@ -278,7 +278,7 @@ export function generateProductStructureReportHTML(product, flattenedData, logoB
                             }
                             return `
                                 <tr style="background-color: ${level % 2 === 0 ? '#f7fafc' : '#fff'};">
-                                    <td style="border: 1px solid #eee; padding: 4px; font-family: monospace; white-space: pre;">${prefix}${item.descripcion}</td>
+                                    <td style="border: 1px solid #eee; padding: 4px; white-space: pre;">${prefix}${item.descripcion}</td>
                                     <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${level}</td>
                                     <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${item.id}</td>
                                     <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${node.tipo !== 'producto' ? (node.quantity ?? 1) : ''}</td>
