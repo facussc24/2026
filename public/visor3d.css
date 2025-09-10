@@ -6,12 +6,14 @@ body.visor3d-active {
 #visor3d-container {
     position: relative;
     width: 100%;
-    height: 80vh; /* Use viewport height to make it large */
+    height: calc(100vh - 12rem); /* Full viewport height minus header/padding */
+    min-height: 600px; /* A reasonable minimum height */
     background-color: #f0f2f5;
     display: flex;
     border: 1px solid #e2e8f0;
     border-radius: 0.75rem;
     overflow: hidden; /* To contain the rounded corners */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08); /* A bit more polish */
 }
 
 #visor3d-scene-container {
