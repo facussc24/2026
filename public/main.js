@@ -10541,28 +10541,32 @@ export function runSinopticoTabularLogic() {
 }
 
 async function exportSinopticoTabularToPdf() {
-    // --- FINAL DIAGNOSTIC TEST ---
-    // This is the simplest possible invocation of the library.
-    // It attempts to print the entire visible page body.
-    // If this fails, the problem is environmental or a deep library bug.
-    // If it works, the problem is in the creation/handling of the off-screen div.
-    showToast('Ejecutando prueba de diagnóstico final...', 'info');
-    dom.loadingOverlay.style.display = 'flex';
-    try {
-        const options = {
-            filename: 'pagina_completa.pdf',
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
-        };
-        await html2pdf().from(document.body).set(options).save();
-        showToast('Prueba de diagnóstico completada.', 'success');
-    } catch(err) {
-        console.error("Error in final diagnostic test:", err);
-        showToast('Error en la prueba de diagnóstico.', 'error');
-    } finally {
-        dom.loadingOverlay.style.display = 'none';
-    }
+  try {
+    console.log("Jules's Test: Exporting simple PDF");
+    showToast("Jules's Test: Iniciando exportación simple...", 'info');
+
+    // Create a simple element to export
+    const element = document.createElement('div');
+    element.innerHTML = '<h1>Hello World</h1><p>This is a test from Jules to check if html2pdf is working at all.</p>';
+
+    const opt = {
+      margin:       1,
+      filename:     'test_jules.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+
+    // Use html2pdf() to generate the PDF
+    await html2pdf().from(element).set(opt).save();
+
+    showToast("Jules's Test: PDF simple generado con éxito.", 'success');
+    console.log("Jules's Test: Simple PDF export should be complete.");
+
+  } catch (error) {
+    console.error("Jules's Test: Error exporting simple PDF:", error);
+    showToast(`Jules's Test: Error al generar el PDF de prueba. ${error.message}`, 'error');
+  }
 }
 
 function handleCaratulaClick(e) {
