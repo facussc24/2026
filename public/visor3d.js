@@ -4,6 +4,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Visor3D Module
 let scene, camera, renderer, controls;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let selectedObject = null;
+let originalMaterial = null;
+let isTransparent = false;
+const exteriorMaterials = [];
+let modelParts = [];
+let isExploded = false;
+const originalPositions = new Map();
 
 // This function will be called by main.js to start the 3D viewer.
 export function runVisor3dLogic() {
@@ -27,6 +36,7 @@ export function runVisor3dLogic() {
                     </div>
                 </div>
                 <div id="visor3d-controls">
+                    <button id="transparency-btn" class="visor3d-control-btn" title="Alternar transparencia"><i data-lucide="glasses"></i></button>
                     <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                     <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                 </div>
@@ -90,11 +100,55 @@ function initThreeScene() {
     directionalLight.position.set(5, 10, 7.5);
     scene.add(directionalLight);
 
-    // Placeholder Cube
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({ color: 0x007bff });
-    const cube = new THREE.Mesh(geometry, material);
-    scene.add(cube);
+    // GLTFLoader
+    const loader = new GLTFLoader();
+    loader.load('auto.glb', (gltf) => {
+        const model = gltf.scene;
+        scene.add(model);
+
+        // Center the model
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center);
+
+        // Adjust camera to fit the model
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+
+        let cameraZ = Math.abs(maxDim / 2 * Math.tan(fov * 2));
+        cameraZ *= 1.5; // Zoom out a bit
+
+        camera.position.z = center.z + cameraZ;
+        camera.position.y = center.y + size.y / 4;
+
+        const lookAtVector = new THREE.Vector3(center.x, center.y, center.z);
+        camera.lookAt(lookAtVector);
+
+        if (controls) {
+            controls.target.copy(lookAtVector);
+            controls.update();
+        }
+
+        // Explore the model's hierarchy and populate parts list
+        modelParts = []; // Clear previous parts
+        const partNames = new Set();
+        model.traverse((child) => {
+            if (child.isMesh && child.name) {
+                // Filter out material-like names and duplicates
+                if (!child.name.includes('_shader') && !child.name.includes('_#')) {
+                    partNames.add(child.name);
+                }
+                modelParts.push(child);
+            }
+        });
+        renderPartsList(Array.from(partNames));
+
+    }, undefined, (error) => {
+        console.error('An error happened while loading the model:', error);
+    });
+
+    renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
 
     // Animation loop
     function animate() {
@@ -117,23 +171,201 @@ function onWindowResize() {
     }
 }
 
+function selectObject(objectToSelect) {
+    // Deselect previous
+    if (selectedObject) {
+        selectedObject.material = originalMaterial;
+        selectedObject = null;
+    }
+
+    const pieceCard = document.getElementById('visor3d-piece-card');
+    if (!objectToSelect || !objectToSelect.isMesh) {
+        if (pieceCard) pieceCard.classList.add('hidden');
+        return;
+    }
+
+    // Select new object
+    selectedObject = objectToSelect;
+    originalMaterial = objectToSelect.material;
+
+    const highlightMaterial = objectToSelect.material.clone();
+    highlightMaterial.color.set(0xff0000); // Highlight in red
+    highlightMaterial.emissive.set(0x330000);
+    objectToSelect.material = highlightMaterial;
+
+    const pieceTitle = document.getElementById('piece-card-title');
+    const pieceDesc = document.getElementById('piece-card-desc');
+    if (pieceCard && pieceTitle && pieceDesc) {
+        pieceTitle.textContent = objectToSelect.name;
+        pieceDesc.textContent = `Este es el ${objectToSelect.name}. Haz clic en otros componentes para ver sus detalles.`;
+        pieceCard.classList.remove('hidden');
+    }
+}
+
+function onPointerDown(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(scene.children, true);
+
+    if (intersects.length > 0) {
+        const firstIntersected = intersects[0].object;
+        if (firstIntersected.isMesh && firstIntersected.name.toLowerCase().startsWith('asiento_')) {
+            selectObject(firstIntersected);
+        } else {
+            selectObject(null); // Deselect if clicking on non-seat part
+        }
+    } else {
+        selectObject(null); // Deselect if clicking on empty space
+    }
+}
+
+function toggleTransparency() {
+    isTransparent = !isTransparent;
+
+    // First time, find and store exterior materials
+    if (exteriorMaterials.length === 0 && scene) {
+        scene.traverse((child) => {
+            if (child.isMesh && child.name.toLowerCase().startsWith('carroceria')) {
+                const material = child.material;
+                // Ensure material is not an array
+                if (!Array.isArray(material)) {
+                    exteriorMaterials.push({
+                        mesh: child,
+                        originalOpacity: material.opacity,
+                        originalTransparent: material.transparent
+                    });
+                } else {
+                    // Handle multi-material objects if necessary
+                    console.warn(`Mesh ${child.name} has multiple materials. Transparency might not work as expected.`);
+                }
+            }
+        });
+    }
+
+    exteriorMaterials.forEach(item => {
+        // Make a copy of the material to avoid sharing state
+        if (!item.transparentMaterial) {
+            item.transparentMaterial = item.mesh.material.clone();
+            item.transparentMaterial.transparent = true;
+            item.transparentMaterial.opacity = 0.2;
+        }
+
+        if (isTransparent) {
+            item.mesh.material = item.transparentMaterial;
+        } else {
+            // Revert to original material properties
+            item.mesh.material.transparent = item.originalTransparent;
+            item.mesh.material.opacity = item.originalOpacity;
+        }
+        item.mesh.material.needsUpdate = true;
+    });
+}
+
+function renderPartsList(partNames) {
+    const partsListContainer = document.getElementById('visor3d-parts-list');
+    if (!partsListContainer) return;
+
+    if (partNames.length === 0) {
+        partsListContainer.innerHTML = '<p class="text-sm text-slate-500 p-4">No se encontraron piezas nombradas en el modelo.</p>';
+        return;
+    }
+
+    partsListContainer.innerHTML = `
+        <ul class="divide-y divide-slate-200">
+            ${partNames.map(partName => `
+                <li>
+                    <button data-part-name="${partName}" class="w-full text-left p-3 hover:bg-slate-100 text-sm">
+                        ${partName}
+                    </button>
+                </li>
+            `).join('')}
+        </ul>
+    `;
+}
+
+function toggleExplodeView() {
+    isExploded = !isExploded;
+
+    if (isExploded && originalPositions.size === 0) {
+        modelParts.forEach(mesh => {
+            originalPositions.set(mesh.uuid, mesh.position.clone());
+        });
+    }
+
+    const modelBox = new THREE.Box3();
+    const modelGroup = scene.children.find(child => child.type === 'Group');
+    if (modelGroup) {
+        modelBox.setFromObject(modelGroup);
+    } else {
+        // Fallback for models not in a group
+        modelBox.setFromObject(scene);
+    }
+    const modelCenter = modelBox.getCenter(new THREE.Vector3());
+    const explosionFactor = 2.0;
+
+    modelParts.forEach(mesh => {
+        const originalPos = originalPositions.get(mesh.uuid);
+        if (!originalPos) return;
+
+        if (isExploded) {
+            const meshCenter = new THREE.Vector3();
+            mesh.getWorldPosition(meshCenter);
+            const direction = new THREE.Vector3().subVectors(meshCenter, modelCenter).normalize();
+            mesh.position.copy(new THREE.Vector3().addVectors(originalPos, direction.multiplyScalar(explosionFactor)));
+        } else {
+            mesh.position.copy(originalPos);
+        }
+    });
+}
+
+
 function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     const resetBtn = document.getElementById('reset-view-btn');
     const helpBtn = document.getElementById('visor3d-help-btn');
+    const transparencyBtn = document.getElementById('transparency-btn');
+    const partsList = document.getElementById('visor3d-parts-list');
+
+    if (transparencyBtn) {
+        transparencyBtn.addEventListener('click', toggleTransparency);
+    }
+
+    if (partsList) {
+        partsList.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-part-name]');
+            if (button) {
+                const partName = button.dataset.partName;
+                const partToSelect = modelParts.find(p => p.name === partName);
+                if (partToSelect) {
+                    // For now, we only allow selecting seats from the list
+                    if (partToSelect.name.toLowerCase().startsWith('asiento_')) {
+                        selectObject(partToSelect);
+                    } else {
+                        selectObject(null);
+                        console.log(`Selección de la pieza '${partName}' no implementada desde la lista.`);
+                    }
+                }
+            }
+        });
+    }
 
     if (explodeBtn) {
-        explodeBtn.addEventListener('click', () => {
-            console.log('Explode view clicked');
-            // Placeholder for explode logic
-        });
+        explodeBtn.addEventListener('click', toggleExplodeView);
     }
 
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
+            if (isExploded) {
+                toggleExplodeView(); // Implode the model
+            }
             if (controls) {
                 controls.reset();
             }
+            // Also deselect any object
+            selectObject(null);
         });
     }
 
