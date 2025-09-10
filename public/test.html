@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+
+    <h1>PDF Generation Test</h1>
+    <p>Click the button to generate a simple "Hello World" PDF.</p>
+    <button id="test-pdf-btn">Generate Test PDF</button>
+
+    <div id="element-to-print" style="display: none;">
+        <h2>Hello World!</h2>
+        <p>This is a test of the html2pdf.js library.</p>
+    </div>
+
+    <script>
+        document.getElementById('test-pdf-btn').addEventListener('click', () => {
+            console.log('Test button clicked. Generating PDF...');
+            const element = document.getElementById('element-to-print');
+
+            const opt = {
+                margin:       1,
+                filename:     'test-document.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2 },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            // New Promise-based usage:
+            html2pdf().set(opt).from(element).save().then(() => {
+                console.log('PDF generated successfully.');
+            }).catch(err => {
+                console.error('PDF generation failed:', err);
+            });
+        });
+    </script>
+
+</body>
+</html>
