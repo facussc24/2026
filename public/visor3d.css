@@ -91,7 +91,7 @@ body.visor3d-active {
 
 #visor3d-piece-card {
     position: absolute;
-    top: 20px;
+    bottom: 20px;
     right: 20px;
     background-color: white;
     border-radius: 0.75rem;
