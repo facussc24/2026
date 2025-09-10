@@ -428,7 +428,7 @@ function selectObject(objectToSelect) {
                 pieceTitle.textContent = "Headrest rear center Patagonia";
                 detailsContainer.innerHTML = `
                    <div class="custom-card-layout">
-                       <img src="../imagenes/APC.jpg" alt="Headrest rear center Patagonia" class="custom-card-image">
+                       <img src="modulos/visor3d/imagenes/APC.jpg" alt="Headrest rear center Patagonia" class="custom-card-image">
                        <div class="custom-card-details">
                            <div class="flex justify-between py-1 border-b border-slate-200">
                                <span class="font-semibold text-slate-500">Description:</span>
