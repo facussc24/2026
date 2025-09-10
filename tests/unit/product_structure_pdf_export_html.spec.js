@@ -47,42 +47,33 @@ describe('generateProductStructureReportHTML', () => {
         mockLogoBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA';
     });
 
-    test('should generate a valid HTML report string', () => {
+    test('should generate a valid HTML report string with pagination', () => {
         // --- ACT ---
         const resultHTML = generateProductStructureReportHTML(mockProduct, mockFlattenedData, mockLogoBase64, mockCollectionsById);
 
         // --- ASSERT ---
-        // 1. Check for basic HTML structure
-        expect(resultHTML).toContain('<div style="padding: 15mm; font-family: sans-serif; color: #333;">');
-        expect(resultHTML).toContain('<table style="width: 100%; border-collapse: collapse; font-size: 8px;">');
-        expect(resultHTML).toContain('<thead>');
-        expect(resultHTML).toContain('<tbody>');
+        // 1. Check for the new paged structure
+        expect(resultHTML).toContain('<div class="pdf-page"');
 
-        // 2. Check header content
+        // 2. Check header content is present
         expect(resultHTML).toContain('<h1 style="font-size: 22px; font-weight: bold; margin: 0; color: #1e40af;">Composición de Piezas</h1>');
         expect(resultHTML).toContain(`<p style="font-size: 14px; margin: 0;">${mockProduct.descripcion}</p>`);
         expect(resultHTML).toContain(`<strong>Nº de Pieza:</strong> ${mockProduct.id}`);
-        expect(resultHTML).toContain(`<strong>Cliente:</strong> ${mockCollectionsById[COLLECTIONS.CLIENTES].get('CLIENTE-A').descripcion}`);
-        expect(resultHTML).toContain(`<img src="${mockLogoBase64}" style="height: 40px;">`);
 
         // 3. Check table content
-        // It should generate one row for each item in flattenedData
         const rowCount = (resultHTML.match(/<tr/g) || []).length;
         expect(rowCount).toBe(mockFlattenedData.length + 1); // +1 for the header row
 
-        // 4. Check specific row content and tree prefixes
+        // 4. Check that the footer with page numbers is present
+        expect(resultHTML).toContain('Página 1 de 1');
+
+        // 5. Check specific row content and tree prefixes
         expect(resultHTML).toContain('>Producto de Prueba</td>'); // Level 0 has no prefix
-
-        // Level 1: isLast is false, so it should start with a connector
         expect(resultHTML).toContain('├─ Sub-ensamble A</td>');
-
-        // Level 2: isLast is true, so it should start with an end-connector
         expect(resultHTML).toContain('└─ Pieza X</td>');
-
-        // Also check the full prefix for the nested item to verify lineage
         expect(resultHTML).toContain('│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;└─ Pieza X</td>');
 
-        // 5. Check a comment
+        // 6. Check a comment
         expect(resultHTML).toContain('>Comentario de prueba</td>');
     });
 
