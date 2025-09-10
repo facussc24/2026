@@ -10541,57 +10541,27 @@ export function runSinopticoTabularLogic() {
 }
 
 async function exportSinopticoTabularToPdf() {
-    const state = appState.sinopticoTabularState;
-    if (!state || !state.selectedProduct) {
-        showToast('No hay producto seleccionado para exportar.', 'error');
-        return;
-    }
-    const product = state.selectedProduct;
-
-    showToast('Generando PDF de estructura...', 'info');
+    // --- FINAL DIAGNOSTIC TEST ---
+    // This is the simplest possible invocation of the library.
+    // It attempts to print the entire visible page body.
+    // If this fails, the problem is environmental or a deep library bug.
+    // If it works, the problem is in the creation/handling of the off-screen div.
+    showToast('Ejecutando prueba de diagnóstico final...', 'info');
     dom.loadingOverlay.style.display = 'flex';
-    dom.loadingOverlay.querySelector('p').textContent = 'Renderizando estructura...';
-
-    const printContainer = document.createElement('div');
-    printContainer.id = 'temp-print-container';
-    printContainer.style.position = 'absolute';
-    printContainer.style.left = '-9999px';
-    printContainer.style.width = '210mm';
-    printContainer.style.backgroundColor = 'white';
-    document.body.appendChild(printContainer);
-
     try {
-        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
-        const logoBase64 = await getLogoBase64();
-
-        const reportHTML = generateProductStructureReportHTML(product, flattenedData, logoBase64, appState.collectionsById);
-        printContainer.innerHTML = reportHTML;
-
-        await waitForImages(printContainer);
-        dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
-
-        const opt = {
-            margin:       [15, 15, 15, 15],
-            filename:     `Estructura_${product.id}.pdf`,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css'], after: '.pdf-page' }
+        const options = {
+            filename: 'pagina_completa.pdf',
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
         };
-
-        // Use html2pdf() to generate the PDF
-        await html2pdf().from(printContainer).set(opt).save();
-
-        showToast('PDF de estructura generado con éxito.', 'success');
-
-    } catch (error) {
-        console.error("Error al exportar la estructura del producto a PDF:", error);
-        showToast('Error al generar el PDF.', 'error');
+        await html2pdf().from(document.body).set(options).save();
+        showToast('Prueba de diagnóstico completada.', 'success');
+    } catch(err) {
+        console.error("Error in final diagnostic test:", err);
+        showToast('Error en la prueba de diagnóstico.', 'error');
     } finally {
         dom.loadingOverlay.style.display = 'none';
-        if (document.getElementById('temp-print-container')) {
-            document.getElementById('temp-print-container').remove();
-        }
     }
 }
 
