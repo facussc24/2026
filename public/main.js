@@ -10556,7 +10556,7 @@ async function exportSinopticoTabularToPdf() {
     printContainer.id = 'temp-print-container';
     printContainer.style.position = 'absolute';
     printContainer.style.left = '-9999px';
-    printContainer.style.width = '210mm'; // A4 width
+    printContainer.style.width = '210mm';
     printContainer.style.backgroundColor = 'white';
     document.body.appendChild(printContainer);
 
@@ -10571,40 +10571,37 @@ async function exportSinopticoTabularToPdf() {
         dom.loadingOverlay.querySelector('p').textContent = 'Comprimiendo PDF...';
 
         const opt = {
-            margin: 15, // Margin in mm
-            filename: `Estructura_${product.id}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true, logging: false },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            // The `pagebreak` option is removed to allow html2pdf to handle it automatically.
+            margin:       [15, 15, 15, 15],
+            filename:     `Estructura_${product.id}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['css'], after: '.pdf-page' }
         };
 
-        const worker = html2pdf().from(printContainer).set(opt);
-
-        // Use the advanced API to add page numbers.
-        await worker.toPdf().get('pdf').then(function (pdf) {
-            const totalPages = pdf.internal.getNumberOfPages();
-            const footerHeight = 10; // Height of the footer area in mm
-
-            for (let i = 1; i <= totalPages; i++) {
-                pdf.setPage(i);
-                pdf.setFontSize(8);
-                pdf.setTextColor(150);
-                const text = `Página ${i} de ${totalPages}`;
-                const textWidth = pdf.getStringUnitWidth(text) * pdf.internal.getFontSize() / pdf.internal.scaleFactor;
-                const textX = (pdf.internal.pageSize.getWidth() - textWidth) / 2;
-                const textY = pdf.internal.pageSize.getHeight() - footerHeight;
-                pdf.text(text, textX, textY);
+        // FIX: Defer PDF generation to the end of the event loop.
+        // This ensures the browser has fully rendered the off-screen `printContainer`
+        // before html2pdf tries to capture it, preventing a race condition that
+        // can lead to a blank PDF on complex or large tables.
+        setTimeout(async () => {
+            try {
+                await html2pdf().from(printContainer).set(opt).save();
+                showToast('PDF de estructura generado con éxito.', 'success');
+            } catch (pdfError) {
+                console.error("Error al generar el PDF con html2pdf:", pdfError);
+                showToast('Error al generar el PDF.', 'error');
+            } finally {
+                dom.loadingOverlay.style.display = 'none';
+                if (document.getElementById('temp-print-container')) {
+                    document.getElementById('temp-print-container').remove();
+                }
             }
-        }).save();
-
-
-        showToast('PDF de estructura generado con éxito.', 'success');
+        }, 0);
 
     } catch (error) {
-        console.error("Error al exportar la estructura del producto a PDF:", error);
-        showToast('Error al generar el PDF.', 'error');
-    } finally {
+        // This outer catch handles errors from the setup (e.g., fetching data)
+        console.error("Error al preparar la exportación de la estructura del producto a PDF:", error);
+        showToast('Error al preparar la exportación del PDF.', 'error');
         dom.loadingOverlay.style.display = 'none';
         if (document.getElementById('temp-print-container')) {
             document.getElementById('temp-print-container').remove();
