@@ -14,6 +14,113 @@ let modelParts = [];
 let isExploded = false;
 const originalPositions = new Map();
 
+// --- Base de datos simulada de características de piezas ---
+const partCharacteristics = {
+    'chassis': {
+        'ID de Pieza': 'CH-MAIN-001',
+        'Material': 'Acero de alta resistencia',
+        'Peso (kg)': 800,
+        'Tratamiento': 'Galvanizado por inmersión en caliente',
+        'Rigidez Torsional (Nm/deg)': 35000
+    },
+    'engine_block': {
+        'ID de Pieza': 'EN-BLK-001',
+        'Material': 'Aleación de Aluminio',
+        'Peso (kg)': 150,
+        'Fabricante': 'AutoParts Co.',
+        'Fecha de Fabricación': '2023-05-12'
+    },
+    'piston': {
+        'ID de Pieza': 'PS-045',
+        'Material': 'Acero Forjado',
+        'Peso (kg)': 1.2,
+        'Fabricante': 'Engine Systems',
+        'Tolerancia': '0.01mm'
+    },
+    'seat_front_left': {
+        'ID de Pieza': 'SEAT-FL-089',
+        'Material': 'Cuero sintético, Espuma de alta densidad',
+        'Peso (kg)': 25,
+        'Proveedor': 'ComfortRide Inc.',
+        'Características': 'Ajuste lumbar, Calefactable'
+    },
+    'seat_front_right': {
+        'ID de Pieza': 'SEAT-FR-090',
+        'Material': 'Cuero sintético, Espuma de alta densidad',
+        'Peso (kg)': 25,
+        'Proveedor': 'ComfortRide Inc.',
+        'Características': 'Ajuste lumbar, Calefactable'
+    },
+    'wheel_front_left': {
+        'ID de Pieza': 'WHL-FL-303',
+        'Material': 'Aleación de Magnesio',
+        'Peso (kg)': 12,
+        'Dimensiones': '18" x 8.5"',
+        'Fabricante': 'WheelPros'
+    },
+    'wheel_front_right': {
+        'ID de Pieza': 'WHL-FR-304',
+        'Material': 'Aleación de Magnesio',
+        'Peso (kg)': 12,
+        'Dimensiones': '18" x 8.5"',
+        'Fabricante': 'WheelPros'
+    },
+    'wheel_rear_left': {
+        'ID de Pieza': 'WHL-RL-305',
+        'Material': 'Aleación de Magnesio',
+        'Peso (kg)': 12,
+        'Dimensiones': '18" x 8.5"',
+        'Fabricante': 'WheelPros'
+    },
+    'wheel_rear_right': {
+        'ID de Pieza': 'WHL-RR-306',
+        'Material': 'Aleación de Magnesio',
+        'Peso (kg)': 12,
+        'Dimensiones': '18" x 8.5"',
+        'Fabricante': 'WheelPros'
+    },
+    'brake_caliper_front_left': {
+        'ID de Pieza': 'BC-FL-772',
+        'Material': 'Hierro Dúctil',
+        'Peso (kg)': 4.5,
+        'Tipo': '4 pistones',
+        'Proveedor': 'StopFast Brakes'
+    },
+    'glass_windshield': {
+        'ID de Pieza': 'GLS-WND-001',
+        'Material': 'Vidrio Laminado Acústico',
+        'Peso (kg)': 15,
+        'Proveedor': 'SafeGlass Corp.',
+        'Características': 'Filtro UV, Sensor de lluvia integrado'
+    },
+    'exhaust_system': {
+        'ID de Pieza': 'EXH-SYS-019',
+        'Material': 'Acero Inoxidable 304',
+        'Peso (kg)': 25,
+        'Fabricante': 'FlowMax',
+        'Nivel de Ruido (dB)': '85'
+    },
+    'steering_wheel': {
+        'ID de Pieza': 'STR-WHL-007',
+        'Material': 'Cuero y Aluminio',
+        'Peso (kg)': 2.5,
+        'Características': 'Controles multifunción, Airbag'
+    },
+    'dashboard': {
+        'ID de Pieza': 'DASH-001',
+        'Material': 'Polímero ABS',
+        'Peso (kg)': 18,
+        'Acabado': 'Textura suave al tacto'
+    },
+    'paint_main_body': {
+        'ID de Pieza': 'PNT-MB-01',
+        'Color': 'Blanco Perlado',
+        'Tipo': 'Tricapa',
+        'Código de Color': '#FDFDFD',
+        'Proveedor': 'ColorLux'
+    }
+};
+
 // This function will be called by main.js to start the 3D viewer.
 export function runVisor3dLogic() {
     console.log("Running Visor3D logic...");
@@ -35,7 +142,7 @@ export function runVisor3dLogic() {
                         <div class="flex justify-between items-center">
                             <h3 class="text-lg font-bold">Piezas del Modelo</h3>
                             <div id="visor3d-controls" class="flex items-center gap-2">
-                                <button id="transparency-btn" class="visor3d-control-btn" title="Alternar transparencia"><i data-lucide="glasses"></i></button>
+                                <button id="transparency-btn" class="visor3d-control-btn" title="Modo Lupa"><i data-lucide="zoom-in"></i></button>
                                 <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                                 <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                             </div>
@@ -47,9 +154,13 @@ export function runVisor3dLogic() {
                     </div>
                 </div>
                 <div id="visor3d-piece-card" class="hidden">
-                    <h4 id="piece-card-title" class="text-xl font-bold mb-2">Título de la Pieza</h4>
-                    <p id="piece-card-desc" class="text-sm text-slate-600 mb-4">Descripción de la pieza.</p>
-                    <button class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm">Más Info</button>
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 id="piece-card-title" class="text-xl font-bold">Título de la Pieza</h4>
+                        <button id="close-card-btn" class="p-1 leading-none rounded-full hover:bg-slate-200" title="Cerrar"><i data-lucide="x" class="h-4 w-4"></i></button>
+                    </div>
+                    <div id="piece-card-details" class="text-sm space-y-1.5">
+                        <!-- Characteristics will be populated here -->
+                    </div>
                 </div>
             </div>
         `;
@@ -245,11 +356,12 @@ function onWindowResize() {
 }
 
 function selectObject(objectToSelect) {
-    // Deselect previous
-    if (selectedObject) {
+    // Deselect previous object
+    if (selectedObject && originalMaterial) {
         selectedObject.material = originalMaterial;
-        selectedObject = null;
     }
+    selectedObject = null;
+    originalMaterial = null;
 
     const pieceCard = document.getElementById('visor3d-piece-card');
     if (!objectToSelect || !objectToSelect.isMesh) {
@@ -261,16 +373,41 @@ function selectObject(objectToSelect) {
     selectedObject = objectToSelect;
     originalMaterial = objectToSelect.material;
 
-    const highlightMaterial = objectToSelect.material.clone();
-    highlightMaterial.color.set(0xff0000); // Highlight in red
-    highlightMaterial.emissive.set(0x330000);
-    objectToSelect.material = highlightMaterial;
+    // Create a generic highlight material
+    const highlightMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff0000, // Highlight in red
+        emissive: 0x330000,
+        metalness: 0.8,
+        roughness: 0.5
+    });
+
+    // Apply highlight, skipping multi-material objects to prevent errors
+    if (!Array.isArray(originalMaterial)) {
+        objectToSelect.material = highlightMaterial;
+    }
 
     const pieceTitle = document.getElementById('piece-card-title');
-    const pieceDesc = document.getElementById('piece-card-desc');
-    if (pieceCard && pieceTitle && pieceDesc) {
-        pieceTitle.textContent = objectToSelect.name;
-        pieceDesc.textContent = `Este es el ${objectToSelect.name}. Haz clic en otros componentes para ver sus detalles.`;
+    const detailsContainer = document.getElementById('piece-card-details');
+
+    if (pieceCard && pieceTitle && detailsContainer) {
+        const partName = objectToSelect.name;
+        // Format name for display: replace underscores with spaces and capitalize words
+        const displayName = partName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        pieceTitle.textContent = displayName;
+
+        const characteristics = partCharacteristics[partName];
+
+        if (characteristics) {
+            detailsContainer.innerHTML = Object.entries(characteristics).map(([key, value]) => {
+                return `<div class="flex justify-between py-1 border-b border-slate-200">
+                            <span class="font-semibold text-slate-500">${key}:</span>
+                            <span class="text-right text-slate-700">${value}</span>
+                        </div>`;
+            }).join('');
+        } else {
+            detailsContainer.innerHTML = `<p class="text-slate-400 italic py-2">No hay información detallada disponible para esta pieza.</p>`;
+        }
+
         pieceCard.classList.remove('hidden');
     }
 }
@@ -288,10 +425,25 @@ function onPointerDown(event) {
     const intersects = raycaster.intersectObjects(scene.children, true);
 
     if (intersects.length > 0) {
-        const firstIntersected = intersects[0].object;
-        // Select any part that is a mesh and has a name
-        if (firstIntersected.isMesh && firstIntersected.name) {
-            selectObject(firstIntersected);
+        let targetObject = null;
+
+        if (isTransparent) {
+            // In Lupa Mode, we want to ignore the transparent exterior and select what's behind it.
+            const exteriorMeshes = new Set(exteriorMaterials.map(item => item.mesh));
+            for (const intersection of intersects) {
+                if (!exteriorMeshes.has(intersection.object)) {
+                    targetObject = intersection.object;
+                    break; // We found the first internal part, so we stop.
+                }
+            }
+        } else {
+            // In normal mode, we select the first object we hit.
+            targetObject = intersects[0].object;
+        }
+
+        // Select the object if it's a valid, named mesh.
+        if (targetObject && targetObject.isMesh && targetObject.name) {
+            selectObject(targetObject);
         } else {
             selectObject(null);
         }
@@ -410,6 +562,18 @@ function setupVisor3dEventListeners() {
     const resetBtn = document.getElementById('reset-view-btn');
     const transparencyBtn = document.getElementById('transparency-btn');
     const partsList = document.getElementById('visor3d-parts-list');
+    const closeCardBtn = document.getElementById('close-card-btn');
+
+    if (closeCardBtn) {
+        closeCardBtn.addEventListener('click', () => {
+            const pieceCard = document.getElementById('visor3d-piece-card');
+            if (pieceCard) {
+                pieceCard.classList.add('hidden');
+            }
+            // Also deselect the object
+            selectObject(null);
+        });
+    }
 
     if (transparencyBtn) {
         transparencyBtn.addEventListener('click', toggleTransparency);
