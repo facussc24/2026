@@ -67,3 +67,29 @@ export class GLTFLoader {
         }
     }
 }
+
+// Post-processing and loaders added for the new features
+export class RGBELoader {
+    setPath() { return this; }
+    load(path, onLoad) {
+        if (onLoad) onLoad({});
+        return this;
+    }
+}
+export class EffectComposer {
+    addPass() {}
+    setSize() {}
+    render() {}
+}
+export class RenderPass {}
+export class OutlinePass {
+    selectedObjects = [];
+}
+export class ShaderPass {}
+export const FXAAShader = {
+    uniforms: {
+        resolution: { value: { x: 0, y: 0 } }
+    },
+    vertexShader: '',
+    fragmentShader: ''
+};

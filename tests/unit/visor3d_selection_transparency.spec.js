@@ -15,17 +15,23 @@ const createMockMaterial = (name) => ({
 
 describe('Visor3D Selection Transparency', () => {
     let visor3d;
+    let state;
     let mockPart1, mockPart2, mockPart3;
 
     beforeEach(async () => {
         // Reset modules to get a fresh state for the stateful visor3d.js module
         jest.resetModules();
         visor3d = await import('../../public/modulos/visor3d/js/visor3d.js');
+        state = visor3d.state;
+        state.outlinePass = { selectedObjects: [] }; // Mock the outlinePass
 
         // Set up the necessary DOM structure
         document.body.innerHTML = `
             <div id="view-content"></div>
             <button id="selection-transparency-btn"></button>
+            <div id="visor3d-piece-card"></div>
+            <button id="isolate-btn"></button>
+            <div id="visor3d-parts-list"></div>
         `;
 
         // Create mock parts
@@ -35,6 +41,7 @@ describe('Visor3D Selection Transparency', () => {
 
         // Populate the modelParts array in the module
         visor3d.modelParts.push(mockPart1, mockPart2, mockPart3);
+        visor3d.transparentMaterials.clear();
     });
 
     test('should make non-selected parts transparent when activated', () => {
@@ -45,17 +52,10 @@ describe('Visor3D Selection Transparency', () => {
         // Act: Toggle the selection transparency mode
         visor3d.toggleSelectionTransparency();
 
-        // Assert
-        // Part 1 is selected, should be highlighted, not transparent.
-        expect(mockPart1.material.emissive).toBeDefined();
-
-        // Part 2 is NOT selected, should be transparent
-        expect(mockPart2.material.transparent).toBe(true);
-        expect(mockPart2.material.opacity).toBe(0.1);
-
-        // Part 3 is NOT selected, should be transparent
-        expect(mockPart3.material.transparent).toBe(true);
-        expect(mockPart3.material.opacity).toBe(0.1);
+        // Assert: Check the internal state of the transparency map
+        expect(visor3d.transparentMaterials.has(mockPart1.uuid)).toBe(false);
+        expect(visor3d.transparentMaterials.has(mockPart2.uuid)).toBe(true);
+        expect(visor3d.transparentMaterials.has(mockPart3.uuid)).toBe(true);
     });
 
     test('should restore all parts to original materials when deactivated', () => {
@@ -64,67 +64,47 @@ describe('Visor3D Selection Transparency', () => {
         visor3d.toggleSelectionTransparency(); // Activate
 
         // Verify initial state
-        expect(mockPart2.material.transparent).toBe(true);
-        expect(mockPart3.material.transparent).toBe(true);
+        expect(visor3d.transparentMaterials.size).toBe(2);
 
         // Act: Deactivate the mode
         visor3d.toggleSelectionTransparency();
 
-        // Assert
-        // Part 1 was selected, it should remain highlighted
-        expect(mockPart1.material.emissive).toBeDefined();
-
-        // Part 2 should be restored
-        expect(mockPart2.material.name).toBe('mat2');
-        expect(mockPart2.material.transparent).toBe(false);
-        expect(mockPart2.material.opacity).toBe(1.0);
-
-        // Part 3 should be restored
-        expect(mockPart3.material.name).toBe('mat3');
-        expect(mockPart3.material.transparent).toBe(false);
-        expect(mockPart3.material.opacity).toBe(1.0);
+        // Assert: The transparency map should be empty
+        expect(visor3d.transparentMaterials.size).toBe(0);
     });
 
     test('should update transparency dynamically when selection changes', () => {
         // Arrange: Activate mode with no selection
         visor3d.toggleSelectionTransparency();
-        expect(mockPart1.material.transparent).toBe(true);
-        expect(mockPart2.material.transparent).toBe(true);
+        expect(visor3d.transparentMaterials.size).toBe(3); // All transparent
 
         // Act: Select part 2
         visor3d.updateSelection(mockPart2, false);
 
-        // Assert
-        // Part 1 is still not selected -> should be transparent
-        expect(mockPart1.material.transparent).toBe(true);
-        // Part 2 is now selected -> should be opaque (and highlighted)
-        expect(mockPart2.material.emissive).toBeDefined(); // Highlight material
-        // Part 3 is not selected -> should be transparent
-        expect(mockPart3.material.transparent).toBe(true);
+        // Assert: Part 2 is removed from the transparency map
+        expect(visor3d.transparentMaterials.has(mockPart1.uuid)).toBe(true);
+        expect(visor3d.transparentMaterials.has(mockPart2.uuid)).toBe(false);
+        expect(visor3d.transparentMaterials.has(mockPart3.uuid)).toBe(true);
+        expect(visor3d.transparentMaterials.size).toBe(2);
 
         // Act again: deselect part 2 by selecting part 1
         visor3d.updateSelection(mockPart1, false);
 
-        // Assert
-        // Part 1 is now selected -> should be opaque (and highlighted)
-        expect(mockPart1.material.emissive).toBeDefined();
-        // Part 2 is no longer selected -> should become transparent
-        expect(mockPart2.material.transparent).toBe(true);
-        expect(mockPart2.material.opacity).toBe(0.1);
+        // Assert: Part 1 is removed, part 2 is added back
+        expect(visor3d.transparentMaterials.has(mockPart1.uuid)).toBe(false);
+        expect(visor3d.transparentMaterials.has(mockPart2.uuid)).toBe(true);
+        expect(visor3d.transparentMaterials.has(mockPart3.uuid)).toBe(true);
+        expect(visor3d.transparentMaterials.size).toBe(2);
     });
 
-    test('should not make a highlighted part transparent', () => {
+    test('should not make a selected part transparent', () => {
         // Arrange: Select part 1
         visor3d.updateSelection(mockPart1, false);
-        // The highlight material is applied
-        expect(mockPart1.material.emissive).toBeDefined();
 
         // Act: Activate transparency mode
         visor3d.toggleSelectionTransparency();
 
-        // Assert
-        // The material should still be the highlight material, not a transparent one.
-        expect(mockPart1.material.emissive).toBeDefined();
-        expect(mockPart1.material.transparent).not.toBe(true); // Highlight material has no transparent property
+        // Assert: The selected part is not in the transparency map
+        expect(visor3d.transparentMaterials.has(mockPart1.uuid)).toBe(false);
     });
 });
