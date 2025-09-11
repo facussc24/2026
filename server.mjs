@@ -6,6 +6,15 @@ const server = http.createServer((request, response) => {
     "public": "public",
     "rewrites": [
       { "source": "**", "destination": "/index.html" }
+    ],
+    "headers": [
+      {
+        "source" : "**",
+        "headers" : [{
+          "key" : "Access-Control-Allow-Origin",
+          "value" : "*"
+        }]
+      }
     ]
   });
 });

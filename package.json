@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@playwright/test": "^1.55.0",
+    "lil-gui": "^0.20.0",
     "serve-handler": "^6.1.6"
   }
 }
