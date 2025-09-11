@@ -6,14 +6,14 @@ global.lucide = {
 };
 
 describe('Visor3D Multi-Material Selection', () => {
-    let selectObject;
+    let updateSelection;
     let mockMultiMaterial;
 
     beforeEach(async () => {
         // Reset modules to get a fresh state for the stateful visor3d.js module
         jest.resetModules();
         const freshModule = await import('../../public/modulos/visor3d/js/visor3d.js');
-        selectObject = freshModule.selectObject;
+        updateSelection = freshModule.updateSelection;
 
         // Set up the necessary DOM structure
         document.body.innerHTML = `
@@ -38,7 +38,7 @@ describe('Visor3D Multi-Material Selection', () => {
         };
 
         // Act
-        selectObject(multiMaterialMesh);
+        updateSelection(multiMaterialMesh, false); // Simulate a single click
 
         // Assert
         // With the bug, the material array is unchanged. This test will fail.
