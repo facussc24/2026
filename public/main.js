@@ -5042,11 +5042,18 @@ async function runEcrFormLogic(params = null) {
 
     const saveEcrForm = async (status = 'in-progress') => {
         const dataFromForm = getEcrFormData(formContainer);
-
-        // Combine the fresh form data with the existing ECR data (especially the approvals).
         const dataToSave = { ...ecrData, ...dataFromForm };
 
-        dataToSave.status = status;
+        // --- Refactored Status Logic ---
+        // First, check if the ECR's status should be automatically updated based on its content.
+        // This function is pure and operates on the provided data.
+        const autoUpdatedStatus = checkAndUpdateEcrStatus(dataToSave);
+
+        // If an automatic status is determined (e.g., 'approved'), use it.
+        // Otherwise, use the status from the button click (e.g., 'in-progress').
+        dataToSave.status = autoUpdatedStatus || status;
+        // --- End Refactored Status Logic ---
+
         dataToSave.lastModified = new Date();
         dataToSave.modifiedBy = appState.currentUser.email;
         if (!dataToSave.approvals) dataToSave.approvals = {};
@@ -5075,7 +5082,6 @@ async function runEcrFormLogic(params = null) {
         try {
             if (!isEditing) {
                 showToast('Generando número de ECR...', 'loading', { toastId });
-                // Call the new Cloud Function to get the next ECR number.
                 const getNextEcrNumber = httpsCallable(functions, 'getNextEcrNumber');
                 const result = await getNextEcrNumber();
                 const newEcrNumber = result.data.ecrNumber;
@@ -5091,25 +5097,20 @@ async function runEcrFormLogic(params = null) {
                 dataToSave.id = ecrId;
             }
 
-            // --- Client-side Firestore Write Logic ---
             const docId = dataToSave.id;
             const docRef = doc(db, COLLECTIONS.ECR_FORMS, docId);
             const historyCollectionRef = collection(docRef, 'history');
-
             const batch = writeBatch(db);
 
+            // The correct status is now part of dataToSave, so we only need one write operation.
             batch.set(docRef, dataToSave, { merge: true });
-
             const historyDocRef = doc(historyCollectionRef);
             batch.set(historyDocRef, dataToSave);
-
             await batch.commit();
 
-            // After saving, check if the status needs to be updated due to the changes.
-            const newStatus = checkAndUpdateEcrStatus(dataToSave);
-            if (newStatus && newStatus !== dataToSave.status) {
-                showToast(`El estado del ECR ha cambiado a: ${newStatus}`, 'info');
-                await updateDoc(docRef, { status: newStatus });
+            // Notify the user if the status changed from what it was before saving.
+            if (ecrData && dataToSave.status !== ecrData.status) {
+                showToast(`El estado del ECR ha cambiado a: ${dataToSave.status}`, 'info');
             }
 
             localStorage.removeItem(ECR_FORM_STORAGE_KEY);
