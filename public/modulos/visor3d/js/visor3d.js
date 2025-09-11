@@ -206,7 +206,7 @@ function initThreeScene(modelId) {
 
     // GLTFLoader
     const loader = new GLTFLoader();
-    loader.load(`modulos/visor3d/modelos/${modelId}.glb`, (gltf) => {
+    loader.load(`modulos/visor3d/modelos/${modelId}/model.glb`, (gltf) => {
         updateStatus('Processing model...');
         const model = gltf.scene;
 
