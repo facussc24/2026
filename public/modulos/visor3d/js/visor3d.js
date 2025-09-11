@@ -18,6 +18,7 @@ export let isIsolated = false;
 export let isolatedObjects = [];
 let isSelectionTransparencyActive = false;
 const transparentMaterials = new Map();
+const preIsolationVisibility = new Map();
 
 export let partCharacteristics = {}; // This will be loaded from JSON
 let currentCleanup = null;
@@ -700,7 +701,7 @@ function toggleExplodeView() {
 }
 
 
-function toggleIsolation() {
+export function toggleIsolation() {
     if (selectedObjects.length === 0 && !isIsolated) {
         // Don't do anything if nothing is selected and we are not already in isolation mode
         return;
@@ -714,7 +715,12 @@ function toggleIsolation() {
     const icon = isolateBtn.querySelector('i');
 
     if (isIsolated) {
-        // Entering isolation mode
+        // Entering isolation mode: store current visibility states
+        preIsolationVisibility.clear();
+        modelParts.forEach(part => {
+            preIsolationVisibility.set(part.uuid, part.visible);
+        });
+
         isolatedObjects = [...selectedObjects]; // Store the objects to be isolated
         const isolatedUuids = new Set(isolatedObjects.map(obj => obj.uuid));
 
@@ -725,11 +731,13 @@ function toggleIsolation() {
         isolateBtn.setAttribute('title', 'Mostrar Todo');
         icon.setAttribute('data-lucide', 'eye');
     } else {
-        // Exiting isolation mode
+        // Exiting isolation mode: restore previous visibility states
         isolatedObjects = [];
         modelParts.forEach(part => {
-            part.visible = true;
+            // Restore visibility from the map, default to true if not found
+            part.visible = preIsolationVisibility.has(part.uuid) ? preIsolationVisibility.get(part.uuid) : true;
         });
+        preIsolationVisibility.clear(); // Clean up the map
 
         isolateBtn.setAttribute('title', 'Aislar Pieza');
         icon.setAttribute('data-lucide', 'zap');
