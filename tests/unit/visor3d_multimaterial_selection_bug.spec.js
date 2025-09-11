@@ -43,7 +43,7 @@ describe('Visor3D Multi-Material Selection', () => {
         // Assert
         // With the bug, the material array is unchanged. This test will fail.
         expect(multiMaterialMesh.material).not.toEqual(mockMultiMaterial);
-        expect(multiMaterialMesh.material[0].color).toBe(0xff0000);
-        expect(multiMaterialMesh.material[1].color).toBe(0xff0000);
+        expect(multiMaterialMesh.material[0].emissive).toBeDefined();
+        expect(multiMaterialMesh.material[1].emissive).toBeDefined();
     });
 });

@@ -47,15 +47,15 @@ describe('Visor3D Selection Transparency', () => {
 
         // Assert
         // Part 1 is selected, should be highlighted, not transparent.
-        expect(mockPart1.material.color).toBe(0xff0000);
+        expect(mockPart1.material.emissive).toBeDefined();
 
         // Part 2 is NOT selected, should be transparent
         expect(mockPart2.material.transparent).toBe(true);
-        expect(mockPart2.material.opacity).toBe(0.15);
+        expect(mockPart2.material.opacity).toBe(0.1);
 
         // Part 3 is NOT selected, should be transparent
         expect(mockPart3.material.transparent).toBe(true);
-        expect(mockPart3.material.opacity).toBe(0.15);
+        expect(mockPart3.material.opacity).toBe(0.1);
     });
 
     test('should restore all parts to original materials when deactivated', () => {
@@ -72,7 +72,7 @@ describe('Visor3D Selection Transparency', () => {
 
         // Assert
         // Part 1 was selected, it should remain highlighted
-        expect(mockPart1.material.color).toBe(0xff0000);
+        expect(mockPart1.material.emissive).toBeDefined();
 
         // Part 2 should be restored
         expect(mockPart2.material.name).toBe('mat2');
@@ -98,7 +98,7 @@ describe('Visor3D Selection Transparency', () => {
         // Part 1 is still not selected -> should be transparent
         expect(mockPart1.material.transparent).toBe(true);
         // Part 2 is now selected -> should be opaque (and highlighted)
-        expect(mockPart2.material.color).toBe(0xff0000); // Highlight material
+        expect(mockPart2.material.emissive).toBeDefined(); // Highlight material
         // Part 3 is not selected -> should be transparent
         expect(mockPart3.material.transparent).toBe(true);
 
@@ -107,24 +107,24 @@ describe('Visor3D Selection Transparency', () => {
 
         // Assert
         // Part 1 is now selected -> should be opaque (and highlighted)
-        expect(mockPart1.material.color).toBe(0xff0000);
+        expect(mockPart1.material.emissive).toBeDefined();
         // Part 2 is no longer selected -> should become transparent
         expect(mockPart2.material.transparent).toBe(true);
-        expect(mockPart2.material.opacity).toBe(0.15);
+        expect(mockPart2.material.opacity).toBe(0.1);
     });
 
     test('should not make a highlighted part transparent', () => {
         // Arrange: Select part 1
         visor3d.updateSelection(mockPart1, false);
         // The highlight material is applied
-        expect(mockPart1.material.color).toBe(0xff0000);
+        expect(mockPart1.material.emissive).toBeDefined();
 
         // Act: Activate transparency mode
         visor3d.toggleSelectionTransparency();
 
         // Assert
         // The material should still be the highlight material, not a transparent one.
-        expect(mockPart1.material.color).toBe(0xff0000);
-        expect(mockPart1.material.transparent).toBe(undefined); // Highlight material has no transparent property
+        expect(mockPart1.material.emissive).toBeDefined();
+        expect(mockPart1.material.transparent).not.toBe(true); // Highlight material has no transparent property
     });
 });

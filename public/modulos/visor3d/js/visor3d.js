@@ -492,6 +492,14 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
     if (!objectToSelect || !objectToSelect.isMesh) {
         unhighlightAll();
     } else {
+        // --- FIX: Before highlighting, if the object is transparent, restore it ---
+        // This prevents the transparent material from being saved as the "original"
+        if (transparentMaterials.has(objectToSelect.uuid)) {
+            objectToSelect.material = transparentMaterials.get(objectToSelect.uuid);
+            transparentMaterials.delete(objectToSelect.uuid);
+        }
+        // --- END FIX ---
+
         if (!isCtrlPressed) {
             // Single selection logic
             unhighlightAll();
