@@ -90,33 +90,14 @@ body.visor3d-active {
 }
 
 #visor3d-piece-card {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    background-color: white;
-    border-radius: 0.75rem;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-    padding: 1rem; /* A bit smaller padding */
-    width: 90%;
-    max-width: 450px; /* A bit wider to accommodate the new layout */
-    display: none; /* Hidden by default */
-    animation: slide-in-from-right 0.4s ease-out;
-    z-index: 20; /* Ensure it's above the scene but below modals */
+    /* Now a static block within the panel */
+    width: 100%;
+    background-color: #f8fafc; /* A slightly different background to distinguish it */
+    display: block; /* Shown by default, will be hidden via JS */
 }
 
-@keyframes slide-in-from-right {
-    from {
-        transform: translateX(100%);
-        opacity: 0;
-    }
-    to {
-        transform: translateX(0);
-        opacity: 1;
-    }
-}
-
-#visor3d-piece-card.visible {
-    display: block;
+#visor3d-piece-card.hidden {
+    display: none;
 }
 
 .custom-card-layout {
@@ -136,4 +117,29 @@ body.visor3d-active {
 
 .custom-card-details {
     flex-grow: 1; /* Allow details to take up remaining space */
+}
+
+/* Styling for the lil-gui container to integrate it smoothly */
+#lil-gui-container .lil-gui {
+    /* Override default lil-gui styles that make it a floating panel */
+    box-shadow: none;
+    border: none;
+    width: 100% !important; /* Force it to take the full width of the container */
+    --widget-padding: 0; /* Adjust padding if necessary */
+    --title-background-color: transparent;
+    --title-text-color: #1f2937; /* A darker text color for the title */
+    --background-color: transparent; /* Make the GUI background transparent */
+}
+
+#lil-gui-container .lil-gui .title {
+    font-size: 1.125rem; /* text-lg */
+    font-weight: 700; /* font-bold */
+    padding-left: 0;
+    padding-right: 0;
+}
+
+#lil-gui-container .lil-gui .children {
+    /* The container for the actual controls */
+    background-color: transparent;
+    border: none;
 }
