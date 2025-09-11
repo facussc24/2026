@@ -609,6 +609,9 @@ function setupVisor3dEventListeners() {
             if (isExploded) {
                 toggleExplodeView(); // Implode the model
             }
+            if (isTransparent) {
+                toggleTransparency();
+            }
             if (controls) {
                 controls.reset();
             }
