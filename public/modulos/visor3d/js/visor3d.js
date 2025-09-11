@@ -162,7 +162,7 @@ function initThreeScene(modelId) {
     camera.position.z = 5;
 
     // Renderer
-    renderer = new THREE.WebGLRenderer({ antialias: false });
+    renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.offsetWidth, container.offsetHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true; // Enable shadows
@@ -228,25 +228,37 @@ function initThreeScene(modelId) {
         const centeredBox = new THREE.Box3().setFromObject(model);
         const groundY = centeredBox.min.y;
 
-        // Simple grid floor
-        const gridHelper = new THREE.GridHelper(200, 40, 0x000000, 0x000000);
-        gridHelper.material.opacity = 0.1;
-        gridHelper.material.transparent = true;
-        gridHelper.position.y = groundY;
-        scene.add(gridHelper);
+        // Checkerboard floor
+        const floorSize = 200;
+        const divisions = 20; // How many squares across the whole floor
+        const canvas = document.createElement('canvas');
+        canvas.width = 2;
+        canvas.height = 2;
+        const context = canvas.getContext('2d');
+        context.fillStyle = 'white';
+        context.fillRect(0, 0, 2, 2);
+        context.fillStyle = 'black';
+        context.fillRect(0, 0, 1, 1);
+        context.fillRect(1, 1, 1, 1);
 
-        // A reflective ground plane just below the model
-        const groundGeo = new THREE.PlaneGeometry(200, 200);
-        const groundMat = new THREE.MeshStandardMaterial({
-            color: 0x888888, // A darker grey for better contrast with reflections
-            metalness: 0.9,  // More metallic for clearer reflections
-            roughness: 0.4,  // A bit of roughness to blur reflections slightly
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(divisions, divisions);
+        texture.magFilter = THREE.NearestFilter; // Ensures sharp pixelated look for the checkerboard
+
+        const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize);
+        const floorMat = new THREE.MeshStandardMaterial({
+            map: texture,
+            roughness: 0.8,
+            metalness: 0.2,
+            color: 0xaaaaaa // Base color to tint the checkerboard slightly
         });
-        const groundPlane = new THREE.Mesh(groundGeo, groundMat);
-        groundPlane.rotation.x = -Math.PI / 2;
-        groundPlane.position.y = groundY - 0.01; // Place it just below the grid
-        groundPlane.receiveShadow = true;
-        scene.add(groundPlane);
+        const floorPlane = new THREE.Mesh(floorGeo, floorMat);
+        floorPlane.rotation.x = -Math.PI / 2;
+        floorPlane.position.y = groundY;
+        floorPlane.receiveShadow = true;
+        scene.add(floorPlane);
 
 
         // Adjust camera to fit the model
