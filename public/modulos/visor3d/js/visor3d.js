@@ -175,27 +175,35 @@ function initThreeScene(modelId) {
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // Slightly reduce ambient light to make shadows pop
+    // Lights - Improved setup
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // A bit more ambient light to soften shadows
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // Increase intensity for more contrast
-    directionalLight.position.set(10, 15, 5); // Adjust angle for more dynamic shadows
-    directionalLight.castShadow = true; // Enable shadow casting for this light
-
-    // Configure shadow properties for better quality
-    directionalLight.shadow.mapSize.width = 1024;
-    directionalLight.shadow.mapSize.height = 1024;
+    // Main directional light (simulating the sun)
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5); // Increased intensity for brighter highlights
+    directionalLight.position.set(5, 10, 7.5);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048; // Higher resolution for sharper shadows
+    directionalLight.shadow.mapSize.height = 2048;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 50;
-    // Define the area covered by the shadow camera
-    const shadowCameraSize = 20;
-    directionalLight.shadow.camera.left = -shadowCameraSize;
-    directionalLight.shadow.camera.right = shadowCameraSize;
-    directionalLight.shadow.camera.top = shadowCameraSize;
-    directionalLight.shadow.camera.bottom = -shadowCameraSize;
-
+    const shadowCamSize = 15;
+    directionalLight.shadow.camera.left = -shadowCamSize;
+    directionalLight.shadow.camera.right = shadowCamSize;
+    directionalLight.shadow.camera.top = shadowCamSize;
+    directionalLight.shadow.camera.bottom = -shadowCamSize;
+    directionalLight.shadow.bias = -0.0005; // Helps prevent shadow acne
     scene.add(directionalLight);
+
+    // A fill light from the opposite side to reduce harshness
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    fillLight.position.set(-5, -5, -7.5);
+    scene.add(fillLight);
+
+    // A soft light from above
+    const hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x444488, 0.4);
+    hemisphereLight.position.set(0, 20, 0);
+    scene.add(hemisphereLight);
 
     // GLTFLoader
     const loader = new GLTFLoader();
@@ -219,16 +227,26 @@ function initThreeScene(modelId) {
 
         // Add a ground plane
         const centeredBox = new THREE.Box3().setFromObject(model);
-        const groundGeometry = new THREE.PlaneGeometry(200, 200);
-        const groundMaterial = new THREE.MeshStandardMaterial({
-            color: 0xcccccc,
-            roughness: 0.8,
-            metalness: 0.2
+        const groundY = centeredBox.min.y;
+
+        // Simple grid floor
+        const gridHelper = new THREE.GridHelper(200, 40, 0x000000, 0x000000);
+        gridHelper.material.opacity = 0.1;
+        gridHelper.material.transparent = true;
+        gridHelper.position.y = groundY;
+        scene.add(gridHelper);
+
+        // A reflective ground plane just below the model
+        const groundGeo = new THREE.PlaneGeometry(200, 200);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x888888, // A darker grey for better contrast with reflections
+            metalness: 0.9,  // More metallic for clearer reflections
+            roughness: 0.4,  // A bit of roughness to blur reflections slightly
         });
-        const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+        const groundPlane = new THREE.Mesh(groundGeo, groundMat);
         groundPlane.rotation.x = -Math.PI / 2;
-        groundPlane.position.y = centeredBox.min.y; // Position plane at the bottom of the model
-        groundPlane.receiveShadow = true; // Allow the ground to receive shadows
+        groundPlane.position.y = groundY - 0.01; // Place it just below the grid
+        groundPlane.receiveShadow = true;
         scene.add(groundPlane);
 
 
@@ -531,53 +549,70 @@ function updatePieceCard(object) {
 
 
 function onPointerDown(event) {
+    // Check if the click is on the GUI; if so, do not trigger the raycaster.
+    // This prevents accidental selections when interacting with lil-gui.
+    const isGuiInteraction = event.target.closest('.lil-gui');
+    if (isGuiInteraction) {
+        return;
+    }
+
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(scene.children, true);
+
+    // Ensure we only intersect with the model parts, not helpers or the ground
+    const intersectableObjects = modelParts.length > 0 ? modelParts : scene.children;
+    const intersects = raycaster.intersectObjects(intersectableObjects, true);
 
     let targetObject = null;
     if (intersects.length > 0) {
-        if (isTransparent) {
-            const exteriorMeshes = new Set(exteriorMaterials.map(item => item.mesh));
-            targetObject = intersects.find(intersection => !exteriorMeshes.has(intersection.object))?.object;
-        } else {
-            targetObject = intersects[0].object;
+        // Find the first visible mesh that was clicked
+        const firstVisibleHit = intersects.find(hit => hit.object.visible && hit.object.isMesh);
+        if (firstVisibleHit) {
+            targetObject = firstVisibleHit.object;
         }
     }
 
-    // Update selection based on what was clicked and if Ctrl was pressed
-    if (targetObject && targetObject.isMesh && targetObject.name) {
+    // A click on empty space (no targetObject) with Ctrl NOT pressed should clear selection.
+    // If Ctrl is pressed, a click on empty space should do nothing (preserve selection).
+    if (!targetObject && !event.ctrlKey) {
+        updateSelection(null, false);
+    } else if (targetObject && targetObject.name) {
+        // Only update selection if a valid, named object was clicked.
         updateSelection(targetObject, event.ctrlKey);
-    } else {
-        updateSelection(null, event.ctrlKey);
     }
 }
 
 function toggleTransparency() {
     isTransparent = !isTransparent;
+    const btn = document.getElementById('transparency-btn');
+    if(btn) btn.classList.toggle('active', isTransparent);
+
+    document.body.dataset.animationStatus = 'running';
 
     // First time, find and store exterior materials
     if (exteriorMaterials.length === 0 && scene) {
         scene.traverse((child) => {
             if (child.isMesh) {
                 const name = child.name.toLowerCase();
-                // Identify exterior parts like body, paint, and glass
-                const isExterior = name.startsWith('paint_') || name.startsWith('glass_') || name.startsWith('matte_black_');
-                // Exclude parts that shouldn't be transparent, like wheels or interior trim
-                const isExcluded = name.includes('wheel') || name.includes('cloth') || name.includes('caliper');
+                // A more robust list of keywords for exterior parts
+                const exteriorKeywords = ['paint', 'glass', 'chrome', 'plastic', 'body', 'door', 'hood', 'roof', 'bumper', 'fender'];
+                const isExterior = exteriorKeywords.some(keyword => name.includes(keyword));
+
+                // A more robust list of keywords for parts to exclude from transparency
+                const excludedKeywords = ['wheel', 'tire', 'caliper', 'interior', 'seat', 'dashboard', 'engine', 'chassis'];
+                const isExcluded = excludedKeywords.some(keyword => name.includes(keyword));
 
                 if (isExterior && !isExcluded) {
                     const material = child.material;
                     if (!Array.isArray(material)) {
-                        // Store the original material state
-                        const originalMaterial = material.clone();
-                        // Create the transparent variant
+                        const originalMaterial = material; // Direct reference
                         const transparentMaterial = material.clone();
                         transparentMaterial.transparent = true;
-                        transparentMaterial.opacity = 0.15;
+                        transparentMaterial.opacity = 0.1;
+                        transparentMaterial.depthWrite = false; // Important for correct rendering of transparent objects
 
                         exteriorMaterials.push({
                             mesh: child,
@@ -585,22 +620,23 @@ function toggleTransparency() {
                             transparentMaterial: transparentMaterial
                         });
                     } else {
-                        console.warn(`Mesh ${child.name} has multiple materials. Transparency might not work as expected.`);
+                        console.warn(`Mesh ${child.name} has multiple materials. Transparency will not be applied.`);
                     }
                 }
             }
         });
+        console.log(`Identified ${exteriorMaterials.length} exterior parts for transparency.`);
     }
 
     // Apply the correct material based on the transparency state
     exteriorMaterials.forEach(item => {
-        if (isTransparent) {
-            item.mesh.material = item.transparentMaterial;
-        } else {
-            item.mesh.material = item.originalMaterial;
-        }
+        item.mesh.material = isTransparent ? item.transparentMaterial : item.originalMaterial;
         item.mesh.material.needsUpdate = true;
     });
+
+    setTimeout(() => {
+        document.body.dataset.animationStatus = 'finished';
+    }, 500);
 }
 
 function renderPartsList(partNames) {
@@ -627,37 +663,64 @@ function renderPartsList(partNames) {
 
 function toggleExplodeView() {
     isExploded = !isExploded;
+    const btn = document.getElementById('explode-btn');
+    if(btn) btn.classList.toggle('active', isExploded);
 
+    document.body.dataset.animationStatus = 'running';
+
+    // Store original positions on first explosion
     if (isExploded && originalPositions.size === 0) {
         modelParts.forEach(mesh => {
             originalPositions.set(mesh.uuid, mesh.position.clone());
         });
     }
 
-    const modelBox = new THREE.Box3();
-    const modelGroup = scene.children.find(child => child.type === 'Group');
-    if (modelGroup) {
-        modelBox.setFromObject(modelGroup);
-    } else {
-        // Fallback for models not in a group
-        modelBox.setFromObject(scene);
-    }
-    const modelCenter = modelBox.getCenter(new THREE.Vector3());
-    const explosionFactor = 2.0;
+    const explosionFactor = 1.5; // Controls the overall distance of the explosion
 
     modelParts.forEach(mesh => {
         const originalPos = originalPositions.get(mesh.uuid);
         if (!originalPos) return;
 
         if (isExploded) {
-            const meshCenter = new THREE.Vector3();
-            mesh.getWorldPosition(meshCenter);
-            const direction = new THREE.Vector3().subVectors(meshCenter, modelCenter).normalize();
-            mesh.position.copy(new THREE.Vector3().addVectors(originalPos, direction.multiplyScalar(explosionFactor)));
+            const direction = new THREE.Vector3();
+
+            // --- Smarter Explosion Logic ---
+            const name = mesh.name.toLowerCase();
+            if (name.includes('wheel') || name.includes('tire')) {
+                // Explode wheels outwards along the x-axis
+                direction.set(mesh.position.x > 0 ? 1 : -1, 0, 0);
+            } else if (name.includes('door')) {
+                // Explode doors slightly out and up
+                direction.set(mesh.position.x > 0 ? 0.8 : -0.8, 0.2, 0);
+            } else if (name.includes('hood') || name.includes('bonnet')) {
+                // Explode hood forwards and up
+                direction.set(0, 0.5, -1);
+            } else if (name.includes('trunk') || name.includes('boot')) {
+                // Explode trunk backwards and up
+                direction.set(0, 0.5, 1);
+            } else if (name.includes('roof')) {
+                // Explode roof straight up
+                direction.set(0, 1, 0);
+            } else {
+                // Default behavior for other parts: radiate from center
+                const meshCenter = new THREE.Vector3();
+                mesh.getWorldPosition(meshCenter);
+
+                // Use the object's original position relative to the model's origin as the direction vector
+                direction.copy(originalPos).normalize();
+            }
+
+            mesh.position.copy(originalPos).add(direction.multiplyScalar(explosionFactor));
+
         } else {
+            // If not exploded, return to original position
             mesh.position.copy(originalPos);
         }
     });
+
+    setTimeout(() => {
+        document.body.dataset.animationStatus = 'finished';
+    }, 1500); // Wait for the animation to finish
 }
 
 
@@ -696,64 +759,78 @@ function toggleIsolation() {
 }
 
 
-export function applySelectionTransparency(forceRestore = false) {
-    if (!isSelectionTransparencyActive && !forceRestore) return;
+function applySelectionTransparency(forceRestore = false) {
+    if (!isSelectionTransparencyActive && !forceRestore) {
+        // If the mode is being turned off, we need to restore materials.
+        // The `forceRestore` flag ensures this happens.
+        if (!forceRestore) return;
+    }
 
     const selectedUuids = new Set(selectedObjects.map(obj => obj.uuid));
 
     modelParts.forEach(part => {
         const isSelected = selectedUuids.has(part.uuid);
 
+        // Condition to make a part transparent:
+        // - The mode must be active (`isSelectionTransparencyActive`)
+        // - The part must NOT be in the current selection (`!isSelected`)
+        // - We are not in the process of restoring everything (`!forceRestore`)
         if (isSelectionTransparencyActive && !isSelected && !forceRestore) {
-            // Part is NOT selected, make it transparent
             if (!transparentMaterials.has(part.uuid)) {
+                // Store the original material before making it transparent
                 transparentMaterials.set(part.uuid, part.material);
-                const transparentMaterial = Array.isArray(part.material)
-                    ? part.material.map(m => m.clone())
-                    : part.material.clone();
 
-                if (Array.isArray(transparentMaterial)) {
-                    transparentMaterial.forEach(m => {
-                        m.transparent = true;
-                        m.opacity = 0.15;
-                    });
+                const makeTransparent = (material) => {
+                    const transparentMat = material.clone();
+                    transparentMat.transparent = true;
+                    transparentMat.opacity = 0.1;
+                    transparentMat.emissive = new THREE.Color(0x000000); // Ensure no self-glow
+                    return transparentMat;
+                };
+
+                if (Array.isArray(part.material)) {
+                    part.material = part.material.map(makeTransparent);
                 } else {
-                    transparentMaterial.transparent = true;
-                    transparentMaterial.opacity = 0.15;
+                    part.material = makeTransparent(part.material);
                 }
-                part.material = transparentMaterial;
-                part.material.needsUpdate = true;
             }
         } else {
-            // Part IS selected or we are turning the mode off, restore it
+            // Condition to restore a part's material:
+            // - If the part was previously made transparent (`transparentMaterials.has(part.uuid)`)
+            // - This will trigger when the mode is turned off (`!isSelectionTransparencyActive` or `forceRestore`)
+            // - Or when a part becomes selected (`isSelected`)
             if (transparentMaterials.has(part.uuid)) {
                 part.material = transparentMaterials.get(part.uuid);
                 transparentMaterials.delete(part.uuid);
-                part.material.needsUpdate = true;
             }
+        }
+        if (Array.isArray(part.material)) {
+            part.material.forEach(m => m.needsUpdate = true);
+        } else {
+            part.material.needsUpdate = true;
         }
     });
 }
-
 
 export function toggleSelectionTransparency() {
     isSelectionTransparencyActive = !isSelectionTransparencyActive;
     const btn = document.getElementById('selection-transparency-btn');
 
+    document.body.dataset.animationStatus = 'running';
+
     if (isSelectionTransparencyActive) {
-        if (btn) btn.classList.add('active');
+        btn.classList.add('active');
+        // When activating, apply transparency to all non-selected parts
         applySelectionTransparency();
     } else {
-        if (btn) btn.classList.remove('active');
-        // Restore all transparent materials
-        modelParts.forEach(part => {
-            if (transparentMaterials.has(part.uuid)) {
-                part.material = transparentMaterials.get(part.uuid);
-                transparentMaterials.delete(part.uuid);
-            }
-        });
-        transparentMaterials.clear();
+        btn.classList.remove('active');
+        // When deactivating, restore all parts that were made transparent
+        applySelectionTransparency(true); // `forceRestore = true`
     }
+
+    setTimeout(() => {
+        document.body.dataset.animationStatus = 'finished';
+    }, 500);
 }
 
 function setupVisor3dEventListeners() {

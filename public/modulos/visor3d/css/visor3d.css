@@ -152,5 +152,20 @@ body.visor3d-active {
 
 /* Ensure the controller labels are readable on a white background */
 #lil-gui-container .lil-gui .name {
-    color: #374151; /* text-gray-700 */
+    color: #374151 !important; /* text-gray-700, use important to override inline styles */
+}
+
+/* General lil-gui text color */
+#lil-gui-container .lil-gui, #lil-gui-container .lil-gui .widget input, #lil-gui-container .lil-gui .widget select {
+    color: #1f2937; /* A dark color for all text */
+}
+
+/* Specifically target number inputs and text inputs to ensure they are dark */
+#lil-gui-container .lil-gui input[type="number"],
+#lil-gui-container .lil-gui input[type="text"] {
+    color: #111827; /* Even darker for input fields */
+    background-color: #f9fafb; /* A very light gray background to distinguish them */
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 2px 4px;
 }
