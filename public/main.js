@@ -1394,29 +1394,32 @@ function setupGlobalEventListeners() {
     document.addEventListener('click', handleGlobalClick);
 
     // --- New Help Modal Logic ---
-    const helpBtn = document.getElementById('help-tutorial-btn');
-    const helpModal = document.getElementById('help-modal');
+    function setupHelpButtonListener() {
+        const helpBtn = document.getElementById('help-tutorial-btn');
+        const helpModal = document.getElementById('help-modal');
 
-    if (helpBtn && helpModal) {
-        const closeHelpButtons = helpModal.querySelectorAll('[data-action="close-help-modal"]');
+        if (helpBtn && helpModal) {
+            const closeHelpButtons = helpModal.querySelectorAll('[data-action="close-help-modal"]');
 
-        helpBtn.addEventListener('click', () => {
-            helpModal.classList.remove('hidden');
-        });
-
-        closeHelpButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                helpModal.classList.add('hidden');
+            helpBtn.addEventListener('click', () => {
+                helpModal.classList.remove('hidden');
             });
-        });
 
-        // Close modal by clicking on the backdrop
-        helpModal.addEventListener('click', (e) => {
-            if (e.target === helpModal) {
-                helpModal.classList.add('hidden');
-            }
-        });
+            closeHelpButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    helpModal.classList.add('hidden');
+                });
+            });
+
+            // Close modal by clicking on the backdrop
+            helpModal.addEventListener('click', (e) => {
+                if (e.target === helpModal) {
+                    helpModal.classList.add('hidden');
+                }
+            });
+        }
     }
+    window.setupHelpButtonListener = setupHelpButtonListener;
 }
 
 async function switchView(viewName, params = null) {
@@ -1459,7 +1462,7 @@ async function switchView(viewName, params = null) {
     
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
-    if (viewName === 'visor3d') await runVisor3dLogic();
+    if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic();
     else if (viewName === 'dashboard') await runDashboardLogic();
     else if (viewName === 'sinoptico') await runSinopticoLogic();
     else if (viewName === 'sinoptico_tabular') await runSinopticoTabularLogic();
