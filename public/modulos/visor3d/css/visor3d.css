@@ -149,3 +149,8 @@ body.visor3d-active {
     background-color: transparent;
     border: none;
 }
+
+/* Ensure the controller labels are readable on a white background */
+#lil-gui-container .lil-gui .name {
+    color: #374151; /* text-gray-700 */
+}

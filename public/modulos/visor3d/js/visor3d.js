@@ -20,112 +20,115 @@ let isSelectionTransparencyActive = false;
 const transparentMaterials = new Map();
 
 export let partCharacteristics = {}; // This will be loaded from JSON
+let currentCleanup = null;
+
+async function loadModel(modelId) {
+    console.log(`Loading model: ${modelId}`);
+    // If there's an old scene, clean it up first
+    if (currentCleanup) {
+        currentCleanup();
+    }
+
+    try {
+        const response = await fetch(`modulos/visor3d/data/${modelId}.json`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        partCharacteristics = await response.json();
+    } catch (error) {
+        console.error("Could not load part characteristics:", error);
+        partCharacteristics = {}; // Reset to avoid using stale data
+        updateStatus(`Error al cargar datos de ${modelId}`, true);
+        return;
+    }
+
+    // Initialize the scene and get the new cleanup function
+    currentCleanup = initThreeScene(modelId);
+}
 
 // This function will be called by main.js to start the 3D viewer.
 export async function runVisor3dLogic() {
     console.log("Running Visor3D logic...");
 
-    // Determine which model to load. For now, it's hardcoded to 'auto'.
-    // In the future, this could be passed as a parameter.
-    const modelId = 'auto';
-
-    try {
-        const response = await fetch(`modulos/visor3d/data/${modelId}.json`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        partCharacteristics = await response.json();
-    } catch (error) {
-        console.error("Could not load part characteristics:", error);
-        // Handle the error appropriately, maybe show a message to the user
-        partCharacteristics = {}; // Reset to avoid using stale data
-    }
-
     const container = document.getElementById('view-content');
-    if (container) {
-        // Clear previous view content
-        container.innerHTML = '';
-        document.body.classList.add('visor3d-active');
+    if (!container) return;
 
-        const visorHTML = `
-            <div id="visor3d-container">
-                <div id="visor3d-scene-container">
-                    <div id="visor3d-status" class="absolute inset-0 flex items-center justify-center bg-slate-100/80 z-10">
-                        <p class="text-slate-600 font-semibold text-lg animate-pulse">Initializing viewer...</p>
-                    </div>
-                </div>
-                <div id="visor3d-panel">
-                    <div id="visor3d-panel-header">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-bold">Piezas del Modelo</h3>
-                            <div id="visor3d-controls" class="flex items-center gap-2">
-                                <button id="transparency-btn" class="visor3d-control-btn" title="Vista Interior"><i data-lucide="zoom-in"></i></button>
-                                <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
-                                <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
-                                <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
-                                <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
-                                <!-- Help/Tutorial Icon -->
-                                <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
-                                    <i data-lucide="help-circle" class="w-6 h-6 text-slate-600"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <input type="text" id="visor3d-search" placeholder="Buscar pieza..." class="mt-2">
-                    </div>
-                    <div id="lil-gui-container" class="p-4 border-b border-slate-200"></div>
-                    <div id="visor3d-parts-list">
-                        <p class="text-sm text-slate-500 p-4">La lista de piezas aparecerá aquí.</p>
-                    </div>
-                    <div id="visor3d-piece-card" class="border-t border-slate-200 p-4 hidden">
-                        <div class="flex justify-between items-center mb-2">
-                            <h4 id="piece-card-title" class="text-xl font-bold">Título de la Pieza</h4>
-                            <button id="close-card-btn" class="p-1 leading-none rounded-full hover:bg-slate-200" title="Cerrar"><i data-lucide="x" class="h-4 w-4"></i></button>
-                        </div>
-                        <div id="piece-card-details" class="text-sm space-y-1.5">
-                            <!-- Characteristics will be populated here -->
-                        </div>
-                    </div>
+    container.innerHTML = `
+        <div id="visor3d-container">
+            <div id="visor3d-scene-container">
+                <div id="visor3d-status" class="absolute inset-0 flex items-center justify-center bg-slate-100/80 z-10">
+                    <p class="text-slate-600 font-semibold text-lg animate-pulse">Seleccione un modelo para comenzar...</p>
                 </div>
             </div>
-        `;
-        container.innerHTML = visorHTML;
-        lucide.createIcons();
-
-        // Add event listeners for the new controls
-        setupVisor3dEventListeners();
-        if (window.setupHelpButtonListener) {
-            window.setupHelpButtonListener();
-        }
-
-        // Initialize the three.js scene
-        initThreeScene();
+            <div id="visor3d-panel">
+                <div id="visor3d-panel-header">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-bold">Piezas del Modelo</h3>
+                        <select id="model-selector" class="text-sm border-gray-300 rounded-md">
+                            <option value="">Cargando...</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div id="visor3d-controls" class="flex items-center gap-2">
+                            <button id="transparency-btn" class="visor3d-control-btn" title="Vista Interior"><i data-lucide="zoom-in"></i></button>
+                            <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
+                            <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
+                            <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
+                            <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
+                            <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
+                                <i data-lucide="help-circle" class="w-6 h-6 text-slate-600"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="text" id="visor3d-search" placeholder="Buscar pieza..." class="mt-2">
+                </div>
+                <div id="lil-gui-container" class="p-4 border-b border-slate-200"></div>
+                <div id="visor3d-parts-list"></div>
+                <div id="visor3d-piece-card" class="border-t border-slate-200 p-4 hidden"></div>
+            </div>
+        </div>
+    `;
+    document.body.classList.add('visor3d-active');
+    lucide.createIcons();
+    setupVisor3dEventListeners();
+    if (window.setupHelpButtonListener) {
+        window.setupHelpButtonListener();
     }
 
-    // Return a cleanup function
-    return () => {
-        // Reset state for next time
-        modelParts = [];
-        exteriorMaterials.length = 0;
-        originalPositions.clear();
-        isExploded = false;
-        isTransparent = false;
-        selectedObjects.length = 0;
-        originalMaterials.clear();
-        isIsolated = false;
-        isolatedObjects.length = 0;
-        isSelectionTransparencyActive = false;
-        transparentMaterials.clear();
+    // Fetch manifest and populate selector
+    const selector = document.getElementById('model-selector');
+    try {
+        const response = await fetch('modulos/visor3d/data/manifest.json');
+        const models = await response.json();
+        selector.innerHTML = '<option value="">-- Seleccionar Modelo --</option>';
+        models.forEach(model => {
+            selector.innerHTML += `<option value="${model.id}">${model.name}</option>`;
+        });
 
-        console.log("Cleaning up Visor3D view.");
+        // Load the first model by default
+        if (models.length > 0) {
+            selector.value = models[0].id;
+            loadModel(models[0].id);
+        }
+
+    } catch (e) {
+        console.error("Failed to load model manifest:", e);
+        selector.innerHTML = '<option value="">Error al cargar</option>';
+        updateStatus("Error: No se pudo cargar la lista de modelos.", true);
+    }
+
+    selector.addEventListener('change', (e) => {
+        if (e.target.value) {
+            loadModel(e.target.value);
+        }
+    });
+
+    // Return a cleanup function for when the user navigates away from the viewer
+    return () => {
+        if (currentCleanup) {
+            currentCleanup();
+            currentCleanup = null;
+        }
         document.body.classList.remove('visor3d-active');
-        if (gui) {
-            gui.destroy();
-            gui = null;
-        }
-        if (renderer) {
-            renderer.dispose();
-        }
-        window.removeEventListener('resize', onWindowResize);
+        console.log("Cleaned up Visor3D main view.");
     };
 }
 
@@ -143,10 +146,12 @@ function updateStatus(message, isError = false) {
     }
 }
 
-function initThreeScene() {
+function initThreeScene(modelId) {
     const container = document.getElementById('visor3d-scene-container');
     if (!container) return;
 
+    // Clear any previous scene content
+    container.innerHTML = '';
     updateStatus('Loading 3D model...');
 
     // Scene
@@ -194,7 +199,7 @@ function initThreeScene() {
 
     // GLTFLoader
     const loader = new GLTFLoader();
-    loader.load('modulos/visor3d/modelos/auto.glb', (gltf) => {
+    loader.load(`modulos/visor3d/modelos/${modelId}.glb`, (gltf) => {
         updateStatus('Processing model...');
         const model = gltf.scene;
 
@@ -365,6 +370,34 @@ function initThreeScene() {
 
     // Handle window resize
     window.addEventListener('resize', onWindowResize, false);
+
+    return () => {
+        // Reset state for next time
+        modelParts = [];
+        exteriorMaterials.length = 0;
+        originalPositions.clear();
+        isExploded = false;
+        isTransparent = false;
+        selectedObjects.length = 0;
+        originalMaterials.clear();
+        isIsolated = false;
+        isolatedObjects.length = 0;
+        isSelectionTransparencyActive = false;
+        transparentMaterials.clear();
+        partCharacteristics = {};
+
+        console.log("Cleaning up Visor3D scene.");
+        if (gui) {
+            gui.destroy();
+            gui = null;
+        }
+        if (renderer) {
+            renderer.dispose();
+        }
+        window.removeEventListener('resize', onWindowResize);
+        const partsList = document.getElementById('visor3d-parts-list');
+        if(partsList) partsList.innerHTML = '';
+    };
 }
 
 function onWindowResize() {
