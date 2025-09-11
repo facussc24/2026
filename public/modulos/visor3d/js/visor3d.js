@@ -1,14 +1,22 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import GUI from 'lil-gui';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+
 
 // Visor3D Module
-export let scene, camera, renderer, controls, gui;
+export let scene, camera, renderer, controls;
+export const state = { outlinePass: null };
+let ambientLight, directionalLight;
+let composer, fxaaPass;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 export const selectedObjects = [];
-export const originalMaterials = new Map();
 let isTransparent = false;
 const exteriorMaterials = [];
 export let modelParts = [];
@@ -17,7 +25,7 @@ const originalPositions = new Map();
 export let isIsolated = false;
 export let isolatedObjects = [];
 let isSelectionTransparencyActive = false;
-const transparentMaterials = new Map();
+export const transparentMaterials = new Map();
 const preIsolationVisibility = new Map();
 
 export let partCharacteristics = {}; // This will be loaded from JSON
@@ -55,8 +63,11 @@ export async function runVisor3dLogic() {
     container.innerHTML = `
         <div id="visor3d-container">
             <div id="visor3d-scene-container">
-                <div id="visor3d-status" class="absolute inset-0 flex items-center justify-center bg-slate-100/80 z-10">
-                    <p class="text-slate-600 font-semibold text-lg animate-pulse">Seleccione un modelo para comenzar...</p>
+                <div id="visor3d-status" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100/80 z-10">
+                    <p id="visor3d-status-text" class="text-slate-600 font-semibold text-lg animate-pulse mb-4">Seleccione un modelo para comenzar...</p>
+                    <div id="visor3d-progress-bar-container" class="w-1/2 bg-slate-300 rounded-full h-4 hidden">
+                        <div id="visor3d-progress-bar" class="bg-blue-500 h-4 rounded-full" style="width: 0%"></div>
+                    </div>
                 </div>
             </div>
             <div id="visor3d-panel">
@@ -80,7 +91,21 @@ export async function runVisor3dLogic() {
                     </div>
                     <input type="text" id="visor3d-search" placeholder="Buscar pieza..." class="mt-2">
                 </div>
-                <div id="lil-gui-container" class="p-4 border-b border-slate-200"></div>
+                <div id="visor3d-controls-container" class="p-2 border-b border-slate-200">
+                    <details class="visor-section">
+                        <summary>Controles Visuales</summary>
+                        <div class="visor-section-content">
+                            <label for="bg-color">Fondo</label>
+                            <input type="color" id="bg-color" value="#f0f2f5">
+
+                            <label for="sun-intensity">Intensidad Sol</label>
+                            <input type="range" id="sun-intensity" min="0" max="4" step="0.1" value="2.5">
+
+                            <label for="ambient-light">Luz Ambiente</label>
+                            <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.7">
+                        </div>
+                    </details>
+                </div>
                 <div id="visor3d-parts-list"></div>
                 <div id="visor3d-piece-card" class="border-t border-slate-200 p-4 hidden"></div>
             </div>
@@ -132,14 +157,22 @@ export async function runVisor3dLogic() {
     };
 }
 
-function updateStatus(message, isError = false) {
+function updateStatus(message, isError = false, showProgressBar = false) {
     const statusEl = document.getElementById('visor3d-status');
-    if (statusEl) {
+    const statusText = document.getElementById('visor3d-status-text');
+    const progressBarContainer = document.getElementById('visor3d-progress-bar-container');
+
+    if (statusEl && statusText && progressBarContainer) {
         if (message) {
-            const pulseClass = isError ? '' : 'animate-pulse';
-            const colorClass = isError ? 'text-red-500' : 'text-slate-600';
-            statusEl.innerHTML = `<p class="${colorClass} font-semibold text-lg ${pulseClass}">${message}</p>`;
             statusEl.classList.remove('hidden');
+            statusText.textContent = message;
+            statusText.className = `font-semibold text-lg ${isError ? 'text-red-500' : 'text-slate-600'} ${isError ? '' : 'animate-pulse'}`;
+
+            if (showProgressBar) {
+                progressBarContainer.classList.remove('hidden');
+            } else {
+                progressBarContainer.classList.add('hidden');
+            }
         } else {
             statusEl.classList.add('hidden');
         }
@@ -152,7 +185,7 @@ function initThreeScene(modelId) {
 
     // Clear any previous scene content
     container.innerHTML = '';
-    updateStatus('Loading 3D model...');
+    updateStatus('Cargando modelo 3D...', false, true);
 
     // Scene
     scene = new THREE.Scene();
@@ -176,11 +209,11 @@ function initThreeScene(modelId) {
     controls.dampingFactor = 0.05;
 
     // Lights - Improved setup
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // A bit more ambient light to soften shadows
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // A bit more ambient light to soften shadows
     scene.add(ambientLight);
 
     // Main directional light (simulating the sun)
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5); // Increased intensity for brighter highlights
+    directionalLight = new THREE.DirectionalLight(0xffffff, 2.5); // Increased intensity for brighter highlights
     directionalLight.position.set(5, 10, 7.5);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048; // Higher resolution for sharper shadows
@@ -207,8 +240,9 @@ function initThreeScene(modelId) {
 
     // GLTFLoader
     const loader = new GLTFLoader();
-    loader.load(`modulos/visor3d/modelos/${modelId}/model.glb`, (gltf) => {
-        updateStatus('Processing model...');
+    loader.load(`modulos/visor3d/modelos/${modelId}/model.glb`,
+    (gltf) => { // onLoad
+        updateStatus('Procesando modelo...');
         const model = gltf.scene;
 
         // --- FIX: Remove camera from loaded model ---
@@ -225,42 +259,44 @@ function initThreeScene(modelId) {
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
 
-        // Add a ground plane
+        // Environment, Ground, and Shadows
+        const pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+
+        new RGBELoader()
+            .setPath('modulos/visor3d/imagenes/')
+            .load('studio_small_03_1k.hdr', function (texture) {
+                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+                pmremGenerator.dispose();
+
+                scene.environment = envMap;
+                scene.background = envMap;
+                scene.backgroundBlurriness = 0.5; // Add a little blur to the background
+            }, undefined, () => {
+                console.error("Failed to load HDR environment map. Make sure 'studio_small_03_1k.hdr' is in 'public/modulos/visor3d/imagenes/'.");
+                updateStatus("Error: No se pudo cargar el mapa de entorno.", true);
+            });
+
         const centeredBox = new THREE.Box3().setFromObject(model);
         const groundY = centeredBox.min.y;
 
-        // Checkerboard floor
-        const floorSize = 200;
-        const divisions = 20; // How many squares across the whole floor
-        const canvas = document.createElement('canvas');
-        canvas.width = 2;
-        canvas.height = 2;
-        const context = canvas.getContext('2d');
-        context.fillStyle = 'white';
-        context.fillRect(0, 0, 2, 2);
-        context.fillStyle = 'black';
-        context.fillRect(0, 0, 1, 1);
-        context.fillRect(1, 1, 1, 1);
+        // Grid
+        const grid = new THREE.GridHelper(200, 40, 0x000000, 0x000000);
+        grid.material.opacity = 0.2;
+        grid.material.transparent = true;
+        grid.position.y = groundY;
+        scene.add(grid);
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(divisions, divisions);
-        texture.magFilter = THREE.NearestFilter; // Ensures sharp pixelated look for the checkerboard
-
-        const floorGeo = new THREE.PlaneGeometry(floorSize, floorSize);
-        const floorMat = new THREE.MeshStandardMaterial({
-            map: texture,
-            roughness: 0.8,
-            metalness: 0.2,
-            color: 0xaaaaaa // Base color to tint the checkerboard slightly
+        // Shadow Catcher
+        const shadowPlaneGeo = new THREE.PlaneGeometry(200, 200);
+        const shadowPlaneMat = new THREE.ShadowMaterial({
+            opacity: 0.3
         });
-        const floorPlane = new THREE.Mesh(floorGeo, floorMat);
-        floorPlane.rotation.x = -Math.PI / 2;
-        floorPlane.position.y = groundY;
-        floorPlane.receiveShadow = true;
-        scene.add(floorPlane);
-
+        const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
+        shadowPlane.rotation.x = -Math.PI / 2;
+        shadowPlane.position.y = groundY + 0.01; // Place it slightly above the grid
+        shadowPlane.receiveShadow = true;
+        scene.add(shadowPlane);
 
         // Adjust camera to fit the model
         const size = box.getSize(new THREE.Vector3());
@@ -268,7 +304,7 @@ function initThreeScene(modelId) {
         // --- Guardian Check for model size ---
         if (size.x === 0 && size.y === 0 && size.z === 0) {
             console.error("Guardian Error: The model's bounding box is zero. The model may be empty or have no visible geometry.");
-            updateStatus("Error: Model is empty or invisible.", true);
+            updateStatus("Error: El modelo está vacío o no es visible.", true);
             return; // Stop further processing
         }
 
@@ -310,7 +346,7 @@ function initThreeScene(modelId) {
         });
         if (!meshFound) {
             console.warn("Guardian Warning: No meshes were found in the loaded model.");
-            updateStatus("Error: The loaded model does not contain any visible parts.", true);
+            updateStatus("Error: El modelo cargado no contiene partes visibles.", true);
             return; // Stop processing if model is empty
         }
         console.log("--- End of Inspection ---");
@@ -333,62 +369,44 @@ function initThreeScene(modelId) {
 
         updateStatus(null); // Hide status on success
 
-    }, undefined, (error) => {
+    },
+    (xhr) => { // onProgress
+        if (xhr.lengthComputable) {
+            const percentComplete = (xhr.loaded / xhr.total) * 100;
+            const progressBar = document.getElementById('visor3d-progress-bar');
+            if (progressBar) {
+                progressBar.style.width = percentComplete + '%';
+            }
+            updateStatus(`Cargando modelo: ${Math.round(percentComplete)}%`, false, true);
+        }
+    },
+    (error) => { // onError
         console.error('An error happened while loading the model:', error);
-        updateStatus('Error: Could not load 3D model. Check console for details.', true);
+        updateStatus('Error: No se pudo cargar el modelo 3D. Verifique la consola para más detalles.', true);
     });
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
 
-    // --- GUI Controls ---
-    if (gui) gui.destroy(); // Destroy old GUI if it exists from a previous run
-    const guiContainer = document.getElementById('lil-gui-container');
-    gui = new GUI({ container: guiContainer, autoPlace: false });
-    gui.title("Visual Controls");
+    // Post-processing
+    composer = new EffectComposer(renderer);
 
-    const sceneFolder = gui.addFolder('Scene');
-    const sceneParams = {
-        backgroundColor: scene.background.getHex(),
-        antialias: false
-    };
-    sceneFolder.addColor(sceneParams, 'backgroundColor').name('Background').onChange(value => {
-        scene.background.set(value);
-    });
-    sceneFolder.add(sceneParams, 'antialias').name('Anti-aliasing').onChange(value => {
-        // This is tricky because you can't change antialiasing on an existing renderer.
-        // We have to create a new one and replace the old one.
-        showToast('Recreando el renderizador para cambiar el antialiasing...', 'info');
-        const container = document.getElementById('visor3d-scene-container');
-        if (renderer) {
-            renderer.dispose();
-            container.removeChild(renderer.domElement);
-        }
-        renderer = new THREE.WebGLRenderer({ antialias: value });
-        renderer.setSize(container.offsetWidth, container.offsetHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        container.appendChild(renderer.domElement);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
 
-        // Re-attach controls and event listeners to the new renderer's DOM element
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
-        onWindowResize(); // Adjust size
-        showToast('Renderizador actualizado.', 'success');
-    });
+    state.outlinePass = new OutlinePass(new THREE.Vector2(container.offsetWidth, container.offsetHeight), scene, camera);
+    state.outlinePass.edgeStrength = 5;
+    state.outlinePass.edgeGlow = 0.5;
+    state.outlinePass.edgeThickness = 1;
+    state.outlinePass.visibleEdgeColor.set('#007bff');
+    state.outlinePass.hiddenEdgeColor.set('#007bff');
+    composer.addPass(state.outlinePass);
 
-    const lightFolder = gui.addFolder('Lighting');
-    lightFolder.add(directionalLight, 'intensity', 0, 4, 0.05).name('Sun Intensity');
-    lightFolder.add(directionalLight.position, 'x', -50, 50).name('Sun X');
-    lightFolder.add(directionalLight.position, 'y', -50, 50).name('Sun Y');
-    lightFolder.add(directionalLight.position, 'z', -50, 50).name('Sun Z');
-    lightFolder.add(ambientLight, 'intensity', 0, 2, 0.05).name('Ambient Light');
+    fxaaPass = new ShaderPass(FXAAShader);
+    const pixelRatio = renderer.getPixelRatio();
+    fxaaPass.material.uniforms['resolution'].value.x = 1 / (container.offsetWidth * pixelRatio);
+    fxaaPass.material.uniforms['resolution'].value.y = 1 / (container.offsetHeight * pixelRatio);
+    composer.addPass(fxaaPass);
 
-    const shadowFolder = gui.addFolder('Shadows');
-    shadowFolder.add(renderer.shadowMap, 'enabled').name('Enabled');
-    // --- End GUI Controls ---
 
     // Animation loop
     function animate() {
@@ -406,7 +424,7 @@ function initThreeScene(modelId) {
             });
         }
 
-        renderer.render(scene, camera);
+        composer.render();
     }
     animate();
 
@@ -429,10 +447,6 @@ function initThreeScene(modelId) {
         partCharacteristics = {};
 
         console.log("Cleaning up Visor3D scene.");
-        if (gui) {
-            gui.destroy();
-            gui = null;
-        }
         if (renderer) {
             renderer.dispose();
         }
@@ -445,9 +459,18 @@ function initThreeScene(modelId) {
 function onWindowResize() {
     const container = document.getElementById('visor3d-scene-container');
     if (container && camera && renderer) {
-        camera.aspect = container.offsetWidth / container.offsetHeight;
+        const width = container.offsetWidth;
+        const height = container.offsetHeight;
+
+        camera.aspect = width / height;
         camera.updateProjectionMatrix();
-        renderer.setSize(container.offsetWidth, container.offsetHeight);
+
+        renderer.setSize(width, height);
+        composer.setSize(width, height);
+
+        const pixelRatio = renderer.getPixelRatio();
+        fxaaPass.material.uniforms['resolution'].value.x = 1 / (width * pixelRatio);
+        fxaaPass.material.uniforms['resolution'].value.y = 1 / (height * pixelRatio);
     }
 }
 
@@ -455,69 +478,30 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
     const pieceCard = document.getElementById('visor3d-piece-card');
     const isolateBtn = document.getElementById('isolate-btn');
 
-    // Create a generic highlight material (once)
-    const highlightMaterial = new THREE.MeshStandardMaterial({
-        color: 0xff0000,
-        emissive: 0x330000,
-        metalness: 0.8,
-        roughness: 0.5
-    });
-
-    // Function to apply highlight to an object
-    const highlight = (obj) => {
-        if (!originalMaterials.has(obj.uuid)) {
-            originalMaterials.set(obj.uuid, obj.material);
-        }
-        if (Array.isArray(obj.material)) {
-            obj.material = obj.material.map(() => highlightMaterial);
-        } else {
-            obj.material = highlightMaterial;
-        }
-    };
-
-    // Function to remove highlight from an object
-    const unhighlight = (obj) => {
-        if (originalMaterials.has(obj.uuid)) {
-            obj.material = originalMaterials.get(obj.uuid);
-            originalMaterials.delete(obj.uuid);
-        }
-    };
-
-    const unhighlightAll = () => {
-        selectedObjects.forEach(unhighlight);
+    if (!isCtrlPressed) {
+        // Single selection
         selectedObjects.length = 0;
-    };
-
-    // If nothing is clicked, deselect everything
-    if (!objectToSelect || !objectToSelect.isMesh) {
-        unhighlightAll();
-    } else {
-        // --- FIX: Before highlighting, if the object is transparent, restore it ---
-        // This prevents the transparent material from being saved as the "original"
-        if (transparentMaterials.has(objectToSelect.uuid)) {
-            objectToSelect.material = transparentMaterials.get(objectToSelect.uuid);
-            transparentMaterials.delete(objectToSelect.uuid);
-        }
-        // --- END FIX ---
-
-        if (!isCtrlPressed) {
-            // Single selection logic
-            unhighlightAll();
+        if (objectToSelect && objectToSelect.isMesh) {
             selectedObjects.push(objectToSelect);
-            highlight(objectToSelect);
-        } else {
-            // Multi-selection logic (Ctrl is pressed)
+        }
+    } else {
+        // Multi-selection (Ctrl pressed)
+        if (objectToSelect && objectToSelect.isMesh) {
             const index = selectedObjects.findIndex(obj => obj.uuid === objectToSelect.uuid);
             if (index > -1) {
                 // Already selected, so deselect it
-                unhighlight(objectToSelect);
                 selectedObjects.splice(index, 1);
             } else {
-                // Not selected, so add it to the selection
+                // Not selected, so add it
                 selectedObjects.push(objectToSelect);
-                highlight(objectToSelect);
             }
         }
+        // If ctrl-clicking in empty space, do nothing to the current selection.
+    }
+
+    // Update the outline pass with the new selection
+    if (state.outlinePass) {
+        state.outlinePass.selectedObjects = selectedObjects;
     }
 
     // --- UI Updates ---
@@ -837,6 +821,27 @@ export function setupVisor3dEventListeners() {
     const partsList = document.getElementById('visor3d-parts-list');
     const searchInput = document.getElementById('visor3d-search');
     const closeCardBtn = document.getElementById('close-card-btn');
+    const bgColorPicker = document.getElementById('bg-color');
+    const sunIntensitySlider = document.getElementById('sun-intensity');
+    const ambientLightSlider = document.getElementById('ambient-light');
+
+    if (bgColorPicker && scene) {
+        bgColorPicker.addEventListener('input', (e) => {
+            scene.background.set(e.target.value);
+        });
+    }
+
+    if (sunIntensitySlider && directionalLight) {
+        sunIntensitySlider.addEventListener('input', (e) => {
+            directionalLight.intensity = parseFloat(e.target.value);
+        });
+    }
+
+    if (ambientLightSlider && ambientLight) {
+        ambientLightSlider.addEventListener('input', (e) => {
+            ambientLight.intensity = parseFloat(e.target.value);
+        });
+    }
 
     if (searchInput) {
         searchInput.addEventListener('keyup', (e) => {

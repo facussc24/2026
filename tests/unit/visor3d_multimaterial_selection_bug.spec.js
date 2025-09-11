@@ -6,14 +6,16 @@ global.lucide = {
 };
 
 describe('Visor3D Multi-Material Selection', () => {
-    let updateSelection;
+    let visor3d;
+    let state;
     let mockMultiMaterial;
 
     beforeEach(async () => {
         // Reset modules to get a fresh state for the stateful visor3d.js module
         jest.resetModules();
-        const freshModule = await import('../../public/modulos/visor3d/js/visor3d.js');
-        updateSelection = freshModule.updateSelection;
+        visor3d = await import('../../public/modulos/visor3d/js/visor3d.js');
+        state = visor3d.state;
+        state.outlinePass = { selectedObjects: [] }; // Mock the outlinePass
 
         // Set up the necessary DOM structure
         document.body.innerHTML = `
@@ -23,27 +25,28 @@ describe('Visor3D Multi-Material Selection', () => {
             <div id="visor3d-panel">
                 <button id="isolate-btn"><i></i></button>
             </div>
+            <div id="visor3d-parts-list"></div>
         `;
 
         mockMultiMaterial = [{ color: 'red' }, { color: 'green' }];
         global.lucide.createIcons.mockClear();
     });
 
-    test('[Failing Test] should apply highlight material to a multi-material object', () => {
+    test('should add a multi-material object to the selection outline', () => {
         // Arrange
         const multiMaterialMesh = {
             isMesh: true,
             name: 'multi_material_part',
+            uuid: 'multi-uuid',
             material: [...mockMultiMaterial]
         };
 
         // Act
-        updateSelection(multiMaterialMesh, false); // Simulate a single click
+        visor3d.updateSelection(multiMaterialMesh, false); // Simulate a single click
 
         // Assert
-        // With the bug, the material array is unchanged. This test will fail.
-        expect(multiMaterialMesh.material).not.toEqual(mockMultiMaterial);
-        expect(multiMaterialMesh.material[0].emissive).toBeDefined();
-        expect(multiMaterialMesh.material[1].emissive).toBeDefined();
+        // The mesh should be added to the selected objects array for the outline pass
+        expect(state.outlinePass.selectedObjects).toContain(multiMaterialMesh);
+        expect(state.outlinePass.selectedObjects.length).toBe(1);
     });
 });
