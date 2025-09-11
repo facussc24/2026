@@ -198,74 +198,64 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById, produ
 }
 
 export function generateProductStructureReportHTML(product, flattenedData, logoBase64, collectionsById) {
-    const ROWS_PER_PAGE = 28; // Estimated rows per A4 page
-    const totalPages = Math.ceil(flattenedData.length / ROWS_PER_PAGE);
+    const client = collectionsById[COLLECTIONS.CLIENTES].get(product.clienteId);
+    const createdAt = product.createdAt ? new Date(product.createdAt.seconds * 1000).toLocaleDateString('es-AR') : 'N/A';
+    const proyecto = collectionsById[COLLECTIONS.PROYECTOS]?.get(product.proyectoId);
 
-    let html = '';
+    const tableRows = flattenedData.map(rowData => {
+        const { node, item, level, isLast, lineage } = rowData;
+        // This is the corrected prefix generation logic.
+        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;').join('');
+        if (level > 0) {
+            prefix += isLast ? '└─ ' : '├─ ';
+        }
+        return `
+            <tr style="background-color: ${level % 2 === 0 ? '#f7fafc' : '#fff'};">
+                <td style="border: 1px solid #eee; padding: 4px; font-family: monospace; white-space: pre;">${prefix}${item.descripcion}</td>
+                <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${level}</td>
+                <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${item.id}</td>
+                <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${node.tipo !== 'producto' ? (node.quantity ?? 1) : ''}</td>
+                <td style="border: 1px solid #eee; padding: 4px;">${node.comment || ''}</td>
+            </tr>
+        `;
+    }).join('');
 
-    for (let i = 0; i < totalPages; i++) {
-        const pageData = flattenedData.slice(i * ROWS_PER_PAGE, (i + 1) * ROWS_PER_PAGE);
-        const client = collectionsById[COLLECTIONS.CLIENTES].get(product.clienteId);
-        const createdAt = product.createdAt ? new Date(product.createdAt.seconds * 1000).toLocaleDateString('es-AR') : 'N/A';
-        const proyecto = collectionsById[COLLECTIONS.PROYECTOS]?.get(product.proyectoId);
-
-        html += `
-            <div class="pdf-page" style="padding: 15mm; font-family: sans-serif; color: #333; width: 210mm; height: 296mm; page-break-after: always;">
-                <!-- Header -->
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
-                    ${logoBase64 ? `<img src="${logoBase64}" style="height: 40px;">` : '<div></div>'}
-                    <div style="text-align: right;">
-                        <h1 style="font-size: 22px; font-weight: bold; margin: 0; color: #1e40af;">Composición de Piezas</h1>
-                        <p style="font-size: 14px; margin: 0;">${product.descripcion}</p>
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; font-size: 9px; margin-bottom: 15px;">
-                    <div><strong>Nº de Pieza:</strong> ${product.id}</div>
-                    <div><strong>Fecha Creación:</strong> ${createdAt}</div>
-                    <div><strong>Versión:</strong> ${product.version}</div>
-                    <div><strong>Fecha Revisión:</strong> ${product.fechaRevision || 'N/A'}</div>
-                    <div><strong>Proyecto:</strong> ${proyecto?.nombre || 'N/A'}</div>
-                    <div><strong>Realizó:</strong> ${product.lastUpdatedBy || 'N/A'}</div>
-                    <div><strong>Cliente:</strong> ${client?.descripcion || 'N/A'}</div>
-                    <div><strong>Aprobó:</strong> ${product.aprobadoPor || 'N/A'}</div>
-                </div>
-
-                <!-- Table -->
-                <table style="width: 100%; border-collapse: collapse; font-size: 8px;">
-                    <thead>
-                        <tr style="background-color: #4A5568; color: white;">
-                            <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 50%;">Descripción</th>
-                            <th style="border: 1px solid #ccc; padding: 5px; text-align: center;">Nivel</th>
-                            <th style="border: 1px solid #ccc; padding: 5px; text-align: center;">Código</th>
-                            <th style="border: 1px solid #ccc; padding: 5px; text-align: center;">Cantidad</th>
-                            <th style="border: 1px solid #ccc; padding: 5px; text-align: left;">Comentarios</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${pageData.map(rowData => {
-                            const { node, item, level, isLast, lineage } = rowData;
-                            let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;').join('');
-                            if (level > 0) {
-                                prefix += isLast ? '└─ ' : '├─ ';
-                            }
-                            return `
-                                <tr style="background-color: ${level % 2 === 0 ? '#f7fafc' : '#fff'};">
-                                    <td style="border: 1px solid #eee; padding: 4px; font-family: monospace; white-space: pre;">${prefix}${item.descripcion}</td>
-                                    <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${level}</td>
-                                    <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${item.id}</td>
-                                    <td style="border: 1px solid #eee; padding: 4px; text-align: center;">${node.tipo !== 'producto' ? (node.quantity ?? 1) : ''}</td>
-                                    <td style="border: 1px solid #eee; padding: 4px;">${node.comment || ''}</td>
-                                </tr>
-                            `;
-                        }).join('')}
-                    </tbody>
-                </table>
-                <!-- Footer -->
-                <div style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm; text-align: center; font-size: 9px; color: #888;">
-                    Página ${i + 1} de ${totalPages}
+    return `
+        <div id="pdf-content" style="padding: 15mm; font-family: sans-serif; color: #333; width: 210mm; min-height: 296mm;">
+            <!-- Header -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 10px;">
+                ${logoBase64 ? `<img src="${logoBase64}" style="height: 40px;">` : '<div></div>'}
+                <div style="text-align: right;">
+                    <h1 style="font-size: 22px; font-weight: bold; margin: 0; color: #1e40af;">Composición de Piezas</h1>
+                    <p style="font-size: 14px; margin: 0;">${product.descripcion}</p>
                 </div>
             </div>
-        `;
-    }
-    return html;
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px 15px; font-size: 9px; margin-bottom: 15px;">
+                <div><strong>Nº de Pieza:</strong> ${product.id}</div>
+                <div><strong>Fecha Creación:</strong> ${createdAt}</div>
+                <div><strong>Versión:</strong> ${product.version}</div>
+                <div><strong>Fecha Revisión:</strong> ${product.fechaRevision || 'N/A'}</div>
+                <div><strong>Proyecto:</strong> ${proyecto?.nombre || 'N/A'}</div>
+                <div><strong>Realizó:</strong> ${product.lastUpdatedBy || 'N/A'}</div>
+                <div><strong>Cliente:</strong> ${client?.descripcion || 'N/A'}</div>
+                <div><strong>Aprobó:</strong> ${product.aprobadoPor || 'N/A'}</div>
+            </div>
+
+            <!-- Table -->
+            <table style="width: 100%; border-collapse: collapse; font-size: 8px;">
+                <thead>
+                    <tr style="background-color: #4A5568; color: white;">
+                        <th style="border: 1px solid #ccc; padding: 5px; text-align: left; width: 50%;">Descripción</th>
+                        <th style="border: 1px solid #ccc; padding: 5px; text-align: center;">Nivel</th>
+                        <th style="border: 1px solid #ccc; padding: 5px; text-align: center;">Código</th>
+                        <th style="border: 1px solid #ccc; padding: 5px; text-align: center;">Cantidad</th>
+                        <th style="border: 1px solid #ccc; padding: 5px; text-align: left;">Comentarios</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableRows}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
