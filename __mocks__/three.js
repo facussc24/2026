@@ -33,6 +33,15 @@ export class Vector3 {
     normalize() { return this; }
 }
 
+export class MeshStandardMaterial {
+    constructor(params = {}) {
+        this.color = params.color;
+        this.emissive = params.emissive;
+        this.metalness = params.metalness;
+        this.roughness = params.roughness;
+    }
+}
+
 // Mock the named exports for addons, as they are mapped to this file in jest.config.js
 export class OrbitControls {
     reset() {}
