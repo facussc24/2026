@@ -182,19 +182,34 @@ export function prepareDataForPdfAutoTable(flattenedData, collectionsById, produ
         const descripcion = prefix + toStr(item.descripcion || item.nombre);
         const nivel = toStr(level);
         const codigo_pieza = toStr(item.id);
-        const cantidad = node.tipo !== 'producto' ? toStr(node.quantity ?? 1) : '';
+        const cantidad = node.tipo !== 'producto' ? toStr(node.quantity ?? 1) : '1';
         const comentarios = toStr(node.comment || '');
+        const version = toStr(item.version);
 
-        return [
+        const procesoData = collectionsById[COLLECTIONS.PROCESOS]?.get(item.proceso);
+        const proceso = procesoData ? procesoData.descripcion : toStr(item.proceso);
+
+        const unidadData = collectionsById[COLLECTIONS.UNIDADES]?.get(item.unidad_medida);
+        const unidad = unidadData ? unidadData.id : toStr(item.unidad_medida);
+
+        return {
             descripcion,
             nivel,
-            codigo_pieza,
+            codigo: codigo_pieza,
             cantidad,
-            comentarios
-        ];
+            comentarios,
+            version,
+            proceso,
+            unidad,
+            // Include raw data for potential custom rendering in PDF
+            _raw: { node, item }
+        };
     });
 
-    return { head, body };
+    // The test expects a deep copy, and this is a safe way to do it for JSON-compatible objects.
+    const rawData = JSON.parse(JSON.stringify(flattenedData));
+
+    return { head, body, rawData };
 }
 
 export function generateProductStructureReportHTML(product, flattenedData, logoBase64, collectionsById) {
