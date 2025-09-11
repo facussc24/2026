@@ -1,0 +1,14 @@
+{
+    "chassis": {
+        "ID de Pieza": "VW-AMAROK-CH-001",
+        "Material": "Acero",
+        "Peso (kg)": 900,
+        "Comentario": "Datos de ejemplo. Rellenar con información real."
+    },
+    "body": {
+        "ID de Pieza": "VW-AMAROK-BD-001",
+        "Material": "Acero",
+        "Peso (kg)": 600,
+        "Comentario": "Datos de ejemplo. Rellenar con información real."
+    }
+}
