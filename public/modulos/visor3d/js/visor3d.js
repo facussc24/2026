@@ -68,7 +68,6 @@ export async function runVisor3dLogic() {
                     </div>
                     <div class="flex justify-between items-center">
                         <div id="visor3d-controls" class="flex items-center gap-2">
-                            <button id="transparency-btn" class="visor3d-control-btn" title="Vista Interior"><i data-lucide="zoom-in"></i></button>
                             <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                             <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
                             <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
@@ -518,6 +517,18 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
         }
     }
 
+    // --- Highlight in Parts List ---
+    document.querySelectorAll('#visor3d-parts-list li').forEach(li => {
+        li.classList.remove('selected-part');
+    });
+    selectedObjects.forEach(obj => {
+        const partName = obj.name;
+        const listItem = document.querySelector(`#visor3d-parts-list li[data-part-name="${partName}"]`);
+        if (listItem) {
+            listItem.classList.add('selected-part');
+        }
+    });
+
     // After any selection change, re-apply the transparency logic if it's active.
     applySelectionTransparency();
 }
@@ -593,60 +604,6 @@ function onPointerDown(event) {
     }
 }
 
-function toggleTransparency() {
-    isTransparent = !isTransparent;
-    const btn = document.getElementById('transparency-btn');
-    if(btn) btn.classList.toggle('active', isTransparent);
-
-    document.body.dataset.animationStatus = 'running';
-
-    // First time, find and store exterior materials
-    if (exteriorMaterials.length === 0 && scene) {
-        scene.traverse((child) => {
-            if (child.isMesh) {
-                const name = child.name.toLowerCase();
-                // A more robust list of keywords for exterior parts
-                const exteriorKeywords = ['paint', 'glass', 'window', 'vidrio', 'chrome', 'plastic', 'body', 'door', 'hood', 'roof', 'bumper', 'fender'];
-                const isExterior = exteriorKeywords.some(keyword => name.includes(keyword));
-
-                // A more robust list of keywords for parts to exclude from transparency
-                const excludedKeywords = ['wheel', 'tire', 'caliper', 'interior', 'seat', 'dashboard', 'engine', 'chassis'];
-                const isExcluded = excludedKeywords.some(keyword => name.includes(keyword));
-
-                if (isExterior && !isExcluded) {
-                    const material = child.material;
-                    if (!Array.isArray(material)) {
-                        const originalMaterial = material; // Direct reference
-                        const transparentMaterial = material.clone();
-                        transparentMaterial.transparent = true;
-                        transparentMaterial.opacity = 0.1;
-                        transparentMaterial.depthWrite = false; // Important for correct rendering of transparent objects
-
-                        exteriorMaterials.push({
-                            mesh: child,
-                            originalMaterial: originalMaterial,
-                            transparentMaterial: transparentMaterial
-                        });
-                    } else {
-                        console.warn(`Mesh ${child.name} has multiple materials. Transparency will not be applied.`);
-                    }
-                }
-            }
-        });
-        console.log(`Identified ${exteriorMaterials.length} exterior parts for transparency.`);
-    }
-
-    // Apply the correct material based on the transparency state
-    exteriorMaterials.forEach(item => {
-        item.mesh.material = isTransparent ? item.transparentMaterial : item.originalMaterial;
-        item.mesh.material.needsUpdate = true;
-    });
-
-    setTimeout(() => {
-        document.body.dataset.animationStatus = 'finished';
-    }, 500);
-}
-
 function renderPartsList(partNames) {
     const partsListContainer = document.getElementById('visor3d-parts-list');
     if (!partsListContainer) return;
@@ -659,14 +616,18 @@ function renderPartsList(partNames) {
     partsListContainer.innerHTML = `
         <ul class="divide-y divide-slate-200">
             ${partNames.map(partName => `
-                <li>
-                    <button data-part-name="${partName}" class="w-full text-left p-3 hover:bg-slate-100 text-sm">
+                <li class="flex items-center justify-between p-2 hover:bg-slate-100" data-part-name="${partName}">
+                    <button class="flex-grow text-left text-sm p-1">
                         ${partName}
+                    </button>
+                    <button class="p-2 text-slate-500 hover:text-blue-600" data-action="toggle-visibility" title="Ocultar/Mostrar Pieza">
+                        <i data-lucide="eye" class="pointer-events-none"></i>
                     </button>
                 </li>
             `).join('')}
         </ul>
     `;
+    lucide.createIcons();
 }
 
 function toggleExplodeView() {
@@ -791,6 +752,7 @@ function applySelectionTransparency(forceRestore = false) {
                     transparentMat.transparent = true;
                     transparentMat.opacity = 0.1;
                     transparentMat.emissive = new THREE.Color(0x000000); // Ensure no self-glow
+                    transparentMat.depthWrite = false; // Important for correct rendering
                     return transparentMat;
                 };
 
@@ -842,7 +804,6 @@ export function toggleSelectionTransparency() {
 function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     const resetBtn = document.getElementById('reset-view-btn');
-    const transparencyBtn = document.getElementById('transparency-btn');
     const isolateBtn = document.getElementById('isolate-btn');
     const selectionTransparencyBtn = document.getElementById('selection-transparency-btn');
     const partsList = document.getElementById('visor3d-parts-list');
@@ -859,10 +820,6 @@ function setupVisor3dEventListeners() {
         });
     }
 
-    if (transparencyBtn) {
-        transparencyBtn.addEventListener('click', toggleTransparency);
-    }
-
     if (isolateBtn) {
         isolateBtn.addEventListener('click', toggleIsolation);
     }
@@ -873,14 +830,24 @@ function setupVisor3dEventListeners() {
 
     if (partsList) {
         partsList.addEventListener('click', (e) => {
-            const button = e.target.closest('button[data-part-name]');
-            if (button) {
-                const partName = button.dataset.partName;
-                const partToSelect = modelParts.find(p => p.name === partName);
-                if (partToSelect) {
-                    // Clicking from the list simulates a normal click (not a ctrl+click)
-                    updateSelection(partToSelect, e.ctrlKey);
-                }
+            const listItem = e.target.closest('li[data-part-name]');
+            if (!listItem) return;
+
+            const partName = listItem.dataset.partName;
+            const partToAffect = modelParts.find(p => p.name === partName);
+            if (!partToAffect) return;
+
+            const actionButton = e.target.closest('button[data-action]');
+
+            if (actionButton && actionButton.dataset.action === 'toggle-visibility') {
+                // Handle visibility toggle
+                partToAffect.visible = !partToAffect.visible;
+                const icon = actionButton.querySelector('i');
+                icon.setAttribute('data-lucide', partToAffect.visible ? 'eye' : 'eye-off');
+                lucide.createIcons({nodes: [icon]});
+            } else {
+                // Handle selection
+                updateSelection(partToAffect, e.ctrlKey);
             }
         });
     }
@@ -893,9 +860,6 @@ function setupVisor3dEventListeners() {
         resetBtn.addEventListener('click', () => {
             if (isExploded) {
                 toggleExplodeView(); // Implode the model
-            }
-            if (isTransparent) {
-                toggleTransparency();
             }
             // Deactivate selection transparency if active
             if (isSelectionTransparencyActive) {
