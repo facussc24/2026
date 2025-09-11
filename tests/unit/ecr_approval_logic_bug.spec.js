@@ -101,4 +101,23 @@ describe('ECR Approval Status Logic', () => {
         // The status should immediately become 'rejected'.
         expect(newStatus).toBe('rejected');
     });
+
+    test('should transition to "approved" if status is "pending-approval" and there are no required approvals', () => {
+        // --- ARRANGE ---
+        // An ECR is pending approval but has no departments marked as affecting it.
+        const ecrData = {
+            status: 'pending-approval',
+            afecta_calidad: false,
+            afecta_compras: false,
+            // ... all other 'afecta_' fields are false
+            approvals: {} // No approvals given or needed
+        };
+
+        // --- ACT ---
+        const newStatus = checkAndUpdateEcrStatus(ecrData);
+
+        // --- ASSERT ---
+        // The ECR should be auto-approved as there are no pending requirements.
+        expect(newStatus).toBe('approved');
+    });
 });

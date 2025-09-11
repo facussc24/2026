@@ -230,10 +230,9 @@ export function checkAndUpdateEcrStatus(ecrData, currentDecision = '') {
         return 'rejected';
     }
 
-    // If there are no required departments, one 'approved' decision is enough to approve the ECR.
+    // If there are no required departments, the ECR is implicitly approved.
     if (requiredApprovals.length === 0) {
-        // This handles the edge case where no departments are checked, but a user (e.g., admin) approves.
-        return currentDecision === 'approved' ? 'approved' : null;
+        return 'approved';
     }
 
     // Check if all required departments have approved.
