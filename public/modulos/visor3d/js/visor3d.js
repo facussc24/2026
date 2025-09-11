@@ -375,7 +375,13 @@ export function selectObject(objectToSelect) {
         isolatedObject = selectedObject; // Update the reference
     }
 
-    originalMaterial = objectToSelect.material;
+    // Store original material, creating a shallow copy if it's an array to prevent reference bugs.
+    const currentMaterial = objectToSelect.material;
+    if (Array.isArray(currentMaterial)) {
+        originalMaterial = [...currentMaterial];
+    } else {
+        originalMaterial = currentMaterial;
+    }
 
     // Create a generic highlight material
     const highlightMaterial = new THREE.MeshStandardMaterial({
@@ -386,10 +392,10 @@ export function selectObject(objectToSelect) {
     });
 
     // Apply highlight, now with multi-material support
-    if (Array.isArray(originalMaterial)) {
+    if (Array.isArray(currentMaterial)) {
         // This object has multiple materials.
         // Replace the material array with an array of highlight materials.
-        objectToSelect.material = originalMaterial.map(() => highlightMaterial);
+        objectToSelect.material = currentMaterial.map(() => highlightMaterial);
     } else {
         // Single material object
         objectToSelect.material = highlightMaterial;
