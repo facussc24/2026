@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import GUI from 'lil-gui';
 
 // Visor3D Module
-let scene, camera, renderer, controls;
+let scene, camera, renderer, controls, gui;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let selectedObject = null;
@@ -98,6 +99,10 @@ export async function runVisor3dLogic() {
 
         console.log("Cleaning up Visor3D view.");
         document.body.classList.remove('visor3d-active');
+        if (gui) {
+            gui.destroy();
+            gui = null;
+        }
         if (renderer) {
             renderer.dispose();
         }
@@ -137,6 +142,8 @@ function initThreeScene() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.offsetWidth, container.offsetHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true; // Enable shadows
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
     container.appendChild(renderer.domElement);
 
     // Controls
@@ -145,16 +152,30 @@ function initThreeScene() {
     controls.dampingFactor = 0.05;
 
     // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); // Slightly reduce ambient light to make shadows pop
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(5, 10, 7.5);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // Increase intensity for more contrast
+    directionalLight.position.set(10, 15, 5); // Adjust angle for more dynamic shadows
+    directionalLight.castShadow = true; // Enable shadow casting for this light
+
+    // Configure shadow properties for better quality
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.camera.near = 0.5;
+    directionalLight.shadow.camera.far = 50;
+    // Define the area covered by the shadow camera
+    const shadowCameraSize = 20;
+    directionalLight.shadow.camera.left = -shadowCameraSize;
+    directionalLight.shadow.camera.right = shadowCameraSize;
+    directionalLight.shadow.camera.top = shadowCameraSize;
+    directionalLight.shadow.camera.bottom = -shadowCameraSize;
+
     scene.add(directionalLight);
 
     // GLTFLoader
     const loader = new GLTFLoader();
-    loader.load('../modelos/auto.glb', (gltf) => {
+    loader.load('/modulos/visor3d/modelos/auto.glb', (gltf) => {
         updateStatus('Processing model...');
         const model = gltf.scene;
 
@@ -171,6 +192,21 @@ function initThreeScene() {
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
+
+        // Add a ground plane
+        const centeredBox = new THREE.Box3().setFromObject(model);
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const groundMaterial = new THREE.MeshStandardMaterial({
+            color: 0xcccccc,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
+        groundPlane.rotation.x = -Math.PI / 2;
+        groundPlane.position.y = centeredBox.min.y; // Position plane at the bottom of the model
+        groundPlane.receiveShadow = true; // Allow the ground to receive shadows
+        scene.add(groundPlane);
+
 
         // Adjust camera to fit the model
         const size = box.getSize(new THREE.Vector3());
@@ -226,13 +262,17 @@ function initThreeScene() {
         console.log("--- End of Inspection ---");
 
 
-        // Populate parts list
+        // Populate parts list and enable shadows
         modelParts = []; // Clear previous parts
         const partNames = new Set();
         model.traverse((child) => {
-            if (child.isMesh && child.name) {
-                partNames.add(child.name);
-                modelParts.push(child);
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (child.name) {
+                    partNames.add(child.name);
+                    modelParts.push(child);
+                }
             }
         });
         renderPartsList(Array.from(partNames));
@@ -245,6 +285,28 @@ function initThreeScene() {
     });
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
+
+    // --- GUI Controls ---
+    if (gui) gui.destroy(); // Destroy old GUI if it exists from a previous run
+    gui = new GUI();
+    gui.title("Visual Controls");
+
+    const sceneFolder = gui.addFolder('Scene');
+    const sceneParams = { backgroundColor: scene.background.getHex() };
+    sceneFolder.addColor(sceneParams, 'backgroundColor').name('Background').onChange(value => {
+        scene.background.set(value);
+    });
+
+    const lightFolder = gui.addFolder('Lighting');
+    lightFolder.add(directionalLight, 'intensity', 0, 4, 0.05).name('Sun Intensity');
+    lightFolder.add(directionalLight.position, 'x', -50, 50).name('Sun X');
+    lightFolder.add(directionalLight.position, 'y', -50, 50).name('Sun Y');
+    lightFolder.add(directionalLight.position, 'z', -50, 50).name('Sun Z');
+    lightFolder.add(ambientLight, 'intensity', 0, 2, 0.05).name('Ambient Light');
+
+    const shadowFolder = gui.addFolder('Shadows');
+    shadowFolder.add(renderer.shadowMap, 'enabled').name('Enabled');
+    // --- End GUI Controls ---
 
     // Animation loop
     function animate() {
