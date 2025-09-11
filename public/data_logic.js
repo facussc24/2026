@@ -209,7 +209,19 @@ export function checkAndUpdateEcrStatus(ecrData, currentDecision = '') {
         return null; // Don't change status if it's not pending
     }
 
-    // Immediate rejection if the current decision is 'rejected'
+    // --- BUG FIX: A rejection is final and should be checked first. ---
+    // This check ensures that if an ECR has ever been rejected, it stays rejected
+    // for this version, even if the rejecting department is later removed as a requirement.
+    if (ecrData.approvals) {
+        const hasRejection = Object.values(ecrData.approvals).some(
+            approval => approval.status === 'rejected'
+        );
+        if (hasRejection) {
+            return 'rejected';
+        }
+    }
+
+    // This handles the case where the current action is a rejection.
     if (currentDecision === 'rejected') {
         return 'rejected';
     }
@@ -219,17 +231,6 @@ export function checkAndUpdateEcrStatus(ecrData, currentDecision = '') {
         'sqa', 'tooling', 'logistica', 'financiero', 'comercial',
         'mantenimiento', 'produccion', 'calidad_cliente'
     ];
-
-    // First, check for any rejection across ALL approvals, regardless of whether they are still "required".
-    // A rejection is final.
-    if (ecrData.approvals) {
-        const hasRejection = Object.values(ecrData.approvals).some(
-            approval => approval.status === 'rejected'
-        );
-        if (hasRejection) {
-            return 'rejected';
-        }
-    }
 
     const requiredApprovals = allDepartments.filter(dept => ecrData[`afecta_${dept}`] === true);
 
