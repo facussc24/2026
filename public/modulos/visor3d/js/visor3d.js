@@ -61,6 +61,10 @@ export async function runVisor3dLogic() {
                                 <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                                 <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
                                 <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
+                                <!-- Help/Tutorial Icon -->
+                                <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
+                                    <i data-lucide="help-circle" class="w-6 h-6 text-slate-600"></i>
+                                </button>
                             </div>
                         </div>
                         <input type="text" id="visor3d-search" placeholder="Buscar pieza..." class="mt-2">
@@ -86,6 +90,9 @@ export async function runVisor3dLogic() {
 
         // Add event listeners for the new controls
         setupVisor3dEventListeners();
+        if (window.setupHelpButtonListener) {
+            window.setupHelpButtonListener();
+        }
 
         // Initialize the three.js scene
         initThreeScene();
@@ -146,7 +153,7 @@ function initThreeScene() {
     camera.position.z = 5;
 
     // Renderer
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(container.offsetWidth, container.offsetHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true; // Enable shadows
@@ -167,8 +174,8 @@ function initThreeScene() {
     directionalLight.castShadow = true; // Enable shadow casting for this light
 
     // Configure shadow properties for better quality
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.mapSize.width = 1024;
+    directionalLight.shadow.mapSize.height = 1024;
     directionalLight.shadow.camera.near = 0.5;
     directionalLight.shadow.camera.far = 50;
     // Define the area covered by the shadow camera
@@ -182,7 +189,7 @@ function initThreeScene() {
 
     // GLTFLoader
     const loader = new GLTFLoader();
-    loader.load('/modulos/visor3d/modelos/auto.glb', (gltf) => {
+    loader.load('modulos/visor3d/modelos/auto.glb', (gltf) => {
         updateStatus('Processing model...');
         const model = gltf.scene;
 
@@ -300,9 +307,36 @@ function initThreeScene() {
     gui.title("Visual Controls");
 
     const sceneFolder = gui.addFolder('Scene');
-    const sceneParams = { backgroundColor: scene.background.getHex() };
+    const sceneParams = {
+        backgroundColor: scene.background.getHex(),
+        antialias: false
+    };
     sceneFolder.addColor(sceneParams, 'backgroundColor').name('Background').onChange(value => {
         scene.background.set(value);
+    });
+    sceneFolder.add(sceneParams, 'antialias').name('Anti-aliasing').onChange(value => {
+        // This is tricky because you can't change antialiasing on an existing renderer.
+        // We have to create a new one and replace the old one.
+        showToast('Recreando el renderizador para cambiar el antialiasing...', 'info');
+        const container = document.getElementById('visor3d-scene-container');
+        if (renderer) {
+            renderer.dispose();
+            container.removeChild(renderer.domElement);
+        }
+        renderer = new THREE.WebGLRenderer({ antialias: value });
+        renderer.setSize(container.offsetWidth, container.offsetHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Re-attach controls and event listeners to the new renderer's DOM element
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
+        onWindowResize(); // Adjust size
+        showToast('Renderizador actualizado.', 'success');
     });
 
     const lightFolder = gui.addFolder('Lighting');
