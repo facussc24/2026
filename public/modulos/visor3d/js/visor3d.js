@@ -16,6 +16,8 @@ let isExploded = false;
 const originalPositions = new Map();
 export let isIsolated = false;
 export let isolatedObjects = [];
+let isSelectionTransparencyActive = false;
+const transparentMaterials = new Map();
 
 export let partCharacteristics = {}; // This will be loaded from JSON
 
@@ -60,6 +62,7 @@ export async function runVisor3dLogic() {
                                 <button id="transparency-btn" class="visor3d-control-btn" title="Vista Interior"><i data-lucide="zoom-in"></i></button>
                                 <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                                 <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
+                                <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
                                 <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                                 <!-- Help/Tutorial Icon -->
                                 <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
@@ -110,6 +113,8 @@ export async function runVisor3dLogic() {
         originalMaterials.clear();
         isIsolated = false;
         isolatedObjects.length = 0;
+        isSelectionTransparencyActive = false;
+        transparentMaterials.clear();
 
         console.log("Cleaning up Visor3D view.");
         document.body.classList.remove('visor3d-active');
@@ -453,6 +458,9 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
             pieceCard.classList.add('hidden');
         }
     }
+
+    // After any selection change, re-apply the transparency logic if it's active.
+    applySelectionTransparency();
 }
 
 function updatePieceCard(object) {
@@ -655,11 +663,72 @@ function toggleIsolation() {
 }
 
 
+export function applySelectionTransparency(forceRestore = false) {
+    if (!isSelectionTransparencyActive && !forceRestore) return;
+
+    const selectedUuids = new Set(selectedObjects.map(obj => obj.uuid));
+
+    modelParts.forEach(part => {
+        const isSelected = selectedUuids.has(part.uuid);
+
+        if (isSelectionTransparencyActive && !isSelected && !forceRestore) {
+            // Part is NOT selected, make it transparent
+            if (!transparentMaterials.has(part.uuid)) {
+                transparentMaterials.set(part.uuid, part.material);
+                const transparentMaterial = Array.isArray(part.material)
+                    ? part.material.map(m => m.clone())
+                    : part.material.clone();
+
+                if (Array.isArray(transparentMaterial)) {
+                    transparentMaterial.forEach(m => {
+                        m.transparent = true;
+                        m.opacity = 0.15;
+                    });
+                } else {
+                    transparentMaterial.transparent = true;
+                    transparentMaterial.opacity = 0.15;
+                }
+                part.material = transparentMaterial;
+                part.material.needsUpdate = true;
+            }
+        } else {
+            // Part IS selected or we are turning the mode off, restore it
+            if (transparentMaterials.has(part.uuid)) {
+                part.material = transparentMaterials.get(part.uuid);
+                transparentMaterials.delete(part.uuid);
+                part.material.needsUpdate = true;
+            }
+        }
+    });
+}
+
+
+export function toggleSelectionTransparency() {
+    isSelectionTransparencyActive = !isSelectionTransparencyActive;
+    const btn = document.getElementById('selection-transparency-btn');
+
+    if (isSelectionTransparencyActive) {
+        if (btn) btn.classList.add('active');
+        applySelectionTransparency();
+    } else {
+        if (btn) btn.classList.remove('active');
+        // Restore all transparent materials
+        modelParts.forEach(part => {
+            if (transparentMaterials.has(part.uuid)) {
+                part.material = transparentMaterials.get(part.uuid);
+                transparentMaterials.delete(part.uuid);
+            }
+        });
+        transparentMaterials.clear();
+    }
+}
+
 function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     const resetBtn = document.getElementById('reset-view-btn');
     const transparencyBtn = document.getElementById('transparency-btn');
     const isolateBtn = document.getElementById('isolate-btn');
+    const selectionTransparencyBtn = document.getElementById('selection-transparency-btn');
     const partsList = document.getElementById('visor3d-parts-list');
     const closeCardBtn = document.getElementById('close-card-btn');
 
@@ -680,6 +749,10 @@ function setupVisor3dEventListeners() {
 
     if (isolateBtn) {
         isolateBtn.addEventListener('click', toggleIsolation);
+    }
+
+    if (selectionTransparencyBtn) {
+        selectionTransparencyBtn.addEventListener('click', toggleSelectionTransparency);
     }
 
     if (partsList) {
@@ -707,6 +780,10 @@ function setupVisor3dEventListeners() {
             }
             if (isTransparent) {
                 toggleTransparency();
+            }
+            // Deactivate selection transparency if active
+            if (isSelectionTransparencyActive) {
+                toggleSelectionTransparency();
             }
             // Exit isolation mode if active
             if (isIsolated) {
