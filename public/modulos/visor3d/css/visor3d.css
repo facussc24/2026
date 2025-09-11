@@ -89,6 +89,12 @@ body.visor3d-active {
     box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
+.visor3d-control-btn.active {
+    background-color: #e0f2fe; /* A light blue, like selected items */
+    color: #0c4a6e; /* A dark blue text */
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.06); /* Inner shadow for a "pressed" look */
+}
+
 #visor3d-piece-card {
     /* Now a static block within the panel */
     width: 100%;
