@@ -913,6 +913,23 @@ export function setupVisor3dEventListeners() {
             if (isIsolated) {
                 toggleIsolation();
             }
+
+            // --- FIX: Restore visibility of all parts ---
+            modelParts.forEach(part => {
+                if (!part.visible) {
+                    part.visible = true;
+                }
+            });
+             // After making all parts visible, update the UI in the parts list
+            const allVisibilityIcons = document.querySelectorAll('#visor3d-parts-list button[data-action="toggle-visibility"] i');
+            allVisibilityIcons.forEach(icon => {
+                if (icon.getAttribute('data-lucide') === 'eye-off') {
+                    icon.setAttribute('data-lucide', 'eye');
+                    lucide.createIcons({nodes: [icon.parentElement]});
+                }
+            });
+
+
             if (controls) {
                 controls.reset();
             }
