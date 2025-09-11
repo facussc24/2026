@@ -2,7 +2,7 @@ import { describe, test, expect } from '@jest/globals';
 import { checkAndUpdateEcrStatus } from '../../public/data_logic.js';
 
 describe('ECR Approval Status Logic', () => {
-    test('[BUG] should transition status to "approved" when a pending requirement is removed', () => {
+    test('should transition status to "approved" when a pending requirement is removed', () => {
         // --- ARRANGE ---
         // 1. Simulate an ECR that requires approval from 'calidad' and 'compras'.
         //    'calidad' has already approved, but 'compras' has not.
@@ -37,7 +37,6 @@ describe('ECR Approval Status Logic', () => {
         const modifiedEcrData = { ...ecrData, afecta_compras: false };
 
         // 3. Call the logic that should re-evaluate the ECR's status.
-        //    This function does not exist yet, so this test is expected to fail.
         const newStatus = checkAndUpdateEcrStatus(modifiedEcrData);
 
         // --- ASSERT ---
@@ -45,7 +44,44 @@ describe('ECR Approval Status Logic', () => {
         expect(newStatus).toBe('approved');
     });
 
-    test('[BUG] should transition status to "rejected" as soon as one department rejects', () => {
+    test('[FIX VERIFICATION] should correctly determine final status when saving progress on a form', () => {
+        // This test simulates the logic within the saveEcrForm function.
+
+        // --- ARRANGE ---
+        // 1. An ECR that is pending approval and only needs one more signature from 'calidad'.
+        const ecrData = {
+            status: 'pending-approval',
+            afecta_calidad: true,
+            afecta_compras: false,
+            approvals: {}
+        };
+
+        // 2. A user from 'calidad' provides the final approval. This would be part of the form data upon saving.
+        const dataFromFormWithApproval = {
+            ...ecrData,
+            approvals: {
+                calidad: { status: 'approved', user: 'Test User' }
+            }
+        };
+
+        // 3. The user clicks "Save Progress", not the final "Approve" button.
+        const statusFromButtonClick = 'in-progress';
+
+        // --- ACT ---
+        // 4. This simulates the new, correct logic in saveEcrForm.
+        //    We first check for an automatic status change.
+        const autoUpdatedStatus = checkAndUpdateEcrStatus(dataFromFormWithApproval);
+
+        //    Then we determine the final status, prioritizing the automatic one.
+        const finalStatus = autoUpdatedStatus || statusFromButtonClick;
+
+        // --- ASSERT ---
+        // 5. The automatic status 'approved' should take precedence over the 'in-progress' from the button click.
+        expect(autoUpdatedStatus).toBe('approved');
+        expect(finalStatus).toBe('approved');
+    });
+
+    test('should transition status to "rejected" as soon as one department rejects', () => {
         // --- ARRANGE ---
         // ECR requires 'calidad' and 'compras'
         const ecrData = {
