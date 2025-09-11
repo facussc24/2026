@@ -14,6 +14,8 @@ const exteriorMaterials = [];
 let modelParts = [];
 let isExploded = false;
 const originalPositions = new Map();
+let isIsolated = false;
+let isolatedObject = null;
 
 let partCharacteristics = {}; // This will be loaded from JSON
 
@@ -57,6 +59,7 @@ export async function runVisor3dLogic() {
                             <div id="visor3d-controls" class="flex items-center gap-2">
                                 <button id="transparency-btn" class="visor3d-control-btn" title="Vista Interior"><i data-lucide="zoom-in"></i></button>
                                 <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
+                                <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
                                 <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                             </div>
                         </div>
@@ -96,6 +99,8 @@ export async function runVisor3dLogic() {
         isExploded = false;
         isTransparent = false;
         selectedObject = null;
+        isIsolated = false;
+        isolatedObject = null;
 
         console.log("Cleaning up Visor3D view.");
         document.body.classList.remove('visor3d-active');
@@ -338,13 +343,38 @@ function selectObject(objectToSelect) {
     originalMaterial = null;
 
     const pieceCard = document.getElementById('visor3d-piece-card');
+    const isolateBtn = document.getElementById('isolate-btn');
+
+
+    // Handle deselection or clicking on non-mesh objects
     if (!objectToSelect || !objectToSelect.isMesh) {
         if (pieceCard) pieceCard.classList.remove('visible');
+        if (isolateBtn) {
+            isolateBtn.disabled = true;
+            // If we were in isolation mode, exit it gracefully
+            if (isIsolated) {
+                isIsolated = false;
+                isolatedObject = null;
+                modelParts.forEach(part => { part.visible = true; });
+                isolateBtn.setAttribute('title', 'Aislar Pieza');
+                isolateBtn.querySelector('i').setAttribute('data-lucide', 'zap');
+                lucide.createIcons();
+            }
+        }
         return;
     }
 
-    // Select new object
+    // A valid mesh is selected from this point
     selectedObject = objectToSelect;
+
+    // If we are in isolation mode and select a new object, update the isolated view
+    if (isIsolated && selectedObject !== isolatedObject) {
+        modelParts.forEach(part => {
+            part.visible = (part.uuid === selectedObject.uuid);
+        });
+        isolatedObject = selectedObject; // Update the reference
+    }
+
     originalMaterial = objectToSelect.material;
 
     // Create a generic highlight material
@@ -358,6 +388,11 @@ function selectObject(objectToSelect) {
     // Apply highlight, skipping multi-material objects to prevent errors
     if (!Array.isArray(originalMaterial)) {
         objectToSelect.material = highlightMaterial;
+    }
+
+    // Enable the isolate button since an object is selected
+    if (isolateBtn) {
+        isolateBtn.disabled = false;
     }
 
     const pieceTitle = document.getElementById('piece-card-title');
@@ -565,10 +600,39 @@ function toggleExplodeView() {
 }
 
 
+function toggleIsolation() {
+    if (!selectedObject) return; // Should not happen if button is disabled correctly
+
+    isIsolated = !isIsolated;
+
+    const isolateBtn = document.getElementById('isolate-btn');
+    const icon = isolateBtn.querySelector('i');
+
+    if (isIsolated) {
+        isolatedObject = selectedObject;
+        modelParts.forEach(part => {
+            // Hide all parts that are not the selected one
+            part.visible = (part.uuid === selectedObject.uuid);
+        });
+        isolateBtn.setAttribute('title', 'Mostrar Todo');
+        icon.setAttribute('data-lucide', 'eye');
+    } else {
+        isolatedObject = null;
+        modelParts.forEach(part => {
+            part.visible = true;
+        });
+        isolateBtn.setAttribute('title', 'Aislar Pieza');
+        icon.setAttribute('data-lucide', 'zap');
+    }
+    lucide.createIcons(); // Redraw icons to reflect the change
+}
+
+
 function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     const resetBtn = document.getElementById('reset-view-btn');
     const transparencyBtn = document.getElementById('transparency-btn');
+    const isolateBtn = document.getElementById('isolate-btn');
     const partsList = document.getElementById('visor3d-parts-list');
     const closeCardBtn = document.getElementById('close-card-btn');
 
@@ -585,6 +649,10 @@ function setupVisor3dEventListeners() {
 
     if (transparencyBtn) {
         transparencyBtn.addEventListener('click', toggleTransparency);
+    }
+
+    if (isolateBtn) {
+        isolateBtn.addEventListener('click', toggleIsolation);
     }
 
     if (partsList) {
@@ -611,6 +679,10 @@ function setupVisor3dEventListeners() {
             }
             if (isTransparent) {
                 toggleTransparency();
+            }
+            // Exit isolation mode if active
+            if (isIsolated) {
+                toggleIsolation();
             }
             if (controls) {
                 controls.reset();
