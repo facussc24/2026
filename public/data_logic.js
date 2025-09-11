@@ -220,17 +220,21 @@ export function checkAndUpdateEcrStatus(ecrData, currentDecision = '') {
         'mantenimiento', 'produccion', 'calidad_cliente'
     ];
 
-    const requiredApprovals = allDepartments.filter(dept => ecrData[`afecta_${dept}`] === true);
-
-    // If any required department has rejected, the whole ECR is rejected.
-    const hasRejection = requiredApprovals.some(
-        dept => ecrData.approvals?.[dept]?.status === 'rejected'
-    );
-    if (hasRejection) {
-        return 'rejected';
+    // First, check for any rejection across ALL approvals, regardless of whether they are still "required".
+    // A rejection is final.
+    if (ecrData.approvals) {
+        const hasRejection = Object.values(ecrData.approvals).some(
+            approval => approval.status === 'rejected'
+        );
+        if (hasRejection) {
+            return 'rejected';
+        }
     }
 
-    // If there are no required departments, the ECR is implicitly approved.
+    const requiredApprovals = allDepartments.filter(dept => ecrData[`afecta_${dept}`] === true);
+
+    // If there are no required departments, and we've already confirmed there are no rejections,
+    // the ECR is implicitly approved.
     if (requiredApprovals.length === 0) {
         return 'approved';
     }

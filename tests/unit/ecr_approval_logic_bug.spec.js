@@ -120,4 +120,35 @@ describe('ECR Approval Status Logic', () => {
         // The ECR should be auto-approved as there are no pending requirements.
         expect(newStatus).toBe('approved');
     });
+
+    test('should remain "rejected" even if the rejecting department is no longer a requirement', () => {
+        // --- ARRANGE ---
+        // 1. ECR requires 'calidad' and 'compras'. 'calidad' has approved, 'compras' has rejected.
+        const ecrData = {
+            status: 'pending-approval',
+            afecta_calidad: true,
+            afecta_compras: true,
+            approvals: {
+                calidad: { status: 'approved', user: 'User A' },
+                compras: { status: 'rejected', user: 'User B' }
+            }
+        };
+
+        // First, verify the initial rejection is caught correctly.
+        const initialStatus = checkAndUpdateEcrStatus(ecrData);
+        expect(initialStatus).toBe('rejected');
+
+        // --- ACT ---
+        // 2. Now, the user deselects 'compras' as a requirement.
+        const modifiedEcrData = { ...ecrData, afecta_compras: false };
+
+        // 3. Re-evaluate the status.
+        const newStatus = checkAndUpdateEcrStatus(modifiedEcrData);
+
+        // --- ASSERT ---
+        // 4. The status should *still* be 'rejected'. A rejection is final and should not be
+        //    revoked simply by unchecking the box. The current buggy logic will incorrectly
+        //    change this to 'approved'.
+        expect(newStatus).toBe('rejected');
+    });
 });
