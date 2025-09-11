@@ -4,20 +4,20 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import GUI from 'lil-gui';
 
 // Visor3D Module
-let scene, camera, renderer, controls, gui;
+export let scene, camera, renderer, controls, gui;
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-let selectedObject = null;
-let originalMaterial = null;
+export let selectedObject = null;
+export let originalMaterial = null;
 let isTransparent = false;
 const exteriorMaterials = [];
-let modelParts = [];
+export let modelParts = [];
 let isExploded = false;
 const originalPositions = new Map();
-let isIsolated = false;
-let isolatedObject = null;
+export let isIsolated = false;
+export let isolatedObject = null;
 
-let partCharacteristics = {}; // This will be loaded from JSON
+export let partCharacteristics = {}; // This will be loaded from JSON
 
 // This function will be called by main.js to start the 3D viewer.
 export async function runVisor3dLogic() {
@@ -334,7 +334,7 @@ function onWindowResize() {
     }
 }
 
-function selectObject(objectToSelect) {
+export function selectObject(objectToSelect) {
     // Deselect previous object
     if (selectedObject && originalMaterial) {
         selectedObject.material = originalMaterial;
@@ -385,8 +385,13 @@ function selectObject(objectToSelect) {
         roughness: 0.5
     });
 
-    // Apply highlight, skipping multi-material objects to prevent errors
-    if (!Array.isArray(originalMaterial)) {
+    // Apply highlight, now with multi-material support
+    if (Array.isArray(originalMaterial)) {
+        // This object has multiple materials.
+        // Replace the material array with an array of highlight materials.
+        objectToSelect.material = originalMaterial.map(() => highlightMaterial);
+    } else {
+        // Single material object
         objectToSelect.material = highlightMaterial;
     }
 
