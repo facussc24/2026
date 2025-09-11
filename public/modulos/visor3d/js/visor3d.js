@@ -382,6 +382,18 @@ function initThreeScene(modelId) {
     function animate() {
         requestAnimationFrame(animate);
         controls.update();
+
+        // Enforce isolation every frame to prevent camera controls from resetting visibility
+        if (isIsolated) {
+            const isolatedUuids = new Set(isolatedObjects.map(obj => obj.uuid));
+            modelParts.forEach(part => {
+                const shouldBeVisible = isolatedUuids.has(part.uuid);
+                if (part.visible !== shouldBeVisible) {
+                    part.visible = shouldBeVisible;
+                }
+            });
+        }
+
         renderer.render(scene, camera);
     }
     animate();
@@ -493,10 +505,6 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
     // Update Isolate Button state
     if (isolateBtn) {
         isolateBtn.disabled = selectedObjects.length === 0;
-        // If we are in isolation mode and the selection becomes empty, exit isolation
-        if (isIsolated && selectedObjects.length === 0) {
-            toggleIsolation();
-        }
     }
 
     // Update Piece Card visibility and content
@@ -598,7 +606,7 @@ function toggleTransparency() {
             if (child.isMesh) {
                 const name = child.name.toLowerCase();
                 // A more robust list of keywords for exterior parts
-                const exteriorKeywords = ['paint', 'glass', 'chrome', 'plastic', 'body', 'door', 'hood', 'roof', 'bumper', 'fender'];
+                const exteriorKeywords = ['paint', 'glass', 'window', 'vidrio', 'chrome', 'plastic', 'body', 'door', 'hood', 'roof', 'bumper', 'fender'];
                 const isExterior = exteriorKeywords.some(keyword => name.includes(keyword));
 
                 // A more robust list of keywords for parts to exclude from transparency
@@ -700,16 +708,11 @@ function toggleExplodeView() {
                 direction.set(0, 0.5, 1);
             } else if (name.includes('roof')) {
                 // Explode roof straight up
-                direction.set(0, 1, 0);
-            } else {
-                // Default behavior for other parts: radiate from center
-                const meshCenter = new THREE.Vector3();
-                mesh.getWorldPosition(meshCenter);
-
-                // Use the object's original position relative to the model's origin as the direction vector
-                direction.copy(originalPos).normalize();
+                direction.set(0, 2, 0);
+            } else if (name.includes('glass') || name.includes('window') || name.includes('vidrio')) {
+                // Explode windows slightly up and out, based on their orientation
+                direction.set(mesh.position.x > 0 ? 0.5 : -0.5, 0.7, 0);
             }
-
             mesh.position.copy(originalPos).add(direction.multiplyScalar(explosionFactor));
 
         } else {
@@ -732,6 +735,9 @@ function toggleIsolation() {
 
     isIsolated = !isIsolated;
     const isolateBtn = document.getElementById('isolate-btn');
+    if (isolateBtn) {
+        isolateBtn.classList.toggle('active', isIsolated);
+    }
     const icon = isolateBtn.querySelector('i');
 
     if (isIsolated) {
