@@ -6,7 +6,12 @@ export class Vector2 {}
 export class Scene {
     add() {}
 }
-export class Color {}
+export class Color {
+    constructor(color) { this.color = color; }
+    clone() { return this; }
+    set(val) { this.color = val; }
+    getHex() { return this.color; }
+}
 export class PerspectiveCamera {
     updateProjectionMatrix() {}
 }
@@ -35,8 +40,8 @@ export class Vector3 {
 
 export class MeshStandardMaterial {
     constructor(params = {}) {
-        this.color = params.color;
-        this.emissive = params.emissive;
+        this.color = new Color(params.color);
+        this.emissive = new Color(params.emissive);
         this.metalness = params.metalness;
         this.roughness = params.roughness;
     }

@@ -801,13 +801,29 @@ export function toggleSelectionTransparency() {
     }, 500);
 }
 
-function setupVisor3dEventListeners() {
+export function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     const resetBtn = document.getElementById('reset-view-btn');
     const isolateBtn = document.getElementById('isolate-btn');
     const selectionTransparencyBtn = document.getElementById('selection-transparency-btn');
     const partsList = document.getElementById('visor3d-parts-list');
+    const searchInput = document.getElementById('visor3d-search');
     const closeCardBtn = document.getElementById('close-card-btn');
+
+    if (searchInput) {
+        searchInput.addEventListener('keyup', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const partsListItems = document.querySelectorAll('#visor3d-parts-list li');
+            partsListItems.forEach(li => {
+                const partName = li.dataset.partName.toLowerCase();
+                if (partName.includes(searchTerm)) {
+                    li.style.display = '';
+                } else {
+                    li.style.display = 'none';
+                }
+            });
+        });
+    }
 
     if (closeCardBtn) {
         closeCardBtn.addEventListener('click', () => {
