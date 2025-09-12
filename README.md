@@ -36,7 +36,7 @@ El proyecto ha evolucionado desde un prototipo hasta convertirse en una aplicaci
 - **Gestión Avanzada de Árboles de Producto:** Interfaz con Drag and Drop para construir y modificar las estructuras jerárquicas de los productos.
 - **Vista Sinóptica Mejorada:** Una vista interactiva para explorar la estructura completa de todos los productos, con edición de cantidades en contexto y diferenciación visual de componentes.
 - **Exportación de Estructura de Producto a PDF Profesional:** Se ha implementado una función de exportación que genera un listado de materiales (Estructura de Producto) en formato PDF tabular. El reporte se presenta en formato horizontal e incluye columnas detalladas para Nivel, Descripción, Código, Cantidad y Unidad de Medida.
-- **Próximamente: Flujograma de Procesos:** Se está implementando una nueva vista dedicada que leerá la información de los árboles de producto para generar automáticamente un flujograma visual del proceso de fabricación completo.
+- **Flujograma de Procesos:** Una nueva vista dedicada que lee la información de los árboles de producto para generar automáticamente un flujograma visual del proceso de fabricación completo. El diagrama, inspirado en la industria automotriz, muestra la jerarquía de componentes y sus relaciones, facilitando la comprensión del flujo de ensamblaje desde los insumos hasta el producto final.
 
 ### Gestión de Cambios de Ingeniería (ECR/ECO)
 

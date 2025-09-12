@@ -9759,11 +9759,16 @@ async function loadDataForTreeView(selectedProductId) {
 }
 
 
-function openProductSearchModalForView(viewType) {
+function openProductSearchModalForView(viewType, onProductSelectCallback) {
     // Re-use the existing modal logic but adapt the callback.
     const modalId = `prod-search-modal-${viewType}-${Date.now()}`;
 
     const onProductSelect = async (productId) => {
+        if (onProductSelectCallback) {
+            onProductSelectCallback(productId);
+            return;
+        }
+
         const productData = await loadDataForTreeView(productId);
         if (!productData) {
             // If data loading fails, go back to the initial screen of the respective view.
@@ -10867,12 +10872,111 @@ function handleCaratulaClick(e) {
 
 
 function runFlujogramaLogic() {
-    dom.viewContent.innerHTML = `<div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">
-        <i data-lucide="git-branch-plus" class="h-24 w-24 text-gray-300 mb-6"></i>
-        <h3 class="text-2xl font-bold">Flujograma de Procesos</h3>
-        <p class="text-gray-500 mt-2 max-w-lg mx-auto">Próximamente: Esta sección mostrará un diagrama interactivo del flujo de producción. Podrás seleccionar un producto para ver, editar y reorganizar su secuencia de procesos desde la materia prima hasta el ensamblaje final.</p>
-    </div>`;
-    lucide.createIcons();
+    const flujogramaState = {
+        selectedProduct: null,
+    };
+
+    const renderInitialView = () => {
+        dom.viewContent.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-full bg-white rounded-xl shadow-lg p-6 text-center animate-fade-in-up">
+                <i data-lucide="git-branch-plus" class="h-24 w-24 text-gray-300 mb-6"></i>
+                <h3 class="text-2xl font-bold">Flujograma de Procesos</h3>
+                <p class="text-gray-500 mt-2 mb-8 max-w-lg">
+                    Seleccione un producto para generar automáticamente un flujograma visual de su proceso de fabricación,
+                    inspirado en los sistemas de la industria automotriz.
+                </p>
+                <button data-action="open-product-search-modal-flujograma" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 text-lg font-semibold shadow-lg transition-transform transform hover:scale-105">
+                    <i data-lucide="search" class="inline-block mr-2 -mt-1"></i>Seleccionar Producto
+                </button>
+            </div>
+        `;
+        lucide.createIcons();
+    };
+
+    const renderFlujogramaView = () => {
+        const product = flujogramaState.selectedProduct;
+        if (!product) {
+            renderInitialView();
+            return;
+        }
+
+        dom.viewContent.innerHTML = `
+            <div class="animate-fade-in-up">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold">Flujograma para: ${product.descripcion}</h3>
+                    <button data-action="select-another-product-flujograma" class="bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-gray-600">
+                        Seleccionar Otro Producto
+                    </button>
+                </div>
+                <div id="flujograma-container" class="bg-white p-6 rounded-xl shadow-lg overflow-x-auto">
+                    <div class="flujograma-wrapper">
+                        ${generateFlowchartHTML(product.estructura)}
+                    </div>
+                </div>
+            </div>
+        `;
+        lucide.createIcons();
+    };
+
+    const generateNodeHTML = (node) => {
+        const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
+        if (!item) return '';
+
+        let icon;
+        switch(node.tipo) {
+            case 'producto': icon = 'package'; break;
+            case 'semiterminado': icon = 'box'; break;
+            case 'insumo': icon = 'beaker'; break;
+            default: icon = 'help-circle';
+        }
+
+        const childrenHTML = node.children && node.children.length > 0
+            ? `<div class="flujograma-children">${generateFlowchartHTML(node.children)}</div>`
+            : '';
+
+        return `
+            <div class="flujograma-node-container">
+                <div class="flujograma-node ${node.tipo}">
+                    <div class="flujograma-node-icon"><i data-lucide="${icon}"></i></div>
+                    <div class="flujograma-node-text">
+                        <h4>${item.descripcion}</h4>
+                        <p>${node.tipo} - ${item.id}</p>
+                    </div>
+                </div>
+                ${childrenHTML}
+            </div>
+        `;
+    };
+
+    const generateFlowchartHTML = (nodes) => {
+        if (!nodes || nodes.length === 0) return '';
+        return `<div class="flujograma-level">${nodes.map(generateNodeHTML).join('')}</div>`;
+    };
+
+    const handleProductSelect = async (productId) => {
+        const productData = await loadDataForTreeView(productId);
+        if (productData) {
+            flujogramaState.selectedProduct = productData;
+            renderFlujogramaView();
+        } else {
+            showToast('No se pudo cargar la información del producto.', 'error');
+        }
+    };
+
+    dom.viewContent.addEventListener('click', (e) => {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        if (action === 'open-product-search-modal-flujograma') {
+            openProductSearchModalForView('flujograma', handleProductSelect);
+        } else if (action === 'select-another-product-flujograma') {
+            flujogramaState.selectedProduct = null;
+            renderInitialView();
+        }
+    });
+
+    renderInitialView();
 }
 
 function renderSinopticoLayout() {
