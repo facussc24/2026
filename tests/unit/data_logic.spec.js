@@ -261,4 +261,33 @@ describe('deleteProductAndOrphanedSubProducts', () => {
         expect(mockFirestore.doc).toHaveBeenCalledWith(mockDb, COLLECTIONS.SEMITERMINADOS, 'ORPHAN_SUB');
         expect(mockUiCallbacks.showToast).toHaveBeenCalledWith('1 sub-componentes huérfanos eliminados.', 'success');
     });
+
+    test('should delete sub-products before deleting the main product for safety', async () => {
+        // Arrange
+        const productToDeleteData = { id: 'PROD001', estructura: [{ tipo: 'semiterminado', refId: 'SUB001' }] };
+        const deleteOrder = [];
+
+        // Mock getDoc to return the product and its sub-component
+        mockFirestore.getDoc.mockImplementation(async (docRef) => {
+            if (docRef.id === 'PROD001') return { exists: () => true, data: () => productToDeleteData };
+            if (docRef.id === 'SUB001') return { exists: () => true, data: () => ({ id: 'SUB001' }) };
+            return { exists: () => false, data: () => null };
+        });
+
+        // Mock getDocs to indicate the sub-component is an orphan
+        mockFirestore.getDocs.mockResolvedValue({ empty: true, docs: [] });
+
+        // Mock deleteDoc to record the collection name of the document being deleted
+        mockFirestore.deleteDoc.mockImplementation(async (docRef) => {
+            deleteOrder.push(docRef.collection);
+            return Promise.resolve();
+        });
+
+        // Act
+        await deleteProductAndOrphanedSubProducts('PROD001', mockDb, mockFirestore, COLLECTIONS, mockUiCallbacks);
+
+        // Assert
+        // The correct, safer order is to delete sub-components first, then the main product.
+        expect(deleteOrder).toEqual(['semiterminados', 'productos']);
+    });
 });
