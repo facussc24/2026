@@ -1136,7 +1136,7 @@ async function seedDatabase() {
  * @param {object|string|null} item - El objeto sobre el que se actúa, un string para identificar el tipo (ej: 'tarea'), o null.
  * @returns {boolean} - `true` si el usuario tiene permiso, `false` en caso contrario.
  */
-function checkUserPermission(action, item = null) {
+export function checkUserPermission(action, item = null) {
     if (!appState.currentUser) {
         return false; // Si no hay usuario, no hay permisos.
     }
@@ -6040,6 +6040,12 @@ function handleGlobalClick(e) {
             dropdown.classList.remove('open');
         });
     }
+
+    if (!target.closest('.dropdown-container')) {
+        document.querySelectorAll('.dropdown-menu').forEach(menu => {
+            menu.classList.add('hidden');
+        });
+    }
     
     if (!target.closest('#export-menu-container')) document.getElementById('export-dropdown')?.classList.add('hidden'); 
     if (!target.closest('#type-filter-btn')) document.getElementById('type-filter-dropdown')?.classList.add('hidden'); 
@@ -9320,16 +9326,78 @@ function renderArbolesInitialView() {
 function renderArbolDetalle(highlightNodeId = null) {
     const cliente = appState.collections[COLLECTIONS.CLIENTES].find(c => c.id === appState.arbolActivo.clienteId);
     let treeContentHTML = `<div id="tree-render-area" class="tree p-4 rounded-lg bg-gray-50 min-h-[200px]"></div>`;
-    
+
     if(appState.arbolActivo.estructura[0]?.children.length === 0) {
         treeContentHTML += `<div class="text-center p-6 bg-blue-50 border-t border-blue-200 rounded-b-lg">
             <i data-lucide="mouse-pointer-click" class="h-10 w-10 mx-auto text-blue-400 mb-3"></i>
             <h4 class="font-semibold text-blue-800">¡Tu árbol está listo para crecer!</h4>
-            <p class="text-sm text-blue-700">Comienza agregando componentes usando los botones <span class="font-mono bg-green-100 text-green-800 px-1 rounded">+ semiterminado</span> o <span class="font-mono bg-green-100 text-green-800 px-1 rounded">+ insumo</span>.</p>
+            <p class="text-sm text-blue-700">Comienza agregando componentes usando los botones de acción que aparecen al pasar el mouse sobre un nodo.</p>
         </div>`;
     }
+
     dom.viewContent.innerHTML = `<div class="bg-white rounded-xl shadow-md p-6 animate-fade-in-up"><div class="flex justify-between items-start mb-4 pb-4 border-b"><div><h3 class="text-2xl font-bold">${appState.arbolActivo.nombre}</h3><p class="text-sm text-gray-500">Cliente: <span class="font-semibold">${cliente?.descripcion || 'N/A'}</span></p></div><div class="flex space-x-2"><button data-action="volver-a-busqueda" class="bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-gray-600">Buscar Otro</button>${checkUserPermission('edit') ? `<button data-action="guardar-arbol" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-blue-700 flex items-center justify-center w-28 transition-all duration-300">Guardar</button>` : ''}</div></div>${treeContentHTML}</div>`;
     renderArbol(highlightNodeId);
+
+    const treeArea = document.getElementById('tree-render-area');
+    if (!treeArea) return;
+
+    treeArea.addEventListener('click', (e) => {
+        const button = e.target.closest('button[data-action], a[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        const nodeId = button.dataset.nodeId;
+
+        switch(action) {
+            case 'add-node':
+                e.preventDefault();
+                openComponentSearchModal(nodeId, button.dataset.childType);
+                break;
+            case 'delete-node':
+                eliminarNodo(nodeId);
+                break;
+            case 'toggle-add-dropdown':
+                const dropdownContainer = button.closest('.dropdown-container');
+                const menu = dropdownContainer.querySelector('.dropdown-menu');
+                document.querySelectorAll('#tree-render-area .dropdown-menu').forEach(otherMenu => {
+                    if (otherMenu !== menu) otherMenu.classList.add('hidden');
+                });
+                menu.classList.toggle('hidden');
+                break;
+        }
+    });
+
+    // Delegated listeners for inline editing
+    treeArea.addEventListener('blur', (e) => {
+        if (e.target.matches('.node-attribute-editor')) {
+            const nodeId = e.target.closest('li[data-node-id]').dataset.nodeId;
+            const field = e.target.dataset.field;
+            const value = e.target.textContent;
+
+            const nodeToUpdate = findNode(nodeId, appState.arbolActivo.estructura);
+            if (nodeToUpdate) {
+                if (field === 'quantity') {
+                    nodeToUpdate[field] = parseFloat(value) || 1;
+                } else {
+                    nodeToUpdate[field] = value;
+                }
+                showToast(`'${field}' actualizado. Guarde el árbol para conservar los cambios.`, 'info', 2000);
+            }
+        }
+    }, true);
+
+    treeArea.addEventListener('keydown', (e) => {
+        if (e.target.matches('.node-attribute-editor')) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.target.blur();
+            } else if (e.key === 'Escape') {
+                e.target.blur();
+            }
+        }
+    }, true);
+
+
     lucide.createIcons();
 }
 
@@ -9350,58 +9418,83 @@ function renderArbol(highlightNodeId = null) {
     lucide.createIcons();
 }
 
-function renderNodo(nodo) {
+export function renderNodo(nodo, checkPermissionFunc = checkUserPermission) {
     const collectionName = nodo.tipo + 's';
     const item = appState.collectionsById[collectionName]?.get(nodo.refId);
     if (!item) return '';
 
-    const addableChildren = { producto: ['semiterminado', 'insumo'], semiterminado: ['semiterminado', 'insumo'], insumo: [] };
-    let addButtons = checkUserPermission('edit')
-        ? (addableChildren[nodo.tipo] || []).map(tipo => `<button data-action="add-node" data-node-id="${nodo.id}" data-child-type="${tipo}" class="px-2 py-1 bg-green-100 text-green-800 rounded-md hover:bg-green-200 text-xs font-semibold" title="Agregar ${tipo}">+ ${tipo}</button>`).join(' ')
-        : '';
+    const addableChildrenTypes = { producto: ['semiterminado', 'insumo'], semiterminado: ['semiterminado', 'insumo'], insumo: [] }[nodo.tipo] || [];
 
-    const isDraggable = nodo.tipo !== 'producto';
+    let addActionsDropdown = '';
+    if (checkPermissionFunc('edit') && addableChildrenTypes.length > 0) {
+        const dropdownItems = addableChildrenTypes.map(tipo =>
+            `<a href="#" data-action="add-node" data-node-id="${nodo.id}" data-child-type="${tipo}" class="flex items-center gap-3 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">
+                <i data-lucide="plus-circle" class="w-4 h-4 text-slate-500"></i>
+                <span>Agregar ${tipo}</span>
+            </a>`
+        ).join('');
 
-    let quantityText = '';
-    if (nodo.tipo === 'insumo') {
-        const merma = nodo.consumoTeorico > 0 ? ((nodo.consumoReal - nodo.consumoTeorico) / nodo.consumoTeorico) * 100 : 0;
-        const mermaClass = merma > 0 ? 'text-red-600' : 'text-green-600';
-        quantityText = `
-            <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0" title="Cantidad por Conjunto">x${nodo.quantity || 0}</span>
-            <span class="text-xs text-gray-500 bg-blue-100 px-2 py-0.5 rounded-full flex-shrink-0" title="Consumo Real por Unidad">${nodo.consumoReal || 0} ${nodo.unidadConsumo || ''}</span>
-            <span class="text-xs ${mermaClass} bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0" title="Merma de Proceso">${merma.toFixed(2)}%</span>
+        addActionsDropdown = `
+            <div class="relative dropdown-container">
+                <button data-action="toggle-add-dropdown" class="p-1.5 rounded-full hover:bg-slate-200 transition-colors">
+                    <i data-lucide="plus-circle" class="h-5 w-5 text-slate-600 pointer-events-none"></i>
+                </button>
+                <div class="dropdown-menu absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-xl hidden z-10 py-1">
+                    ${dropdownItems}
+                </div>
+            </div>
         `;
-    } else if (nodo.tipo !== 'producto') {
-         quantityText = `<span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0">x${nodo.quantity || 1}</span>`;
     }
 
+    const deleteButton = (checkPermissionFunc('delete') && nodo.tipo !== 'producto')
+        ? `<button data-action="delete-node" data-node-id="${nodo.id}" class="p-1.5 rounded-full hover:bg-slate-200 transition-colors" title="Eliminar">
+               <i data-lucide="trash-2" class="h-5 w-5 text-red-500 pointer-events-none"></i>
+           </button>`
+        : '';
 
-    const commentText = nodo.comment ? `<p class="pl-8 text-sm text-slate-500 italic flex items-center gap-2"><i data-lucide="message-square" class="w-3.5 h-3.5"></i>${nodo.comment}</p>` : '';
+    const nodeActions = `
+        <div class="node-actions absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/50 backdrop-blur-sm rounded-full p-1 border border-slate-200 shadow-sm">
+            ${addActionsDropdown}
+            ${deleteButton}
+        </div>
+    `;
 
-    const editButton = (checkUserPermission('edit') && nodo.tipo !== 'producto') ? `
-        <button data-action="edit-node-details" data-node-id="${nodo.id}" class="text-blue-600 hover:text-blue-700" title="Editar Atributos">
-            <i data-lucide="pencil" class="h-4 w-4 pointer-events-none"></i>
-        </button>
-    ` : '';
+    const isDraggable = nodo.tipo !== 'producto';
+    const canEdit = checkUserPermission('edit');
 
-    return `<li data-node-id="${nodo.id}" class="group">
-                <div class="node-content ${isDraggable ? '' : 'cursor-default'}" data-type="${nodo.tipo}">
-                    <div class="flex items-center gap-3 flex-grow min-w-0">
-                        <i data-lucide="${nodo.icon}" class="h-5 w-5 text-gray-600 flex-shrink-0"></i>
-                        <span class="font-semibold truncate" title="${item.descripcion}">${item.descripcion}</span>
-                        <span class="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0">${nodo.tipo}</span>
+    const quantityHTML = (nodo.tipo !== 'producto') ?
+        `<span
+            contenteditable="${canEdit}"
+            data-field="quantity"
+            class="node-attribute-editor min-w-[3ch] text-center text-sm font-semibold text-slate-600 bg-slate-200 px-2 py-0.5 rounded-full hover:bg-slate-300 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+            title="Cantidad"
+        >${nodo.quantity || 1}</span>` : '';
+
+    const commentHTML =
+        `<span
+            contenteditable="${canEdit}"
+            data-field="comment"
+            class="node-attribute-editor text-sm text-slate-500 italic hover:bg-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none rounded-md px-2 py-1"
+            placeholder="Añadir comentario..."
+        >${nodo.comment || ''}</span>`;
+
+    return `<li data-node-id="${nodo.id}" class="group relative pt-2">
+                <div class="node-content ${isDraggable ? '' : 'cursor-default'} bg-white border border-slate-200 rounded-lg p-3 flex items-center gap-3" data-type="${nodo.tipo}">
+                    <i data-lucide="${nodo.icon}" class="h-5 w-5 text-slate-600 flex-shrink-0"></i>
+                    <div class="flex-grow min-w-0">
+                        <p class="font-semibold truncate" title="${item.descripcion}">${item.descripcion}</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-xs text-white font-bold bg-slate-400 px-2 py-0.5 rounded-full flex-shrink-0">${nodo.tipo}</span>
+                            ${quantityHTML}
+                            ${commentHTML}
+                        </div>
                     </div>
-                     <div class="flex items-center gap-2 flex-shrink-0">
-                        ${quantityText}
-                    </div>
-                    <div class="flex items-center space-x-2 flex-shrink-0">
-                        ${addButtons}
-                        ${editButton}
-                        ${(checkUserPermission('delete') && nodo.tipo !== 'producto') ? `<button data-action="delete-node" data-node-id="${nodo.id}" class="text-red-500 hover:text-red-700" title="Eliminar"><i data-lucide="trash-2" class="h-4 w-4 pointer-events-none"></i></button>` : ''}
+                    <div class="node-actions flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        ${addActionsDropdown}
+                        ${deleteButton}
                     </div>
                 </div>
-                ${commentText}
-                ${addableChildren[nodo.tipo].length > 0 ? `<ul class="node-children-list">${(nodo.children || []).map(renderNodo).join('')}</ul>` : ''}
+                ${(addableChildrenTypes.length > 0 && nodo.children) ? `<ul class="node-children-list pl-6">${nodo.children.map(renderNodo).join('')}</ul>` : ''}
             </li>`;
 }
 
@@ -10049,46 +10142,32 @@ function runSinopticoLogic() {
     // that first loads the necessary data.
 }
 
-export const getFlattenedData = (product, levelFilters) => {
+export const getFlattenedData = (product, activeFilters = {}) => {
     if (!product || !product.estructura) return [];
 
-    const useFilter = levelFilters && levelFilters.size > 0;
-
-    // --- Sub-function to flatten the entire tree, adding originalLevel ---
-    const getUnfilteredFlatList = () => {
-        const list = [];
-        const flatten = (nodes, level, lineage) => {
-            if (!nodes) return;
-            nodes.forEach((node, index) => {
-                const isLast = index === nodes.length - 1;
-                const collectionName = node.tipo + 's';
-                const item = appState.collectionsById[collectionName]?.get(node.refId);
-                if (item) {
-                    node.originalLevel = level; // Tag node with its original level
-                    list.push({ node, item, level, isLast, lineage });
-                    if (node.children) {
-                        flatten(node.children, level + 1, [...lineage, !isLast]);
-                    }
-                }
-            });
-        };
-        flatten(product.estructura, 0, []);
-        return list;
-    };
-
-    // If no filters are applied, return the simple flattened list.
-    if (!useFilter) {
-        return getUnfilteredFlatList();
+    // --- Argument Handling ---
+    // This handles inconsistent call signatures found in the codebase.
+    // Some calls pass the `niveles` Set directly, others pass an `activeFilters` object.
+    let niveles, material;
+    if (activeFilters instanceof Set) {
+        niveles = activeFilters;
+        material = null;
+    } else {
+        ({ niveles, material } = activeFilters || {});
     }
+    // --- End Argument Handling ---
 
-    // --- Logic for when filters ARE applied ---
+    const materialLower = material ? String(material).toLowerCase().trim() : null;
+    const hasLevelFilter = niveles && niveles.size > 0;
+    const hasMaterialFilter = !!materialLower;
+    const hasFilters = hasLevelFilter || hasMaterialFilter;
 
-    // 1. Get a simple list of all nodes with their original levels.
-    const allNodesWithOriginalLevel = [];
+    // This helper function runs before the main process to set a baseline `originalLevel`
+    // on every node in the tree. This is essential for the level filter to work correctly.
     const recordOriginalLevels = (nodes, level) => {
+        if (!nodes) return;
         nodes.forEach(node => {
             node.originalLevel = level;
-            allNodesWithOriginalLevel.push(node);
             if (node.children) {
                 recordOriginalLevels(node.children, level + 1);
             }
@@ -10096,102 +10175,114 @@ export const getFlattenedData = (product, levelFilters) => {
     };
     recordOriginalLevels(product.estructura, 0);
 
-    // 2. Determine which nodes will be visible based on the filter.
-    const visibleNodeIds = new Set(
-        allNodesWithOriginalLevel
-            .filter(node => levelFilters.has(node.originalLevel.toString()))
-            .map(node => node.id)
-    );
-
-    // 3. Recursively build the final list, calculating new visual levels and properties.
-    const finalList = [];
-    const buildFinalList = (nodes, currentVisualLevel, parentLineage) => {
-        // From the current set of siblings, find which ones are visible.
-        const visibleSiblings = nodes.filter(sibling => visibleNodeIds.has(sibling.id));
-
-        // Process each of the original siblings.
-        nodes.forEach(node => {
-            const isVisible = visibleNodeIds.has(node.id);
-
-            if (isVisible) {
-                const collectionName = node.tipo + 's';
-                const item = appState.collectionsById[collectionName]?.get(node.refId);
-
-                if (item) {
-                    // A node is the "last" if it's the last one in the list of *visible* siblings.
-                    const isLast = node.id === visibleSiblings[visibleSiblings.length - 1]?.id;
-
-                    finalList.push({
-                        node: node, // The node object now correctly includes .originalLevel
-                        item: item,
-                        level: currentVisualLevel, // This is the new, calculated visual level
-                        isLast: isLast,
-                        lineage: parentLineage,
-                    });
+    // If no filters are active, we can return a simple flattened list.
+    if (!hasFilters) {
+        return (function simpleFlatten(nodes, level, lineage) {
+            let list = [];
+            if (!nodes) return list;
+            nodes.forEach((node, index) => {
+                const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
+                if (!item) return;
+                const isLast = index === nodes.length - 1;
+                list.push({ node, item, level, isLast, lineage });
+                if (node.children) {
+                    list = list.concat(simpleFlatten(node.children, level + 1, [...lineage, !isLast]));
                 }
-            }
+            });
+            return list;
+        })(product.estructura, 0, []);
+    }
 
-            // Always recurse into children.
-            if (node.children && node.children.length > 0) {
-                // If the current node was visible, its children are one level deeper visually.
-                const nextVisualLevel = isVisible ? currentVisualLevel + 1 : currentVisualLevel;
+    const results = [];
 
-                // The lineage array tracks the vertical lines. A "true" means a line should be drawn.
-                // This depends on the visibility of the parent and whether it's the last visible sibling.
-                let nextLineage = parentLineage;
-                if (isVisible) {
-                    const lastVisibleParent = visibleSiblings[visibleSiblings.length - 1];
-                    const isParentLast = node.id === lastVisibleParent?.id;
-                    nextLineage = [...parentLineage, !isParentLast];
-                }
+    // Helper to determine if a node or any of its descendants should be kept.
+    const shouldKeepNode = (node) => {
+        const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
+        if (!item) return false;
 
-                buildFinalList(node.children, nextVisualLevel, nextLineage);
-            }
-        });
+        // Check if the node itself matches all active filters.
+        const selfMatchesLevel = !hasLevelFilter || niveles.has(String(node.originalLevel));
+        let selfMatchesMaterial = true;
+        if (hasMaterialFilter) {
+            let materialText = '';
+            if (node.tipo === 'semiterminado') selfMatchesMaterial = (item.materiales_componentes || '').toLowerCase().includes(materialLower);
+            else if (node.tipo === 'insumo') selfMatchesMaterial = (item.material || '').toLowerCase().includes(materialLower);
+            else selfMatchesMaterial = false;
+        }
+
+        if (selfMatchesLevel && selfMatchesMaterial) return true;
+
+        // If not, check if any of its children should be kept.
+        return (node.children || []).some(shouldKeepNode);
     };
 
-    buildFinalList(product.estructura, 0, []);
-    return finalList;
+    function process(nodes, visualLevel, lineage) {
+        if (!nodes) return;
+
+        const visibleNodes = nodes.filter(shouldKeepNode);
+
+        visibleNodes.forEach((node, index) => {
+            const isLast = index === visibleNodes.length - 1;
+            const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
+            if (!item) return;
+
+            const selfMatchesLevel = !hasLevelFilter || niveles.has(String(node.originalLevel));
+            const selfMatchesMaterial = !hasMaterialFilter || (
+                (node.tipo === 'semiterminado' && (item.materiales_componentes || '').toLowerCase().includes(materialLower)) ||
+                (node.tipo === 'insumo' && (item.material || '').toLowerCase().includes(materialLower))
+            );
+
+            if (selfMatchesLevel && selfMatchesMaterial) {
+                results.push({
+                    node,
+                    item,
+                    level: visualLevel,
+                    isLast,
+                    lineage,
+                });
+                process(node.children, visualLevel + 1, [...lineage, !isLast]);
+            } else {
+                process(node.children, visualLevel, lineage);
+            }
+        });
+    }
+
+    process(product.estructura, 0, []);
+    return results;
 };
 
 function renderTabularTable(data) {
     const state = appState.sinopticoTabularState;
     const selectedProduct = state.selectedProduct;
 
-    if (data.length === 0) return `<p class="text-slate-500 p-4 text-center">El producto seleccionado no tiene una estructura definida.</p>`;
+    if (data.length === 0) return `<p class="text-slate-500 p-4 text-center">La estructura de este producto está vacía o los filtros no arrojaron resultados.</p>`;
 
-    let tableHTML = `<table class="w-full text-sm text-left text-gray-600">`;
-    tableHTML += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr>
-        <th scope="col" class="px-4 py-3 align-middle" style="min-width: 400px;">Descripción</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Nivel</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">LC / KD</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Código de pieza</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Versión</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Proceso</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap col-aspecto">Aspecto</th>
-        <th scope="col" class="px-4 py-3 text-right align-middle whitespace-nowrap">Peso (gr)</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Color</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Piezas por Vehículo (Un.)</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Material</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Código Materia Prima</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Proveedor Materia Prima</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Cantidad / Pieza</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap">Unidad</th>
-        <th scope="col" class="px-4 py-3 align-middle col-comentarios">Comentarios</th>
-        <th scope="col" class="px-4 py-3 text-center align-middle whitespace-nowrap col-acciones">Acciones</th>
-    </tr></thead><tbody>`;
+    const headers = [
+        "Nivel", "Descripción", "Version", "Part Number", "Image", "Pieces/Vh [u.]", "Process", "LC Site / KD", "Aspect", "Material",
+        "Total Weight (Calculated) [g]", "Color", "Raw Material", "Raw Material Supplier", "Net Consumption",
+        "Consumption with Scrap", "UoM (Unit of Measure)", "Comments", "Acciones"
+    ];
+
+    let tableHTML = `<table class="w-full text-sm text-left text-gray-600 modern-bom-table">`;
+    tableHTML += `<thead class="text-xs text-gray-700 uppercase bg-gray-100"><tr>`;
+    headers.forEach(h => tableHTML += `<th scope="col" class="px-4 py-3 align-middle whitespace-nowrap">${h}</th>`);
+    tableHTML += `</tr></thead><tbody>`;
 
     data.forEach(rowData => {
         const { node, item, level, isLast, lineage } = rowData;
-        const NA = '<span class="text-slate-400">N/A</span>';
+        const NA = '<span class="text-slate-400">-</span>';
 
-        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;').join('');
+        let prefix = lineage.map(parentIsNotLast => parentIsNotLast ? '│&nbsp;&nbsp;&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;').join('');
         if (level > 0)  prefix += isLast ? '└─ ' : '├─ ';
-        const descripcion = `<span class="font-sans">${prefix}</span>${item.descripcion || item.nombre || ''}`;
+
+        const descripcion = `<span class="font-mono font-medium">${prefix}</span><span class="font-semibold">${item.descripcion || item.nombre || ''}</span>`;
         const nivel = node.originalLevel;
-        const lc_kd = item.lc_kd || NA;
-        const codigo_pieza = item.codigo_pieza || NA;
         const version = item.version || NA;
+        const partNumber = item.codigo_pieza || NA;
+        const image = item.imagen ? `<img src="${item.imagen}" class="h-10 w-10 object-cover rounded-md border" alt="Component image">` : NA;
+
+        const piecesPerVh = selectedProduct.piezas_por_vehiculo || NA;
+        const color = selectedProduct.color || NA;
 
         let proceso = NA;
         if (item.proceso) {
@@ -10199,59 +10290,63 @@ function renderTabularTable(data) {
             proceso = procesoData ? procesoData.descripcion : item.proceso;
         }
 
+        const lcKd = item.lc_kd || NA;
         const aspecto = item.aspecto || NA;
 
-        let peso_display = NA;
-        if (node.tipo === 'semiterminado' && item.peso_gr) {
-            peso_display = item.peso_gr;
-            if (item.tolerancia_gr) {
-                peso_display += ` ± ${item.tolerancia_gr}`;
-            }
+        let material = NA;
+        if (node.tipo === 'producto' && selectedProduct.material_separar) {
+            material = 'Ver sub-componentes';
+        } else if (node.tipo === 'semiterminado') {
+            material = item.materiales_componentes || NA;
+        } else if (node.tipo === 'insumo') {
+            material = item.material || NA;
         }
 
-        const color = selectedProduct.color || NA;
-        const piezas_por_vehiculo = selectedProduct.piezas_por_vehiculo || NA;
-        const material = selectedProduct.material_separar ? 'Sí' : 'No';
+        const weight = item.peso_gr || NA;
 
-        let codigo_materia_prima = NA;
-        let proveedor_materia_prima = NA;
+        let rawMaterial = NA;
+        let rawMaterialSupplier = NA;
+        let netConsumption = NA;
+        let consumptionWithScrap = NA;
+        let uom = NA;
+
         if (node.tipo === 'insumo') {
-            codigo_materia_prima = item.codigo_materia_prima || NA;
+            rawMaterial = item.codigo_materia_prima || NA;
             if (item.proveedor_materia_prima) {
                 const provMP = appState.collectionsById[COLLECTIONS.PROVEEDORES]?.get(item.proveedor_materia_prima);
-                proveedor_materia_prima = provMP ? provMP.descripcion : item.proveedor_materia_prima;
+                rawMaterialSupplier = provMP ? provMP.descripcion : item.proveedor_materia_prima;
+            }
+            netConsumption = node.consumoTeorico ?? NA;
+            consumptionWithScrap = node.consumoReal ?? NA;
+            if (item.unidad_medida) {
+                const unidadData = appState.collectionsById[COLLECTIONS.UNIDADES]?.get(item.unidad_medida);
+                uom = unidadData ? unidadData.id : item.unidad_medida;
             }
         }
 
-        const cantidad = node.quantity ?? NA;
-
-        let unidad_medida = NA;
-        if (node.tipo === 'insumo' && item.unidad_medida) {
-            const unidadData = appState.collectionsById[COLLECTIONS.UNIDADES]?.get(item.unidad_medida);
-            unidad_medida = unidadData ? unidadData.id : item.unidad_medida;
-        }
-
-        const comentarios = node.comment ? `<span class="whitespace-normal">${node.comment}</span>` : NA;
+        const comments = node.comment || NA;
         const actionsHTML = checkUserPermission('edit') ? `<button data-action="edit-tabular-node" data-node-id="${node.id}" class="p-1 text-blue-600 hover:bg-blue-100 rounded-md" title="Editar"><i data-lucide="pencil" class="w-4 h-4 pointer-events-none"></i></button>` : '';
 
         tableHTML += `<tr class="bg-white border-b hover:bg-gray-100" data-node-id="${node.id}">
-            <td class="px-4 py-2 font-mono font-medium text-gray-900 align-middle" style="min-width: 400px;">${descripcion}</td>
             <td class="px-4 py-2 text-center align-middle">${nivel}</td>
-            <td class="px-4 py-2 text-center align-middle">${lc_kd}</td>
-            <td class="px-4 py-2 text-center align-middle">${codigo_pieza}</td>
+            <td class="px-4 py-2 align-middle" style="min-width: 300px;">${descripcion}</td>
             <td class="px-4 py-2 text-center align-middle">${version}</td>
+            <td class="px-4 py-2 text-center align-middle">${partNumber}</td>
+            <td class="px-4 py-2 text-center align-middle">${image}</td>
+            <td class="px-4 py-2 text-center align-middle">${piecesPerVh}</td>
             <td class="px-4 py-2 text-center align-middle">${proceso}</td>
-            <td class="px-4 py-2 text-center align-middle col-aspecto">${aspecto}</td>
-            <td class="px-4 py-2 text-right align-middle">${peso_display}</td>
-            <td class="px-4 py-2 text-center align-middle">${color}</td>
-            <td class="px-4 py-2 text-center align-middle">${piezas_por_vehiculo}</td>
+            <td class="px-4 py-2 text-center align-middle">${lcKd}</td>
+            <td class="px-4 py-2 text-center align-middle">${aspecto}</td>
             <td class="px-4 py-2 text-center align-middle">${material}</td>
-            <td class="px-4 py-2 text-center align-middle">${codigo_materia_prima}</td>
-            <td class="px-4 py-2 text-center align-middle">${proveedor_materia_prima}</td>
-            <td class="px-4 py-2 text-center align-middle">${cantidad}</td>
-            <td class="px-4 py-2 text-center align-middle">${unidad_medida}</td>
-            <td class="px-4 py-2 align-middle col-comentarios">${comentarios}</td>
-            <td class="px-4 py-2 text-center align-middle col-acciones">${actionsHTML}</td>
+            <td class="px-4 py-2 text-right align-middle">${weight}</td>
+            <td class="px-4 py-2 text-center align-middle">${color}</td>
+            <td class="px-4 py-2 text-center align-middle">${rawMaterial}</td>
+            <td class="px-4 py-2 text-center align-middle">${rawMaterialSupplier}</td>
+            <td class="px-4 py-2 text-right align-middle">${netConsumption}</td>
+            <td class="px-4 py-2 text-right align-middle">${consumptionWithScrap}</td>
+            <td class="px-4 py-2 text-center align-middle">${uom}</td>
+            <td class="px-4 py-2 align-middle" style="min-width: 150px;">${comments}</td>
+            <td class="px-4 py-2 text-center align-middle">${actionsHTML}</td>
         </tr>`;
     });
     tableHTML += `</tbody></table>`;
@@ -10280,7 +10375,29 @@ export function runSinopticoTabularLogic() {
             return;
         }
 
-        const client = appState.collectionsById[COLLECTIONS.CLIENTES].get(product.clienteId);
+        // The user wants a header section. Let's build it here.
+        const headerHTML = `
+            <div class="report-header bg-white p-4 mb-4 rounded-lg shadow-md border flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <img src="/barack_logo.png" alt="Logo" class="h-12">
+                    <div>
+                        <h2 class="text-xl font-bold text-slate-800">PART COMPOSITION - BOM</h2>
+                        <p class="text-sm text-slate-500">${product.descripcion || ''}</p>
+                    </div>
+                </div>
+                <div class="text-sm text-slate-600 grid grid-cols-2 gap-x-4 gap-y-1">
+                    <strong class="text-right">Issue Date:</strong>
+                    <input type="date" value="${new Date().toISOString().split('T')[0]}" class="p-1 border rounded-md bg-white">
+
+                    <strong class="text-right">Prepared by:</strong>
+                    <span>${appState.currentUser?.name || 'N/A'}</span>
+
+                    <strong class="text-right">Version:</strong>
+                    <span>${product.version || '1.0'}</span>
+                </div>
+            </div>
+        `;
+
 
         const getOriginalMaxDepth = (nodes, level = 0) => {
             if (!nodes || nodes.length === 0) return level > 0 ? level - 1 : 0;
@@ -10308,7 +10425,7 @@ export function runSinopticoTabularLogic() {
         }
 
         dom.viewContent.innerHTML = `<div class="animate-fade-in-up">
-            <div id="caratula-container" class="mb-6"></div>
+            ${headerHTML}
             <div class="bg-white p-6 rounded-xl shadow-lg">
                 <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div><h3 class="text-xl font-bold text-slate-800">Detalle de: ${product.descripcion}</h3><p class="text-sm text-slate-500">${product.id}</p></div>
@@ -10320,8 +10437,12 @@ export function runSinopticoTabularLogic() {
                             <div id="level-filter-dropdown" class="absolute z-10 right-0 mt-2 w-48 bg-white border rounded-lg shadow-xl hidden p-2 dropdown-menu">
                                 ${levelFilterOptionsHTML}
                                 <div class="border-t my-2"></div>
-                                <button data-action="apply-level-filter" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700">Aplicar</button>
+                                <button data-action="apply-tabular-filters" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700">Aplicar</button>
                             </div>
+                        </div>
+                        <div class="border-l pl-2 flex items-center gap-2">
+                             <input type="text" id="material-filter-input" placeholder="Buscar por material..." class="border-slate-300 rounded-md shadow-sm text-sm p-2">
+                             <button data-action="apply-tabular-filters" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-blue-700">Buscar</button>
                         </div>
                         <button data-action="select-another-product-tabular" class="bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-gray-600 flex items-center">
                             <i data-lucide="search" class="mr-2 h-4 w-4"></i>Seleccionar Otro
@@ -10335,7 +10456,6 @@ export function runSinopticoTabularLogic() {
             </div>
         </div>`;
 
-        renderCaratula(product, client);
         lucide.createIcons();
     };
 
@@ -10366,52 +10486,41 @@ export function runSinopticoTabularLogic() {
             case 'edit-tabular-node':
                 openSinopticoEditModal(button.dataset.nodeId);
                 break;
-            case 'apply-level-filter':
-                const dropdown = document.getElementById('level-filter-dropdown');
+            case 'apply-tabular-filters':
+                const levelDropdown = document.getElementById('level-filter-dropdown');
                 const selectedLevels = new Set();
-                dropdown.querySelectorAll('.level-filter-cb:checked').forEach(cb => {
-                    selectedLevels.add(cb.dataset.level);
-                });
-
-                const allLevelsCount = dropdown.querySelectorAll('.level-filter-cb').length;
-                // If all are selected, it's the same as no filter.
-                if (selectedLevels.size === allLevelsCount) {
-                    state.activeFilters.niveles.clear();
-                } else {
-                    state.activeFilters.niveles = selectedLevels;
+                if (levelDropdown) {
+                    levelDropdown.querySelectorAll('.level-filter-cb:checked').forEach(cb => {
+                        selectedLevels.add(cb.dataset.level);
+                    });
+                    const allLevelsCount = levelDropdown.querySelectorAll('.level-filter-cb').length;
+                    if (allLevelsCount > 0 && selectedLevels.size === allLevelsCount) {
+                        state.activeFilters.niveles.clear();
+                    } else {
+                        state.activeFilters.niveles = selectedLevels;
+                    }
+                    levelDropdown.classList.add('hidden');
                 }
 
-                dropdown.classList.add('hidden');
+                const materialInput = document.getElementById('material-filter-input');
+                state.activeFilters.material = materialInput ? materialInput.value : '';
 
                 const tableContainer = document.getElementById('sinoptico-tabular-container');
                 if (tableContainer) {
-                    // 1. Store scroll position & show loading state
                     const savedScrollY = window.scrollY;
-                    tableContainer.innerHTML = `
-                        <div class="flex items-center justify-center p-16 text-slate-500">
-                            <i data-lucide="loader" class="animate-spin h-8 w-8 mr-3"></i>
-                            <span>Cargando tabla...</span>
-                        </div>
-                    `;
+                    tableContainer.innerHTML = `<div class="flex items-center justify-center p-16 text-slate-500"><i data-lucide="loader" class="animate-spin h-8 w-8 mr-3"></i><span>Aplicando filtros...</span></div>`;
                     lucide.createIcons();
-
-                    // 2. Set up promises for minimum delay and data processing
-                    const minDelayPromise = new Promise(resolve => setTimeout(resolve, 400));
 
                     const processDataPromise = new Promise(resolve => {
                         const product = state.selectedProduct;
-                        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+                        const flattenedData = getFlattenedData(product, state.activeFilters);
                         const newTableHTML = renderTabularTable(flattenedData);
                         resolve(newTableHTML);
                     });
 
-                    // 3. Wait for both to complete
-                    Promise.all([minDelayPromise, processDataPromise]).then(([_, newTableHTML]) => {
-                        // 4. Render new table
+                    Promise.all([new Promise(res => setTimeout(res, 300)), processDataPromise]).then(([_, newTableHTML]) => {
                         tableContainer.innerHTML = newTableHTML;
                         lucide.createIcons();
-
-                        // 5. Restore scroll position
                         window.scrollTo(0, savedScrollY);
                     });
                 }

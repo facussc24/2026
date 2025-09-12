@@ -1,10 +1,63 @@
 import { jest, describe, test, expect, afterEach } from '@jest/globals';
-// Import the real appState and the function to test
-import { appState, getFlattenedData } from '../../public/main.js';
+import { renderNodo, getFlattenedData, appState } from '../../public/main.js';
 import { COLLECTIONS } from '../../public/utils.js';
 
-describe('getFlattenedData Level Filtering Logic', () => {
+describe('renderNodo HTML Structure', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
 
+    test('should generate correct flexbox structure without absolute positioning for actions', () => {
+        // --- ARRANGE ---
+        // 1. Create a simple mock for the permission function.
+        const mockCheckPermission = () => true;
+
+        // 2. Mock the necessary data in appState
+        const mockSemiproducto = { id: 'SEMI-01', descripcion: 'Componente de prueba' };
+        appState.collectionsById[COLLECTIONS.SEMITERMINADOS] = new Map([
+            ['SEMI-01', mockSemiproducto]
+        ]);
+        appState.collectionsById[COLLECTIONS.INSUMOS] = new Map();
+        appState.collectionsById[COLLECTIONS.PRODUCTOS] = new Map();
+
+        // 3. Define the sample node to be rendered
+        const nodo = {
+            id: 'test-node-1',
+            refId: 'SEMI-01',
+            tipo: 'semiterminado',
+            icon: 'box',
+            quantity: 5,
+            comment: 'Test comment',
+            children: []
+        };
+
+        // --- ACT ---
+        // 4. Call the function, injecting our mock permission checker
+        const htmlString = renderNodo(nodo, mockCheckPermission);
+
+        // 5. Parse the HTML string into a DOM element for inspection
+        const dom = new DOMParser().parseFromString(htmlString, 'text/html');
+        const nodeContent = dom.querySelector('.node-content');
+        const nodeActions = dom.querySelector('.node-actions');
+
+        // --- ASSERT ---
+        // 6. Verify the structure
+        expect(nodeContent).not.toBeNull();
+        expect(nodeActions).not.toBeNull();
+
+        // Key assertion: The actions container should be a direct child of the main content div
+        expect(nodeContent.contains(nodeActions)).toBe(true);
+
+        // 7. Verify the classes (the core of the bug fix)
+        // The main content should NOT have the fixed padding anymore
+        expect(nodeContent.classList.contains('pr-28')).toBe(false);
+
+        // The actions container should NOT be absolutely positioned
+        expect(nodeActions.classList.contains('absolute')).toBe(false);
+    });
+});
+
+describe('getFlattenedData Level Filtering Logic', () => {
     afterEach(() => {
         // Restore all mocks after each test to ensure test isolation
         jest.restoreAllMocks();

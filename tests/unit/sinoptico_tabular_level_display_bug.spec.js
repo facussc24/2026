@@ -116,8 +116,8 @@ describe('Sinoptico Tabular Level Display Bug', () => {
         const cellMatches = [...insumoRowHtml.matchAll(cellContentRegex)];
         const cellContents = cellMatches.map(match => match[1]);
 
-        // The "Nivel" column is the second column (index 1).
-        const nivelCellContent = cellContents[1];
+        // In the new layout, the "Nivel" column is the first column (index 0).
+        const nivelCellContent = cellContents[0];
 
         // The original buggy code would output '1' (the visual level).
         // We assert that the output is '2' (the correct original level).
