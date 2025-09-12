@@ -599,6 +599,58 @@ table.data-table .actions-cell button:hover {
     font-size: 14px;
 }
 
+/* --- Tree Lines for Arboles View --- */
+#tree-render-area > ul {
+    padding-left: 0;
+}
+
+#tree-render-area .node-children-list {
+    position: relative;
+    padding-left: 24px; /* Control indentation */
+}
+
+/* The vertical line connecting all siblings */
+#tree-render-area .node-children-list::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -20px; /* Start from above the first item */
+    width: 1px;
+    height: calc(100% - 10px); /* Adjust to not overshoot the last item */
+    background-color: #cbd5e1; /* slate-300 */
+}
+
+#tree-render-area .group { /* This is the <li> */
+    position: relative;
+}
+
+/* The horizontal line connecting the node to the vertical line */
+#tree-render-area .group::before {
+    content: '';
+    position: absolute;
+    left: -24px; /* Match the ul padding-left */
+    top: 23px; /* Vertically center with the node icon */
+    width: 20px;
+    height: 1px;
+    background-color: #cbd5e1; /* slate-300 */
+}
+
+/* For the last item in a list, the vertical line should not extend all the way down */
+#tree-render-area .group:last-child::before {
+    height: 1px;
+    width: 20px;
+    /* This makes the line for the last-child only horizontal */
+}
+
+#tree-render-area .group:last-child > .node-children-list::before {
+    height: 0; /* Hide the descendant vertical line if the parent is the last child */
+}
+
+#tree-render-area > ul > li::before,
+#tree-render-area > ul > li::after {
+    display: none; /* Hide lines for the root node */
+}
+
 /* --- Kanban Column Collapsing --- */
 .task-column.collapsed .task-list {
     display: none;
