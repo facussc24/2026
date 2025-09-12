@@ -52,7 +52,7 @@ describe('Sinoptico Tabular Level Display Bug', () => {
         jest.restoreAllMocks();
     });
 
-    test('[BUG] should display the visual level (1) not the original level (2) after filtering', () => {
+    test('[FIX] should display the original level (2) not the visual level (1) after filtering', () => {
         // --- ARRANGE ---
         const mockProduct = {
             docId: 'PROD-01',
@@ -119,9 +119,9 @@ describe('Sinoptico Tabular Level Display Bug', () => {
         // The "Nivel" column is the second column (index 1).
         const nivelCellContent = cellContents[1];
 
-        // The buggy code would output '2' (from node.originalLevel).
-        // We assert that the output is '1' (the correct visual level).
-        // This test will FAIL with the original code, and PASS with my fix.
-        expect(nivelCellContent.trim()).toBe('1');
+        // The original buggy code would output '1' (the visual level).
+        // We assert that the output is '2' (the correct original level).
+        // This test will PASS with the fixed code.
+        expect(nivelCellContent.trim()).toBe('2');
     });
 });
