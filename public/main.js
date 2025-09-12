@@ -917,12 +917,7 @@ async function seedDatabase() {
     const vehicleBrands = ['Astro', 'Vortex', 'Terra', 'Quantum', 'Nova', 'Pulsar'];
     const colors = ['Rojo', 'Azul', 'Verde', 'Negro', 'Blanco', 'Gris Plata', 'Gris Oscuro'];
 
-    const imageUrls = [
-        'https://images.pexels.com/photos/120049/pexels-photo-120049.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-        'https://images.pexels.com/photos/3802510/pexels-photo-3802510.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-        'https://images.pexels.com/photos/1545743/pexels-photo-1545743.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1',
-        'https://images.pexels.com/photos/170811/pexels-photo-170811.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'
-    ];
+    const imageUrls = [];
 
     // --- GENERACIÓN DE DATOS BASE ---
     const generated = {
@@ -10219,10 +10214,13 @@ export const getFlattenedData = (product, activeFilters = {}) => {
     function process(nodes, visualLevel, lineage) {
         if (!nodes) return;
 
-        const visibleNodes = nodes.filter(shouldKeepNode);
+        nodes.forEach((node, index) => {
+            const isLast = index === nodes.length - 1;
 
-        visibleNodes.forEach((node, index) => {
-            const isLast = index === visibleNodes.length - 1;
+            if (!shouldKeepNode(node)) {
+                return;
+            }
+
             const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
             if (!item) return;
 
@@ -10242,7 +10240,7 @@ export const getFlattenedData = (product, activeFilters = {}) => {
                 });
                 process(node.children, visualLevel + 1, [...lineage, !isLast]);
             } else {
-                process(node.children, visualLevel, lineage);
+                process(node.children, visualLevel, [...lineage, !isLast]);
             }
         });
     }
