@@ -132,4 +132,76 @@ describe('getFlattenedData Level Filtering Logic', () => {
         // This confirms that `node.originalLevel` contains the correct, persistent level (2),
         // which is what the rendering function needs to fix the bug.
     });
+
+    test('[FIX] should not include intermediate levels when filtering for a deep level', () => {
+        // --- ARRANGE ---
+        // 1. Mock the necessary data lookups in appState
+        appState.collectionsById = {
+            [COLLECTIONS.PRODUCTOS]: new Map([['PROD-02', { id: 'PROD-02', descripcion: 'Producto' }]]),
+            [COLLECTIONS.SEMITERMINADOS]: new Map([
+                ['SEMI-L1', { id: 'SEMI-L1', descripcion: 'Semi Nivel 1' }],
+                ['SEMI-L2', { id: 'SEMI-L2', descripcion: 'Semi Nivel 2' }],
+                ['SEMI-L3', { id: 'SEMI-L3', descripcion: 'Semi Nivel 3' }],
+            ]),
+            [COLLECTIONS.INSUMOS]: new Map([
+                ['INSUMO-L4', { id: 'INSUMO-L4', descripcion: 'Insumo Nivel 4' }]
+            ]),
+        };
+
+        // 2. Create a deep product structure
+        const mockProduct = {
+            id: 'PROD-02',
+            estructura: [
+                { // Level 0
+                    id: 'node-0', refId: 'PROD-02', tipo: 'producto',
+                    children: [
+                        { // Level 1
+                            id: 'node-1', refId: 'SEMI-L1', tipo: 'semiterminado',
+                            children: [
+                                { // Level 2
+                                    id: 'node-2', refId: 'SEMI-L2', tipo: 'semiterminado',
+                                    children: [
+                                        { // Level 3 (Should be filtered out)
+                                            id: 'node-3', refId: 'SEMI-L3', tipo: 'semiterminado',
+                                            children: [
+                                                { id: 'node-4', refId: 'INSUMO-L4', tipo: 'insumo', children: [] } // Level 4
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        // 3. Filter to show only the root (level 0) and the deepest item (level 4)
+        const levelFilters = new Set(['0', '4']);
+
+        // --- ACT ---
+        const flattenedData = getFlattenedData(mockProduct, levelFilters);
+
+        // --- ASSERT ---
+        // The result should only contain the product (level 0) and the insumo (level 4).
+        expect(flattenedData).toHaveLength(2);
+
+        const productData = flattenedData.find(d => d.node.refId === 'PROD-02');
+        const insumoData = flattenedData.find(d => d.node.refId === 'INSUMO-L4');
+        const intermediateLevel3 = flattenedData.find(d => d.node.refId === 'SEMI-L3');
+
+        // Check that the correct items are present
+        expect(productData).toBeDefined();
+        expect(insumoData).toBeDefined();
+
+        // Crucially, check that the intermediate level was NOT included in the output
+        expect(intermediateLevel3).toBeUndefined();
+
+        // Verify original and visual levels
+        expect(productData.node.originalLevel).toBe(0);
+        expect(productData.level).toBe(0); // Visual level
+
+        expect(insumoData.node.originalLevel).toBe(4);
+        expect(insumoData.level).toBe(1); // Visual level is 1 because levels 1, 2, and 3 were filtered out
+    });
 });
