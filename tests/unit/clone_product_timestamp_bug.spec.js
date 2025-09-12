@@ -50,6 +50,8 @@ describe('cloneProduct Timestamp and Metadata Handling', () => {
             fecha_modificacion: originalModDate,
             docId: 'xyz-123',
             reviewedBy: 'Old User',
+            lastUpdated: new Date('2023-11-01T00:00:00Z'),
+            lastUpdatedBy: 'Previous User',
             estructura: [],
         };
 
@@ -70,6 +72,9 @@ describe('cloneProduct Timestamp and Metadata Handling', () => {
         // 1. Check that original metadata was removed
         expect(savedProduct.docId).toBeUndefined();
         expect(savedProduct.reviewedBy).toBeUndefined();
+        // Assertions for the newly added test cases
+        expect(savedProduct.lastUpdated).toBeUndefined();
+        expect(savedProduct.lastUpdatedBy).toBeUndefined();
 
         // 2. Check that the ID is the new one
         expect(savedProduct.id).toBe('PROD-CLON');
