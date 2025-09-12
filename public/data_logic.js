@@ -86,6 +86,8 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
     } catch (error) {
         console.error("Error deleting product and orphaned sub-products:", error);
         showToast('Ocurrió un error durante la eliminación compleja.', 'error');
+        // Re-throw the error to allow the calling context to handle it.
+        throw error;
     }
 }
 
