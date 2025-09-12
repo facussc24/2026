@@ -11692,6 +11692,8 @@ export async function cloneProduct(dependencies, product = null) {
     delete newProduct.reviewedBy;
     delete newProduct.fecha_modificacion; // Remove old stringified date
     delete newProduct.createdAt; // Remove old stringified date
+    delete newProduct.fechaRevision; // BUG FIX: Ensure review date is not cloned
+    delete newProduct.aprobadoPor; // BUG FIX: Ensure approver is not cloned
 
     newProduct.id = newId;
     newProduct.codigo_pieza = newId;
