@@ -38,6 +38,10 @@ export class Vector3 {
     normalize() { return this; }
 }
 
+export class Plane {
+    constructor(vector, num) {}
+}
+
 export class MeshStandardMaterial {
     constructor(params = {}) {
         this.color = new Color(params.color);
