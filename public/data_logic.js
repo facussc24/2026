@@ -38,56 +38,48 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
 
         findSubComponents(productData.estructura);
 
-        // Delete the main product
-        await deleteDoc(productRef);
-        showToast('Producto principal eliminado.', 'success');
+        // --- REFACTORED LOGIC ---
+        // Step 1: Identify and delete orphans first for safety.
+        if (subComponentRefs.size > 0) {
+            showToast(`Verificando ${subComponentRefs.size} sub-componentes...`, 'info');
+            let deletedCount = 0;
+            const productsRef = collection(db, COLLECTIONS.PRODUCTOS);
 
-        if (subComponentRefs.size === 0) {
-            showToast('El producto no tenía sub-componentes para verificar.', 'info');
-            runTableLogic();
-            return;
-        }
+            for (const [subComponentId, subComponentType] of subComponentRefs.entries()) {
+                const q = query(
+                    productsRef,
+                    where('component_ids', 'array-contains', subComponentId),
+                    limit(2)
+                );
+                const usageSnap = await getDocs(q);
 
-        showToast(`Verificando ${subComponentRefs.size} sub-componentes...`, 'info');
+                // An orphan is a component whose only user is the product being deleted.
+                // So, if usage count is 1 (or 0), it's an orphan.
+                const otherUsers = usageSnap.docs.filter(d => d.id !== productDocId);
 
-        let deletedCount = 0;
-        const productsRef = collection(db, COLLECTIONS.PRODUCTOS);
-
-        // This is now an efficient loop. It performs one quick, indexed query per sub-component.
-        for (const [subComponentId, subComponentType] of subComponentRefs.entries()) {
-            // Query to see if any *other* product uses this sub-component.
-            // Query for products that contain the sub-component.
-            // Fetch up to 2 documents for efficiency. If we find 2 or more, we know for sure
-            // it's not an orphan, even after filtering out the product being deleted.
-            const q = query(
-                productsRef,
-                where('component_ids', 'array-contains', subComponentId),
-                limit(2)
-            );
-            const usageSnap = await getDocs(q);
-
-            // Filter out the product that is currently being deleted from the usage results.
-            const otherUsers = usageSnap.docs.filter(doc => doc.id !== productDocId);
-
-            // If no OTHER products use this component, it's an orphan.
-            if (otherUsers.length === 0) {
-                const collectionName = subComponentType === 'insumo' ? COLLECTIONS.INSUMOS : COLLECTIONS.SEMITERMINADOS;
-                const subProductDocRef = doc(db, collectionName, subComponentId);
-
-                // It's good practice to check if the document still exists before deleting.
-                const subProductDocSnap = await getDoc(subProductDocRef);
-                if (subProductDocSnap.exists()) {
-                    await deleteDoc(subProductDocRef);
-                    deletedCount++;
+                if (otherUsers.length === 0) {
+                    const collectionName = subComponentType === 'insumo' ? COLLECTIONS.INSUMOS : COLLECTIONS.SEMITERMINADOS;
+                    const subProductDocRef = doc(db, collectionName, subComponentId);
+                    const subProductDocSnap = await getDoc(subProductDocRef);
+                    if (subProductDocSnap.exists()) {
+                        await deleteDoc(subProductDocRef);
+                        deletedCount++;
+                    }
                 }
             }
+
+            if (deletedCount > 0) {
+                showToast(`${deletedCount} sub-componentes huérfanos eliminados.`, 'success');
+            } else {
+                showToast('No se eliminaron sub-componentes (están en uso por otros productos).', 'info');
+            }
+        } else {
+            showToast('El producto no tenía sub-componentes para verificar.', 'info');
         }
 
-        if (deletedCount > 0) {
-            showToast(`${deletedCount} sub-componentes huérfanos eliminados.`, 'success');
-        } else {
-            showToast('No se eliminaron sub-componentes (están en uso por otros productos).', 'info');
-        }
+        // Step 2: Now, safely delete the main product.
+        await deleteDoc(productRef);
+        showToast('Producto principal eliminado.', 'success');
 
         runTableLogic();
 
