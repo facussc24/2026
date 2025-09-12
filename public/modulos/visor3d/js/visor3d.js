@@ -8,7 +8,6 @@ import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 
-
 // Visor3D Module
 export let scene, camera, renderer, controls;
 export const state = { outlinePass: null };
@@ -27,6 +26,10 @@ export let isolatedObjects = [];
 let isSelectionTransparencyActive = false;
 export const transparentMaterials = new Map();
 const preIsolationVisibility = new Map();
+let isClipping = false;
+const clippingPlanes = [
+    new THREE.Plane(new THREE.Vector3(-1, 0, 0), 10)
+];
 
 export let partCharacteristics = {}; // This will be loaded from JSON
 let currentCleanup = null;
@@ -83,6 +86,7 @@ export async function runVisor3dLogic() {
                             <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                             <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
                             <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
+                            <button id="clipping-btn" class="visor3d-control-btn" title="Vista de Sección"><i data-lucide="scissors"></i></button>
                             <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                             <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
                                 <i data-lucide="help-circle" class="w-6 h-6 text-slate-600"></i>
@@ -105,9 +109,32 @@ export async function runVisor3dLogic() {
                             <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.7">
                         </div>
                     </details>
+                    <details id="clipping-controls-details" class="visor-section hidden">
+                        <summary>Controles de Corte</summary>
+                        <div class="visor-section-content">
+                             <div class="grid grid-cols-2 gap-2 items-center">
+                                <label for="clipping-x">Eje X</label>
+                                <input type="range" id="clipping-x" min="-5" max="5" step="0.1" value="5" class="w-full">
+                                <label for="clipping-y">Eje Y</label>
+                                <input type="range" id="clipping-y" min="-5" max="5" step="0.1" value="5" class="w-full">
+                                <label for="clipping-z">Eje Z</label>
+                                <input type="range" id="clipping-z" min="-5" max="5" step="0.1" value="5" class="w-full">
+                                <label for="clipping-constant">Posición</label>
+                                <input type="range" id="clipping-constant" min="-5" max="5" step="0.1" value="5" class="w-full">
+                            </div>
+                        </div>
+                    </details>
                 </div>
                 <div id="visor3d-parts-list"></div>
-                <div id="visor3d-piece-card" class="border-t border-slate-200 p-4 hidden"></div>
+                <div id="visor3d-piece-card" class="border-t border-slate-200 p-4 hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 id="piece-card-title" class="text-md font-bold"></h4>
+                        <button id="zoom-to-part-btn" class="p-1 text-slate-500 hover:text-blue-600" title="Enfocar pieza">
+                            <i data-lucide="zoom-in" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div id="piece-card-details"></div>
+                </div>
             </div>
         </div>
     `;
@@ -201,6 +228,7 @@ function initThreeScene(modelId) {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true; // Enable shadows
     renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
+    renderer.localClippingEnabled = true; // Enable clipping
     container.appendChild(renderer.domElement);
 
     // Controls
@@ -412,6 +440,9 @@ function initThreeScene(modelId) {
     function animate() {
         requestAnimationFrame(animate);
         controls.update();
+        if (typeof TWEEN !== 'undefined') {
+            TWEEN.update();
+        }
 
         // Enforce isolation every frame to prevent camera controls from resetting visibility
         if (isIsolated) {
@@ -439,11 +470,13 @@ function initThreeScene(modelId) {
         isExploded = false;
         isTransparent = false;
         selectedObjects.length = 0;
-        originalMaterials.clear();
+        // originalMaterials.clear();
         isIsolated = false;
         isolatedObjects.length = 0;
         isSelectionTransparencyActive = false;
         transparentMaterials.clear();
+        isClipping = false;
+        renderer.clippingPlanes = [];
         partCharacteristics = {};
 
         console.log("Cleaning up Visor3D scene.");
@@ -549,25 +582,24 @@ function updatePieceCard(object) {
 
     let characteristics = partCharacteristics[partName] || partCharacteristics[partName.split('_')[0]];
 
-    if (characteristics) {
-        detailsContainer.innerHTML = Object.entries(characteristics).map(([key, value]) => `
-            <div class="flex justify-between py-1 border-b border-slate-200">
-                <span class="font-semibold text-slate-500">${key}:</span>
+    // Filter out the explosionVector before rendering
+    const characteristicsToDisplay = { ...characteristics };
+    delete characteristicsToDisplay.explosionVector;
+
+
+    if (characteristics && Object.keys(characteristicsToDisplay).length > 0) {
+        detailsContainer.innerHTML = Object.entries(characteristicsToDisplay).map(([key, value]) => `
+            <div class="flex justify-between py-1 border-b border-slate-200 text-sm">
+                <span class="font-semibold text-slate-500">${key.replace(/_/g, ' ')}:</span>
                 <span class="text-right text-slate-700">${value}</span>
             </div>`).join('');
     } else {
-        // This is a specific hardcoded fallback, retain for now but should be data-driven
-        if (displayName === 'Anodized Aluminum Brushed 90° Black #1') {
-            pieceTitle.textContent = "Headrest rear center Patagonia";
-            detailsContainer.innerHTML = `...`; // Content omitted for brevity, it's the same as before
-        } else {
-            detailsContainer.innerHTML = `
-                <div class="flex justify-between py-1 border-b border-slate-200">
-                    <span class="font-semibold text-slate-500">Nombre:</span>
-                    <span class="text-right text-slate-700">${displayName}</span>
-                </div>
-                <p class="text-slate-400 italic py-2 mt-2">No hay más información detallada disponible.</p>`;
-        }
+        detailsContainer.innerHTML = `
+            <div class="flex justify-between py-1 border-b border-slate-200 text-sm">
+                <span class="font-semibold text-slate-500">Nombre:</span>
+                <span class="text-right text-slate-700">${displayName}</span>
+            </div>
+            <p class="text-slate-400 italic py-2 mt-2 text-sm">No hay más información detallada disponible.</p>`;
     }
 }
 
@@ -656,31 +688,14 @@ function toggleExplodeView() {
         if (!originalPos) return;
 
         if (isExploded) {
-            const direction = new THREE.Vector3();
-
-            // --- Smarter Explosion Logic ---
-            const name = mesh.name.toLowerCase();
-            if (name.includes('wheel') || name.includes('tire')) {
-                // Explode wheels outwards along the x-axis
-                direction.set(mesh.position.x > 0 ? 1 : -1, 0, 0);
-            } else if (name.includes('door')) {
-                // Explode doors slightly out and up
-                direction.set(mesh.position.x > 0 ? 0.8 : -0.8, 0.2, 0);
-            } else if (name.includes('hood') || name.includes('bonnet')) {
-                // Explode hood forwards and up
-                direction.set(0, 0.5, -1);
-            } else if (name.includes('trunk') || name.includes('boot')) {
-                // Explode trunk backwards and up
-                direction.set(0, 0.5, 1);
-            } else if (name.includes('roof')) {
-                // Explode roof straight up
-                direction.set(0, 2, 0);
-            } else if (name.includes('glass') || name.includes('window') || name.includes('vidrio')) {
-                // Explode windows slightly up and out, based on their orientation
-                direction.set(mesh.position.x > 0 ? 0.5 : -0.5, 0.7, 0);
+            // Data-driven explosion logic
+            const characteristics = partCharacteristics[mesh.name] || partCharacteristics[mesh.name.split('_')[0]];
+            if (characteristics && characteristics.explosionVector) {
+                const explosionVec = characteristics.explosionVector;
+                const direction = new THREE.Vector3(explosionVec[0], explosionVec[1], explosionVec[2]);
+                mesh.position.copy(originalPos).add(direction.multiplyScalar(explosionFactor));
             }
-            mesh.position.copy(originalPos).add(direction.multiplyScalar(explosionFactor));
-
+            // Parts without an explosionVector will remain in place.
         } else {
             // If not exploded, return to original position
             mesh.position.copy(originalPos);
@@ -813,6 +828,62 @@ export function toggleSelectionTransparency() {
     }, 500);
 }
 
+function zoomToSelection() {
+    if (selectedObjects.length === 0) return;
+
+    const object = selectedObjects[0]; // Zoom to the first selected object
+    const box = new THREE.Box3().setFromObject(object);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    const cameraDistance = (maxDim / 1.5) / Math.tan(fov / 2);
+
+    // Animate camera position
+    new TWEEN.Tween(camera.position)
+        .to({
+            x: center.x,
+            y: center.y + size.y / 2, // Look from a slightly elevated angle
+            z: center.z + cameraDistance
+        }, 800)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .start();
+
+    // Animate camera target
+    new TWEEN.Tween(controls.target)
+        .to(center, 800)
+        .easing(TWEEN.Easing.Quadratic.Out)
+        .onUpdate(() => {
+            camera.lookAt(controls.target);
+        })
+        .start();
+}
+
+function toggleClippingView() {
+    isClipping = !isClipping;
+    const btn = document.getElementById('clipping-btn');
+    const controls = document.getElementById('clipping-controls-details');
+    btn.classList.toggle('active', isClipping);
+    controls.classList.toggle('hidden', !isClipping);
+
+    if (isClipping) {
+        // When turning on, set the renderer's planes
+        renderer.clippingPlanes = clippingPlanes;
+        // Add a helper to visualize the plane
+        const planeHelper = new THREE.PlaneHelper(clippingPlanes[0], 5, 0x00ff00);
+        planeHelper.name = 'clipping-plane-helper';
+        scene.add(planeHelper);
+    } else {
+        // When turning off, clear the renderer's planes
+        renderer.clippingPlanes = [];
+        // Remove the helper
+        const helper = scene.getObjectByName('clipping-plane-helper');
+        if (helper) {
+            scene.remove(helper);
+        }
+    }
+}
+
 export function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     const resetBtn = document.getElementById('reset-view-btn');
@@ -820,6 +891,10 @@ export function setupVisor3dEventListeners() {
     const selectionTransparencyBtn = document.getElementById('selection-transparency-btn');
     const partsList = document.getElementById('visor3d-parts-list');
     const searchInput = document.getElementById('visor3d-search');
+    const zoomBtn = document.getElementById('zoom-to-part-btn');
+    if (zoomBtn) {
+        zoomBtn.addEventListener('click', zoomToSelection);
+    }
     const closeCardBtn = document.getElementById('close-card-btn');
     const bgColorPicker = document.getElementById('bg-color');
     const sunIntensitySlider = document.getElementById('sun-intensity');
@@ -877,6 +952,32 @@ export function setupVisor3dEventListeners() {
         selectionTransparencyBtn.addEventListener('click', toggleSelectionTransparency);
     }
 
+    const clippingBtn = document.getElementById('clipping-btn');
+    if (clippingBtn) {
+        clippingBtn.addEventListener('click', toggleClippingView);
+    }
+
+    const clippingX = document.getElementById('clipping-x');
+    const clippingY = document.getElementById('clipping-y');
+    const clippingZ = document.getElementById('clipping-z');
+    const clippingConstant = document.getElementById('clipping-constant');
+
+    function updateClippingPlane() {
+        if (!isClipping) return;
+        const normal = new THREE.Vector3(
+            parseFloat(clippingX.value),
+            parseFloat(clippingY.value),
+            parseFloat(clippingZ.value)
+        ).normalize();
+        clippingPlanes[0].normal.copy(normal);
+        clippingPlanes[0].constant = parseFloat(clippingConstant.value);
+    }
+
+    if(clippingX) clippingX.addEventListener('input', updateClippingPlane);
+    if(clippingY) clippingY.addEventListener('input', updateClippingPlane);
+    if(clippingZ) clippingZ.addEventListener('input', updateClippingPlane);
+    if(clippingConstant) clippingConstant.addEventListener('input', updateClippingPlane);
+
     if (partsList) {
         partsList.addEventListener('click', (e) => {
             const listItem = e.target.closest('li[data-part-name]');
@@ -917,6 +1018,9 @@ export function setupVisor3dEventListeners() {
             // Exit isolation mode if active
             if (isIsolated) {
                 toggleIsolation();
+            }
+            if (isClipping) {
+                toggleClippingView();
             }
 
             // --- FIX: Restore visibility of all parts ---

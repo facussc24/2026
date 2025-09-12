@@ -10,5 +10,62 @@
         "Material": "Acero",
         "Peso (kg)": 600,
         "Comentario": "Datos de ejemplo. Rellenar con información real."
+    },
+    "wheel_front_right": {
+        "explosionVector": [1, 0, 0]
+    },
+    "wheel_front_left": {
+        "explosionVector": [-1, 0, 0]
+    },
+    "wheel_rear_right": {
+        "explosionVector": [1, 0, 0]
+    },
+    "wheel_rear_left": {
+        "explosionVector": [-1, 0, 0]
+    },
+    "door_front_right": {
+        "explosionVector": [0.8, 0.2, 0]
+    },
+    "door_front_left": {
+        "explosionVector": [-0.8, 0.2, 0]
+    },
+    "door_rear_right": {
+        "explosionVector": [0.8, 0.2, 0]
+    },
+    "door_rear_left": {
+        "explosionVector": [-0.8, 0.2, 0]
+    },
+    "hood": {
+        "explosionVector": [0, 0.5, -1]
+    },
+    "bonnet": {
+        "explosionVector": [0, 0.5, -1]
+    },
+    "trunk": {
+        "explosionVector": [0, 0.5, 1]
+    },
+    "boot": {
+        "explosionVector": [0, 0.5, 1]
+    },
+    "roof": {
+        "explosionVector": [0, 2, 0]
+    },
+    "glass_windshield": {
+        "explosionVector": [0, 0.7, -0.5]
+    },
+    "glass_rear": {
+        "explosionVector": [0, 0.7, 0.5]
+    },
+    "glass_door_front_right": {
+        "explosionVector": [0.5, 0.7, 0]
+    },
+    "glass_door_front_left": {
+        "explosionVector": [-0.5, 0.7, 0]
+    },
+    "glass_door_rear_right": {
+        "explosionVector": [0.5, 0.7, 0]
+    },
+    "glass_door_rear_left": {
+        "explosionVector": [-0.5, 0.7, 0]
     }
 }
