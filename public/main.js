@@ -5355,7 +5355,7 @@ function handleViewContentActions(e) {
 // --- 5. UI, COMPONENTES Y NOTIFICACIONES ---
 // =================================================================================
 
-function showToast(message, type = 'success', options = {}) {
+window.showToast = function(message, type = 'success', options = {}) {
     const { duration = 3000, toastId = null } = typeof options === 'number' ? { duration: options } : options;
     const icons = { success: 'check-circle', error: 'alert-circle', info: 'info', loading: 'loader' };
     const icon = icons[type] || 'info';
