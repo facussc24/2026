@@ -2473,7 +2473,7 @@ async function runEcrTableViewLogic() {
     dom.headerActions.style.display = 'none';
     let allEcrs = []; // To store all ECRs for client-side filtering
 
-    const renderTableRows = (ecrsToRender) => {
+    const renderTableRows = async (ecrsToRender) => {
         const tableBody = dom.viewContent.querySelector('#ecr-control-table-body');
         if (!tableBody) return;
 
@@ -2500,20 +2500,27 @@ async function runEcrTableViewLogic() {
             return `<span class="status-pill ${s.class}">${s.text}</span>`;
         };
 
+        // --- Performance Refactor: Batch-fetch ECO statuses ---
+        const ecrIds = ecrsToRender.map(ecr => ecr.id).filter(Boolean);
+        let ecoStatuses = new Map();
+
+        if (ecrIds.length > 0) {
+            const ecoPromises = ecrIds.map(id => getDoc(doc(db, COLLECTIONS.ECO_FORMS, id)));
+            const ecoSnaps = await Promise.all(ecoPromises);
+            ecoSnaps.forEach(ecoSnap => {
+                if (ecoSnap.exists()) {
+                    ecoStatuses.set(ecoSnap.id, ecoSnap.data().status);
+                }
+            });
+        }
+        // --- End Refactor ---
+
         tableBody.innerHTML = ecrsToRender.map(ecr => {
             const origem = ecr.origen_cliente ? 'Cliente' : (ecr.origen_interno ? 'Interno' : (ecr.origen_proveedor ? 'Proveedor' : (ecr.origen_reglamentacion ? 'Reglamentación' : 'N/A')));
             const tipoEcr = ecr.tipo_producto ? 'Producto' : (ecr.tipo_proceso ? 'Proceso' : (ecr.tipo_otro ? ecr.tipo_otro_text || 'Otro' : 'N/A'));
 
-            const ecoStatusCellId = `eco-status-${ecr.id}`;
-            if (ecr.id) {
-                getDoc(doc(db, COLLECTIONS.ECO_FORMS, ecr.id)).then(ecoSnap => {
-                    const ecoStatus = ecoSnap.exists() ? ecoSnap.data().status : null;
-                    const cell = document.getElementById(ecoStatusCellId);
-                    if (cell) {
-                        cell.innerHTML = statusPill(ecoStatus);
-                    }
-                });
-            }
+            // Get the pre-fetched ECO status
+            const ecoStatus = ecoStatuses.get(ecr.id) || null;
 
             return `
             <tr class="hover:bg-slate-50 transition-colors">
@@ -2530,7 +2537,7 @@ async function runEcrTableViewLogic() {
                 <td title="${ecr.fecha_cierre || ''}">${ecr.fecha_cierre || 'N/A'}</td>
                 <td title="${ecr.fecha_realizacion_ecr || ''}">${ecr.fecha_realizacion_ecr || 'N/A'}</td>
                 <td>${statusPill(ecr.status)}</td>
-                <td id="${ecoStatusCellId}">${statusPill(null)}</td>
+                <td>${statusPill(ecoStatus)}</td>
                 <td title="${ecr.cliente_requiere_aprobacion ? 'Sí' : 'No'}">${ecr.cliente_requiere_aprobacion ? 'Sí' : 'No'}</td>
                 <td title="${ecr.cliente_aprobacion_estado || ''}">${statusPill(ecr.cliente_aprobacion_estado)}</td>
                 <td title="${ecr.cliente_requiere_ppap ? 'Sí' : 'No'}">${ecr.cliente_requiere_ppap ? 'Sí' : 'No'}</td>
