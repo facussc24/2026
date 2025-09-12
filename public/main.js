@@ -10407,7 +10407,7 @@ export function runSinopticoTabularLogic() {
             return max;
         };
 
-        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        const flattenedData = getFlattenedData(product, state.activeFilters);
         const tableHTML = renderTabularTable(flattenedData);
 
         const maxLevel = getOriginalMaxDepth(product.estructura);
@@ -10692,7 +10692,7 @@ export function runSinopticoTabularLogic() {
     };
 }
 
-async function exportSinopticoTabularToPdf() {
+export async function exportSinopticoTabularToPdf() {
     const state = appState.sinopticoTabularState;
     if (!state || !state.selectedProduct) {
         showToast('No hay producto seleccionado para exportar.', 'error');
@@ -10744,7 +10744,7 @@ async function exportSinopticoTabularToPdf() {
         doc.addPage();
         dom.loadingOverlay.querySelector('p').textContent = 'Generando tabla...';
 
-        const flattenedData = getFlattenedData(product, state.activeFilters.niveles);
+        const flattenedData = getFlattenedData(product, state.activeFilters);
         const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
 
         doc.autoTable({
