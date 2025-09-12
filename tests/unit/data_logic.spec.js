@@ -124,16 +124,22 @@ describe('deleteProductAndOrphanedSubProducts', () => {
         expect(mockUiCallbacks.showToast).toHaveBeenCalledWith('2 sub-componentes huérfanos eliminados.', 'success');
     });
 
-    test('should handle errors during deletion', async () => {
+    test('should handle errors during deletion by rejecting the promise', async () => {
         // Arrange
         const error = new Error('Firestore error');
         mockFirestore.getDoc.mockRejectedValue(error);
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-        // Act
-        await deleteProductAndOrphanedSubProducts('PROD001', mockDb, mockFirestore, COLLECTIONS, mockUiCallbacks);
+        // Act & Assert
+        // The function should reject when a database error occurs.
+        await expect(deleteProductAndOrphanedSubProducts('PROD001', mockDb, mockFirestore, COLLECTIONS, mockUiCallbacks))
+            .rejects.toThrow('Firestore error');
 
-        // Assert
+        // We also ensure the user is still notified and the error is logged.
         expect(mockUiCallbacks.showToast).toHaveBeenCalledWith('Ocurrió un error durante la eliminación compleja.', 'error');
+        expect(consoleErrorSpy).toHaveBeenCalledWith("Error deleting product and orphaned sub-products:", error);
+
+        consoleErrorSpy.mockRestore();
     });
 
     test('should not delete a sub-product if it is not found', async () => {
