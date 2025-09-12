@@ -20,6 +20,8 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"></noscript>
     <link rel="preload" href="bundle.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="bundle.css"></noscript>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/alyssaxuu/flowy/flowy.min.css">
+
 
     <!-- Importmap for three.js and its modules -->
     <script type="importmap">
@@ -168,6 +170,7 @@
                             <div class="border-t my-1"></div>
                             <a href="#" data-view="arboles" class="nav-link flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="pencil-ruler" class="w-5 h-5 text-slate-500"></i>Editor de Estructura de Producto</a>
                             <a href="#" data-view="sinoptico_tabular" class="nav-link flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="table" class="w-5 h-5 text-slate-500"></i>Lista de Materiales (Tabular)</a>
+                            <a href="#" data-view="flujograma" class="nav-link flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="git-branch-plus" class="w-5 h-5 text-slate-500"></i>Flujograma de Procesos</a>
                             <div class="border-t my-1"></div>
                             <a href="#" id="start-tutorial-btn" class="nav-link flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100 text-blue-600 font-semibold">
                                 <i data-lucide="life-buoy" class="w-5 h-5"></i>Tutorial ECR/ECO
@@ -368,12 +371,90 @@ public/modulos/visor3d/
 
 <!-- Library Scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/20.0.3/tween.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/alyssaxuu/flowy/flowy.min.js"></script>
 <!-- Firebase Hosting Scripts -->
 <script type="module" src="main.js"></script>
 <script type="module" src="tutorial.js"></script>
 
     <!-- 3D Viewer Styles -->
     <link rel="stylesheet" href="modulos/visor3d/css/visor3d.css">
+    <style>
+        .flujograma-wrapper {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .flujograma-level {
+            display: flex;
+            justify-content: center;
+            margin-top: 40px;
+        }
+        .flujograma-node-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            padding: 0 20px;
+        }
+        .flujograma-node {
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            width: 220px;
+            background-color: white;
+        }
+        .flujograma-node.producto { border-left: 5px solid #3b82f6; }
+        .flujograma-node.semiterminado { border-left: 5px solid #16a34a; }
+        .flujograma-node.insumo { border-left: 5px solid #64748b; }
 
+        .flujograma-node-icon { margin-right: 12px; }
+        .flujograma-node-text h4 { font-weight: 600; font-size: 1rem; color: #1e293b; }
+        .flujograma-node-text p { font-size: 0.8rem; color: #475569; }
+
+        .flujograma-children {
+            display: flex;
+            justify-content: center;
+            position: relative;
+            margin-top: 40px;
+        }
+
+        /* Connectors */
+        .flujograma-node-container::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            border-left: 2px solid #cbd5e1;
+            width: 0;
+            height: 20px;
+        }
+        .flujograma-level:first-child > .flujograma-node-container:first-child::before {
+            display: none;
+        }
+
+        .flujograma-children::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: 0;
+            right: 0;
+            border-top: 2px solid #cbd5e1;
+            height: 0;
+        }
+        .flujograma-children .flujograma-node-container:first-child::before {
+            left: 50%;
+            right: auto;
+        }
+        .flujograma-children .flujograma-node-container:last-child::before {
+            left: auto;
+            right: 50%;
+        }
+        .flujograma-children .flujograma-node-container:only-child::before {
+            display: none;
+        }
+    </style>
 </body>
 </html>
