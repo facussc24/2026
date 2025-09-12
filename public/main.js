@@ -10158,8 +10158,16 @@ export const getFlattenedData = (product, activeFilters = {}) => {
     // --- End Argument Handling ---
 
     const materialLower = material ? String(material).toLowerCase().trim() : null;
-    const hasLevelFilter = niveles && niveles.size > 0;
+    const hasLevelFilter = !!(niveles && niveles.size > 0);
     const hasMaterialFilter = !!materialLower;
+
+    // BUG FIX: If a level filter is active but empty (i.e., user deselected all
+    // levels), the intention is to show nothing. We check if `niveles` is not null
+    // (meaning the filter UI has been used) and is empty.
+    if (niveles && niveles.size === 0) {
+        return [];
+    }
+
     const hasFilters = hasLevelFilter || hasMaterialFilter;
 
     // This helper function runs before the main process to set a baseline `originalLevel`
@@ -10362,7 +10370,8 @@ export function runSinopticoTabularLogic() {
         appState.sinopticoTabularState = {
             selectedProduct: null,
             activeFilters: {
-                niveles: new Set()
+                niveles: null, // Initialize to null to indicate no filter is active yet
+                material: ''
             }
         };
     }
