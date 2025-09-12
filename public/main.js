@@ -11696,6 +11696,8 @@ export async function cloneProduct(dependencies, product = null) {
     delete newProduct.aprobadoPor; // BUG FIX: Ensure approver is not cloned
 
     newProduct.id = newId;
+    // BUG FIX (2025-09-12): Ensure the new product's codigo_pieza is set to its own ID.
+    // Previously, it retained the ID of the cloned product, causing data integrity issues.
     newProduct.codigo_pieza = newId;
     newProduct.createdAt = new Date();
     newProduct.fecha_modificacion = new Date();
