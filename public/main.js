@@ -1731,73 +1731,76 @@ async function runEcoFormLogic(params = null) {
 
         function buildSectionHTML(section) {
             const checklistItemsHTML = section.checklist
-            ? section.checklist.map((item, index) => {
-                const tutorialId = (section.id === 'implementacion' && index === 0)
-                    ? 'data-tutorial-id="action-plan-completion-checkbox"'
-                    : '';
-                return `
-                    <div class="checklist-item" ${tutorialId}>
-                        <span class="checklist-item-label text-sm">${item}</span>
-                        <div class="checklist-item-options">
-                            <label class="text-sm font-medium">SI</label>
-                            <input type="checkbox" name="check_${section.id}_${index}_si" class="form-checkbox h-5 w-5 text-blue-600">
-                            <label class="text-sm font-medium">N/A</label>
-                            <input type="checkbox" name="check_${section.id}_${index}_na" class="form-checkbox h-5 w-5 text-gray-400">
+                ? section.checklist.map((item, index) => {
+                    const tutorialId = (section.id === 'implementacion' && index === 0)
+                        ? 'data-tutorial-id="action-plan-completion-checkbox"'
+                        : '';
+                    return `
+                        <div class="flex justify-between items-center py-2 border-b border-slate-100" ${tutorialId}>
+                            <span class="text-sm">${item}</span>
+                            <div class="flex items-center gap-6">
+                                <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                                    <input type="checkbox" name="check_${section.id}_${index}_si" class="h-5 w-5 text-blue-600 rounded-md border-gray-300 focus:ring-blue-500">
+                                    <span>SI</span>
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                                    <input type="checkbox" name="check_${section.id}_${index}_na" class="h-5 w-5 text-gray-400 rounded-md border-gray-300 focus:ring-gray-500">
+                                    <span>N/A</span>
+                                </label>
+                            </div>
                         </div>
-                        </div>
-                `;
-            }).join('')
+                    `;
+                }).join('')
                 : '';
 
             const mainContentHTML = section.checklist
                 ? `
-                <div class="section-checklist">${checklistItemsHTML}</div>
-                <div class="section-comments">
-                    <label for="comments_${section.id}" class="block font-bold text-gray-700 mb-2">Comentarios:</label>
-                    <textarea id="comments_${section.id}" name="comments_${section.id}" rows="8" class="form-field"></textarea>
+                <div class="flex-1 space-y-2 pr-6 border-r border-slate-200">
+                    ${checklistItemsHTML}
+                </div>
+                <div class="flex-1">
+                    <label for="comments_${section.id}" class="block font-bold text-slate-700 mb-2">Comentarios:</label>
+                    <textarea id="comments_${section.id}" name="comments_${section.id}" rows="8" class="w-full border-slate-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
                 </div>`
-                : `<div class="p-4 w-full col-span-2">
-                    <p class="text-gray-700 text-center italic">${section.description}</p>
-                </div>`;
+                : `<div class="p-4 w-full text-center text-slate-500 italic">${section.description}</div>`;
 
             const statusFieldHTML = section.checklist
-                ? `<div class="footer-field">
-                    <label>Estado de Revisión</label>
-                    <div class="status-options">
-                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="status_${section.id}" value="ok" class="form-radio h-4 w-4 text-green-600"> <span class="font-semibold text-green-700">OK</span></label>
-                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="status_${section.id}" value="nok" class="form-radio h-4 w-4 text-red-600"> <span class="font-semibold text-red-700">NOK</span></label>
+                ? `
+                <div>
+                    <label class="text-sm font-medium text-slate-600">Estado</label>
+                    <div class="flex items-center gap-4 mt-1">
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="status_${section.id}" value="ok" class="h-4 w-4 text-green-600 focus:ring-green-500"> <span class="font-semibold text-green-700">OK</span></label>
+                        <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="status_${section.id}" value="nok" class="h-4 w-4 text-red-600 focus:ring-red-500"> <span class="font-semibold text-red-700">NOK</span></label>
                     </div>
                 </div>`
                 : '';
 
             return `
-            <div class="section-block">
-                <div class="section-sidebar">
-                    <i data-lucide="${section.icon || 'help-circle'}" class="w-6 h-6 text-slate-500"></i>
+            <section class="border border-slate-200 rounded-xl mb-6 bg-white shadow-sm transition-all duration-300 hover:shadow-lg hover:border-blue-300">
+                <header class="bg-slate-50 px-5 py-3 font-bold text-lg text-slate-800 flex items-center gap-3 border-b border-slate-200 rounded-t-xl">
+                    <i data-lucide="${section.icon || 'help-circle'}" class="w-6 h-6 text-blue-600"></i>
                     <span>${section.title}</span>
+                </header>
+                <div class="p-5">
+                    <div class="flex gap-6">${mainContentHTML}</div>
                 </div>
-                <div class="section-main">
-                    <div class="section-content">
-                        ${mainContentHTML}
+                <footer class="bg-slate-50 px-5 py-3 border-t border-slate-200 flex flex-wrap items-end gap-x-6 gap-y-3 text-sm rounded-b-xl">
+                    <div>
+                        <label for="date_review_${section.id}" class="block text-xs font-medium text-slate-500">Fecha de Revisión</label>
+                        <input type="date" id="date_review_${section.id}" name="date_review_${section.id}" class="mt-1 p-1 border border-slate-300 rounded-md shadow-sm">
                     </div>
-                    <div class="section-footer">
-                        <div class="footer-field">
-                            <label for="date_review_${section.id}">Fecha de Revisión</label>
-                            <input type="date" id="date_review_${section.id}" name="date_review_${section.id}" class="p-1 border rounded-md form-field">
-                        </div>
-                        ${statusFieldHTML}
-                        <div class="flex-grow"></div>
-                        <div class="footer-field">
-                            <label for="name_${section.id}">Nombre del Aprobador</label>
-                            <input type="text" id="name_${section.id}" name="name_${section.id}" class="p-1 border rounded-md form-field w-48">
-                        </div>
-                        <div class="footer-field">
-                            <label for="visto_${section.id}">Firma</label>
-                            <input type="text" id="visto_${section.id}" name="visto_${section.id}" class="p-1 border rounded-md form-field w-32">
-                        </div>
+                    ${statusFieldHTML}
+                    <div class="flex-grow"></div>
+                    <div>
+                        <label for="name_${section.id}" class="block text-xs font-medium text-slate-500">Nombre del Aprobador</label>
+                        <input type="text" id="name_${section.id}" name="name_${section.id}" class="mt-1 p-1 border border-slate-300 rounded-md shadow-sm w-48">
                     </div>
-                </div>
-            </div>`;
+                    <div>
+                        <label for="visto_${section.id}" class="block text-xs font-medium text-slate-500">Firma</label>
+                        <input type="text" id="visto_${section.id}" name="visto_${section.id}" class="mt-1 p-1 border border-slate-300 rounded-md shadow-sm w-32">
+                    </div>
+                </footer>
+            </section>`;
         }
 
         const container = formElement.querySelector('#dynamic-form-sections');
@@ -4501,15 +4504,15 @@ async function runEcrFormLogic(params = null) {
 
     // --- Render the basic structure ---
     dom.viewContent.innerHTML = `
-        <div class="form-container">
+        <div class="max-w-7xl mx-auto my-8">
             <div id="ecr-progress-bar" class="sticky top-0 bg-white/80 backdrop-blur-sm z-10 p-4 shadow-sm mb-4 rounded-lg border">
-                </div>
-            <form id="ecr-form" class="bg-white p-6"></form>
-            <div id="action-buttons-container" class="max-w-7xl mx-auto mt-[-1rem] mb-8 px-8 pb-4 bg-white rounded-b-lg shadow-lg border-t flex justify-end items-center gap-4">
-                <button type="button" id="ecr-back-button" class="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 mr-auto">Volver a la Lista</button>
-                <button type="button" id="ecr-save-button" class="bg-gray-500 text-white px-6 py-2 rounded-md hover:bg-gray-600">Guardar Progreso</button>
-                <button type="button" id="ecr-clear-button" class="bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600">Limpiar</button>
-                <button type="button" id="ecr-approve-button" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700">Aprobar y Guardar</button>
+            </div>
+            <form id="ecr-form" class="bg-white p-8 rounded-lg shadow-lg border"></form>
+            <div id="action-buttons-container" class="mt-8 flex justify-end items-center gap-4">
+                <button type="button" id="ecr-back-button" class="bg-slate-200 text-slate-800 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors mr-auto">Volver a la Lista</button>
+                <button type="button" id="ecr-save-button" class="bg-slate-500 text-white px-6 py-2 rounded-md hover:bg-slate-600 font-semibold transition-colors">Guardar Progreso</button>
+                <button type="button" id="ecr-clear-button" class="bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600 font-semibold transition-colors">Limpiar</button>
+                <button type="button" id="ecr-approve-button" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 font-semibold transition-colors">Aprobar y Guardar</button>
             </div>
         </div>
     `;
@@ -4642,26 +4645,25 @@ async function runEcrFormLogic(params = null) {
     // --- Form HTML structure ---
     const page1HTML = `
         <div class="ecr-page relative" id="page1">
-            <div class="watermark">Página 1</div>
-            <header class="ecr-header">
+            <header class="flex justify-between items-start border-b-2 border-black pb-2">
                 <img src="/barack_logo.png" alt="Logo" class="h-12">
-                <div class="title-block">
+                <div class="text-center">
                     <div class="flex items-center gap-2">
-                        <span class="ecr-main-title">ECR</span>
+                        <span class="text-3xl font-bold">ECR</span>
                         ${createHelpTooltip('ECR (Engineering Change Request): Use este formulario para iniciar una solicitud formal de cambio en un producto o proceso. Complete todos los campos relevantes para su evaluación.')}
                     </div>
-                    <div class="ecr-subtitle">DE PRODUCTO / PROCESO</div>
+                    <div class="text-lg font-bold">DE PRODUCTO / PROCESO</div>
                 </div>
-                <div class="ecr-number-box">
-                    <span>ECR N°:</span>
+                <div class="border-2 border-black p-2">
+                    <span class="font-bold">ECR N°:</span>
                     <input type="text" name="ecr_no" readonly class="bg-gray-100 cursor-not-allowed" placeholder="Generando...">
                 </div>
             </header>
-            <div class="ecr-checklist-bar">CHECK LIST ECR - ENGINEERING CHANGE REQUEST</div>
+            <div class="bg-gray-300 text-center py-1 font-bold my-3">CHECK LIST ECR - ENGINEERING CHANGE REQUEST</div>
 
-            <section class="form-row">
-                <div class="form-field" style="flex-grow: 2;">
-                    <label class="text-sm font-bold mb-1">ORIGEN DEL PEDIDO:</label>
+            <section class="flex items-end gap-6 mb-5">
+                <div class="flex-grow-[2]">
+                    <label class="text-sm font-bold mb-1 block">ORIGEN DEL PEDIDO:</label>
                     <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
                         ${createCheckbox('Cliente', 'origen_cliente')}
                         ${createCheckbox('Proveedor', 'origen_proveedor')}
@@ -4673,9 +4675,9 @@ async function runEcrFormLogic(params = null) {
                 ${createSelectFieldFromCollection('Cliente:', 'cliente', COLLECTIONS.CLIENTES)}
             </section>
 
-            <section class="form-row">
-                <div class="form-field" style="flex-grow: 2;">
-                    <label class="text-sm font-bold mb-1">FASE DE PROYECTO:</label>
+            <section class="flex items-end gap-6 mb-5">
+                <div class="flex-grow-[2]">
+                    <label class="text-sm font-bold mb-1 block">FASE DE PROYECTO:</label>
                     <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
                         ${createCheckbox('Programa', 'fase_programa')}
                         ${createCheckbox('Serie', 'fase_serie')}
@@ -4685,103 +4687,103 @@ async function runEcrFormLogic(params = null) {
                 ${createDateField('Fecha de Cierre:', 'fecha_cierre')}
             </section>
 
-            <section class="form-row">
-                <div class="form-field">
-                    <label for="codigo_barack_search" class="text-sm font-bold mb-1">Producto Barack</label>
+            <section class="flex items-end gap-6 mb-5">
+                <div class="flex-1">
+                    <label for="codigo_barack_search" class="text-sm font-bold mb-1 block">Producto Barack</label>
                     <div class="flex items-center gap-2">
                         <input type="text" id="codigo_barack_display" class="w-full bg-gray-100" readonly placeholder="Seleccione un producto...">
                         <input type="hidden" name="codigo_barack" id="codigo_barack">
                         <button type="button" data-action="open-ecr-product-search" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600"><i data-lucide="search" class="h-5 w-5 pointer-events-none"></i></button>
                     </div>
                 </div>
-                ${createTextField('Código(s) Cliente:', 'codigo_cliente', '...')}
+                ${createTextField('Código(s) Cliente:', 'codigo_cliente', '...', false)}
             </section>
-            <section class="form-row">
-                 <div class="form-field col-span-full">
-                    <label for="denominacion_producto" class="text-sm font-bold mb-1">Denominación del Producto</label>
+            <section class="mb-5">
+                 <div class="w-full">
+                    <label for="denominacion_producto" class="text-sm font-bold mb-1 block">Denominación del Producto</label>
                     <input type="text" name="denominacion_producto" id="denominacion_producto" placeholder="..." class="w-full bg-gray-100" readonly>
                 </div>
             </section>
 
-            <section class="form-row">
-                <div class="form-field">
-                    <label for="componentes_obsoletos" class="text-sm font-bold mb-1">Componentes Obsoletos (Cantidad):</label>
+            <section class="mb-5">
+                <div class="flex-1">
+                    <label for="componentes_obsoletos" class="text-sm font-bold mb-1 block">Componentes Obsoletos (Cantidad):</label>
                     <input type="number" name="componentes_obsoletos" id="componentes_obsoletos" placeholder="0" class="w-full" min="0">
                 </div>
             </section>
 
-            <div class="ecr-flex-section">
-                <div class="ecr-flex-header">OBJETIVO DE ECR</div>
-                <div class="ecr-flex-content ecr-flex-columns-2">
-                    <div class="ecr-flex-column">
+            <section class="border border-black rounded mt-4 overflow-hidden">
+                <div class="bg-gray-200 font-bold p-2 text-center border-b border-black">OBJETIVO DE ECR</div>
+                <div class="p-3 flex gap-4">
+                    <div class="flex-1 flex flex-col gap-2">
                         ${['Productividad', 'Mejora de calidad', 'Estrategia del Cliente'].map(l => createCheckbox(l, `obj_${l.toLowerCase().replace(/ /g, '_')}`)).join('')}
                     </div>
-                    <div class="ecr-flex-column">
+                    <div class="flex-1 flex flex-col gap-2">
                         ${['Estrategia Barack', 'Nacionalización'].map(l => createCheckbox(l, `obj_${l.toLowerCase().replace(/ /g, '_')}`)).join('')}
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="ecr-flex-section">
-                <div class="ecr-flex-header">TIPO DE ALTERACIÓN</div>
-                <div class="ecr-flex-content ecr-flex-columns-2">
-                    <div class="ecr-flex-column">
+            <section class="border border-black rounded mt-4 overflow-hidden">
+                <div class="bg-gray-200 font-bold p-2 text-center border-b border-black">TIPO DE ALTERACIÓN</div>
+                <div class="p-3 flex gap-4">
+                    <div class="flex-1 flex flex-col gap-2">
                         ${['Producto', 'Proceso'].map(l => createCheckbox(l, `tipo_${l.toLowerCase().replace(/ /g, '_')}`)).join('')}
                     </div>
-                    <div class="ecr-flex-column">
+                    <div class="flex-1 flex flex-col gap-2">
                         ${['Fuente de suministro', 'Embalaje'].map(l => createCheckbox(l, `tipo_${l.toLowerCase().replace(/ /g, '_')}`)).join('')}
                         <div class="flex items-center gap-2 mt-1"><input type="checkbox" id="tipo_otro" name="tipo_otro"><label for="tipo_otro" class="text-sm">Otro:</label><input name="tipo_otro_text" type="text" class="border-b-2 bg-transparent flex-grow"></div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="ecr-flex-section">
-                <div class="ecr-flex-header">VALIDACIÓN DEL CLIENTE</div>
-                <div class="ecr-flex-content ecr-flex-columns-2">
-                    <div class="ecr-flex-column space-y-2">
+            <section class="border border-black rounded mt-4 overflow-hidden">
+                <div class="bg-gray-200 font-bold p-2 text-center border-b border-black">VALIDACIÓN DEL CLIENTE</div>
+                <div class="p-3 flex gap-4">
+                    <div class="flex-1 flex flex-col gap-2">
                         ${createCheckbox('Requiere Aprobación del Cliente', 'cliente_requiere_aprobacion')}
                         ${createCheckbox('Requiere PPAP', 'cliente_requiere_ppap')}
                     </div>
-                    <div class="ecr-flex-column space-y-2">
-                        <div class="form-field"><label for="cliente_aprobacion_estado" class="text-sm font-bold">Estado:</label><select name="cliente_aprobacion_estado" id="cliente_aprobacion_estado" class="w-full text-sm"><option value="na">No Aplica</option><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select></div>
-                        <div class="form-field"><label for="cliente_aprobacion_fecha" class="text-sm font-bold">Fecha de Decisión:</label><input type="date" name="cliente_aprobacion_fecha" id="cliente_aprobacion_fecha" class="w-full text-sm"></div>
+                    <div class="flex-1 flex flex-col gap-2">
+                        <div class="flex-1"><label for="cliente_aprobacion_estado" class="text-sm font-bold block">Estado:</label><select name="cliente_aprobacion_estado" id="cliente_aprobacion_estado" class="w-full text-sm"><option value="na">No Aplica</option><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select></div>
+                        <div class="flex-1"><label for="cliente_aprobacion_fecha" class="text-sm font-bold block">Fecha de Decisión:</label><input type="date" name="cliente_aprobacion_fecha" id="cliente_aprobacion_fecha" class="w-full text-sm"></div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="ecr-flex-section">
-                <div class="ecr-flex-header">AFECTA S/R</div>
-                <div class="ecr-flex-content">
-                    <div class="ecr-flex-column">
+            <section class="border border-black rounded mt-4 overflow-hidden">
+                <div class="bg-gray-200 font-bold p-2 text-center border-b border-black">AFECTA S/R</div>
+                <div class="p-3">
+                    <div class="flex flex-col gap-2">
                         ${['Relocalización de Planta', 'Modificación de Layout', 'Modificación de herramental'].map(l => createCheckbox(l, `afecta_${l.toLowerCase().replace(/ /g, '_')}`)).join('')}
                     </div>
                 </div>
+            </section>
+
+            <div class="grid grid-cols-2 gap-4 mt-4" data-tutorial-id="situacion-layout">
+                <div class="border border-gray-400"><h3 class="font-bold text-center bg-gray-200 p-1">SITUACIÓN EXISTENTE:</h3><div class="p-1">${createTextarea('situacion_existente')}</div></div>
+                <div class="border border-gray-400"><h3 class="font-bold text-center bg-gray-200 p-1">SITUACIÓN PROPUESTA:</h3><div class="p-1">${createTextarea('situacion_propuesta')}</div></div>
             </div>
 
-            <div class="two-column-layout mt-4" data-tutorial-id="situacion-layout">
-                <div class="column-box"><h3>SITUACIÓN EXISTENTE:</h3>${createTextarea('situacion_existente')}</div>
-                <div class="column-box"><h3>SITUACIÓN PROPUESTA:</h3>${createTextarea('situacion_propuesta')}</div>
-            </div>
-
-            <table class="full-width-table risk-analysis-table">
-                <thead><tr><th colspan="7">IMPACTO EN CASO DE FALLA</th></tr><tr><th>RESPONSABLE</th><th>ANÁLISIS DE RIESGO</th><th>Nivel</th><th>Observaciones</th><th>NOMBRE</th><th>FECHA</th><th>VISTO</th></tr></thead>
-                <tbody>${['RETORNO DE GARANTÍA', 'RECLAMACIÓN ZERO KM', 'HSE', 'SATISFACCIÓN DEL CLIENTE', 'S/R (Seguridad y/o Regulamentación)'].map((r, i) => `<tr><td>Gerente de Calidad</td><td>${r}</td><td><input name="impacto_nivel_${i}"></td><td><input name="impacto_obs_${i}"></td><td><input name="impacto_nombre_${i}"></td><td><input type="date" name="impacto_fecha_${i}"></td><td><input name="impacto_visto_${i}"></td></tr>`).join('')}</tbody>
+            <table class="w-full border-collapse mt-4 text-xs">
+                <thead><tr><th colspan="7" class="border border-black bg-gray-200 font-bold p-1 text-center">IMPACTO EN CASO DE FALLA</th></tr><tr class="bg-gray-200 font-bold"><th class="border border-black p-1">RESPONSABLE</th><th class="border border-black p-1">ANÁLISIS DE RIESGO</th><th class="border border-black p-1">Nivel</th><th class="border border-black p-1">Observaciones</th><th class="border border-black p-1">NOMBRE</th><th class="border border-black p-1">FECHA</th><th class="border border-black p-1">VISTO</th></tr></thead>
+                <tbody>${['RETORNO DE GARANTÍA', 'RECLAMACIÓN ZERO KM', 'HSE', 'SATISFACCIÓN DEL CLIENTE', 'S/R (Seguridad y/o Regulamentación)'].map((r, i) => `<tr><td class="border border-black p-1">Gerente de Calidad</td><td class="border border-black p-1">${r}</td><td class="border border-black p-1"><input name="impacto_nivel_${i}"></td><td class="border border-black p-1"><input name="impacto_obs_${i}"></td><td class="border border-black p-1"><input name="impacto_nombre_${i}"></td><td class="border border-black p-1"><input type="date" name="impacto_fecha_${i}"></td><td class="border border-black p-1"><input name="impacto_visto_${i}"></td></tr>`).join('')}</tbody>
             </table>
 
-            <table class="full-width-table risk-analysis-table mt-4">
-                <thead><tr><th colspan="7">APROBACIÓN DE DIRECTORIO (CODIR)</th></tr><tr><th>Miembro de Directorio</th><th>Aprobado</th><th>Rechazado</th><th>Observaciones</th><th>NOMBRE</th><th>FECHA</th><th>VISTO</th></tr></thead>
-                <tbody>${['Director Comercial', 'Director Industrial'].map((r, i) => `<tr><td>${r}</td><td>${createCheckbox('', `codir_aprobado_${i}`)}</td><td>${createCheckbox('', `codir_rechazado_${i}`)}</td><td><input name="codir_obs_${i}"></td><td><input name="codir_nombre_${i}"></td><td><input type="date" name="codir_fecha_${i}"></td><td><input name="codir_visto_${i}"></td></tr>`).join('')}
-                    <tr><td>Otro: <input name="codir_otro_rol_2" class="border-b-2 bg-transparent w-full"></td><td>${createCheckbox('', 'codir_aprobado_2')}</td><td>${createCheckbox('', 'codir_rechazado_2')}</td><td><input name="codir_obs_2"></td><td><input name="codir_nombre_2"></td><td><input type="date" name="codir_fecha_2"></td><td><input name="codir_visto_2"></td></tr>
+            <table class="w-full border-collapse mt-4 text-xs">
+                <thead><tr><th colspan="7" class="border border-black bg-gray-200 font-bold p-1 text-center">APROBACIÓN DE DIRECTORIO (CODIR)</th></tr><tr class="bg-gray-200 font-bold"><th class="border border-black p-1">Miembro de Directorio</th><th class="border border-black p-1">Aprobado</th><th class="border border-black p-1">Rechazado</th><th class="border border-black p-1">Observaciones</th><th class="border border-black p-1">NOMBRE</th><th class="border border-black p-1">FECHA</th><th class="border border-black p-1">VISTO</th></tr></thead>
+                <tbody>${['Director Comercial', 'Director Industrial'].map((r, i) => `<tr><td class="border border-black p-1">${r}</td><td class="border border-black p-1">${createCheckbox('', `codir_aprobado_${i}`)}</td><td class="border border-black p-1">${createCheckbox('', `codir_rechazado_${i}`)}</td><td class="border border-black p-1"><input name="codir_obs_${i}"></td><td class="border border-black p-1"><input name="codir_nombre_${i}"></td><td class="border border-black p-1"><input type="date" name="codir_fecha_${i}"></td><td class="border border-black p-1"><input name="codir_visto_${i}"></td></tr>`).join('')}
+                    <tr><td class="border border-black p-1">Otro: <input name="codir_otro_rol_2" class="border-b-2 bg-transparent w-full"></td><td class="border border-black p-1">${createCheckbox('', 'codir_aprobado_2')}</td><td class="border border-black p-1">${createCheckbox('', 'codir_rechazado_2')}</td><td class="border border-black p-1"><input name="codir_obs_2"></td><td class="border border-black p-1"><input name="codir_nombre_2"></td><td class="border border-black p-1"><input type="date" name="codir_fecha_2"></td><td class="border border-black p-1"><input name="codir_visto_2"></td></tr>
                 </tbody>
             </table>
 
-            <table class="full-width-table mt-4">
-                 <thead><tr><th colspan="2">EQUIPO DE TRABAJO</th></tr></thead>
+            <table class="w-full border-collapse mt-4 text-xs">
+                 <thead><tr><th colspan="2" class="border border-black bg-gray-200 font-bold p-1 text-center">EQUIPO DE TRABAJO</th></tr></thead>
                  <tbody>
                     ${[['PILOTO ECR:', 'COMERCIAL:'], ['PILOTO:', 'PC&L/LOGÍSTICA:'], ['ING. PRODUCTO:', 'PRODUCCIÓN:'], ['ING. MANUFACTURA:', 'COSTOS:'], ['CALIDAD:', 'HSE:'], ['COMPRAS:', 'MANTENIMIENTO:'], ['SQA:', '']].map((row, i) => {
                         const col1 = `<div class="flex items-center"><label class="w-1/3 font-semibold">${row[0]}</label><input name="equipo_c1_${i}" class="flex-grow ml-2 border-b-2 bg-transparent"></div>`;
                         const col2 = row[1] ? `<div class="flex items-center"><label class="w-1/3 font-semibold">${row[1]}</label><input name="equipo_c2_${i}" class="flex-grow ml-2 border-b-2 bg-transparent"></div>` : '';
-                        return `<tr><td>${col1}</td><td>${col2}</td></tr>`;
+                        return `<tr><td class="border border-black p-1">${col1}</td><td class="border border-black p-1">${col2}</td></tr>`;
                     }).join('')}
                  </tbody>
             </table>
@@ -5441,8 +5443,21 @@ function renderNotificationCenter() {
 
 function showConfirmationModal(title, message, onConfirm) {
     const modalId = `confirm-modal-${Date.now()}`;
-    const modalHTML = `<div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in"><div class="bg-white rounded-lg shadow-xl w-full max-w-md m-4 modal-content"><div class="p-6 text-center"><i data-lucide="alert-triangle" class="h-12 w-12 mx-auto text-yellow-500 mb-4"></i><h3 class="text-xl font-bold mb-2">${title}</h3><p class="text-gray-600">${message}</p></div><div class="flex justify-center items-center p-4 border-t bg-gray-50 space-x-4"><button data-action="cancel" class="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button><button data-action="confirm" class="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 font-semibold">Confirmar</button></div></div></div>`;
-    dom.modalContainer.innerHTML = modalHTML;
+    const modalHTML = `
+        <div id="${modalId}" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md m-4 animate-scale-in">
+                <div class="p-6 text-center">
+                    <i data-lucide="alert-triangle" class="h-12 w-12 mx-auto text-yellow-500 mb-4"></i>
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">${title}</h3>
+                    <p class="text-slate-600">${message}</p>
+                </div>
+                <div class="flex justify-center items-center p-4 border-t border-slate-200 bg-slate-50 space-x-4">
+                    <button data-action="cancel" class="bg-slate-200 text-slate-800 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+                    <button data-action="confirm" class="bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 font-semibold transition-colors">Confirmar</button>
+                </div>
+            </div>
+        </div>`;
+    dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
     lucide.createIcons();
     const modalElement = document.getElementById(modalId);
     modalElement.addEventListener('click', e => {
@@ -5455,17 +5470,17 @@ function showConfirmationModal(title, message, onConfirm) {
 function showInfoModal(title, htmlContent) {
     const modalId = `info-modal-${Date.now()}`;
     const modalHTML = `
-        <div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4 modal-content max-h-[80vh] flex flex-col">
-                <div class="flex justify-between items-center p-5 border-b">
+        <div id="${modalId}" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4 max-h-[80vh] flex flex-col animate-scale-in">
+                <div class="flex justify-between items-center p-5 border-b border-slate-200">
                     <h3 class="text-xl font-bold text-slate-800 flex items-center gap-3"><i data-lucide="info" class="w-6 h-6 text-blue-500"></i>${title}</h3>
-                    <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
+                    <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors"><i data-lucide="x" class="h-6 w-6"></i></button>
                 </div>
-                <div class="p-6 overflow-y-auto">
+                <div class="p-6 overflow-y-auto custom-scrollbar">
                     ${htmlContent}
                 </div>
-                <div class="flex justify-end items-center p-4 border-t bg-gray-50">
-                    <button data-action="close" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Entendido</button>
+                <div class="flex justify-end items-center p-4 border-t border-slate-200 bg-slate-50">
+                    <button data-action="close" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold transition-colors">Entendido</button>
                 </div>
             </div>
         </div>`;
@@ -6401,9 +6416,24 @@ async function openFormModal(item = null) {
         </div>`;
     }
 
-    const modalHTML = `<div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in"><div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 modal-content"><div class="flex justify-between items-center p-5 border-b"><h3 class="text-xl font-bold">${isEditing ? 'Editar' : 'Agregar'} ${config.singular}</h3><button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button></div><form id="data-form" class="p-6 overflow-y-auto" novalidate><input type="hidden" name="edit-doc-id" value="${isEditing ? item.docId : ''}"><div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">${fieldsHTML}</div></form><div class="flex justify-end items-center p-4 border-t bg-gray-50 space-x-3"><button data-action="close" type="button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button><button type="submit" form="data-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar</button></div></div></div>`;
+    const modalHTML = `<div id="${modalId}" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-5 border-b border-slate-200">
+                <h3 class="text-xl font-bold text-slate-800">${isEditing ? 'Editar' : 'Agregar'} ${config.singular}</h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors"><i data-lucide="x" class="h-6 w-6"></i></button>
+            </div>
+            <form id="data-form" class="p-6 overflow-y-auto custom-scrollbar" novalidate>
+                <input type="hidden" name="edit-doc-id" value="${isEditing ? item.docId : ''}">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">${fieldsHTML}</div>
+            </form>
+            <div class="flex justify-end items-center p-4 border-t border-slate-200 bg-slate-50 space-x-3">
+                <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+                <button type="submit" form="data-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold transition-colors">Guardar</button>
+            </div>
+        </div>
+    </div>`;
     
-    dom.modalContainer.innerHTML = modalHTML;
+    dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
     lucide.createIcons();
     const modalElement = document.getElementById(modalId);
     config.fields.forEach(field => {
