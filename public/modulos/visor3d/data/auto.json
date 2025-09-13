@@ -11,7 +11,8 @@
         "Material": "Aleación de Aluminio",
         "Peso (kg)": 150,
         "Fabricante": "AutoParts Co.",
-        "Fecha de Fabricación": "2023-05-12"
+        "Fecha de Fabricación": "2023-05-12",
+        "explosionVector": [0, 1, 0.5]
     },
     "piston": {
         "ID de Pieza": "PS-045",
@@ -39,28 +40,32 @@
         "Material": "Aleación de Magnesio",
         "Peso (kg)": 12,
         "Dimensiones": "18\" x 8.5\"",
-        "Fabricante": "WheelPros"
+        "Fabricante": "WheelPros",
+        "explosionVector": [-1.5, 0, 0]
     },
     "wheel_front_right": {
         "ID de Pieza": "WHL-FR-304",
         "Material": "Aleación de Magnesio",
         "Peso (kg)": 12,
         "Dimensiones": "18\" x 8.5\"",
-        "Fabricante": "WheelPros"
+        "Fabricante": "WheelPros",
+        "explosionVector": [1.5, 0, 0]
     },
     "wheel_rear_left": {
         "ID de Pieza": "WHL-RL-305",
         "Material": "Aleación de Magnesio",
         "Peso (kg)": 12,
         "Dimensiones": "18\" x 8.5\"",
-        "Fabricante": "WheelPros"
+        "Fabricante": "WheelPros",
+        "explosionVector": [-1.5, 0, 0]
     },
     "wheel_rear_right": {
         "ID de Pieza": "WHL-RR-306",
         "Material": "Aleación de Magnesio",
         "Peso (kg)": 12,
         "Dimensiones": "18\" x 8.5\"",
-        "Fabricante": "WheelPros"
+        "Fabricante": "WheelPros",
+        "explosionVector": [1.5, 0, 0]
     },
     "brake_caliper_front_left": {
         "ID de Pieza": "BC-FL-772",
