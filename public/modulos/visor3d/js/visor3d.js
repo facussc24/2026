@@ -10,7 +10,15 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 
 // Visor3D Module
 export let scene, camera, renderer, controls;
-export const state = { outlinePass: null };
+export const state = {
+    outlinePass: null,
+    isExploded: false,
+    isIsolated: false,
+    isolatedObjects: [],
+    isSelectionTransparencyActive: false,
+    preIsolationVisibility: new Map(),
+    isClipping: false,
+};
 let ambientLight, directionalLight;
 let composer, fxaaPass;
 const raycaster = new THREE.Raycaster();
@@ -19,14 +27,8 @@ export const selectedObjects = [];
 let isTransparent = false;
 const exteriorMaterials = [];
 export let modelParts = [];
-let isExploded = false;
 const originalPositions = new Map();
-export let isIsolated = false;
-export let isolatedObjects = [];
-let isSelectionTransparencyActive = false;
 export const transparentMaterials = new Map();
-const preIsolationVisibility = new Map();
-let isClipping = false;
 const clippingPlanes = [
     new THREE.Plane(new THREE.Vector3(-1, 0, 0), 10)
 ];
@@ -107,6 +109,11 @@ export async function runVisor3dLogic() {
 
                             <label for="ambient-light">Luz Ambiente</label>
                             <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.5">
+
+                            <div id="explode-controls" class="hidden mt-2">
+                                <label for="explode-factor" class="font-semibold text-sm text-slate-600">Distancia de Explosión</label>
+                                <input type="range" id="explode-factor" min="0" max="5" step="0.1" value="1.5" class="w-full mt-1">
+                            </div>
                         </div>
                     </details>
                     <details id="clipping-controls-details" class="visor-section">
@@ -451,8 +458,8 @@ function initThreeScene(modelId) {
         }
 
         // Enforce isolation every frame to prevent camera controls from resetting visibility
-        if (isIsolated) {
-            const isolatedUuids = new Set(isolatedObjects.map(obj => obj.uuid));
+        if (state.isIsolated) {
+            const isolatedUuids = new Set(state.isolatedObjects.map(obj => obj.uuid));
             modelParts.forEach(part => {
                 const shouldBeVisible = isolatedUuids.has(part.uuid);
                 if (part.visible !== shouldBeVisible) {
@@ -473,15 +480,16 @@ function initThreeScene(modelId) {
         modelParts = [];
         exteriorMaterials.length = 0;
         originalPositions.clear();
-        isExploded = false;
+        state.isExploded = false;
         isTransparent = false;
         selectedObjects.length = 0;
         // originalMaterials.clear();
-        isIsolated = false;
-        isolatedObjects.length = 0;
-        isSelectionTransparencyActive = false;
+        state.isIsolated = false;
+        state.isolatedObjects = [];
+        state.isSelectionTransparencyActive = false;
         transparentMaterials.clear();
-        isClipping = false;
+        state.preIsolationVisibility.clear();
+        state.isClipping = false;
         renderer.clippingPlanes = [];
         partCharacteristics = {};
 
@@ -673,25 +681,8 @@ function renderPartsList(partNames) {
     lucide.createIcons();
 }
 
-function toggleExplodeView() {
-    isExploded = !isExploded;
-    const btn = document.getElementById('explode-btn');
-    if (btn) btn.classList.toggle('active', isExploded);
-
-    document.body.dataset.animationStatus = 'running';
-
-    // Store original positions on first explosion
-    if (isExploded && originalPositions.size === 0) {
-        modelParts.forEach(mesh => {
-            originalPositions.set(mesh.uuid, mesh.position.clone());
-        });
-    }
-
-    const explosionFactor = 1.5; // Controls the overall distance of the explosion
-    const animationDuration = 800; // Animation time in ms
-
-    let animatedPartsCount = 0;
-    let partsToAnimate = 0;
+function updateExplosion(factor) {
+    const animationDuration = 300; // A shorter duration for slider updates
 
     modelParts.forEach(mesh => {
         const originalPos = originalPositions.get(mesh.uuid);
@@ -700,66 +691,76 @@ function toggleExplodeView() {
         let targetPosition;
         const characteristics = partCharacteristics[mesh.name] || partCharacteristics[mesh.name.split('_')[0]];
 
-        if (isExploded) {
-            // Explode: Move to a new position if explosionVector is defined
-            if (characteristics && characteristics.explosionVector) {
-                const explosionVec = characteristics.explosionVector;
-                const direction = new THREE.Vector3(explosionVec[0], explosionVec[1], explosionVec[2]);
-                targetPosition = new THREE.Vector3().copy(originalPos).add(direction.multiplyScalar(explosionFactor));
-            } else {
-                // If no vector, it stays in its original position
-                targetPosition = originalPos;
-            }
+        if (characteristics && characteristics.explosionVector) {
+            const explosionVec = characteristics.explosionVector;
+            const direction = new THREE.Vector3(explosionVec[0], explosionVec[1], explosionVec[2]);
+            targetPosition = new THREE.Vector3().copy(originalPos).add(direction.multiplyScalar(factor));
         } else {
-            // Implode: Always return to original position
             targetPosition = originalPos;
         }
 
-        // Only animate if the target position is different from the current one
         if (!mesh.position.equals(targetPosition)) {
-            partsToAnimate++;
             new TWEEN.Tween(mesh.position)
                 .to(targetPosition, animationDuration)
                 .easing(TWEEN.Easing.Quadratic.Out)
-                .onComplete(() => {
-                    animatedPartsCount++;
-                    if (animatedPartsCount === partsToAnimate) {
-                        document.body.dataset.animationStatus = 'finished';
-                    }
-                })
                 .start();
         }
     });
+}
+
+function toggleExplodeView() {
+    state.isExploded = !state.isExploded;
+    const btn = document.getElementById('explode-btn');
+    if (btn) btn.classList.toggle('active', state.isExploded);
+
+    const explodeControls = document.getElementById('explode-controls');
+    if (explodeControls) {
+        explodeControls.classList.toggle('hidden', !state.isExploded);
+    }
+
+
+    document.body.dataset.animationStatus = 'running';
+
+    // Store original positions on first explosion
+    if (state.isExploded && originalPositions.size === 0) {
+        modelParts.forEach(mesh => {
+            originalPositions.set(mesh.uuid, mesh.position.clone());
+        });
+    }
+
+    const factor = state.isExploded ? document.getElementById('explode-factor').value : 0;
+    updateExplosion(factor);
+
 
     // If no parts were animated, set the status to finished immediately
-    if (partsToAnimate === 0) {
-        document.body.dataset.animationStatus = 'finished';
-    }
+    // if (partsToAnimate === 0) {
+    //     document.body.dataset.animationStatus = 'finished';
+    // }
 }
 
 
 export function toggleIsolation() {
-    if (selectedObjects.length === 0 && !isIsolated) {
+    if (selectedObjects.length === 0 && !state.isIsolated) {
         // Don't do anything if nothing is selected and we are not already in isolation mode
         return;
     }
 
-    isIsolated = !isIsolated;
+    state.isIsolated = !state.isIsolated;
     const isolateBtn = document.getElementById('isolate-btn');
     if (isolateBtn) {
-        isolateBtn.classList.toggle('active', isIsolated);
+        isolateBtn.classList.toggle('active', state.isIsolated);
     }
     const icon = isolateBtn.querySelector('i');
 
-    if (isIsolated) {
+    if (state.isIsolated) {
         // Entering isolation mode: store current visibility states
-        preIsolationVisibility.clear();
+        state.preIsolationVisibility.clear();
         modelParts.forEach(part => {
-            preIsolationVisibility.set(part.uuid, part.visible);
+            state.preIsolationVisibility.set(part.uuid, part.visible);
         });
 
-        isolatedObjects = [...selectedObjects]; // Store the objects to be isolated
-        const isolatedUuids = new Set(isolatedObjects.map(obj => obj.uuid));
+        state.isolatedObjects = [...selectedObjects]; // Store the objects to be isolated
+        const isolatedUuids = new Set(state.isolatedObjects.map(obj => obj.uuid));
 
         modelParts.forEach(part => {
             part.visible = isolatedUuids.has(part.uuid);
@@ -769,12 +770,12 @@ export function toggleIsolation() {
         icon.setAttribute('data-lucide', 'eye');
     } else {
         // Exiting isolation mode: restore previous visibility states
-        isolatedObjects = [];
+        state.isolatedObjects = [];
         modelParts.forEach(part => {
             // Restore visibility from the map, default to true if not found
-            part.visible = preIsolationVisibility.has(part.uuid) ? preIsolationVisibility.get(part.uuid) : true;
+            part.visible = state.preIsolationVisibility.has(part.uuid) ? state.preIsolationVisibility.get(part.uuid) : true;
         });
-        preIsolationVisibility.clear(); // Clean up the map
+        state.preIsolationVisibility.clear(); // Clean up the map
 
         isolateBtn.setAttribute('title', 'Aislar Pieza');
         icon.setAttribute('data-lucide', 'zap');
@@ -784,7 +785,7 @@ export function toggleIsolation() {
 
 
 function applySelectionTransparency(forceRestore = false) {
-    if (!isSelectionTransparencyActive && !forceRestore) {
+    if (!state.isSelectionTransparencyActive && !forceRestore) {
         // If the mode is being turned off, we need to restore materials.
         // The `forceRestore` flag ensures this happens.
         if (!forceRestore) return;
@@ -796,10 +797,10 @@ function applySelectionTransparency(forceRestore = false) {
         const isSelected = selectedUuids.has(part.uuid);
 
         // Condition to make a part transparent:
-        // - The mode must be active (`isSelectionTransparencyActive`)
+        // - The mode must be active (`state.isSelectionTransparencyActive`)
         // - The part must NOT be in the current selection (`!isSelected`)
         // - We are not in the process of restoring everything (`!forceRestore`)
-        if (isSelectionTransparencyActive && !isSelected && !forceRestore) {
+        if (state.isSelectionTransparencyActive && !isSelected && !forceRestore) {
             if (!transparentMaterials.has(part.uuid)) {
                 // Store the original material before making it transparent
                 transparentMaterials.set(part.uuid, part.material);
@@ -822,7 +823,7 @@ function applySelectionTransparency(forceRestore = false) {
         } else {
             // Condition to restore a part's material:
             // - If the part was previously made transparent (`transparentMaterials.has(part.uuid)`)
-            // - This will trigger when the mode is turned off (`!isSelectionTransparencyActive` or `forceRestore`)
+            // - This will trigger when the mode is turned off (`!state.isSelectionTransparencyActive` or `forceRestore`)
             // - Or when a part becomes selected (`isSelected`)
             if (transparentMaterials.has(part.uuid)) {
                 part.material = transparentMaterials.get(part.uuid);
@@ -838,12 +839,12 @@ function applySelectionTransparency(forceRestore = false) {
 }
 
 export function toggleSelectionTransparency() {
-    isSelectionTransparencyActive = !isSelectionTransparencyActive;
+    state.isSelectionTransparencyActive = !state.isSelectionTransparencyActive;
     const btn = document.getElementById('selection-transparency-btn');
 
     document.body.dataset.animationStatus = 'running';
 
-    if (isSelectionTransparencyActive) {
+    if (state.isSelectionTransparencyActive) {
         btn.classList.add('active');
         // When activating, apply transparency to all non-selected parts
         applySelectionTransparency();
@@ -890,13 +891,13 @@ function zoomToSelection() {
 }
 
 function toggleClippingView() {
-    isClipping = !isClipping;
+    state.isClipping = !state.isClipping;
     const btn = document.getElementById('clipping-btn');
     const controls = document.getElementById('clipping-controls-details');
-    btn.classList.toggle('active', isClipping);
-    controls.open = isClipping;
+    btn.classList.toggle('active', state.isClipping);
+    controls.open = state.isClipping;
 
-    if (isClipping) {
+    if (state.isClipping) {
         // When turning on, set the renderer's planes
         renderer.clippingPlanes = clippingPlanes;
         // Add a helper to visualize the plane
@@ -929,6 +930,15 @@ export function setupVisor3dEventListeners() {
     const bgColorPicker = document.getElementById('bg-color');
     const sunIntensitySlider = document.getElementById('sun-intensity');
     const ambientLightSlider = document.getElementById('ambient-light');
+    const explodeSlider = document.getElementById('explode-factor');
+
+    if (explodeSlider) {
+        explodeSlider.addEventListener('input', (e) => {
+            if(state.isExploded) {
+                updateExplosion(e.target.value);
+            }
+        });
+    }
 
     if (bgColorPicker && scene) {
         bgColorPicker.addEventListener('input', (e) => {
@@ -952,14 +962,31 @@ export function setupVisor3dEventListeners() {
         searchInput.addEventListener('keyup', (e) => {
             const searchTerm = e.target.value.toLowerCase();
             const partsListItems = document.querySelectorAll('#visor3d-parts-list li');
+            const highlightedObjects = [];
+
             partsListItems.forEach(li => {
                 const partName = li.dataset.partName.toLowerCase();
                 if (partName.includes(searchTerm)) {
                     li.style.display = '';
+                    if(searchTerm.length > 0) {
+                        const part = modelParts.find(p => p.name.toLowerCase() === partName);
+                        if (part) {
+                            highlightedObjects.push(part);
+                        }
+                    }
                 } else {
                     li.style.display = 'none';
                 }
             });
+
+            if (state.outlinePass) {
+                if (searchTerm.length > 0) {
+                    state.outlinePass.selectedObjects = highlightedObjects;
+                } else {
+                    // When search is cleared, restore the original selection
+                    state.outlinePass.selectedObjects = selectedObjects;
+                }
+            }
         });
     }
 
@@ -992,7 +1019,7 @@ export function setupVisor3dEventListeners() {
     let activeClipAxis = 'x'; // Default axis
 
     function updateClippingPlane() {
-        if (!isClipping) return;
+        if (!state.isClipping) return;
 
         const normals = {
             x: new THREE.Vector3(-1, 0, 0),
@@ -1058,18 +1085,18 @@ export function setupVisor3dEventListeners() {
 
     if (resetBtn) {
         resetBtn.addEventListener('click', () => {
-            if (isExploded) {
+            if (state.isExploded) {
                 toggleExplodeView(); // Implode the model
             }
             // Deactivate selection transparency if active
-            if (isSelectionTransparencyActive) {
+            if (state.isSelectionTransparencyActive) {
                 toggleSelectionTransparency();
             }
             // Exit isolation mode if active
-            if (isIsolated) {
+            if (state.isIsolated) {
                 toggleIsolation();
             }
-            if (isClipping) {
+            if (state.isClipping) {
                 toggleClippingView();
             }
 
