@@ -227,36 +227,33 @@ function updateStatus(message, isError = false, showProgressBar = false) {
     }
 }
 
-function initThreeScene(modelId) {
-    const container = document.getElementById('visor3d-scene-container');
-    if (!container) return;
-
-    // Clear any previous scene content
-    container.innerHTML = '';
-    updateStatus('Cargando modelo 3D...', false, true);
-
-    // Scene
+function setupScene() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x404040); // Dark grey background
+    scene.background = new THREE.Color(0x404040);
+}
 
-    // Camera - Adjusted clipping planes for large models and close-up zoom
+function setupCamera(container) {
     camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.01, 5000);
     camera.position.z = 5;
+}
 
-    // Renderer
+function setupRenderer(container) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.offsetWidth, container.offsetHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true; // Enable shadows
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
-    renderer.localClippingEnabled = true; // Enable clipping
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.localClippingEnabled = true;
     container.appendChild(renderer.domElement);
+}
 
-    // Controls
+function setupControls(camera, renderer) {
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
+}
 
+function setupLights(scene) {
     // Lights - Improved setup
     ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // A bit more ambient light to soften shadows
     scene.add(ambientLight);
@@ -286,6 +283,21 @@ function initThreeScene(modelId) {
     const hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x444488, 0.4);
     hemisphereLight.position.set(0, 20, 0);
     scene.add(hemisphereLight);
+}
+
+function initThreeScene(modelId) {
+    const container = document.getElementById('visor3d-scene-container');
+    if (!container) return;
+
+    // Clear any previous scene content
+    container.innerHTML = '';
+    updateStatus('Cargando modelo 3D...', false, true);
+
+    setupScene();
+    setupCamera(container);
+    setupRenderer(container);
+    setupControls(camera, renderer);
+    setupLights(scene);
 
     // GLTFLoader
     const loader = new GLTFLoader();

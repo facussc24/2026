@@ -1,10 +1,40 @@
+import { jest } from '@jest/globals';
+
 // Mock file for the 'three' library and its addons.
 // We use named exports to match the structure of the actual 'three' module.
+
+export class Vector3 {
+    constructor(x = 0, y = 0, z = 0) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+    set(x, y, z) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+        return this;
+    }
+    sub() { return this; }
+    copy() { return this; }
+    add() { return this; }
+    addVectors() { return this; }
+    multiplyScalar() { return this; }
+    normalize() { return this; }
+    getCenter() { return this; }
+    getSize() { return this; }
+    equals() { return false; }
+    clone() { return this; }
+}
 
 export class Raycaster {}
 export class Vector2 {}
 export class Scene {
-    add() {}
+    constructor() {
+        this.add = jest.fn();
+        this.background = null;
+        this.environment = null;
+    }
 }
 export class Color {
     constructor(color) { this.color = color; }
@@ -13,10 +43,21 @@ export class Color {
     getHex() { return this.color; }
 }
 export class PerspectiveCamera {
+    constructor() {
+        this.position = new Vector3();
+        this.fov = 75;
+    }
     updateProjectionMatrix() {}
+    lookAt() {}
 }
 export class WebGLRenderer {
-    domElement = {};
+    constructor() {
+        this.domElement = document.createElement('canvas');
+        this.clippingPlanes = [];
+        this.shadowMap = {};
+        this.localClippingEnabled = false;
+    }
+    getPixelRatio() { return 1; }
     setSize() {}
     setPixelRatio() {}
     addEventListener() {}
@@ -24,18 +65,32 @@ export class WebGLRenderer {
     dispose() {}
 }
 export class AmbientLight {}
-export class DirectionalLight {}
+export class DirectionalLight {
+    constructor() {
+        this.position = new Vector3();
+        this.shadow = {
+            mapSize: { width: 0, height: 0 },
+            camera: {
+                near: 0,
+                far: 0,
+                left: 0,
+                right: 0,
+                top: 0,
+                bottom: 0,
+            },
+            bias: 0,
+        };
+    }
+}
+export class HemisphereLight {
+    constructor() {
+        this.position = new Vector3();
+    }
+}
 export class Box3 {
     setFromObject() { return this; }
     getCenter() { return new Vector3(); }
     getSize() { return new Vector3(); }
-}
-export class Vector3 {
-    sub() {}
-    copy() {}
-    addVectors() {}
-    multiplyScalar() {}
-    normalize() { return this; }
 }
 
 export class Plane {
@@ -53,21 +108,28 @@ export class MeshStandardMaterial {
 
 // Mock the named exports for addons, as they are mapped to this file in jest.config.js
 export class OrbitControls {
+    constructor() {
+        this.target = new Vector3();
+    }
     reset() {}
     update() {}
 }
 export class GLTFLoader {
-    load(path, onLoad) {
-        // Immediately call the onLoad callback with a mock gltf object
-        // to simulate a successful model load for any tests that might need it.
+    load(path, onLoad, onProgress, onError) {
         if (onLoad) {
             const mockGltf = {
                 scene: {
-                    traverse: () => {},
-                    position: new Vector3()
+                    traverse: (callback) => {
+                        // Simulate traversing a couple of named meshes
+                        callback({ name: 'part1', isMesh: true, material: {} });
+                        callback({ name: 'part2', isMesh: true, material: {} });
+                    },
+                    position: new Vector3(),
+                    getObjectByProperty: () => null,
                 }
             };
-            onLoad(mockGltf);
+            // Simulate async loading
+            setTimeout(() => onLoad(mockGltf), 0);
         }
     }
 }
@@ -80,6 +142,31 @@ export class RGBELoader {
         return this;
     }
 }
+export class PMREMGenerator {
+    compileEquirectangularShader() {}
+    fromEquirectangular() {
+        return { texture: null };
+    }
+    dispose() {}
+}
+export class GridHelper {
+    constructor() {
+        this.material = { opacity: 0, transparent: false };
+        this.position = new Vector3();
+    }
+}
+export class ShadowMaterial {
+    constructor() {
+        this.opacity = 0;
+    }
+}
+export class PlaneGeometry {}
+export class Mesh {
+    constructor() {
+        this.rotation = new Vector3();
+        this.position = new Vector3();
+    }
+}
 export class EffectComposer {
     addPass() {}
     setSize() {}
@@ -87,9 +174,21 @@ export class EffectComposer {
 }
 export class RenderPass {}
 export class OutlinePass {
-    selectedObjects = [];
+    constructor() {
+        this.selectedObjects = [];
+        this.visibleEdgeColor = { set: jest.fn() };
+        this.hiddenEdgeColor = { set: jest.fn() };
+    }
 }
-export class ShaderPass {}
+export class ShaderPass {
+    constructor() {
+        this.material = {
+            uniforms: {
+                resolution: { value: { x: 0, y: 0 } }
+            }
+        };
+    }
+}
 export const FXAAShader = {
     uniforms: {
         resolution: { value: { x: 0, y: 0 } }
