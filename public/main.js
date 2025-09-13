@@ -10161,7 +10161,8 @@ export const getFlattenedData = (product, activeFilters = {}) => {
     const hasLevelFilter = !!(niveles && niveles.size > 0);
     const hasMaterialFilter = !!materialLower;
 
-    // The bug fix for the empty level filter has been temporarily removed.
+    // BUG FIX (Verified 2025-09-12): When the level filter is an empty set, return an empty array.
+    // This prevents the logic from incorrectly treating an empty filter as no filter.
     if (niveles && niveles.size === 0) {
         return [];
     }
