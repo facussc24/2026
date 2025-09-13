@@ -18,36 +18,48 @@ const appState = {
     }
 };
 
-// Mock de funciones de main.js (si es necesario)
-const generateFlowchartHTML = (nodes) => {
-    const generateNodeHTML = (node) => {
+// Copia de la función a probar desde main.js
+const generateMermaidDefinition = (nodes) => {
+    if (!nodes || nodes.length === 0) return 'graph TD; A["Estructura Vacía"];';
+
+    let definition = 'graph TD;\n';
+    definition += '    classDef producto fill:#e0f2fe,stroke:#3b82f6,stroke-width:2px,font-weight:bold;\n';
+    definition += '    classDef semiterminado fill:#dcfce7,stroke:#16a34a,stroke-width:2px;\n';
+    definition += '    classDef insumo fill:#f1f5f9,stroke:#64748b,stroke-width:2px;\n\n';
+
+    const nodeDefinitions = new Set();
+    const connections = [];
+
+    function traverse(node, parentId) {
         const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
-        if (!item) return '';
+        if (!item) return;
 
-        const childrenHTML = node.children && node.children.length > 0
-            ? `<div class="flujograma-children">${generateFlowchartHTML(node.children)}</div>`
-            : '';
+        // Define el nodo si no ha sido definido antes
+        if (!nodeDefinitions.has(node.id)) {
+            const nodeLabel = `${item.descripcion}<br><small>(${item.id})</small>`;
+            nodeDefinitions.add(node.id);
+            definition += `    ${node.id}("${nodeLabel}"):::${node.tipo};\n`;
+        }
 
-        return `
-            <div class="flujograma-node-container">
-                <div class="flujograma-node ${node.tipo}" data-testid="node-${item.id}">
-                    <div class="flujograma-node-text">
-                        <h4>${item.descripcion}</h4>
-                        <p>${node.tipo} - ${item.id}</p>
-                    </div>
-                </div>
-                ${childrenHTML}
-            </div>
-        `;
-    };
+        // Añade la conexión desde el padre
+        if (parentId) {
+            connections.push(`    ${parentId} --> ${node.id};`);
+        }
 
-    if (!nodes || nodes.length === 0) return '';
-    return `<div class="flujograma-level">${nodes.map(generateNodeHTML).join('')}</div>`;
+        // Recorre los hijos
+        if (node.children && node.children.length > 0) {
+            node.children.forEach(child => traverse(child, node.id));
+        }
+    }
+
+    nodes.forEach(rootNode => traverse(rootNode, null));
+
+    definition += '\n' + connections.join('\n');
+    return definition;
 };
 
-
-describe('Generación de Flujograma de Procesos', () => {
-    it('Debería transformar una estructura de producto simple en el HTML correcto del flujograma', () => {
+describe('Generación de Flujograma de Procesos con Mermaid', () => {
+    it('Debería transformar una estructura de producto simple en la sintaxis correcta de Mermaid', () => {
         const sampleStructure = [
             {
                 id: 'node-1',
@@ -72,33 +84,28 @@ describe('Generación de Flujograma de Procesos', () => {
             }
         ];
 
-        const resultHTML = generateFlowchartHTML(sampleStructure);
-        document.body.innerHTML = resultHTML;
+        const resultMermaid = generateMermaidDefinition(sampleStructure);
 
-        // Verificar el nodo raíz (Producto)
-        expect(document.querySelector('[data-testid="node-PROD-01"]')).not.toBeNull();
-        expect(document.querySelector('[data-testid="node-PROD-01"] h4').textContent).toBe('Producto Principal');
+        // Verificar la cabecera y las definiciones de clase
+        expect(resultMermaid).toContain('graph TD;');
+        expect(resultMermaid).toContain('classDef producto');
+        expect(resultMermaid).toContain('classDef semiterminado');
+        expect(resultMermaid).toContain('classDef insumo');
 
-        // Verificar el nodo semiterminado
-        expect(document.querySelector('[data-testid="node-SEMI-01"]')).not.toBeNull();
-        expect(document.querySelector('[data-testid="node-SEMI-01"] h4').textContent).toBe('Componente Semi-terminado');
+        // Verificar las definiciones de nodos
+        expect(resultMermaid).toContain('node-1("Producto Principal<br><small>(PROD-01)</small>"):::producto;');
+        expect(resultMermaid).toContain('node-2("Componente Semi-terminado<br><small>(SEMI-01)</small>"):::semiterminado;');
+        expect(resultMermaid).toContain('node-3("Insumo A<br><small>(INS-01)</small>"):::insumo;');
+        expect(resultMermaid).toContain('node-4("Insumo B<br><small>(INS-02)</small>"):::insumo;');
 
-        // Verificar los insumos
-        expect(document.querySelector('[data-testid="node-INS-01"]')).not.toBeNull();
-        expect(document.querySelector('[data-testid="node-INS-01"] h4').textContent).toBe('Insumo A');
-        expect(document.querySelector('[data-testid="node-INS-02"]')).not.toBeNull();
-        expect(document.querySelector('[data-testid="node-INS-02"] h4').textContent).toBe('Insumo B');
+        // Verificar las conexiones
+        expect(resultMermaid).toContain('node-1 --> node-2;');
+        expect(resultMermaid).toContain('node-1 --> node-4;');
+        expect(resultMermaid).toContain('node-2 --> node-3;');
+    });
 
-        // Verificar la estructura de niveles
-        const levels = document.querySelectorAll('.flujograma-level');
-        expect(levels.length).toBe(3); // 3 niveles en el flujograma
-
-        // Verificar la anidación
-        const productNode = document.querySelector('[data-testid="node-PROD-01"]').closest('.flujograma-node-container');
-        const semiTerminadoNode = productNode.querySelector('[data-testid="node-SEMI-01"]');
-        expect(semiTerminadoNode).not.toBeNull();
-
-        const insumoNode1 = semiTerminadoNode.closest('.flujograma-node-container').querySelector('[data-testid="node-INS-01"]');
-        expect(insumoNode1).not.toBeNull();
+    it('Debería manejar una estructura vacía', () => {
+        const resultMermaid = generateMermaidDefinition([]);
+        expect(resultMermaid).toBe('graph TD; A["Estructura Vacía"];');
     });
 });

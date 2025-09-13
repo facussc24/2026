@@ -10907,6 +10907,8 @@ function runFlujogramaLogic() {
             return;
         }
 
+        const mermaidDefinition = generateMermaidDefinition(product.estructura);
+
         dom.viewContent.innerHTML = `
             <div class="animate-fade-in-up">
                 <div class="flex justify-between items-center mb-4">
@@ -10915,49 +10917,53 @@ function runFlujogramaLogic() {
                         Seleccionar Otro Producto
                     </button>
                 </div>
-                <div id="flujograma-container" class="bg-white p-6 rounded-xl shadow-lg overflow-x-auto">
-                    <div class="flujograma-wrapper">
-                        ${generateFlowchartHTML(product.estructura)}
+                <div id="flujograma-container" class="bg-white p-6 rounded-xl shadow-lg overflow-x-auto text-center">
+                    <div class="mermaid">
+                        ${mermaidDefinition}
                     </div>
                 </div>
             </div>
         `;
-        lucide.createIcons();
+        mermaid.init(undefined, dom.viewContent.querySelectorAll('.mermaid'));
     };
 
-    const generateNodeHTML = (node) => {
-        const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
-        if (!item) return '';
+    const generateMermaidDefinition = (nodes) => {
+        if (!nodes || nodes.length === 0) return 'graph TD; A["Estructura Vacía"];';
 
-        let icon;
-        switch(node.tipo) {
-            case 'producto': icon = 'package'; break;
-            case 'semiterminado': icon = 'box'; break;
-            case 'insumo': icon = 'beaker'; break;
-            default: icon = 'help-circle';
+        let definition = 'graph TD;\n';
+        definition += '    classDef producto fill:#e0f2fe,stroke:#3b82f6,stroke-width:2px,font-weight:bold;\n';
+        definition += '    classDef semiterminado fill:#dcfce7,stroke:#16a34a,stroke-width:2px;\n';
+        definition += '    classDef insumo fill:#f1f5f9,stroke:#64748b,stroke-width:2px;\n\n';
+
+        const nodeDefinitions = new Set();
+        const connections = [];
+
+        function traverse(node, parentId) {
+            const item = appState.collectionsById[node.tipo + 's']?.get(node.refId);
+            if (!item) return;
+
+            // Define el nodo si no ha sido definido antes
+            if (!nodeDefinitions.has(node.id)) {
+                const nodeLabel = `${item.descripcion}<br><small>(${item.id})</small>`;
+                nodeDefinitions.add(node.id);
+                definition += `    ${node.id}("${nodeLabel}"):::${node.tipo};\n`;
+            }
+
+            // Añade la conexión desde el padre
+            if (parentId) {
+                connections.push(`    ${parentId} --> ${node.id};`);
+            }
+
+            // Recorre los hijos
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => traverse(child, node.id));
+            }
         }
 
-        const childrenHTML = node.children && node.children.length > 0
-            ? `<div class="flujograma-children">${generateFlowchartHTML(node.children)}</div>`
-            : '';
+        nodes.forEach(rootNode => traverse(rootNode, null));
 
-        return `
-            <div class="flujograma-node-container">
-                <div class="flujograma-node ${node.tipo}">
-                    <div class="flujograma-node-icon"><i data-lucide="${icon}"></i></div>
-                    <div class="flujograma-node-text">
-                        <h4>${item.descripcion}</h4>
-                        <p>${node.tipo} - ${item.id}</p>
-                    </div>
-                </div>
-                ${childrenHTML}
-            </div>
-        `;
-    };
-
-    const generateFlowchartHTML = (nodes) => {
-        if (!nodes || nodes.length === 0) return '';
-        return `<div class="flujograma-level">${nodes.map(generateNodeHTML).join('')}</div>`;
+        definition += '\n' + connections.join('\n');
+        return definition;
     };
 
     const handleProductSelect = async (productId) => {
