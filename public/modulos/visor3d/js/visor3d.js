@@ -28,6 +28,7 @@ let isTransparent = false;
 const exteriorMaterials = [];
 export let modelParts = [];
 const originalPositions = new Map();
+const explosionVectors = new Map();
 export const transparentMaterials = new Map();
 const clippingPlanes = [
     new THREE.Plane(new THREE.Vector3(-1, 0, 0), 10)
@@ -158,11 +159,18 @@ export async function runVisor3dLogic() {
         window.setupHelpButtonListener();
     }
 
-    // Fetch manifest and populate selector
+    // Fetch model list from the new API endpoint and populate selector
     const selector = document.getElementById('model-selector');
     try {
-        const response = await fetch('modulos/visor3d/data/manifest.json');
+        const response = await fetch('/api/models');
         const models = await response.json();
+
+        if (models.length === 0) {
+            updateStatus("No se encontraron modelos. Agregue modelos en la carpeta 'public/modulos/visor3d/modelos'.", true);
+            selector.innerHTML = '<option value="">No hay modelos</option>';
+            return;
+        }
+
         selector.innerHTML = '<option value="">-- Seleccionar Modelo --</option>';
         models.forEach(model => {
             selector.innerHTML += `<option value="${model.id}">${model.name}</option>`;
@@ -175,9 +183,9 @@ export async function runVisor3dLogic() {
         }
 
     } catch (e) {
-        console.error("Failed to load model manifest:", e);
+        console.error("Failed to load model list from API:", e);
         selector.innerHTML = '<option value="">Error al cargar</option>';
-        updateStatus("Error: No se pudo cargar la lista de modelos.", true);
+        updateStatus("Error: No se pudo conectar con el servidor para cargar la lista de modelos.", true);
     }
 
     selector.addEventListener('change', (e) => {
@@ -480,6 +488,7 @@ function initThreeScene(modelId) {
         modelParts = [];
         exteriorMaterials.length = 0;
         originalPositions.clear();
+        explosionVectors.clear(); // Clear the calculated vectors
         state.isExploded = false;
         isTransparent = false;
         selectedObjects.length = 0;
@@ -686,18 +695,13 @@ function updateExplosion(factor) {
 
     modelParts.forEach(mesh => {
         const originalPos = originalPositions.get(mesh.uuid);
-        if (!originalPos) return;
+        const explosionVec = explosionVectors.get(mesh.uuid);
 
-        let targetPosition;
-        const characteristics = partCharacteristics[mesh.name] || partCharacteristics[mesh.name.split('_')[0]];
+        if (!originalPos || !explosionVec) return;
 
-        if (characteristics && characteristics.explosionVector) {
-            const explosionVec = characteristics.explosionVector;
-            const direction = new THREE.Vector3(explosionVec[0], explosionVec[1], explosionVec[2]);
-            targetPosition = new THREE.Vector3().copy(originalPos).add(direction.multiplyScalar(factor));
-        } else {
-            targetPosition = originalPos;
-        }
+        // The explosion vector is cloned to avoid modifying the stored vector
+        const offset = explosionVec.clone().multiplyScalar(factor);
+        const targetPosition = new THREE.Vector3().copy(originalPos).add(offset);
 
         if (!mesh.position.equals(targetPosition)) {
             new TWEEN.Tween(mesh.position)
@@ -718,24 +722,30 @@ function toggleExplodeView() {
         explodeControls.classList.toggle('hidden', !state.isExploded);
     }
 
-
-    document.body.dataset.animationStatus = 'running';
-
-    // Store original positions on first explosion
+    // On first explosion, calculate and store original positions and explosion vectors
     if (state.isExploded && originalPositions.size === 0) {
         modelParts.forEach(mesh => {
             originalPositions.set(mesh.uuid, mesh.position.clone());
+
+            const characteristics = partCharacteristics[mesh.name] || partCharacteristics[mesh.name.split('_')[0]];
+
+            // Prioritize manually defined vector from JSON
+            if (characteristics && characteristics.explosionVector) {
+                const definedVec = characteristics.explosionVector;
+                explosionVectors.set(mesh.uuid, new THREE.Vector3(definedVec[0], definedVec[1], definedVec[2]));
+            } else {
+                // If no vector is defined, calculate it automatically
+                const partBox = new THREE.Box3().setFromObject(mesh);
+                const partCenter = partBox.getCenter(new THREE.Vector3());
+                // The vector from the model's center (origin) to the part's center
+                // This creates a natural radial explosion.
+                explosionVectors.set(mesh.uuid, partCenter);
+            }
         });
     }
 
     const factor = state.isExploded ? document.getElementById('explode-factor').value : 0;
     updateExplosion(factor);
-
-
-    // If no parts were animated, set the status to finished immediately
-    // if (partsToAnimate === 0) {
-    //     document.body.dataset.animationStatus = 'finished';
-    // }
 }
 
 
@@ -967,8 +977,9 @@ export function setupVisor3dEventListeners() {
             partsListItems.forEach(li => {
                 const partName = li.dataset.partName.toLowerCase();
                 if (partName.includes(searchTerm)) {
-                    li.style.display = '';
-                    if(searchTerm.length > 0) {
+                    // The list items use flexbox, so set display to 'flex'
+                    li.style.display = 'flex';
+                    if (searchTerm.length > 0) {
                         const part = modelParts.find(p => p.name.toLowerCase() === partName);
                         if (part) {
                             highlightedObjects.push(part);
@@ -981,9 +992,10 @@ export function setupVisor3dEventListeners() {
 
             if (state.outlinePass) {
                 if (searchTerm.length > 0) {
+                    // When searching, the outline should show the search results
                     state.outlinePass.selectedObjects = highlightedObjects;
                 } else {
-                    // When search is cleared, restore the original selection
+                    // When search is cleared, restore the outline to the user's actual selection
                     state.outlinePass.selectedObjects = selectedObjects;
                 }
             }
