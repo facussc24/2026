@@ -100,27 +100,29 @@ export async function runVisor3dLogic() {
                         <summary>Controles Visuales</summary>
                         <div class="visor-section-content">
                             <label for="bg-color">Fondo</label>
-                            <input type="color" id="bg-color" value="#f0f2f5">
+                            <input type="color" id="bg-color" value="#404040">
 
                             <label for="sun-intensity">Intensidad Sol</label>
                             <input type="range" id="sun-intensity" min="0" max="4" step="0.1" value="2.5">
 
                             <label for="ambient-light">Luz Ambiente</label>
-                            <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.7">
+                            <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.5">
                         </div>
                     </details>
-                    <details id="clipping-controls-details" class="visor-section hidden">
+                    <details id="clipping-controls-details" class="visor-section">
                         <summary>Controles de Corte</summary>
                         <div class="visor-section-content">
-                             <div class="grid grid-cols-2 gap-2 items-center">
-                                <label for="clipping-x">Eje X</label>
-                                <input type="range" id="clipping-x" min="-5" max="5" step="0.1" value="5" class="w-full">
-                                <label for="clipping-y">Eje Y</label>
-                                <input type="range" id="clipping-y" min="-5" max="5" step="0.1" value="5" class="w-full">
-                                <label for="clipping-z">Eje Z</label>
-                                <input type="range" id="clipping-z" min="-5" max="5" step="0.1" value="5" class="w-full">
-                                <label for="clipping-constant">Posición</label>
-                                <input type="range" id="clipping-constant" min="-5" max="5" step="0.1" value="5" class="w-full">
+                            <div class="mb-2">
+                                <label class="font-semibold text-sm text-slate-600">Eje de Corte</label>
+                                <div id="clipping-axis-buttons" class="grid grid-cols-3 gap-2 mt-1">
+                                    <button data-axis="x" class="p-2 text-sm font-semibold border rounded-md hover:bg-slate-100 active">X</button>
+                                    <button data-axis="y" class="p-2 text-sm font-semibold border rounded-md hover:bg-slate-100">Y</button>
+                                    <button data-axis="z" class="p-2 text-sm font-semibold border rounded-md hover:bg-slate-100">Z</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="clipping-position" class="font-semibold text-sm text-slate-600">Posición</label>
+                                <input type="range" id="clipping-position" min="-5" max="5" step="0.1" value="5" class="w-full mt-1">
                             </div>
                         </div>
                     </details>
@@ -140,6 +142,10 @@ export async function runVisor3dLogic() {
     `;
     document.body.classList.add('visor3d-active');
     lucide.createIcons();
+
+    // Ensure details panels are closed by default
+    document.querySelectorAll('.visor-section').forEach(details => details.open = false);
+
     setupVisor3dEventListeners();
     if (window.setupHelpButtonListener) {
         window.setupHelpButtonListener();
@@ -216,7 +222,7 @@ function initThreeScene(modelId) {
 
     // Scene
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f2f5);
+    scene.background = new THREE.Color(0x404040); // Dark grey background
 
     // Camera - Adjusted clipping planes for large models and close-up zoom
     camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.01, 5000);
@@ -237,7 +243,7 @@ function initThreeScene(modelId) {
     controls.dampingFactor = 0.05;
 
     // Lights - Improved setup
-    ambientLight = new THREE.AmbientLight(0xffffff, 0.7); // A bit more ambient light to soften shadows
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // A bit more ambient light to soften shadows
     scene.add(ambientLight);
 
     // Main directional light (simulating the sun)
@@ -297,9 +303,9 @@ function initThreeScene(modelId) {
                 const envMap = pmremGenerator.fromEquirectangular(texture).texture;
                 pmremGenerator.dispose();
 
-                scene.environment = envMap;
-                scene.background = envMap;
-                scene.backgroundBlurriness = 0.5; // Add a little blur to the background
+                scene.environment = envMap; // Keep the environment map for reflections
+                // Set a solid color background for better contrast
+                scene.background = new THREE.Color(0x404040);
             }, undefined, () => {
                 console.error("Failed to load HDR environment map. Make sure 'studio_small_03_1k.hdr' is in 'public/modulos/visor3d/imagenes/'.");
                 updateStatus("Error: No se pudo cargar el mapa de entorno.", true);
@@ -309,8 +315,8 @@ function initThreeScene(modelId) {
         const groundY = centeredBox.min.y;
 
         // Grid
-        const grid = new THREE.GridHelper(200, 40, 0x000000, 0x000000);
-        grid.material.opacity = 0.2;
+        const grid = new THREE.GridHelper(200, 40, 0x888888, 0x888888);
+        grid.material.opacity = 0.3;
         grid.material.transparent = true;
         grid.position.y = groundY;
         scene.add(grid);
@@ -318,7 +324,7 @@ function initThreeScene(modelId) {
         // Shadow Catcher
         const shadowPlaneGeo = new THREE.PlaneGeometry(200, 200);
         const shadowPlaneMat = new THREE.ShadowMaterial({
-            opacity: 0.3
+            opacity: 0.5
         });
         const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
         shadowPlane.rotation.x = -Math.PI / 2;
@@ -670,7 +676,7 @@ function renderPartsList(partNames) {
 function toggleExplodeView() {
     isExploded = !isExploded;
     const btn = document.getElementById('explode-btn');
-    if(btn) btn.classList.toggle('active', isExploded);
+    if (btn) btn.classList.toggle('active', isExploded);
 
     document.body.dataset.animationStatus = 'running';
 
@@ -682,29 +688,53 @@ function toggleExplodeView() {
     }
 
     const explosionFactor = 1.5; // Controls the overall distance of the explosion
+    const animationDuration = 800; // Animation time in ms
+
+    let animatedPartsCount = 0;
+    let partsToAnimate = 0;
 
     modelParts.forEach(mesh => {
         const originalPos = originalPositions.get(mesh.uuid);
         if (!originalPos) return;
 
+        let targetPosition;
+        const characteristics = partCharacteristics[mesh.name] || partCharacteristics[mesh.name.split('_')[0]];
+
         if (isExploded) {
-            // Data-driven explosion logic
-            const characteristics = partCharacteristics[mesh.name] || partCharacteristics[mesh.name.split('_')[0]];
+            // Explode: Move to a new position if explosionVector is defined
             if (characteristics && characteristics.explosionVector) {
                 const explosionVec = characteristics.explosionVector;
                 const direction = new THREE.Vector3(explosionVec[0], explosionVec[1], explosionVec[2]);
-                mesh.position.copy(originalPos).add(direction.multiplyScalar(explosionFactor));
+                targetPosition = new THREE.Vector3().copy(originalPos).add(direction.multiplyScalar(explosionFactor));
+            } else {
+                // If no vector, it stays in its original position
+                targetPosition = originalPos;
             }
-            // Parts without an explosionVector will remain in place.
         } else {
-            // If not exploded, return to original position
-            mesh.position.copy(originalPos);
+            // Implode: Always return to original position
+            targetPosition = originalPos;
+        }
+
+        // Only animate if the target position is different from the current one
+        if (!mesh.position.equals(targetPosition)) {
+            partsToAnimate++;
+            new TWEEN.Tween(mesh.position)
+                .to(targetPosition, animationDuration)
+                .easing(TWEEN.Easing.Quadratic.Out)
+                .onComplete(() => {
+                    animatedPartsCount++;
+                    if (animatedPartsCount === partsToAnimate) {
+                        document.body.dataset.animationStatus = 'finished';
+                    }
+                })
+                .start();
         }
     });
 
-    setTimeout(() => {
+    // If no parts were animated, set the status to finished immediately
+    if (partsToAnimate === 0) {
         document.body.dataset.animationStatus = 'finished';
-    }, 1500); // Wait for the animation to finish
+    }
 }
 
 
@@ -864,7 +894,7 @@ function toggleClippingView() {
     const btn = document.getElementById('clipping-btn');
     const controls = document.getElementById('clipping-controls-details');
     btn.classList.toggle('active', isClipping);
-    controls.classList.toggle('hidden', !isClipping);
+    controls.open = isClipping;
 
     if (isClipping) {
         // When turning on, set the renderer's planes
@@ -957,26 +987,46 @@ export function setupVisor3dEventListeners() {
         clippingBtn.addEventListener('click', toggleClippingView);
     }
 
-    const clippingX = document.getElementById('clipping-x');
-    const clippingY = document.getElementById('clipping-y');
-    const clippingZ = document.getElementById('clipping-z');
-    const clippingConstant = document.getElementById('clipping-constant');
+    const clippingAxisButtons = document.getElementById('clipping-axis-buttons');
+    const clippingPositionSlider = document.getElementById('clipping-position');
+    let activeClipAxis = 'x'; // Default axis
 
     function updateClippingPlane() {
         if (!isClipping) return;
-        const normal = new THREE.Vector3(
-            parseFloat(clippingX.value),
-            parseFloat(clippingY.value),
-            parseFloat(clippingZ.value)
-        ).normalize();
-        clippingPlanes[0].normal.copy(normal);
-        clippingPlanes[0].constant = parseFloat(clippingConstant.value);
+
+        const normals = {
+            x: new THREE.Vector3(-1, 0, 0),
+            y: new THREE.Vector3(0, -1, 0),
+            z: new THREE.Vector3(0, 0, -1)
+        };
+
+        clippingPlanes[0].normal.copy(normals[activeClipAxis]);
+        clippingPlanes[0].constant = parseFloat(clippingPositionSlider.value);
+
+        // Also update the plane helper if it exists
+        const helper = scene.getObjectByName('clipping-plane-helper');
+        if (helper) {
+            helper.plane = clippingPlanes[0];
+            helper.updateMatrixWorld(true);
+        }
     }
 
-    if(clippingX) clippingX.addEventListener('input', updateClippingPlane);
-    if(clippingY) clippingY.addEventListener('input', updateClippingPlane);
-    if(clippingZ) clippingZ.addEventListener('input', updateClippingPlane);
-    if(clippingConstant) clippingConstant.addEventListener('input', updateClippingPlane);
+    if (clippingAxisButtons) {
+        clippingAxisButtons.addEventListener('click', (e) => {
+            if (e.target.tagName === 'BUTTON') {
+                // Remove active class from all buttons
+                clippingAxisButtons.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                // Add active class to the clicked button
+                e.target.classList.add('active');
+                activeClipAxis = e.target.dataset.axis;
+                updateClippingPlane();
+            }
+        });
+    }
+
+    if (clippingPositionSlider) {
+        clippingPositionSlider.addEventListener('input', updateClippingPlane);
+    }
 
     if (partsList) {
         partsList.addEventListener('click', (e) => {
