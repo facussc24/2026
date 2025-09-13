@@ -30,9 +30,9 @@ describe('Visor3D Search Functionality', () => {
         searchInput.dispatchEvent(new Event('keyup', { bubbles: true }));
 
         // Assert
-        // With the bug (no listener), no styles will be applied. This will fail.
+        // With the fix, parts that match should be visible ('flex') and others hidden ('none').
         expect(part1.style.display).toBe('none');
-        expect(part2.style.display).toBe(''); // or 'list-item' or 'block'
-        expect(part3.style.display).toBe('');
+        expect(part2.style.display).toBe('flex');
+        expect(part3.style.display).toBe('flex');
     });
 });
