@@ -156,7 +156,7 @@ Esta sección contiene información técnica para desarrolladores sobre cómo in
 
 ### Información del Proyecto
 
-- **ID del Proyecto de Firebase:** `barack2-0-f81a6`
+- **ID del Proyecto de Firebase:** `barackingenieria-e763c`
 
 ### Uso de Firebase CLI en Entornos No Interactivos
 
@@ -165,7 +165,7 @@ Para ejecutar comandos de Firebase CLI en un entorno no interactivo (como un ser
 #### Pasos para la autenticación:
 
 1.  **Generar una clave de cuenta de servicio:**
-    *   Ve a la [consola de Google Cloud para las cuentas de servicio de tu proyecto](https://console.cloud.google.com/iam-admin/serviceaccounts?project=barack2-0-f81a6).
+    *   Ve a la [consola de Google Cloud para las cuentas de servicio de tu proyecto](https://console.cloud.google.com/iam-admin/serviceaccounts?project=barackingenieria-e763c).
     *   Crea una nueva cuenta de servicio o usa una existente.
     *   Asegúrate de que la cuenta de servicio tenga los permisos necesarios. El rol de **"Editor" (Editor)** es una buena opción para tener permisos amplios.
     *   Genera una clave en formato **JSON** para la cuenta de servicio y descarga el archivo.
@@ -187,7 +187,7 @@ Para borrar todas las colecciones y empezar desde cero, puedes usar el siguiente
 
 ```bash
 # Primero, asegúrate de haber iniciado sesión o de haber configurado la cuenta de servicio
-firebase firestore:delete --all-collections --force --project barack2-0-f81a6
+firebase firestore:delete --all-collections --force --project barackingenieria-e763c
 ```
 
 #### Nota sobre la ejecución de Firebase CLI
