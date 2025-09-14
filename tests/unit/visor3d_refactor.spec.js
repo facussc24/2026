@@ -82,7 +82,7 @@ describe('Visor3D Refactor with Firebase', () => {
     expect(buttonContainer.children[1].textContent).toBe('Cybertruck');
 
     // Assert: Check if the first model was automatically loaded
-    expect(getDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ path: 'modelos3d/Raptor.glb' }));
+    expect(getDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ fullPath: 'modelos3d/Raptor.glb' }));
     expect(initThreeScene).toHaveBeenCalledWith('https://fake.url/raptor.glb', expect.any(Function));
   });
 
@@ -95,7 +95,7 @@ describe('Visor3D Refactor with Firebase', () => {
     listAll.mockResolvedValue({ items: mockFiles });
     // Make getDownloadURL return a different URL for the second model to verify
     getDownloadURL.mockImplementation(ref => {
-        if (ref.path === 'modelos3d/Cybertruck.glb') {
+        if (ref.fullPath === 'modelos3d/Cybertruck.glb') {
             return Promise.resolve('https://fake.url/cybertruck.glb');
         }
         return Promise.resolve('https://fake.url/raptor.glb');
@@ -111,7 +111,7 @@ describe('Visor3D Refactor with Firebase', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
 
     // Assert
-    expect(getDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ path: 'modelos3d/Cybertruck.glb' }));
+    expect(getDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ fullPath: 'modelos3d/Cybertruck.glb' }));
     expect(initThreeScene).toHaveBeenCalledWith('https://fake.url/cybertruck.glb', expect.any(Function));
     expect(secondButton.classList.contains('active')).toBe(true);
     // Ensure the first button is no longer active
