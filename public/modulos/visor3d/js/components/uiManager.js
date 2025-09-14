@@ -17,13 +17,14 @@ export function createVisorUI() {
             </div>
             <div id="visor3d-panel">
                 <div id="visor3d-panel-header">
-                    <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-lg font-bold">Piezas del Modelo</h3>
-                        <select id="model-selector" class="text-sm border-gray-300 rounded-md">
-                            <option value="">Cargando...</option>
-                        </select>
+                    <div class="space-y-2 mb-2">
+                        <h3 class="text-lg font-bold">Modelos Disponibles</h3>
+                        <div id="model-button-container" class="flex flex-wrap gap-2">
+                            <!-- Los botones de los modelos se insertarán aquí dinámicamente -->
+                            <span class="text-sm text-slate-500">Cargando...</span>
+                        </div>
                     </div>
-                    <div class="flex justify-between items-center">
+                    <div class="flex justify-between items-center border-t pt-2 mt-2">
                         <div id="visor3d-controls" class="flex items-center gap-2">
                             <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                             <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>

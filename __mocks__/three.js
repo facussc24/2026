@@ -172,6 +172,8 @@ export class EffectComposer {
     setSize() {}
     render() {}
 }
+
+export class CSS2DObject extends Function {}
 export class RenderPass {}
 export class OutlinePass {
     constructor() {
@@ -196,3 +198,11 @@ export const FXAAShader = {
     vertexShader: '',
     fragmentShader: ''
 };
+
+export class CSS2DRenderer {
+    constructor() {
+        this.domElement = document.createElement('div');
+    }
+    setSize() {}
+    render() {}
+}

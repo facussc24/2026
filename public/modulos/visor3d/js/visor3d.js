@@ -1,10 +1,29 @@
 import * as THREE from 'three';
-import { createVisorUI, updateStatus } from './components/uiManager.js';
+import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+
+import { createVisorUI, updateStatus, updateSelectionUI } from './components/uiManager.js';
 import { initThreeScene, scene, camera, renderer, controls } from './components/sceneManager.js';
 import { setupVisor3dEventListeners, onPointerDown, updateSelection, toggleSelectionTransparency, toggleIsolation } from './components/eventManager.js';
 
 // Re-export functions and variables for tests
 export { setupVisor3dEventListeners, updateSelection, toggleSelectionTransparency, toggleIsolation, scene, camera, renderer, controls };
+
+// --- FIREBASE CONFIG ---
+// Copied from main.js to make this module self-contained.
+const firebaseConfig = {
+  apiKey: "AIzaSyAUQxlBCiYoR4-tlGL-S3xR8LXrrMkx1Tk",
+  authDomain: "barackingenieria-e763c.firebaseapp.com",
+  projectId: "barackingenieria-e763c",
+  storageBucket: "barackingenieria-e763c.appspot.com",
+  messagingSenderId: "44704892099",
+  appId: "1:44704892099:web:738c8cbc3cea65808a8e76",
+  measurementId: "G-ZHZ3R9XXDM"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig, "visor3d-app"); // Use a unique name to avoid conflicts
+const storage = getStorage(app);
 
 // --- SHARED STATE AND VARIABLES ---
 export const state = {
@@ -28,31 +47,44 @@ export const transparentMaterials = new Map();
 export const clippingPlanes = [
     new THREE.Plane(new THREE.Vector3(-1, 0, 0), 10)
 ];
-export let partCharacteristics = {};
+export let partCharacteristics = {}; // This will no longer be loaded from JSON
 let currentCleanup = null;
+let activeModelButton = null;
 
-async function loadModel(modelId) {
-    console.log(`Loading model: ${modelId}`);
+async function loadModelsFromFirebase() {
+    const modelsRef = ref(storage, 'modelos3d/');
+    try {
+        const res = await listAll(modelsRef);
+        const modelFiles = res.items.filter(item => item.name.endsWith('.glb'));
+        return modelFiles;
+    } catch (error) {
+        console.error("Error listing files from Firebase Storage:", error);
+        updateStatus("Error al conectar con Firebase Storage.", true);
+        return [];
+    }
+}
+
+async function loadModel(modelRef) {
+    console.log(`Loading model from Firebase: ${modelRef.name}`);
     if (currentCleanup) {
         currentCleanup();
     }
 
-    try {
-        const response = await fetch(`modulos/visor3d/data/${modelId}.json`);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        partCharacteristics = await response.json();
-    } catch (error) {
-        console.error("Could not load part characteristics:", error);
-        partCharacteristics = {};
-        updateStatus(`Error al cargar datos de ${modelId}`, true);
-        return;
-    }
+    // Reset part characteristics for the new model
+    partCharacteristics = {};
 
-    currentCleanup = initThreeScene(modelId, onPointerDown);
+    try {
+        const url = await getDownloadURL(modelRef);
+        // The second argument to initThreeScene (onPointerDown) is passed for event handling
+        currentCleanup = initThreeScene(url, onPointerDown);
+    } catch (error) {
+        console.error("Error getting download URL or initializing scene:", error);
+        updateStatus(`Error al cargar el modelo ${modelRef.name}.`, true);
+    }
 }
 
 export async function runVisor3dLogic() {
-    console.log("Running Visor3D logic (refactored)...");
+    console.log("Running Visor3D logic with Firebase Integration...");
 
     createVisorUI();
 
@@ -60,40 +92,55 @@ export async function runVisor3dLogic() {
         window.setupHelpButtonListener();
     }
 
-    const selector = document.getElementById('model-selector');
-    try {
-        const response = await fetch('/modulos/visor3d/data/models.json');
-        const models = await response.json();
+    setTimeout(async () => {
+        const buttonContainer = document.getElementById('model-button-container');
+        if (!buttonContainer) return;
 
-        if (models.length === 0) {
-            updateStatus("No se encontraron modelos.", true);
-            selector.innerHTML = '<option value="">No hay modelos</option>';
+        const modelFiles = await loadModelsFromFirebase();
+
+        if (modelFiles.length === 0) {
+            buttonContainer.innerHTML = '<span class="text-sm text-slate-500">No se encontraron modelos en Firebase Storage.</span>';
             return;
         }
 
-        selector.innerHTML = '<option value="">-- Seleccionar Modelo --</option>';
-        models.forEach(model => {
-            selector.innerHTML += `<option value="${model.id}">${model.name}</option>`;
+        buttonContainer.innerHTML = ''; // Clear "Cargando..."
+        modelFiles.forEach(fileRef => {
+            const button = document.createElement('button');
+            const modelName = fileRef.name.replace('.glb', '');
+            button.textContent = modelName;
+            button.className = 'model-select-btn';
+            button.dataset.modelName = fileRef.fullPath; // Use full path as a unique ID
+            buttonContainer.appendChild(button);
         });
 
-        if (models.length > 0) {
-            selector.value = models[0].id;
-            await loadModel(models[0].id);
+        buttonContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('.model-select-btn');
+            if (button) {
+                const modelFullPath = button.dataset.modelName;
+                const modelRef = ref(storage, modelFullPath);
+
+                // Deactivate previously active button
+                if (activeModelButton) {
+                    activeModelButton.classList.remove('active');
+                }
+                // Activate clicked button
+                button.classList.add('active');
+                activeModelButton = button;
+
+                loadModel(modelRef);
+            }
+        });
+
+        setupVisor3dEventListeners();
+
+        // Auto-load the first model in the list
+        if (modelFiles.length > 0) {
+            const firstButton = buttonContainer.querySelector('.model-select-btn');
+            firstButton.click();
         }
 
-    } catch (e) {
-        console.error("Failed to load model list from API:", e);
-        selector.innerHTML = '<option value="">Error al cargar</option>';
-        updateStatus("Error: No se pudo conectar con el servidor.", true);
-    }
+    }, 0);
 
-    setupVisor3dEventListeners();
-
-    selector.addEventListener('change', (e) => {
-        if (e.target.value) {
-            loadModel(e.target.value);
-        }
-    });
 
     return () => {
         if (currentCleanup) {

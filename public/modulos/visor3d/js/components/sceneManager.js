@@ -71,7 +71,7 @@ function setupLights(scene) {
     scene.add(hemisphereLight);
 }
 
-export function initThreeScene(modelId, onPointerDown) {
+export function initThreeScene(modelUrl, onPointerDown) {
     const container = document.getElementById('visor3d-scene-container');
     if (!container) return;
 
@@ -92,7 +92,7 @@ export function initThreeScene(modelId, onPointerDown) {
     container.appendChild(labelRenderer.domElement);
 
     const loader = new GLTFLoader();
-    loader.load(`modulos/visor3d/modelos/${modelId}/model.glb`,
+    loader.load(modelUrl,
     (gltf) => {
         updateStatus('Procesando modelo...');
         const model = gltf.scene;
@@ -108,37 +108,25 @@ export function initThreeScene(modelId, onPointerDown) {
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
 
-        const pmremGenerator = new THREE.PMREMGenerator(renderer);
-        pmremGenerator.compileEquirectangularShader();
-
-        new RGBELoader()
-            .setPath('modulos/visor3d/imagenes/')
-            .load('studio_small_03_1k.hdr', function (texture) {
-                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-                pmremGenerator.dispose();
-                scene.environment = envMap;
-                scene.background = new THREE.Color(0x404040);
-            }, undefined, () => {
-                console.error("Failed to load HDR environment map.");
-                updateStatus("Error: No se pudo cargar el mapa de entorno.", true);
-            });
+        // Set a neutral environment map to provide some basic reflections
+        scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new THREE.Scene().add(new THREE.Color(0xffffff))).texture;
+        scene.background = new THREE.Color(0x333333); // A darker grey for a more professional look
 
         const centeredBox = new THREE.Box3().setFromObject(model);
         const groundY = centeredBox.min.y;
 
-        const grid = new THREE.GridHelper(200, 40, 0x888888, 0x888888);
-        grid.material.opacity = 0.3;
-        grid.material.transparent = true;
-        grid.position.y = groundY;
-        scene.add(grid);
-
-        const shadowPlaneGeo = new THREE.PlaneGeometry(200, 200);
-        const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.5 });
-        const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
-        shadowPlane.rotation.x = -Math.PI / 2;
-        shadowPlane.position.y = groundY + 0.01;
-        shadowPlane.receiveShadow = true;
-        scene.add(shadowPlane);
+        // Solid grey floor plane instead of a grid
+        const floorGeometry = new THREE.PlaneGeometry(200, 200);
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            color: 0x808080, // A mid-grey color
+            metalness: 0.1,
+            roughness: 0.8
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = groundY;
+        floor.receiveShadow = true; // The floor should receive shadows
+        scene.add(floor);
 
         const size = box.getSize(new THREE.Vector3());
         if (size.x === 0 && size.y === 0 && size.z === 0) {
