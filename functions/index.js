@@ -489,6 +489,38 @@ exports.updateCollectionCounts = functions.firestore
     }, { merge: true });
 });
 
+exports.listModels = functions.https.onCall(async (data, context) => {
+  const bucket = admin.storage().bucket();
+  const directory = '/'; // List from the root directory
+
+  try {
+    const [files] = await bucket.getFiles({ prefix: directory });
+    const glbFiles = files.filter((file) => file.name.endsWith(".glb"));
+
+    const signedUrls = await Promise.all(
+      glbFiles.map(async (file) => {
+        const [url] = await file.getSignedUrl({
+          action: "read",
+          expires: Date.now() + 1000 * 60 * 60 * 2, // 2 hours
+        });
+        return {
+          name: file.name.replace(".glb", ""),
+          url: url,
+        };
+      })
+    );
+
+    return { models: signedUrls };
+  } catch (error) {
+    console.error("Error listing models from Firebase Storage:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "No se pudieron listar los modelos.",
+      error.message
+    );
+  }
+});
+
 exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires") // Ajusta a tu zona horaria
   .onRun(async (context) => {
