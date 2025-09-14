@@ -1,8 +1,17 @@
+import { getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { showAnnotationPanel } from './eventManager.js';
 
-const db = getFirestore();
+let db;
+const getDb = () => {
+    if (!db) {
+        const app = getApp("visor3d-app");
+        db = getFirestore(app);
+    }
+    return db;
+};
+
 let currentModelName = null;
 let currentAnnotations = [];
 
@@ -26,6 +35,7 @@ export async function initAnnotations(modelName, scene) {
  */
 async function loadAnnotationsFromFirestore(modelName) {
     console.log(`Loading annotations for ${modelName}...`);
+    const db = getDb();
     const docRef = doc(db, "annotations", modelName);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
@@ -43,6 +53,7 @@ async function loadAnnotationsFromFirestore(modelName) {
 export async function saveAnnotation(annotation) {
     if (!currentModelName) return;
     console.log(`Saving annotation for ${currentModelName}:`, annotation);
+    const db = getDb();
     const docRef = doc(db, "annotations", currentModelName);
     try {
         // Use setDoc with merge: true to create the document if it doesn't exist
@@ -64,6 +75,7 @@ export async function saveAnnotation(annotation) {
 export async function addCommentToAnnotation(annotationId, comment) {
     if (!currentModelName) return;
 
+    const db = getDb();
     const docRef = doc(db, "annotations", currentModelName);
     const annotationIndex = currentAnnotations.findIndex(a => a.id === annotationId);
     if (annotationIndex === -1) {
