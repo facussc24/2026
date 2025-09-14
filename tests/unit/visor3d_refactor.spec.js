@@ -17,6 +17,7 @@ jest.unstable_mockModule('../../public/modulos/visor3d/js/components/eventManage
   updateSelection: jest.fn(),
   toggleSelectionTransparency: jest.fn(),
   toggleIsolation: jest.fn(),
+  showAnnotationPanel: jest.fn(),
 }));
 
 // Mock the Firebase Storage module URL

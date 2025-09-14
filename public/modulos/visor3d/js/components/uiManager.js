@@ -31,6 +31,7 @@ export function createVisorUI() {
                             <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
                             <button id="clipping-btn" class="visor3d-control-btn" title="Vista de Sección"><i data-lucide="scissors"></i></button>
                             <button id="measure-btn" class="visor3d-control-btn" title="Medir Distancia"><i data-lucide="ruler"></i></button>
+                            <button id="annotation-btn" class="visor3d-control-btn" title="Modo Anotación"><i data-lucide="message-square-plus"></i></button>
                             <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                             <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
                                 <i data-lucide="help-circle" class="w-6 h-6 text-slate-600"></i>
@@ -85,6 +86,21 @@ export function createVisorUI() {
                         </button>
                     </div>
                     <div id="piece-card-details"></div>
+                </div>
+                <div id="visor3d-annotations-panel" class="border-t border-slate-200 p-4 hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 id="annotations-panel-title" class="text-md font-bold">Anotación</h4>
+                        <button id="close-annotations-panel-btn" class="p-1 text-slate-500 hover:text-red-600" title="Cerrar">
+                            <i data-lucide="x" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                    <div id="annotations-list" class="mb-4 max-h-60 overflow-y-auto space-y-2">
+                        <!-- Annotation comments will be rendered here -->
+                    </div>
+                    <div id="add-comment-form">
+                        <textarea id="comment-text" class="w-full border rounded-md p-2 text-sm" rows="2" placeholder="Añadir un comentario..."></textarea>
+                        <button id="add-comment-btn" class="w-full mt-2 bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600 text-sm font-semibold">Añadir Comentario</button>
+                    </div>
                 </div>
             </div>
         </div>
