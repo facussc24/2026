@@ -215,14 +215,20 @@ La aplicación sigue una estructura de archivos organizada para facilitar el man
 
 ### Módulo de Visualización 3D
 
-Para la gestión de los recursos del visor 3D, se ha creado una estructura de carpetas específica dentro de `public/modulos/visor3d/`:
+Para la gestión de los recursos del visor 3D, se ha creado una estructura de carpetas específica dentro de `public/modulos/visor3d/`. Aunque algunas carpetas locales (`modelos/`, `imagenes/`) se mantienen para propósitos de fallback o desarrollo, la carga principal de modelos se realiza de forma dinámica.
 
+#### Integración con Firebase Storage
+
+El visor 3D ha sido actualizado para cargar los modelos dinámicamente desde **Firebase Storage**, en lugar de depender de los archivos locales. Esto permite una gestión de modelos más flexible y centralizada.
+
+-   **Lógica de Carga:** Al iniciar, el visor se conecta a Firebase Storage y lista todos los archivos `.glb` disponibles en la carpeta `modelos3d/`.
+-   **Botones Dinámicos:** Se crea un botón por cada modelo encontrado, permitiendo al usuario seleccionar cuál visualizar.
+-   **Configuración:** La configuración de la conexión a Firebase se encuentra en `public/modulos/visor3d/js/visor3d.js`.
+-   **Estructura de Almacenamiento:** Para que el visor los encuentre, los modelos 3D deben subirse a la raíz de una carpeta llamada `modelos3d/` en el bucket de Firebase Storage del proyecto. Las reglas de seguridad de Storage están configuradas para permitir el acceso público de solo lectura a esta carpeta específica.
+
+La estructura de archivos local sirve como referencia:
 -   **`js/`**: Contiene los archivos JavaScript principales del visor.
 -   **`css/`**: Contiene las hojas de estilo específicas para el visor.
--   **`modelos/`**: Almacena todos los modelos 3D (`.glb`, `.gltf`, etc.).
--   **`imagenes/`**: Contiene todas las imágenes y texturas utilizadas por el visor 3D.
-
-Esta organización asegura que todos los recursos del módulo 3D estén centralizados y sean fáciles de localizar.
 
 ## Pruebas Automatizadas
 

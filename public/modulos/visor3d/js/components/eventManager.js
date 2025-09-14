@@ -29,6 +29,11 @@ export function onPointerDown(event) {
             measurementPoints.push(pt);
             updateMeasurementVisuals();
         }
+    } else if (state.isAnnotationMode) {
+        if (intersects.length > 0) {
+            const pt = intersects[0].point;
+            createAnnotationAtPoint(pt);
+        }
     } else {
         if (!targetObject && !event.ctrlKey) {
             updateSelection(null, false);
@@ -277,6 +282,7 @@ export function setupVisor3dEventListeners() {
         if (state.isSelectionTransparencyActive) toggleSelectionTransparency();
         if (state.isIsolated) toggleIsolation();
         if (state.isClipping) toggleClippingView();
+        if (state.isAnnotationMode) toggleAnnotationMode();
 
         modelParts.forEach(part => { part.visible = true; });
         document.querySelectorAll('#visor3d-parts-list button[data-action="toggle-visibility"] i').forEach(icon => {
@@ -287,6 +293,89 @@ export function setupVisor3dEventListeners() {
         if (controls) controls.reset();
         updateSelection(null, false);
     });
+
+    const annotationBtn = document.getElementById('annotation-btn');
+    if(annotationBtn) annotationBtn.addEventListener('click', toggleAnnotationMode);
+
+    const closeAnnotationsPanelBtn = document.getElementById('close-annotations-panel-btn');
+    if(closeAnnotationsPanelBtn) closeAnnotationsPanelBtn.addEventListener('click', hideAnnotationPanel);
+
+    const addCommentBtn = document.getElementById('add-comment-btn');
+    if(addCommentBtn) addCommentBtn.addEventListener('click', () => {
+        const text = document.getElementById('comment-text').value;
+        const panel = document.getElementById('visor3d-annotations-panel');
+        const annotationId = panel.dataset.annotationId;
+
+        if(text.trim() === '' || !annotationId) return;
+
+        const comment = {
+            userId: 'user-test-id', // Placeholder
+            userName: 'Test User', // Placeholder
+            text: text.trim(),
+            timestamp: new Date().toISOString()
+        };
+
+        addCommentToAnnotation(annotationId, comment);
+        document.getElementById('comment-text').value = '';
+    });
+}
+
+import { saveAnnotation, addCommentToAnnotation } from './annotationManager.js';
+
+export function toggleAnnotationMode() {
+    state.isAnnotationMode = !state.isAnnotationMode;
+    toggleButtonActive('annotation-btn', state.isAnnotationMode);
+    renderer.domElement.style.cursor = state.isAnnotationMode ? 'crosshair' : 'default';
+    if (!state.isAnnotationMode) {
+        hideAnnotationPanel();
+    }
+}
+
+function createAnnotationAtPoint(point) {
+    const annotation = {
+        id: `anno-${Date.now()}`,
+        position: { x: point.x, y: point.y, z: point.z },
+        cameraPosition: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+        comments: []
+    };
+
+    // Save to Firestore
+    saveAnnotation(annotation);
+
+    // Show the panel and turn off annotation mode
+    showAnnotationPanel(annotation);
+    toggleAnnotationMode();
+}
+
+export function showAnnotationPanel(annotation) {
+    const panel = document.getElementById('visor3d-annotations-panel');
+    const panelTitle = document.getElementById('annotations-panel-title');
+    const list = document.getElementById('annotations-list');
+
+    if (panel && panelTitle && list) {
+        panel.dataset.annotationId = annotation.id;
+        panelTitle.textContent = `Anotación #${annotation.id.slice(-4)}`;
+        panel.classList.remove('hidden');
+
+        if (annotation.comments && annotation.comments.length > 0) {
+            list.innerHTML = annotation.comments.map(comment => `
+                <div class="p-2 bg-slate-100 rounded-md">
+                    <p class="text-sm text-slate-800">${comment.text}</p>
+                    <p class="text-xs text-slate-500 mt-1">${comment.userName} - ${new Date(comment.timestamp).toLocaleString()}</p>
+                </div>
+            `).join('');
+        } else {
+            list.innerHTML = '<p class="text-sm text-slate-500 italic">No hay comentarios aún.</p>';
+        }
+    }
+}
+
+export function hideAnnotationPanel() {
+    const panel = document.getElementById('visor3d-annotations-panel');
+    if (panel) {
+        panel.classList.add('hidden');
+        panel.removeAttribute('data-annotation-id');
+    }
 }
 
 function toggleMeasurement() {

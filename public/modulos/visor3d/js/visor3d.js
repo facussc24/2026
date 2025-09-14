@@ -5,6 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { createVisorUI, updateStatus, updateSelectionUI } from './components/uiManager.js';
 import { initThreeScene, scene, camera, renderer, controls } from './components/sceneManager.js';
 import { setupVisor3dEventListeners, onPointerDown, updateSelection, toggleSelectionTransparency, toggleIsolation } from './components/eventManager.js';
+import { initAnnotations } from './components/annotationManager.js';
 
 // Re-export functions and variables for tests
 export { setupVisor3dEventListeners, updateSelection, toggleSelectionTransparency, toggleIsolation, scene, camera, renderer, controls };
@@ -28,7 +29,7 @@ const storage = getStorage(app);
 export const state = {
     outlinePass: null, isExploded: false, isIsolated: false, isolatedObjects: [],
     isSelectionTransparencyActive: false, preIsolationVisibility: new Map(),
-    isClipping: false, isMeasuring: false,
+    isClipping: false, isMeasuring: false, isAnnotationMode: false,
 };
 export const selectedObjects = [];
 export const modelParts = [];
@@ -69,6 +70,7 @@ async function loadModel(modelRef) {
     try {
         const url = await getDownloadURL(modelRef);
         currentCleanup = initThreeScene(url, onPointerDown);
+        initAnnotations(modelRef.name.replace('.glb', ''), scene);
     } catch (error) {
         console.error("Error getting download URL or initializing scene:", error);
         updateStatus(`Error al cargar el modelo ${modelRef.name}.`, true);
