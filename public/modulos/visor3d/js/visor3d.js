@@ -62,7 +62,7 @@ export async function runVisor3dLogic() {
 
     const selector = document.getElementById('model-selector');
     try {
-        const response = await fetch('/api/models');
+        const response = await fetch('/modulos/visor3d/data/models.json');
         const models = await response.json();
 
         if (models.length === 0) {
