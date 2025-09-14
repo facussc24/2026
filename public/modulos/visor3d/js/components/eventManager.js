@@ -232,7 +232,7 @@ export function setupVisor3dEventListeners() {
             }
         });
         if (state.outlinePass) {
-            state.outlinePass.selectedObjects = searchTerm.length > 0 ? highlightedObjects : selectedObjects;
+            state.outlinePass.selectedObjects = searchTerm.length > 0 ? highlightedObjects : [];
         }
     });
 
