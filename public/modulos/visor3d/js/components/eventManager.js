@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import TWEEN from '@tweenjs/tween.js';
 import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, measurementLine, measurementLabel, clippingPlanes } from '../visor3d.js';
 import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setBackgroundColor, setSunIntensity, setAmbientLightIntensity, scene } from './sceneManager.js';
 import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton } from './uiManager.js';
