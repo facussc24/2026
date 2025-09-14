@@ -52,7 +52,7 @@
         "headers": [
           {
             "key": "Content-Security-Policy",
-            "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net/npm/ https://cdnjs.cloudflare.com/ https://api.dicebear.com https://cdn.tailwindcss.com https://unpkg.com; object-src 'none'; base-uri 'self'; img-src 'self' data: https://api.dicebear.com https://images.pexels.com;"
+            "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net/npm/ https://cdn.jsdelivr.net/gh/ https://cdnjs.cloudflare.com/ https://api.dicebear.com https://cdn.tailwindcss.com https://unpkg.com; object-src 'none'; base-uri 'self'; img-src 'self' data: https://api.dicebear.com https://images.pexels.com;"
           }
         ]
       }

@@ -1,4 +1,3 @@
-import { createIcons, icons } from 'lucide';
 import { state, selectedObjects, partCharacteristics } from '../visor3d.js';
 
 export function createVisorUI() {
@@ -90,7 +89,7 @@ export function createVisorUI() {
         </div>
     `;
     document.body.classList.add('visor3d-active');
-    createIcons({ icons });
+    lucide.createIcons();
     document.querySelectorAll('.visor-section').forEach(details => details.open = false);
 }
 
@@ -134,7 +133,7 @@ export function renderPartsList(partNames) {
             `).join('')}
         </ul>
     `;
-    createIcons({ icons });
+    lucide.createIcons();
 }
 
 export function updatePieceCard(object) {
@@ -223,7 +222,7 @@ export function updateIsolationButton(isIsolated) {
         isolateBtn.setAttribute('title', isIsolated ? 'Mostrar Todo' : 'Aislar Pieza');
         if (icon) {
             icon.setAttribute('data-lucide', isIsolated ? 'eye' : 'zap');
-            createIcons({ icons });
+            lucide.createIcons();
         }
     }
 }

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import TWEEN from '@tweenjs/tween.js';
-import { createIcons, icons } from 'lucide';
 import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, measurementLine, measurementLabel, clippingPlanes } from '../visor3d.js';
 import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setBackgroundColor, setSunIntensity, setAmbientLightIntensity, scene } from './sceneManager.js';
 import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton } from './uiManager.js';
@@ -266,7 +265,7 @@ export function setupVisor3dEventListeners() {
             partToAffect.visible = !partToAffect.visible;
             const icon = actionButton.querySelector('i');
             icon.setAttribute('data-lucide', partToAffect.visible ? 'eye' : 'eye-off');
-            createIcons({icons});
+            lucide.createIcons();
         } else {
             updateSelection(partToAffect, e.ctrlKey);
         }
@@ -283,7 +282,7 @@ export function setupVisor3dEventListeners() {
         modelParts.forEach(part => { part.visible = true; });
         document.querySelectorAll('#visor3d-parts-list button[data-action="toggle-visibility"] i').forEach(icon => {
             icon.setAttribute('data-lucide', 'eye');
-            createIcons({icons});
+            lucide.createIcons();
         });
 
         if (controls) controls.reset();
