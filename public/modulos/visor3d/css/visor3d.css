@@ -189,3 +189,15 @@ body.visor3d-active {
     border: 1px solid #555;
     background-color: rgba(0, 0, 0, 0.2);
 }
+
+/* Measurement Label Styles */
+.visor3d-measurement-label {
+    color: #ffffff;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-family: sans-serif;
+    font-size: 14px;
+    pointer-events: none; /* Avoid blocking mouse events */
+    white-space: nowrap; /* Prevent wrapping */
+}
