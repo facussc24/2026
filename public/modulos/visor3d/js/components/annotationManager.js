@@ -1,7 +1,7 @@
 import { getApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { showAnnotationPanel } from './eventManager.js';
+// No longer import from eventManager to break circular dependency
 
 let db;
 const getDb = () => {
@@ -88,8 +88,8 @@ export async function addCommentToAnnotation(annotationId, comment) {
     try {
         await setDoc(docRef, { annotations: currentAnnotations });
         console.log("Comment added successfully.");
-        // Refresh the panel with the new comment
-        showAnnotationPanel(currentAnnotations[annotationIndex]);
+        // Refresh the panel with the new comment by dispatching an event
+        window.dispatchEvent(new CustomEvent('show-annotation', { detail: currentAnnotations[annotationIndex] }));
     } catch (error) {
         console.error("Error adding comment: ", error);
         // Revert local change on error
@@ -114,7 +114,7 @@ function createAnnotationPin(annotation, scene) {
 
     pinElement.addEventListener('click', (event) => {
         event.stopPropagation();
-        showAnnotationPanel(annotation);
+        window.dispatchEvent(new CustomEvent('show-annotation', { detail: annotation }));
     });
 
     scene.add(pinObject);

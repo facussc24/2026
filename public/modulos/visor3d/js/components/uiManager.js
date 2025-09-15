@@ -7,7 +7,6 @@ export function createVisorUI() {
     container.innerHTML = `
         <div id="visor3d-container">
             <div id="visor3d-scene-container">
-                <div id="axis-gizmo-container"></div>
                 <div id="visor3d-status" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100/80 z-10">
                     <p id="visor3d-status-text" class="text-slate-600 font-semibold text-lg animate-pulse mb-4">Seleccione un modelo para comenzar...</p>
                     <div id="visor3d-progress-bar-container" class="w-1/2 bg-slate-300 rounded-full h-4 hidden">
@@ -15,6 +14,7 @@ export function createVisorUI() {
                     </div>
                 </div>
             </div>
+            <div id="axis-gizmo-container"></div>
             <div id="visor3d-panel">
                 <div id="visor3d-panel-header">
                     <div class="space-y-2 mb-2">
