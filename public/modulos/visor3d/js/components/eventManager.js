@@ -318,6 +318,10 @@ export function setupVisor3dEventListeners() {
         addCommentToAnnotation(annotationId, comment);
         document.getElementById('comment-text').value = '';
     });
+
+    window.addEventListener('show-annotation', (event) => {
+        showAnnotationPanel(event.detail);
+    });
 }
 
 import { saveAnnotation, addCommentToAnnotation } from './annotationManager.js';
