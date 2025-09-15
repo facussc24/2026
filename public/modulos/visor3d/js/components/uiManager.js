@@ -41,16 +41,14 @@ export function createVisorUI() {
                     <input type="text" id="visor3d-search" placeholder="Buscar pieza..." class="mt-2">
                 </div>
                 <div id="visor3d-controls-container" class="p-2 border-b border-slate-200">
-                    <details class="visor-section" open>
+                    <details class="visor-section">
                         <summary>Controles Visuales</summary>
                         <div class="visor-section-content">
-                            <button id="change-bg-btn" class="w-full p-2 text-sm font-semibold border rounded-md hover:bg-slate-100">Cambiar Fondo</button>
-
-                            <label for="sun-intensity" class="mt-2">Intensidad Sol</label>
+                            <label for="sun-intensity">Intensidad Sol</label>
                             <input type="range" id="sun-intensity" min="0" max="4" step="0.1" value="2.5">
 
-                            <label for="ambient-light" class="mt-2">Luz Ambiente</label>
-                            <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.8">
+                            <label for="ambient-light">Luz Ambiente</label>
+                            <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.5">
 
                             <div id="explode-controls" class="hidden mt-2">
                                 <label for="explode-factor" class="font-semibold text-sm text-slate-600">Distancia de Explosión</label>
@@ -123,6 +121,29 @@ export function updateStatus(message, isError = false, showProgressBar = false) 
         } else {
             statusEl.classList.add('hidden');
         }
+    }
+}
+
+export function disableAnnotationFeatures() {
+    const annotationBtn = document.getElementById('annotation-btn');
+    if (annotationBtn) {
+        annotationBtn.disabled = true;
+        annotationBtn.title = "Anotaciones deshabilitadas por configuración del servidor";
+    }
+    // Optionally, hide the button entirely
+    // if (annotationBtn) annotationBtn.style.display = 'none';
+
+    // Also disable the panel in case it's somehow opened
+    const panel = document.getElementById('visor3d-annotations-panel');
+    if (panel) panel.classList.add('hidden');
+
+    // You could also show a persistent message on the UI
+    const statusContainer = document.getElementById('visor3d-status');
+    if (statusContainer && statusContainer.classList.contains('hidden')) {
+        const notice = document.createElement('p');
+        notice.className = 'absolute bottom-4 left-1/2 -translate-x-1/2 bg-amber-100 text-amber-800 text-sm font-semibold px-4 py-2 rounded-md shadow-lg';
+        notice.textContent = 'Las anotaciones están deshabilitadas por el administrador.';
+        document.getElementById('visor3d-scene-container').appendChild(notice);
     }
 }
 

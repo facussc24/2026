@@ -17,37 +17,6 @@ let ambientLight, directionalLight;
 let composer, fxaaPass;
 let gizmoScene, gizmoCamera;
 
-const rgbeLoader = new RGBELoader();
-const environments = [
-    { name: 'Studio', path: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/4k/studio_small_03_4k.exr' },
-    { name: 'Autoshop', path: 'https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/4k/autoshop_01_4k.exr' },
-    { name: 'Outdoor', path: 'https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr' }
-];
-let currentEnvIndex = 0;
-
-function loadHdrBackground(index) {
-    const env = environments[index];
-    rgbeLoader
-        .setDataType(env.path.endsWith('.hdr') ? THREE.UnsignedByteType : THREE.FloatType)
-        .load(env.path, (texture) => {
-            const pmremGenerator = new THREE.PMREMGenerator(renderer);
-            pmremGenerator.compileEquirectangularShader();
-            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-            scene.background = envMap;
-            scene.environment = envMap;
-            texture.dispose();
-            pmremGenerator.dispose();
-        }, undefined, (error) => {
-            console.error(`Error loading HDR environment: ${env.name}`, error);
-            scene.background = new THREE.Color(0x333333);
-        });
-}
-
-export function cycleBackground() {
-    currentEnvIndex = (currentEnvIndex + 1) % environments.length;
-    loadHdrBackground(currentEnvIndex);
-}
-
 function setupScene() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x404040);
@@ -75,7 +44,7 @@ function setupControls(camera, renderer) {
 }
 
 function setupLights(scene) {
-    ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Increased intensity
+    ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
     directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
@@ -122,8 +91,6 @@ export function initThreeScene(modelUrl, onPointerDown) {
     labelRenderer.domElement.style.pointerEvents = 'none';
     container.appendChild(labelRenderer.domElement);
 
-    loadHdrBackground(currentEnvIndex);
-
     const loader = new GLTFLoader();
     loader.load(modelUrl,
     (gltf) => {
@@ -140,6 +107,26 @@ export function initThreeScene(modelUrl, onPointerDown) {
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
+
+        // Set a proper HDR environment map for realistic lighting and reflections.
+        new RGBELoader()
+            .setDataType(THREE.FloatType) // Required for recent three.js versions
+            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
+                const pmremGenerator = new THREE.PMREMGenerator(renderer);
+                pmremGenerator.compileEquirectangularShader();
+
+                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+                scene.background = envMap;
+                scene.environment = envMap;
+
+                texture.dispose();
+                pmremGenerator.dispose();
+            }, undefined, (error) => {
+                console.error('An error occurred while loading the HDR environment map.', error);
+                // Fallback to a simple color background if HDR fails to load
+                scene.background = new THREE.Color(0x333333);
+            });
 
         const centeredBox = new THREE.Box3().setFromObject(model);
         const groundY = centeredBox.min.y;

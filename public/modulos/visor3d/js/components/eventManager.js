@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, clippingPlanes, partCharacteristics, measurementState } from '../visor3d.js';
-import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene, cycleBackground } from './sceneManager.js';
+import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene } from './sceneManager.js';
 import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton } from './uiManager.js';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
@@ -212,9 +212,6 @@ export function setupVisor3dEventListeners() {
     if (explodeFactor) explodeFactor.addEventListener('input', (e) => {
         if(state.isExploded) updateExplosion(e.target.value);
     });
-
-    const changeBgBtn = document.getElementById('change-bg-btn');
-    if (changeBgBtn) changeBgBtn.addEventListener('click', cycleBackground);
 
     const sunIntensity = document.getElementById('sun-intensity');
     if (sunIntensity) sunIntensity.addEventListener('input', (e) => setSunIntensity(e.target.value));
