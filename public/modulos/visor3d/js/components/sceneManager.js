@@ -153,9 +153,11 @@ export function initThreeScene(modelUrl, onPointerDown) {
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
         const cameraDistance = (maxDim / 2) / Math.tan(fov / 2);
-        const cameraZ = center.z + cameraDistance * 1.2;
-        const cameraY = center.y + maxDim / 4;
-        camera.position.set(center.x, cameraY, cameraZ);
+
+        // Position the camera relative to the model's new center at the origin.
+        const cameraZ = cameraDistance * 1.2;
+        const cameraY = maxDim / 4;
+        camera.position.set(0, cameraY, cameraZ);
 
         const lookAtVector = new THREE.Vector3(0, 0, 0);
         camera.lookAt(lookAtVector);
