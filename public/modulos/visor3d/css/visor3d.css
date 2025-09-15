@@ -189,3 +189,17 @@ body.visor3d-active {
     border: 1px solid #555;
     background-color: rgba(0, 0, 0, 0.2);
 }
+
+/* Styles for the measurement label to make it highly visible */
+.visor3d-measurement-label {
+    background-color: rgba(0, 0, 0, 0.75); /* Semi-transparent black background */
+    color: #ffffff;                       /* White text */
+    padding: 6px 12px;                    /* More padding */
+    border-radius: 5px;
+    font-size: 14px;
+    font-weight: bold;
+    border: 2px solid #ffff00;            /* Yellow border to match the line */
+    pointer-events: none;                 /* So it doesn't block mouse events */
+    transform: translate(10px, -50%);     /* Offset slightly from the line center */
+    white-space: nowrap;                  /* Prevent text from wrapping */
+}
