@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
 import { createVisorUI, updateStatus, updateSelectionUI } from './components/uiManager.js';
 import { initThreeScene, scene, camera, renderer, controls } from './components/sceneManager.js';
@@ -24,6 +25,13 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig, "visor3d-app");
 const storage = getStorage(app);
+const auth = getAuth(app);
+
+// Authenticate anonymously
+signInAnonymously(auth).catch((error) => {
+    console.error("Anonymous sign-in failed:", error);
+    updateStatus("Error de autenticación. No se podrán guardar anotaciones.", true);
+});
 
 // --- SHARED STATE AND VARIABLES ---
 export const state = {
@@ -34,8 +42,10 @@ export const state = {
 export const selectedObjects = [];
 export const modelParts = [];
 export const measurementPoints = [];
-export let measurementLine = null;
-export let measurementLabel = null;
+export const measurementState = {
+    line: null,
+    label: null,
+};
 export const originalPositions = new Map();
 export const explosionVectors = new Map();
 export const transparentMaterials = new Map();
@@ -66,14 +76,32 @@ async function loadModel(modelRef) {
     if (currentCleanup) {
         currentCleanup();
     }
+
+    // Reset and load part characteristics
     partCharacteristics = {};
+    const modelName = modelRef.name; // name is already clean
+    const dataUrl = `modulos/visor3d/data/${modelName}.json`;
+
+    try {
+        const response = await fetch(dataUrl);
+        if (response.ok) {
+            partCharacteristics = await response.json();
+            console.log(`Successfully loaded characteristics for ${modelName}`);
+        } else {
+            console.warn(`Could not find characteristics data for ${modelName} at ${dataUrl}. Using default behavior.`);
+        }
+    } catch (error) {
+        console.warn(`Error fetching characteristics for ${modelName}:`, error);
+    }
+
+    // Load the 3D model
     try {
         const url = await getDownloadURL(modelRef);
         currentCleanup = initThreeScene(url, onPointerDown);
-        initAnnotations(modelRef.name.replace('.glb', ''), scene);
+        initAnnotations(modelName, scene);
     } catch (error) {
         console.error("Error getting download URL or initializing scene:", error);
-        updateStatus(`Error al cargar el modelo ${modelRef.name}.`, true);
+        updateStatus(`Error al cargar el modelo ${modelName}.`, true);
     }
 }
 
