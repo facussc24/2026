@@ -3,6 +3,9 @@ import { state, modelParts, selectedObjects, transparentMaterials, originalPosit
 import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene } from './sceneManager.js';
 import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton } from './uiManager.js';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -407,10 +410,20 @@ export function updateMeasurementVisuals() {
     if (measurementPoints.length === 2) {
         const [p1, p2] = measurementPoints;
 
-        // Create line
-        const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
-        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-        measurementState.line = new THREE.Line(geometry, material);
+        // Create line with Line2 for thickness control
+        const positions = [p1.x, p1.y, p1.z, p2.x, p2.y, p2.z];
+        const geometry = new LineGeometry();
+        geometry.setPositions(positions);
+
+        const material = new LineMaterial({
+            color: 0xffff00, // Yellow
+            linewidth: 3, // In pixels
+            resolution: new THREE.Vector2(renderer.domElement.clientWidth, renderer.domElement.clientHeight),
+            depthTest: false, // Render on top
+        });
+
+        measurementState.line = new Line2(geometry, material);
+        measurementState.line.renderOrder = 999; // Ensure it's rendered last (on top)
         scene.add(measurementState.line);
 
         // Create label
