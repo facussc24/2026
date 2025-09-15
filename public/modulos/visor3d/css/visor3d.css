@@ -180,7 +180,7 @@ body.visor3d-active {
 
 /* Axis Gizmo Styles */
 #axis-gizmo-container {
-    position: absolute;
+    position: fixed;
     bottom: 20px;
     left: 20px;
     width: 100px;
