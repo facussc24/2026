@@ -111,7 +111,7 @@ export function initThreeScene(modelUrl, onPointerDown) {
         // Set a proper HDR environment map for realistic lighting and reflections.
         new RGBELoader()
             .setDataType(THREE.FloatType) // Required for recent three.js versions
-            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
+            .load('https://dl.polyhaven.org/file/ph-assets/HDRIs/exr/4k/autoshop_01_4k.exr', (texture) => {
                 const pmremGenerator = new THREE.PMREMGenerator(renderer);
                 pmremGenerator.compileEquirectangularShader();
 
@@ -335,7 +335,9 @@ export function updateClippingPlane(activeClipAxis, clipPosition) {
 
 export function setBackgroundColor(color) {
     if (scene) {
-        scene.background.set(color);
+        scene.background = new THREE.Color(color);
+        // When setting a solid color, remove the environment map to avoid reflections of the old HDR.
+        scene.environment = null;
     }
 }
 

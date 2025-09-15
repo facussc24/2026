@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, measurementLine, measurementLabel, clippingPlanes } from '../visor3d.js';
+import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, clippingPlanes, partCharacteristics, measurementState } from '../visor3d.js';
 import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setBackgroundColor, setSunIntensity, setAmbientLightIntensity, scene } from './sceneManager.js';
 import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton } from './uiManager.js';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
@@ -267,8 +267,8 @@ export function setupVisor3dEventListeners() {
         const actionButton = e.target.closest('button[data-action]');
         if (actionButton && actionButton.dataset.action === 'toggle-visibility') {
             partToAffect.visible = !partToAffect.visible;
-            const icon = actionButton.querySelector('i');
-            icon.setAttribute('data-lucide', partToAffect.visible ? 'eye' : 'eye-off');
+            const iconName = partToAffect.visible ? 'eye' : 'eye-off';
+            actionButton.innerHTML = `<i data-lucide="${iconName}" class="pointer-events-none"></i>`;
             lucide.createIcons();
         } else {
             updateSelection(partToAffect, e.ctrlKey);
@@ -395,15 +395,16 @@ function toggleMeasurement() {
 
 export function updateMeasurementVisuals() {
     // Remove existing line and label
-    if (measurementLine) {
-        scene.remove(measurementLine);
-        measurementLine.geometry.dispose();
-        measurementLine.material.dispose();
-        measurementLine = null;
+    if (measurementState.line) {
+        scene.remove(measurementState.line);
+        measurementState.line.geometry.dispose();
+        measurementState.line.material.dispose();
+        measurementState.line = null;
     }
-    if (measurementLabel) {
-        scene.remove(measurementLabel);
-        measurementLabel = null;
+    if (measurementState.label) {
+        scene.remove(measurementState.label);
+        // CSS2DObject doesn't have a dispose method for its element, it's just removed.
+        measurementState.label = null;
     }
 
     if (measurementPoints.length === 2) {
@@ -412,8 +413,8 @@ export function updateMeasurementVisuals() {
         // Create line
         const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
         const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-        measurementLine = new THREE.Line(geometry, material);
-        scene.add(measurementLine);
+        measurementState.line = new THREE.Line(geometry, material);
+        scene.add(measurementState.line);
 
         // Create label
         const distance = p1.distanceTo(p2);
@@ -421,9 +422,9 @@ export function updateMeasurementVisuals() {
         text.className = 'visor3d-measurement-label';
         text.textContent = `${distance.toFixed(2)} units`;
 
-        measurementLabel = new CSS2DObject(text);
-        measurementLabel.position.lerpVectors(p1, p2, 0.5);
-        scene.add(measurementLabel);
+        measurementState.label = new CSS2DObject(text);
+        measurementState.label.position.lerpVectors(p1, p2, 0.5);
+        scene.add(measurementState.label);
 
         // Reset for next measurement
         measurementPoints.length = 0;
