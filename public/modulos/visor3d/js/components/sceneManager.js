@@ -20,6 +20,12 @@ let gizmoScene, gizmoCamera;
 function setupScene() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x404040);
+
+    // DEBUGGING: Add a simple cube to the scene to test the rendering pipeline.
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // A bright green
+    const cube = new THREE.Mesh(geometry, material);
+    scene.add(cube);
 }
 
 function setupCamera(container) {
@@ -91,108 +97,109 @@ export function initThreeScene(modelUrl, onPointerDown) {
     labelRenderer.domElement.style.pointerEvents = 'none';
     container.appendChild(labelRenderer.domElement);
 
-    const loader = new GLTFLoader();
-    loader.load(modelUrl,
-    (gltf) => {
-        updateStatus('Procesando modelo...');
-        const model = gltf.scene;
-
-        const modelCamera = model.getObjectByProperty('type', 'PerspectiveCamera');
-        if (modelCamera) {
-            modelCamera.parent.remove(modelCamera);
-        }
-
-        scene.add(model);
-
-        const box = new THREE.Box3().setFromObject(model);
-        const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center);
-
-        // Set a proper HDR environment map for realistic lighting and reflections.
-        new RGBELoader()
-            .setDataType(THREE.FloatType) // Required for recent three.js versions
-            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
-                const pmremGenerator = new THREE.PMREMGenerator(renderer);
-                pmremGenerator.compileEquirectangularShader();
-
-                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-
-                scene.background = envMap;
-                scene.environment = envMap;
-
-                texture.dispose();
-                pmremGenerator.dispose();
-            }, undefined, (error) => {
-                console.error('An error occurred while loading the HDR environment map.', error);
-                // Fallback to a simple color background if HDR fails to load
-                scene.background = new THREE.Color(0x333333);
-            });
-
-        const centeredBox = new THREE.Box3().setFromObject(model);
-        const groundY = centeredBox.min.y;
-
-        // Solid grey floor plane instead of a grid
-        const floorGeometry = new THREE.PlaneGeometry(200, 200);
-        const floorMaterial = new THREE.MeshStandardMaterial({
-            color: 0x808080, // A mid-grey color
-            metalness: 0.1,
-            roughness: 0.8
-        });
-        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.y = groundY;
-        floor.receiveShadow = true; // The floor should receive shadows
-        scene.add(floor);
-
-        const size = box.getSize(new THREE.Vector3());
-        if (size.x === 0 && size.y === 0 && size.z === 0) {
-            updateStatus("Error: El modelo está vacío o no es visible.", true);
-            return;
-        }
-
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const fov = camera.fov * (Math.PI / 180);
-        const cameraDistance = (maxDim / 2) / Math.tan(fov / 2);
-
-        // Position the camera relative to the model's new center at the origin.
-        const cameraZ = cameraDistance * 1.2;
-        const cameraY = maxDim / 4;
-        camera.position.set(0, cameraY, cameraZ);
-
-        const lookAtVector = new THREE.Vector3(0, 0, 0);
-        camera.lookAt(lookAtVector);
-        if (controls) {
-            controls.target.copy(lookAtVector);
-            controls.update();
-        }
-
-        modelParts.length = 0;
-        const partNames = new Set();
-        model.traverse((child) => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                if (child.name) {
-                    partNames.add(child.name);
-                    modelParts.push(child);
-                }
-            }
-        });
-        renderPartsList(Array.from(partNames));
-        updateStatus(null);
-    },
-    (xhr) => {
-        if (xhr.lengthComputable) {
-            const percentComplete = (xhr.loaded / xhr.total) * 100;
-            const progressBar = document.getElementById('visor3d-progress-bar');
-            if (progressBar) progressBar.style.width = percentComplete + '%';
-            updateStatus(`Cargando modelo: ${Math.round(percentComplete)}%`, false, true);
-        }
-    },
-    (error) => {
-        console.error('An error happened while loading the model:', error);
-        updateStatus('Error: No se pudo cargar el modelo 3D.', true);
-    });
+    // --- DEBUGGING: Model loading disabled to isolate rendering issues ---
+    // const loader = new GLTFLoader();
+    // loader.load(modelUrl,
+    // (gltf) => {
+    //     updateStatus('Procesando modelo...');
+    //     const model = gltf.scene;
+    //
+    //     const modelCamera = model.getObjectByProperty('type', 'PerspectiveCamera');
+    //     if (modelCamera) {
+    //         modelCamera.parent.remove(modelCamera);
+    //     }
+    //
+    //     scene.add(model);
+    //
+    //     const box = new THREE.Box3().setFromObject(model);
+    //     const center = box.getCenter(new THREE.Vector3());
+    //     model.position.sub(center);
+    //
+    //     // Set a proper HDR environment map for realistic lighting and reflections.
+    //     new RGBELoader()
+    //         .setDataType(THREE.FloatType) // Required for recent three.js versions
+    //         .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
+    //             const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    //             pmremGenerator.compileEquirectangularShader();
+    //
+    //             const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+    //
+    //             scene.background = envMap;
+    //             scene.environment = envMap;
+    //
+    //             texture.dispose();
+    //             pmremGenerator.dispose();
+    //         }, undefined, (error) => {
+    //             console.error('An error occurred while loading the HDR environment map.', error);
+    //             // Fallback to a simple color background if HDR fails to load
+    //             scene.background = new THREE.Color(0x333333);
+    //         });
+    //
+    //     const centeredBox = new THREE.Box3().setFromObject(model);
+    //     const groundY = centeredBox.min.y;
+    //
+    //     // Solid grey floor plane instead of a grid
+    //     const floorGeometry = new THREE.PlaneGeometry(200, 200);
+    //     const floorMaterial = new THREE.MeshStandardMaterial({
+    //         color: 0x808080, // A mid-grey color
+    //         metalness: 0.1,
+    //         roughness: 0.8
+    //     });
+    //     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    //     floor.rotation.x = -Math.PI / 2;
+    //     floor.position.y = groundY;
+    //     floor.receiveShadow = true; // The floor should receive shadows
+    //     scene.add(floor);
+    //
+    //     const size = box.getSize(new THREE.Vector3());
+    //     if (size.x === 0 && size.y === 0 && size.z === 0) {
+    //         updateStatus("Error: El modelo está vacío o no es visible.", true);
+    //         return;
+    //     }
+    //
+    //     const maxDim = Math.max(size.x, size.y, size.z);
+    //     const fov = camera.fov * (Math.PI / 180);
+    //     const cameraDistance = (maxDim / 2) / Math.tan(fov / 2);
+    //
+    //     // Position the camera relative to the model's new center at the origin.
+    //     const cameraZ = cameraDistance * 1.2;
+    //     const cameraY = maxDim / 4;
+    //     camera.position.set(0, cameraY, cameraZ);
+    //
+    //     const lookAtVector = new THREE.Vector3(0, 0, 0);
+    //     camera.lookAt(lookAtVector);
+    //     if (controls) {
+    //         controls.target.copy(lookAtVector);
+    //         controls.update();
+    //     }
+    //
+    //     modelParts.length = 0;
+    //     const partNames = new Set();
+    //     model.traverse((child) => {
+    //         if (child.isMesh) {
+    //             child.castShadow = true;
+    //             child.receiveShadow = true;
+    //             if (child.name) {
+    //                 partNames.add(child.name);
+    //                 modelParts.push(child);
+    //             }
+    //         }
+    //     });
+    //     renderPartsList(Array.from(partNames));
+    //     updateStatus(null);
+    // },
+    // (xhr) => {
+    //     if (xhr.lengthComputable) {
+    //         const percentComplete = (xhr.loaded / xhr.total) * 100;
+    //         const progressBar = document.getElementById('visor3d-progress-bar');
+    //         if (progressBar) progressBar.style.width = percentComplete + '%';
+    //         updateStatus(`Cargando modelo: ${Math.round(percentComplete)}%`, false, true);
+    //     }
+    // },
+    // (error) => {
+    //     console.error('An error happened while loading the model:', error);
+    //     updateStatus('Error: No se pudo cargar el modelo 3D.', true);
+    // });
 
     renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
 
@@ -236,7 +243,8 @@ export function initThreeScene(modelUrl, onPointerDown) {
         renderer.clear();
         renderer.setScissorTest(true);
 
-        composer.render();
+        // DEBUGGING: Use basic renderer instead of composer
+        renderer.render(scene, camera);
         if (labelRenderer) labelRenderer.render(scene, camera);
 
         // render gizmo
