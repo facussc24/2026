@@ -41,17 +41,16 @@ export function createVisorUI() {
                     <input type="text" id="visor3d-search" placeholder="Buscar pieza..." class="mt-2">
                 </div>
                 <div id="visor3d-controls-container" class="p-2 border-b border-slate-200">
-                    <details class="visor-section">
+                    <details class="visor-section" open>
                         <summary>Controles Visuales</summary>
                         <div class="visor-section-content">
-                            <label for="bg-color">Fondo</label>
-                            <input type="color" id="bg-color" value="#404040">
+                            <button id="change-bg-btn" class="w-full p-2 text-sm font-semibold border rounded-md hover:bg-slate-100">Cambiar Fondo</button>
 
-                            <label for="sun-intensity">Intensidad Sol</label>
+                            <label for="sun-intensity" class="mt-2">Intensidad Sol</label>
                             <input type="range" id="sun-intensity" min="0" max="4" step="0.1" value="2.5">
 
-                            <label for="ambient-light">Luz Ambiente</label>
-                            <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.5">
+                            <label for="ambient-light" class="mt-2">Luz Ambiente</label>
+                            <input type="range" id="ambient-light" min="0" max="2" step="0.05" value="0.8">
 
                             <div id="explode-controls" class="hidden mt-2">
                                 <label for="explode-factor" class="font-semibold text-sm text-slate-600">Distancia de Explosión</label>

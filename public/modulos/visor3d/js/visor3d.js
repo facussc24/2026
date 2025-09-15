@@ -33,6 +33,7 @@ signInAnonymously(auth).catch((error) => {
     updateStatus("Error de autenticación. No se podrán guardar anotaciones.", true);
 });
 
+
 // --- SHARED STATE AND VARIABLES ---
 export const state = {
     outlinePass: null, isExploded: false, isIsolated: false, isolatedObjects: [],
