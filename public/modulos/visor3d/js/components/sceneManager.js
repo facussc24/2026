@@ -108,11 +108,25 @@ export function initThreeScene(modelUrl, onPointerDown) {
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
 
-        // Set a neutral environment map to provide some basic reflections
-        const envScene = new THREE.Scene();
-        envScene.background = new THREE.Color(0xffffff);
-        scene.environment = new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
-        scene.background = new THREE.Color(0x333333); // A darker grey for a more professional look
+        // Set a proper HDR environment map for realistic lighting and reflections.
+        new RGBELoader()
+            .setDataType(THREE.FloatType) // Required for recent three.js versions
+            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
+                const pmremGenerator = new THREE.PMREMGenerator(renderer);
+                pmremGenerator.compileEquirectangularShader();
+
+                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+                scene.background = envMap;
+                scene.environment = envMap;
+
+                texture.dispose();
+                pmremGenerator.dispose();
+            }, undefined, (error) => {
+                console.error('An error occurred while loading the HDR environment map.', error);
+                // Fallback to a simple color background if HDR fails to load
+                scene.background = new THREE.Color(0x333333);
+            });
 
         const centeredBox = new THREE.Box3().setFromObject(model);
         const groundY = centeredBox.min.y;
