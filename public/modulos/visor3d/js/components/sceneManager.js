@@ -109,7 +109,9 @@ export function initThreeScene(modelUrl, onPointerDown) {
         model.position.sub(center);
 
         // Set a neutral environment map to provide some basic reflections
-        scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new THREE.Scene().add(new THREE.Color(0xffffff))).texture;
+        const envScene = new THREE.Scene();
+        envScene.background = new THREE.Color(0xffffff);
+        scene.environment = new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
         scene.background = new THREE.Color(0x333333); // A darker grey for a more professional look
 
         const centeredBox = new THREE.Box3().setFromObject(model);
