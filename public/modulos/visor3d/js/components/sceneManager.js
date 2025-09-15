@@ -335,9 +335,12 @@ export function updateClippingPlane(activeClipAxis, clipPosition) {
 
 export function setBackgroundColor(color) {
     if (scene) {
+        // Replace the background texture with a solid color.
+        // The .set() method is only for Color objects, and scene.background
+        // could be a texture. So, we create a new Color object.
         scene.background = new THREE.Color(color);
-        // When setting a solid color, remove the environment map to avoid reflections of the old HDR.
-        scene.environment = null;
+        // We intentionally do NOT set scene.environment to null, so that the
+        // model continues to be lit by and reflect the HDR environment.
     }
 }
 
