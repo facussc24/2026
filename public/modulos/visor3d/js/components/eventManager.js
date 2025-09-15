@@ -418,9 +418,10 @@ export function updateMeasurementVisuals() {
 
         // Create label
         const distance = p1.distanceTo(p2);
+        const distanceInMm = distance * 1000;
         const text = document.createElement('div');
         text.className = 'visor3d-measurement-label';
-        text.textContent = `${distance.toFixed(2)} units`;
+        text.textContent = `${distanceInMm.toFixed(2)} mm`;
 
         measurementState.label = new CSS2DObject(text);
         measurementState.label.position.lerpVectors(p1, p2, 0.5);
