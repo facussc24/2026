@@ -3,7 +3,7 @@ import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.co
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-import { createVisorUI, updateStatus, updateSelectionUI } from './components/uiManager.js';
+import { createVisorUI, updateStatus, updateSelectionUI, disableAnnotationFeatures } from './components/uiManager.js';
 import { initThreeScene, scene, camera, renderer, controls } from './components/sceneManager.js';
 import { setupVisor3dEventListeners, onPointerDown, updateSelection, toggleSelectionTransparency, toggleIsolation } from './components/eventManager.js';
 import { initAnnotations } from './components/annotationManager.js';
@@ -30,9 +30,12 @@ const auth = getAuth(app);
 // Authenticate anonymously
 signInAnonymously(auth).catch((error) => {
     console.error("Anonymous sign-in failed:", error);
-    updateStatus("Error de autenticación. No se podrán guardar anotaciones.", true);
+    if (error.code === 'auth/admin-restricted-operation') {
+        disableAnnotationFeatures();
+    } else {
+        updateStatus("Error de autenticación. No se podrán guardar anotaciones.", true);
+    }
 });
-
 
 // --- SHARED STATE AND VARIABLES ---
 export const state = {
@@ -78,11 +81,12 @@ async function loadModel(modelRef) {
         currentCleanup();
     }
 
-    // Reset and load part characteristics
-    partCharacteristics = {};
-    const modelName = modelRef.name; // name is already clean
+    // Sanitize model name and prepare data URL
+    const modelName = modelRef.name.replace(/\.glb$/i, '');
     const dataUrl = `modulos/visor3d/data/${modelName}.json`;
 
+    // Reset and load part characteristics
+    partCharacteristics = {};
     try {
         const response = await fetch(dataUrl);
         if (response.ok) {
