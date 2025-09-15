@@ -200,14 +200,13 @@ export function initThreeScene(modelUrl, onPointerDown) {
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
-    // DEBUGGING: Temporarily disable OutlinePass to check if it's the cause of the black screen.
-    // state.outlinePass = new OutlinePass(new THREE.Vector2(container.offsetWidth, container.offsetHeight), scene, camera);
-    // state.outlinePass.edgeStrength = 5;
-    // state.outlinePass.edgeGlow = 0.5;
-    // state.outlinePass.edgeThickness = 1;
-    // state.outlinePass.visibleEdgeColor.set('#007bff');
-    // state.outlinePass.hiddenEdgeColor.set('#007bff');
-    // composer.addPass(state.outlinePass);
+    state.outlinePass = new OutlinePass(new THREE.Vector2(container.offsetWidth, container.offsetHeight), scene, camera);
+    state.outlinePass.edgeStrength = 5;
+    state.outlinePass.edgeGlow = 0.5;
+    state.outlinePass.edgeThickness = 1;
+    state.outlinePass.visibleEdgeColor.set('#007bff');
+    state.outlinePass.hiddenEdgeColor.set('#007bff');
+    composer.addPass(state.outlinePass);
 
     fxaaPass = new ShaderPass(FXAAShader);
     const pixelRatio = renderer.getPixelRatio();
@@ -233,9 +232,17 @@ export function initThreeScene(modelUrl, onPointerDown) {
         }
 
         // render main scene
-        renderer.setScissorTest(false);
-        renderer.clear();
-        renderer.setScissorTest(true);
+        // It's crucial to reset the viewport and scissor before rendering the main scene.
+        // The gizmo render in the previous frame modifies these, and if not reset,
+        // the main scene will be rendered into the tiny gizmo viewport.
+        const container = document.getElementById('visor3d-scene-container');
+        if (container) {
+            const width = container.offsetWidth;
+            const height = container.offsetHeight;
+            renderer.setViewport(0, 0, width, height);
+            renderer.setScissor(0, 0, width, height);
+        }
+        renderer.setScissorTest(true); // Ensure scissor is on for both composer and gizmo
 
         composer.render();
         if (labelRenderer) labelRenderer.render(scene, camera);
