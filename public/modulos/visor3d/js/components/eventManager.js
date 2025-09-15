@@ -23,7 +23,12 @@ export function onPointerDown(event) {
         if (firstVisibleHit) targetObject = firstVisibleHit.object;
     }
 
-    if (state.isMeasuring) {
+    if (state.isSelectionTransparencyActive) {
+        if (targetObject) {
+            // In this mode, clicking a part makes it opaque again.
+            restorePartMaterial(targetObject);
+        }
+    } else if (state.isMeasuring) {
         if (intersects.length > 0) {
             const pt = intersects[0].point;
             measurementPoints.push(pt);
@@ -68,49 +73,62 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
     applySelectionTransparency();
 }
 
-function applySelectionTransparency(forceRestore = false) {
-    if (!state.isSelectionTransparencyActive && !forceRestore) {
-        if (!forceRestore) return;
+// --- Transparency Mode Logic ---
+
+function makePartTransparent(part) {
+    if (transparentMaterials.has(part.uuid)) return; // Already transparent
+
+    transparentMaterials.set(part.uuid, part.material);
+    const makeSingleMaterialTransparent = (material) => {
+        const transparentMat = material.clone();
+        transparentMat.transparent = true;
+        transparentMat.opacity = 0.15;
+        transparentMat.emissive = new THREE.Color(0x000000);
+        transparentMat.depthWrite = false; // Often helps with transparency artifacts
+        return transparentMat;
+    };
+
+    part.material = Array.isArray(part.material)
+        ? part.material.map(makeSingleMaterialTransparent)
+        : makeSingleMaterialTransparent(part.material);
+    part.material.needsUpdate = true;
+}
+
+function restorePartMaterial(part) {
+    if (!transparentMaterials.has(part.uuid)) return; // Already opaque
+
+    part.material = transparentMaterials.get(part.uuid);
+    transparentMaterials.delete(part.uuid);
+    part.material.needsUpdate = true;
+}
+
+function enterTransparencyMode() {
+    state.isSelectionTransparencyActive = true;
+    toggleButtonActive('selection-transparency-btn', true);
+    updateSelection(null, false); // Clear existing selections
+    modelParts.forEach(makePartTransparent);
+    document.addEventListener('keydown', handleEscapeKey);
+}
+
+function exitTransparencyMode() {
+    state.isSelectionTransparencyActive = false;
+    toggleButtonActive('selection-transparency-btn', false);
+    modelParts.forEach(restorePartMaterial);
+    transparentMaterials.clear(); // Ensure everything is restored
+    document.removeEventListener('keydown', handleEscapeKey);
+}
+
+function handleEscapeKey(event) {
+    if (event.key === 'Escape' && state.isSelectionTransparencyActive) {
+        exitTransparencyMode();
     }
-
-    const selectedUuids = new Set(selectedObjects.map(obj => obj.uuid));
-
-    modelParts.forEach(part => {
-        const isSelected = selectedUuids.has(part.uuid);
-        if (state.isSelectionTransparencyActive && !isSelected && !forceRestore) {
-            if (!transparentMaterials.has(part.uuid)) {
-                transparentMaterials.set(part.uuid, part.material);
-                const makeTransparent = (material) => {
-                    const transparentMat = material.clone();
-                    transparentMat.transparent = true;
-                    transparentMat.opacity = 0.2; // Increased opacity
-                    transparentMat.emissive = new THREE.Color(0x000000);
-                    transparentMat.depthWrite = true; // Enable depth write
-                    return transparentMat;
-                };
-                part.material = Array.isArray(part.material) ? part.material.map(makeTransparent) : makeTransparent(part.material);
-            }
-        } else {
-            if (transparentMaterials.has(part.uuid)) {
-                part.material = transparentMaterials.get(part.uuid);
-                transparentMaterials.delete(part.uuid);
-            }
-        }
-        if (Array.isArray(part.material)) {
-            part.material.forEach(m => m.needsUpdate = true);
-        } else {
-            part.material.needsUpdate = true;
-        }
-    });
 }
 
 export function toggleSelectionTransparency() {
-    state.isSelectionTransparencyActive = !state.isSelectionTransparencyActive;
-    toggleButtonActive('selection-transparency-btn', state.isSelectionTransparencyActive);
-    if (state.isSelectionTransparencyActive) {
-        applySelectionTransparency();
+    if (!state.isSelectionTransparencyActive) {
+        enterTransparencyMode();
     } else {
-        applySelectionTransparency(true);
+        exitTransparencyMode();
     }
 }
 
@@ -408,7 +426,11 @@ export function updateMeasurementVisuals() {
         const [p1, p2] = measurementPoints;
 
         // Create line
-        const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+        const material = new THREE.LineBasicMaterial({
+            color: 0xffff00, // Bright yellow for high contrast
+            linewidth: 5,    // Increased width (note: may not work on all GPUs)
+            depthTest: false // Render on top of other objects
+        });
         const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
         measurementState.line = new THREE.Line(geometry, material);
         scene.add(measurementState.line);
