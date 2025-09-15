@@ -83,8 +83,7 @@ async function loadModel(modelRef) {
 
     // Sanitize model name and prepare data URL
     const modelName = modelRef.name.replace(/\.glb$/i, '');
-    const sanitizedModelName = modelName.replace(/ /g, '-');
-    const dataUrl = `modulos/visor3d/data/${sanitizedModelName}.json`;
+    const dataUrl = `modulos/visor3d/data/${modelName}.json`;
 
     // Reset and load part characteristics
     partCharacteristics = {};
