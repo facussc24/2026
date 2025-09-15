@@ -83,9 +83,9 @@ function applySelectionTransparency(forceRestore = false) {
                 const makeTransparent = (material) => {
                     const transparentMat = material.clone();
                     transparentMat.transparent = true;
-                    transparentMat.opacity = 0.1;
+                    transparentMat.opacity = 0.2; // Increased opacity
                     transparentMat.emissive = new THREE.Color(0x000000);
-                    transparentMat.depthWrite = false;
+                    transparentMat.depthWrite = true; // Enable depth write
                     return transparentMat;
                 };
                 part.material = Array.isArray(part.material) ? part.material.map(makeTransparent) : makeTransparent(part.material);
