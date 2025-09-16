@@ -38,11 +38,29 @@ export function onPointerDown(event) {
             createAnnotationAtPoint(pt);
         }
     } else {
-        if (!targetObject && !event.ctrlKey) {
+        if (!targetObject && !event.ctrlKey && !state.isSelectionLocked) {
             updateSelection(null, false);
         } else if (targetObject && targetObject.name) {
             updateSelection(targetObject, event.ctrlKey);
         }
+    }
+}
+
+export function toggleSelectionLock() {
+    state.isSelectionLocked = !state.isSelectionLocked;
+    toggleButtonActive('lock-selection-btn', state.isSelectionLocked);
+
+    const lockButton = document.getElementById('lock-selection-btn');
+    if (lockButton) {
+        const icon = lockButton.querySelector('i');
+        if (state.isSelectionLocked) {
+            lockButton.setAttribute('title', 'Desbloquear Selección');
+            if (icon) icon.setAttribute('data-lucide', 'unlock');
+        } else {
+            lockButton.setAttribute('title', 'Bloquear Selección');
+            if (icon) icon.setAttribute('data-lucide', 'lock');
+        }
+        if (window.lucide) window.lucide.createIcons();
     }
 }
 
@@ -65,6 +83,11 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
 
     if (state.outlinePass) {
         state.outlinePass.selectedObjects = selectedObjects;
+    }
+
+    // If the selection is cleared, unlock it.
+    if (selectedObjects.length === 0 && state.isSelectionLocked) {
+        toggleSelectionLock();
     }
 
     updateSelectionUI();
@@ -199,6 +222,9 @@ export function setupVisor3dEventListeners() {
     const isolateBtn = document.getElementById('isolate-btn');
     if (isolateBtn) isolateBtn.addEventListener('click', toggleIsolation);
 
+    const lockSelectionBtn = document.getElementById('lock-selection-btn');
+    if (lockSelectionBtn) lockSelectionBtn.addEventListener('click', toggleSelectionLock);
+
     const selectionTransparencyBtn = document.getElementById('selection-transparency-btn');
     if (selectionTransparencyBtn) selectionTransparencyBtn.addEventListener('click', toggleSelectionTransparency);
 
@@ -283,6 +309,7 @@ export function setupVisor3dEventListeners() {
         if (state.isIsolated) toggleIsolation();
         if (state.isClipping) toggleClippingView();
         if (state.isAnnotationMode) toggleAnnotationMode();
+        if (state.isSelectionLocked) toggleSelectionLock();
 
         modelParts.forEach(part => { part.visible = true; });
         document.querySelectorAll('#visor3d-parts-list button[data-action="toggle-visibility"] i').forEach(icon => {

@@ -41,7 +41,7 @@ signInAnonymously(auth).catch((error) => {
 export const state = {
     outlinePass: null, isExploded: false, isIsolated: false, isolatedObjects: [],
     isSelectionTransparencyActive: false, preIsolationVisibility: new Map(),
-    isClipping: false, isMeasuring: false, isAnnotationMode: false,
+    isClipping: false, isMeasuring: false, isAnnotationMode: false, isSelectionLocked: false,
 };
 export const selectedObjects = [];
 export const modelParts = [];

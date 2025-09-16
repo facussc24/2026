@@ -26,7 +26,8 @@
     "jest-environment-jsdom": "^30.1.2",
     "jest-playwright-preset": "^4.0.0",
     "playwright": "^1.55.0",
-    "tailwindcss": "^4.1.12"
+    "tailwindcss": "^4.1.12",
+    "three": "^0.180.0"
   },
   "dependencies": {
     "@playwright/test": "^1.55.0",

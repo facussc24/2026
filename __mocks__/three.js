@@ -167,11 +167,16 @@ export class Mesh {
         this.position = new Vector3();
     }
 }
+export class DataTextureLoader {}
 export class EffectComposer {
     addPass() {}
     setSize() {}
     render() {}
 }
+
+export class Line2 {}
+export class LineGeometry {}
+export class LineMaterial {}
 
 export class CSS2DObject extends Function {}
 export class RenderPass {}
