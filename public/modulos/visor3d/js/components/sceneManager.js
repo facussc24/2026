@@ -23,7 +23,8 @@ function setupScene() {
 }
 
 function setupCamera(container) {
-    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.01, 5000);
+    // Adjusted near and far planes to improve depth buffer precision and reduce Z-fighting.
+    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 2000);
     camera.position.z = 5;
 }
 
