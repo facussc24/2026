@@ -8433,44 +8433,53 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                 <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
             </div>
             <form id="task-form" class="p-6 overflow-y-auto" novalidate>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <!-- Simple vertical layout -->
+                <div class="space-y-4">
                     <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
                     <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
-                    <div class="md:col-span-2">
+
+                    <div>
                         <label for="task-title" class="block text-sm font-medium text-gray-700 mb-1">Título</label>
                         <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
                     </div>
-                    <div class="md:col-span-2">
+
+                    <div>
                         <label for="task-description" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
                         <textarea id="task-description" name="description" rows="4" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">${isEditing && task.description ? task.description : ''}</textarea>
                     </div>
 
-                    <!-- Grid-based layout for other fields -->
-                    <div>
-                        <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
-                        <select id="task-assignee" name="assigneeUid" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" data-selected-uid="${selectedUid}">
-                            <option value="">Cargando...</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-                        <select id="task-priority" name="priority" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                            <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
-                            <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
-                            <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-                        <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                    </div>
-                    <div>
-                        <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
-                        <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    <!-- Group assignee and priority -->
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1">
+                            <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
+                            <select id="task-assignee" name="assigneeUid" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" data-selected-uid="${selectedUid}">
+                                <option value="">Cargando...</option>
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
+                            <select id="task-priority" name="priority" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                                <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
+                                <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
+                                <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <!-- Subtasks and Comments now span the full width -->
-                    <div class="md:col-span-2 space-y-2 pt-2">
+                    <!-- Group dates -->
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1">
+                            <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+                            <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                        </div>
+                        <div class="flex-1">
+                            <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
+                            <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                        </div>
+                    </div>
+
+                    <!-- Subtasks -->
+                    <div class="space-y-2 pt-2">
                         <label class="block text-sm font-medium text-gray-700">Sub-tareas</label>
                         <div id="subtasks-list" class="space-y-2 max-h-48 overflow-y-auto p-2 rounded-md bg-slate-50 border"></div>
                         <div class="flex items-center gap-2">
@@ -8478,7 +8487,9 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                             <input type="text" id="new-subtask-title" name="new-subtask-title" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Añadir sub-tarea y presionar Enter">
                         </div>
                     </div>
-                    <div class="md:col-span-2 space-y-2 pt-4 border-t mt-4">
+
+                    <!-- Comments -->
+                    <div class="space-y-2 pt-4 border-t mt-4">
                         <label class="block text-sm font-medium text-gray-700">Comentarios</label>
                         <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-50 border custom-scrollbar">
                             <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
@@ -8491,8 +8502,9 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                         </div>
                     </div>
 
+                    <!-- Admin-only public toggle -->
                     ${appState.currentUser.role === 'admin' ? `
-                    <div class="md:col-span-2 pt-2">
+                    <div class="pt-2">
                         <label class="flex items-center space-x-3 cursor-pointer">
                             <input type="checkbox" id="task-is-public" name="isPublic" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isEditing && task.isPublic ? 'checked' : ''}>
                             <span class="text-sm font-medium text-gray-700">Tarea Pública (Visible para todos en Ingeniería)</span>
