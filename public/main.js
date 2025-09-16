@@ -3061,7 +3061,24 @@ async function runIndicadoresEcmViewLogic() {
             const ecrChartCtx = document.getElementById('ecr-doughnut-chart')?.getContext('2d');
             if (ecrChartCtx) {
                 if (ecrChart) ecrChart.destroy();
-                ecrChart = new Chart(ecrChartCtx, createDashboardChartConfig('doughnut', ["Abiertas", "Canceladas", "En Plazo", "Fuera de Plazo"], [ecrAbierta, ecrCancelada, ecrCerradaPlazo, ecrCerradaFueraPlazo], "Distribución de ECRs"));
+                try {
+                    ecrChart = new Chart(ecrChartCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ["Abiertas", "Canceladas", "En Plazo", "Fuera de Plazo"],
+                            datasets: [{
+                                data: [ecrAbierta, ecrCancelada, ecrCerradaPlazo, ecrCerradaFueraPlazo],
+                                backgroundColor: ['#60a5fa', '#f87171', '#4ade80', '#facc15'],
+                                borderColor: '#ffffff',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, title: { display: true, text: 'Distribución de ECRs' } } }
+                    });
+                } catch (error) {
+                    console.error("Error rendering ECR doughnut chart:", error);
+                    ecrChartCtx.canvas.parentElement.innerHTML = `<p class="text-red-500 text-center">Error al renderizar gráfico.</p>`;
+                }
             }
 
             // ECO Data
@@ -3081,7 +3098,24 @@ async function runIndicadoresEcmViewLogic() {
             const ecoChartCtx = document.getElementById('eco-pie-chart')?.getContext('2d');
             if (ecoChartCtx) {
                 if (ecoChart) ecoChart.destroy();
-                ecoChart = new Chart(ecoChartCtx, createDashboardChartConfig('pie', ["Pendiente", "Apertura", "Rechazada"], [ecoPendiente, ecoApertura, ecoRechazada], "Distribución de ECOs"));
+                try {
+                    ecoChart = new Chart(ecoChartCtx, {
+                        type: 'pie',
+                        data: {
+                            labels: ["Pendiente", "Apertura", "Rechazada"],
+                            datasets: [{
+                                data: [ecoPendiente, ecoApertura, ecoRechazada],
+                                backgroundColor: ['#facc15', '#4ade80', '#f87171'],
+                                borderColor: '#ffffff',
+                                borderWidth: 2
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' }, title: { display: true, text: 'Distribución de ECOs' } } }
+                    });
+                } catch (error) {
+                    console.error("Error rendering ECO pie chart:", error);
+                    ecoChartCtx.canvas.parentElement.innerHTML = `<p class="text-red-500 text-center">Error al renderizar gráfico.</p>`;
+                }
             }
 
             // Obsoletos Data (Calculated from ECRs)
@@ -3104,14 +3138,19 @@ async function runIndicadoresEcmViewLogic() {
             const obsoletosChartCtx = document.getElementById('obsoletos-bar-chart')?.getContext('2d');
             if (obsoletosChartCtx) {
                  if (obsoletosChart) obsoletosChart.destroy();
-                 obsoletosChart = new Chart(obsoletosChartCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['Semestre 1', 'Semestre 2'],
-                        datasets: [{ label: 'Cantidad de Obsoletos', data: [s1, s2], backgroundColor: ['#60a5fa', '#3b82f6'], borderRadius: 4, maxBarThickness: 50 }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } }
-                 });
+                 try {
+                     obsoletosChart = new Chart(obsoletosChartCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Semestre 1', 'Semestre 2'],
+                            datasets: [{ label: 'Cantidad de Obsoletos', data: [s1, s2], backgroundColor: ['#60a5fa', '#3b82f6'], borderRadius: 4, maxBarThickness: 50 }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } }
+                     });
+                 } catch (error) {
+                    console.error("Error rendering Obsoletos bar chart:", error);
+                    obsoletosChartCtx.canvas.parentElement.innerHTML = `<p class="text-red-500 text-center">Error al renderizar gráfico.</p>`;
+                 }
             }
             lucide.createIcons();
 
@@ -6814,55 +6853,60 @@ function renderTasksByProjectChart(allTasks, allProjects) {
     };
 
     if (dashboardCharts.tasksByProjectChart) dashboardCharts.tasksByProjectChart.destroy();
-    dashboardCharts.tasksByProjectChart = new Chart(ctx, {
-        type: 'bar',
-        data: chartData,
-        options: {
-            indexAxis: 'y', // This makes the bar chart horizontal
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    stacked: true,
-                    grid: {
-                        display: false
+    try {
+        dashboardCharts.tasksByProjectChart = new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                indexAxis: 'y', // This makes the bar chart horizontal
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            precision: 0,
+                            font: {
+                                family: "'Inter', sans-serif",
+                            }
+                        }
                     },
-                    ticks: {
-                        precision: 0,
-                        font: {
-                            family: "'Inter', sans-serif",
+                    y: {
+                        stacked: true,
+                        ticks: {
+                            font: {
+                                family: "'Inter', sans-serif",
+                            }
                         }
                     }
                 },
-                y: {
-                    stacked: true,
-                    ticks: {
-                        font: {
-                            family: "'Inter', sans-serif",
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: {
+                                family: "'Inter', sans-serif",
+                                size: 14
+                            }
                         }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        titleFont: { family: "'Inter', sans-serif", weight: 'bold' },
+                        bodyFont: { family: "'Inter', sans-serif" },
+                        footerFont: { family: "'Inter', sans-serif" },
                     }
-                }
-            },
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        font: {
-                            family: "'Inter', sans-serif",
-                            size: 14
-                        }
-                    }
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    titleFont: { family: "'Inter', sans-serif", weight: 'bold' },
-                    bodyFont: { family: "'Inter', sans-serif" },
-                    footerFont: { family: "'Inter', sans-serif" },
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error("Error rendering Tasks by Project chart:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">Error al renderizar el gráfico de tareas.</p>`;
+    }
 }
 
 function formatTimeAgo(timestamp) {
@@ -8433,8 +8477,8 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                 <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
             </div>
             <form id="task-form" class="p-6 overflow-y-auto" novalidate>
-                <!-- Simple vertical layout -->
-                <div class="space-y-4">
+                <!-- Using simple block layout with margin -->
+                <div class="space-y-6">
                     <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
                     <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
 
@@ -8448,15 +8492,14 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                         <textarea id="task-description" name="description" rows="4" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">${isEditing && task.description ? task.description : ''}</textarea>
                     </div>
 
-                    <!-- Group assignee and priority -->
-                    <div class="flex flex-col md:flex-row gap-4">
-                        <div class="flex-1">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
                             <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
                             <select id="task-assignee" name="assigneeUid" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" data-selected-uid="${selectedUid}">
                                 <option value="">Cargando...</option>
                             </select>
                         </div>
-                        <div class="flex-1">
+                        <div>
                             <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
                             <select id="task-priority" name="priority" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                                 <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
@@ -8466,13 +8509,12 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                         </div>
                     </div>
 
-                    <!-- Group dates -->
-                    <div class="flex flex-col md:flex-row gap-4">
-                        <div class="flex-1">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
                             <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
                             <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                         </div>
-                        <div class="flex-1">
+                        <div>
                             <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
                             <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                         </div>
@@ -8502,7 +8544,6 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                         </div>
                     </div>
 
-                    <!-- Admin-only public toggle -->
                     ${appState.currentUser.role === 'admin' ? `
                     <div class="pt-2">
                         <label class="flex items-center space-x-3 cursor-pointer">
