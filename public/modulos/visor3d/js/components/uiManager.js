@@ -28,6 +28,7 @@ export function createVisorUI() {
                         <div id="visor3d-controls" class="flex items-center gap-2">
                             <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
                             <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
+                            <button id="lock-selection-btn" class="visor3d-control-btn" title="Bloquear Selección" disabled><i data-lucide="lock"></i></button>
                             <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
                             <button id="clipping-btn" class="visor3d-control-btn" title="Vista de Sección"><i data-lucide="scissors"></i></button>
                             <button id="measure-btn" class="visor3d-control-btn" title="Medir Distancia"><i data-lucide="ruler"></i></button>
@@ -205,9 +206,20 @@ export function updatePieceCard(object) {
 export function updateSelectionUI() {
     const pieceCard = document.getElementById('visor3d-piece-card');
     const isolateBtn = document.getElementById('isolate-btn');
+    const lockSelectionBtn = document.getElementById('lock-selection-btn');
+
+    const hasSelection = selectedObjects.length > 0;
 
     if (isolateBtn) {
-        isolateBtn.disabled = selectedObjects.length === 0;
+        isolateBtn.disabled = !hasSelection;
+    }
+
+    if (lockSelectionBtn) {
+        lockSelectionBtn.disabled = !hasSelection;
+        if (!hasSelection && state.isSelectionLocked) {
+            // This case will be handled in eventManager, but good to have a fallback.
+            // It will force unlock if selection is cleared.
+        }
     }
 
     if (pieceCard) {
