@@ -263,6 +263,26 @@ function generateReport() {
 }
 
 export function setupVisor3dEventListeners() {
+    const moreControlsBtn = document.getElementById('more-controls-btn');
+    if (moreControlsBtn) {
+        moreControlsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const menu = document.getElementById('more-controls-menu');
+            if (menu) {
+                menu.classList.toggle('hidden');
+            }
+        });
+    }
+
+    // Add a global click listener to close the dropdown
+    document.addEventListener('click', (e) => {
+        const container = document.getElementById('more-controls-dropdown-container');
+        const menu = document.getElementById('more-controls-menu');
+        if (menu && !menu.classList.contains('hidden') && container && !container.contains(e.target)) {
+            menu.classList.add('hidden');
+        }
+    });
+
     const explodeBtn = document.getElementById('explode-btn');
     if (explodeBtn) explodeBtn.addEventListener('click', toggleExplodeView);
 
