@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, clippingPlanes, partCharacteristics, measurementState } from '../visor3d.js';
-import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene } from './sceneManager.js';
-import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton } from './uiManager.js';
+import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene, composer } from './sceneManager.js';
+import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton, createReportModal } from './uiManager.js';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -215,6 +215,53 @@ function toggleClippingView() {
     }
 }
 
+function generateReport() {
+    console.log("Iniciando la generación del reporte...");
+
+    // Forzar un renderizado con el composer para asegurar que los efectos (como el outline) están en el buffer
+    if (state.outlinePass) {
+        state.outlinePass.selectedObjects = selectedObjects;
+    }
+    composer.render();
+
+    // 1. Capturar la imagen del canvas
+    const screenshot = renderer.domElement.toDataURL('image/png');
+    if (!screenshot || screenshot === 'data:,') {
+        console.error("Error al capturar la imagen del canvas. Puede que esté vacío.");
+        alert("No se pudo generar la imagen del reporte. Inténtelo de nuevo.");
+        return;
+    }
+
+    // 2. Obtener la lista de piezas seleccionadas
+    if (selectedObjects.length === 0) {
+        alert("Por favor, seleccione al menos una pieza para generar el reporte.");
+        return;
+    }
+
+    // 3. Recopilar datos de las piezas (nombre, coordenadas 3D y metadatos)
+    const reportData = selectedObjects.map(object => {
+        const box = new THREE.Box3().setFromObject(object);
+        const center = box.getCenter(new THREE.Vector3());
+
+        // Los metadatos ya están disponibles en `partCharacteristics`
+        const metadata = partCharacteristics[object.name] || {};
+
+        return {
+            name: object.name,
+            position3d: center, // Guardamos el Vector3 completo
+            metadata: metadata
+        };
+    });
+
+    console.log("Datos para el reporte recopilados:", {
+        screenshotLength: screenshot.length,
+        parts: reportData
+    });
+
+    // Llamar a la función para crear y mostrar el modal
+    createReportModal(screenshot, reportData);
+}
+
 export function setupVisor3dEventListeners() {
     const explodeBtn = document.getElementById('explode-btn');
     if (explodeBtn) explodeBtn.addEventListener('click', toggleExplodeView);
@@ -300,6 +347,9 @@ export function setupVisor3dEventListeners() {
             updateSelection(partToAffect, e.ctrlKey);
         }
     });
+
+    const reportBtn = document.getElementById('report-btn');
+    if (reportBtn) reportBtn.addEventListener('click', generateReport);
 
     const resetBtn = document.getElementById('reset-view-btn');
     if (resetBtn) resetBtn.addEventListener('click', () => {
