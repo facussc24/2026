@@ -7043,27 +7043,9 @@ function renderTaskDashboardView() {
                 <!-- Dashboard Panel (Always visible) -->
                 <div id="tab-panel-dashboard" class="admin-tab-panel">
                     <div id="task-charts-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                        <!-- Combined Card for Admins -->
-                        <div class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'}">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario y Estado</h3>
-                            <div class="grid grid-cols-2 gap-4 h-64">
-                                <div id="user-load-chart-container"><canvas id="user-load-chart"></canvas></div>
-                                <div id="status-chart-container-admin"><canvas id="status-chart-admin"></canvas></div>
-                            </div>
-                        </div>
-
-                        <!-- Status Card for Non-Admins -->
-                        <div class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'hidden' : 'block'}">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3>
-                            <div id="status-chart-container-user" class="h-64 flex items-center justify-center"><canvas id="status-chart-user"></canvas></div>
-                        </div>
-
-                        <!-- Priority Card for Everyone -->
-                        <div class="bg-white p-6 rounded-xl shadow-lg">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3>
-                            <div id="priority-chart-container" class="h-64 flex items-center justify-center"><canvas id="priority-chart"></canvas></div>
-                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3><div id="status-chart-container" class="h-64 flex items-center justify-center"><canvas id="status-chart"></canvas></div></div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3><div id="priority-chart-container" class="h-64 flex items-center justify-center"><canvas id="priority-chart"></canvas></div></div>
+                        <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'} lg:col-span-2"><h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3><div id="user-load-chart-container" class="h-64 flex items-center justify-center"><canvas id="user-load-chart"></canvas></div></div>
                     </div>
                 </div>
 
@@ -7213,46 +7195,24 @@ function updateAdminDashboardData(tasks) {
 let adminCharts = { statusChart: null, priorityChart: null, userLoadChart: null };
 
 function destroyAdminTaskCharts() {
-    // More explicit destruction to handle the new chart structure
-    if (adminCharts.statusChartAdmin) {
-        adminCharts.statusChartAdmin.destroy();
-        adminCharts.statusChartAdmin = null;
-    }
-    if (adminCharts.statusChartUser) {
-        adminCharts.statusChartUser.destroy();
-        adminCharts.statusChartUser = null;
-    }
-    if (adminCharts.priorityChart) {
-        adminCharts.priorityChart.destroy();
-        adminCharts.priorityChart = null;
-    }
-    if (adminCharts.userLoadChart) {
-        adminCharts.userLoadChart.destroy();
-        adminCharts.userLoadChart = null;
-    }
-    // Also destroy the old one just in case
-    if (adminCharts.statusChart) {
-        adminCharts.statusChart.destroy();
-        adminCharts.statusChart = null;
-    }
+    Object.keys(adminCharts).forEach(key => {
+        if (adminCharts[key]) {
+            adminCharts[key].destroy();
+            adminCharts[key] = null;
+        }
+    });
 }
 
 function renderAdminTaskCharts(tasks) {
     destroyAdminTaskCharts();
-    const isAdmin = appState.currentUser.role === 'admin';
-
-    if (isAdmin) {
-        adminCharts.statusChartAdmin = renderStatusChart(tasks, 'status-chart-admin');
-        adminCharts.userLoadChart = renderUserLoadChart(tasks);
-    } else {
-        adminCharts.statusChartUser = renderStatusChart(tasks, 'status-chart-user');
-    }
-    adminCharts.priorityChart = renderPriorityChart(tasks);
+    renderStatusChart(tasks);
+    renderPriorityChart(tasks);
+    renderUserLoadChart(tasks);
 }
 
-function renderStatusChart(tasks, canvasId) {
-    const ctx = document.getElementById(canvasId)?.getContext('2d');
-    if (!ctx) return null;
+function renderStatusChart(tasks) {
+    const ctx = document.getElementById('status-chart')?.getContext('2d');
+    if (!ctx) return;
 
     const activeTasks = tasks.filter(t => t.status !== 'done');
     const statusCounts = activeTasks.reduce((acc, task) => {
@@ -7261,13 +7221,13 @@ function renderStatusChart(tasks, canvasId) {
         return acc;
     }, { todo: 0, inprogress: 0 });
 
-    return new Chart(ctx, {
+    adminCharts.statusChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: ['Por Hacer', 'En Progreso'],
             datasets: [{
                 data: [statusCounts.todo, statusCounts.inprogress],
-                backgroundColor: ['#3b82f6', '#f59e0b'],
+                backgroundColor: ['#f59e0b', '#3b82f6'],
                 borderColor: '#ffffff',
                 borderWidth: 2,
             }]
@@ -7278,7 +7238,7 @@ function renderStatusChart(tasks, canvasId) {
 
 function renderPriorityChart(tasks) {
     const ctx = document.getElementById('priority-chart')?.getContext('2d');
-    if (!ctx) return null;
+    if (!ctx) return;
 
     const activeTasks = tasks.filter(t => t.status !== 'done');
     const priorityCounts = activeTasks.reduce((acc, task) => {
@@ -7287,8 +7247,8 @@ function renderPriorityChart(tasks) {
         return acc;
     }, { low: 0, medium: 0, high: 0 });
 
-    return new Chart(ctx, {
-        type: 'doughnut',
+    adminCharts.priorityChart = new Chart(ctx, {
+        type: 'pie',
         data: {
             labels: ['Baja', 'Media', 'Alta'],
             datasets: [{
@@ -7304,7 +7264,7 @@ function renderPriorityChart(tasks) {
 
 function renderUserLoadChart(tasks) {
     const ctx = document.getElementById('user-load-chart')?.getContext('2d');
-    if (!ctx) return null;
+    if (!ctx) return;
 
     const openTasks = tasks.filter(t => t.status !== 'done');
     const userTaskCounts = openTasks.reduce((acc, task) => {
@@ -7317,7 +7277,7 @@ function renderUserLoadChart(tasks) {
     const labels = Object.keys(userTaskCounts).map(uid => userMap.get(uid)?.name || 'No Asignado');
     const data = Object.values(userTaskCounts);
 
-    return new Chart(ctx, {
+    adminCharts.userLoadChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -8466,26 +8426,51 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
     }
 
     const modalHTML = `
-    <div id="task-form-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+    <div id="task-form-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 modal-content">
             <div class="flex justify-between items-center p-5 border-b">
                 <h3 class="text-xl font-bold">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
                 <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
             </div>
             <form id="task-form" class="p-6 overflow-y-auto" novalidate>
-                <div class="flex flex-col gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                     <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
                     <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
-                    <div>
+                    <div class="md:col-span-2">
                         <label for="task-title" class="block text-sm font-medium text-gray-700 mb-1">Título</label>
                         <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
                     </div>
-                    <div>
+                    <div class="md:col-span-2">
                         <label for="task-description" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
                         <textarea id="task-description" name="description" rows="4" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">${isEditing && task.description ? task.description : ''}</textarea>
                     </div>
 
-                    <div class="space-y-2 pt-2">
+                    <!-- Grid-based layout for other fields -->
+                    <div>
+                        <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
+                        <select id="task-assignee" name="assigneeUid" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" data-selected-uid="${selectedUid}">
+                            <option value="">Cargando...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
+                        <select id="task-priority" name="priority" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                            <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
+                            <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
+                            <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+                        <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
+                        <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+
+                    <!-- Subtasks and Comments now span the full width -->
+                    <div class="md:col-span-2 space-y-2 pt-2">
                         <label class="block text-sm font-medium text-gray-700">Sub-tareas</label>
                         <div id="subtasks-list" class="space-y-2 max-h-48 overflow-y-auto p-2 rounded-md bg-slate-50 border"></div>
                         <div class="flex items-center gap-2">
@@ -8493,9 +8478,7 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                             <input type="text" id="new-subtask-title" name="new-subtask-title" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Añadir sub-tarea y presionar Enter">
                         </div>
                     </div>
-
-                    <!-- Comments Section -->
-                    <div class="space-y-2 pt-4 border-t mt-4">
+                    <div class="md:col-span-2 space-y-2 pt-4 border-t mt-4">
                         <label class="block text-sm font-medium text-gray-700">Comentarios</label>
                         <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-50 border custom-scrollbar">
                             <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
@@ -8508,33 +8491,8 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
-                            <select id="task-assignee" name="assigneeUid" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" data-selected-uid="${selectedUid}">
-                                <option value="">Cargando...</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-                            <select id="task-priority" name="priority" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                                <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
-                                <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
-                                <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-                            <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        </div>
-                        <div>
-                            <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
-                            <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        </div>
-                    </div>
-
                     ${appState.currentUser.role === 'admin' ? `
-                    <div class="pt-2">
+                    <div class="md:col-span-2 pt-2">
                         <label class="flex items-center space-x-3 cursor-pointer">
                             <input type="checkbox" id="task-is-public" name="isPublic" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isEditing && task.isPublic ? 'checked' : ''}>
                             <span class="text-sm font-medium text-gray-700">Tarea Pública (Visible para todos en Ingeniería)</span>
