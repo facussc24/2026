@@ -27,15 +27,9 @@ const app = initializeApp(firebaseConfig, "visor3d-app");
 const storage = getStorage(app);
 const auth = getAuth(app);
 
-// Authenticate anonymously
-signInAnonymously(auth).catch((error) => {
-    console.error("Anonymous sign-in failed:", error);
-    if (error.code === 'auth/admin-restricted-operation') {
-        disableAnnotationFeatures();
-    } else {
-        updateStatus("Error de autenticación. No se podrán guardar anotaciones.", true);
-    }
-});
+// Anonymous sign-in is disabled for this project.
+// The user should already be authenticated via the main app.
+// The module will gracefully disable annotation features if needed.
 
 // --- SHARED STATE AND VARIABLES ---
 export const state = {

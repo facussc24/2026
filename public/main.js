@@ -7043,27 +7043,9 @@ function renderTaskDashboardView() {
                 <!-- Dashboard Panel (Always visible) -->
                 <div id="tab-panel-dashboard" class="admin-tab-panel">
                     <div id="task-charts-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                        <!-- Combined Card for Admins -->
-                        <div class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'}">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario y Estado</h3>
-                            <div class="grid grid-cols-2 gap-4 h-64">
-                                <div id="user-load-chart-container"><canvas id="user-load-chart"></canvas></div>
-                                <div id="status-chart-container-admin"><canvas id="status-chart-admin"></canvas></div>
-                            </div>
-                        </div>
-
-                        <!-- Status Card for Non-Admins -->
-                        <div class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'hidden' : 'block'}">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3>
-                            <div id="status-chart-container-user" class="h-64 flex items-center justify-center"><canvas id="status-chart-user"></canvas></div>
-                        </div>
-
-                        <!-- Priority Card for Everyone -->
-                        <div class="bg-white p-6 rounded-xl shadow-lg">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3>
-                            <div id="priority-chart-container" class="h-64 flex items-center justify-center"><canvas id="priority-chart"></canvas></div>
-                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3><div id="status-chart-container" class="h-64 flex items-center justify-center"><canvas id="status-chart"></canvas></div></div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3><div id="priority-chart-container" class="h-64 flex items-center justify-center"><canvas id="priority-chart"></canvas></div></div>
+                        <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'} lg:col-span-2"><h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3><div id="user-load-chart-container" class="h-64 flex items-center justify-center"><canvas id="user-load-chart"></canvas></div></div>
                     </div>
                 </div>
 
@@ -7213,46 +7195,24 @@ function updateAdminDashboardData(tasks) {
 let adminCharts = { statusChart: null, priorityChart: null, userLoadChart: null };
 
 function destroyAdminTaskCharts() {
-    // More explicit destruction to handle the new chart structure
-    if (adminCharts.statusChartAdmin) {
-        adminCharts.statusChartAdmin.destroy();
-        adminCharts.statusChartAdmin = null;
-    }
-    if (adminCharts.statusChartUser) {
-        adminCharts.statusChartUser.destroy();
-        adminCharts.statusChartUser = null;
-    }
-    if (adminCharts.priorityChart) {
-        adminCharts.priorityChart.destroy();
-        adminCharts.priorityChart = null;
-    }
-    if (adminCharts.userLoadChart) {
-        adminCharts.userLoadChart.destroy();
-        adminCharts.userLoadChart = null;
-    }
-    // Also destroy the old one just in case
-    if (adminCharts.statusChart) {
-        adminCharts.statusChart.destroy();
-        adminCharts.statusChart = null;
-    }
+    Object.keys(adminCharts).forEach(key => {
+        if (adminCharts[key]) {
+            adminCharts[key].destroy();
+            adminCharts[key] = null;
+        }
+    });
 }
 
 function renderAdminTaskCharts(tasks) {
     destroyAdminTaskCharts();
-    const isAdmin = appState.currentUser.role === 'admin';
-
-    if (isAdmin) {
-        adminCharts.statusChartAdmin = renderStatusChart(tasks, 'status-chart-admin');
-        adminCharts.userLoadChart = renderUserLoadChart(tasks);
-    } else {
-        adminCharts.statusChartUser = renderStatusChart(tasks, 'status-chart-user');
-    }
-    adminCharts.priorityChart = renderPriorityChart(tasks);
+    renderStatusChart(tasks);
+    renderPriorityChart(tasks);
+    renderUserLoadChart(tasks);
 }
 
-function renderStatusChart(tasks, canvasId) {
-    const ctx = document.getElementById(canvasId)?.getContext('2d');
-    if (!ctx) return null;
+function renderStatusChart(tasks) {
+    const ctx = document.getElementById('status-chart')?.getContext('2d');
+    if (!ctx) return;
 
     const activeTasks = tasks.filter(t => t.status !== 'done');
     const statusCounts = activeTasks.reduce((acc, task) => {
@@ -7261,13 +7221,13 @@ function renderStatusChart(tasks, canvasId) {
         return acc;
     }, { todo: 0, inprogress: 0 });
 
-    return new Chart(ctx, {
+    adminCharts.statusChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: ['Por Hacer', 'En Progreso'],
             datasets: [{
                 data: [statusCounts.todo, statusCounts.inprogress],
-                backgroundColor: ['#3b82f6', '#f59e0b'],
+                backgroundColor: ['#f59e0b', '#3b82f6'],
                 borderColor: '#ffffff',
                 borderWidth: 2,
             }]
@@ -7287,8 +7247,8 @@ function renderPriorityChart(tasks) {
         return acc;
     }, { low: 0, medium: 0, high: 0 });
 
-    return new Chart(ctx, {
-        type: 'doughnut',
+    adminCharts.priorityChart = new Chart(ctx, {
+        type: 'pie',
         data: {
             labels: ['Baja', 'Media', 'Alta'],
             datasets: [{
@@ -7317,7 +7277,7 @@ function renderUserLoadChart(tasks) {
     const labels = Object.keys(userTaskCounts).map(uid => userMap.get(uid)?.name || 'No Asignado');
     const data = Object.values(userTaskCounts);
 
-    return new Chart(ctx, {
+    adminCharts.userLoadChart = new Chart(ctx, {
         type: 'bar',
         data: {
             labels: labels,
@@ -8466,7 +8426,7 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
     }
 
     const modalHTML = `
-    <div id="task-form-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+    <div id="task-form-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 modal-content">
             <div class="flex justify-between items-center p-5 border-b">
                 <h3 class="text-xl font-bold">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
