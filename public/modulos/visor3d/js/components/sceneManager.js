@@ -12,9 +12,9 @@ import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { state, modelParts, partCharacteristics, selectedObjects, clippingPlanes } from '../visor3d.js';
 import { renderPartsList, updateStatus } from './uiManager.js';
 
-export let scene, camera, renderer, controls, labelRenderer;
+export let scene, camera, renderer, controls, labelRenderer, composer;
 let ambientLight, directionalLight;
-let composer, fxaaPass;
+let fxaaPass;
 let gizmoScene, gizmoCamera;
 
 function setupScene() {
