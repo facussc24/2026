@@ -10,7 +10,7 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 import { state, modelParts, partCharacteristics, selectedObjects, clippingPlanes } from '../visor3d.js';
-import { renderPartsList, updateStatus, showLoader, hideLoader } from './uiManager.js';
+import { renderPartsList, updateStatus } from './uiManager.js';
 
 export let scene, camera, renderer, controls, labelRenderer;
 let ambientLight, directionalLight;
@@ -71,212 +71,209 @@ function setupLights(scene) {
     scene.add(hemisphereLight);
 }
 
-export function initThreeScene(modelUrl, onPointerDown, progressCallback) {
-    return new Promise((resolve, reject) => {
-        const container = document.getElementById('visor3d-scene-container');
-        if (!container) {
-            return reject(new Error("Scene container not found"));
+export function initThreeScene(modelUrl, onPointerDown) {
+    const container = document.getElementById('visor3d-scene-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+    updateStatus('Cargando modelo 3D...', false, true);
+
+    setupScene();
+    setupCamera(container);
+    setupRenderer(container);
+    setupControls(camera, renderer);
+    setupLights(scene);
+
+    labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(container.offsetWidth, container.offsetHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0px';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(labelRenderer.domElement);
+
+    const loader = new GLTFLoader();
+    loader.load(modelUrl,
+    (gltf) => {
+        updateStatus('Procesando modelo...');
+        const model = gltf.scene;
+
+        const modelCamera = model.getObjectByProperty('type', 'PerspectiveCamera');
+        if (modelCamera) {
+            modelCamera.parent.remove(modelCamera);
         }
 
-        container.innerHTML = '';
-        updateStatus(null); // Clear any previous status messages
+        scene.add(model);
 
-        setupScene();
-        setupCamera(container);
-        setupRenderer(container);
-        setupControls(camera, renderer);
-        setupLights(scene);
+        const box = new THREE.Box3().setFromObject(model);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center);
 
-        labelRenderer = new CSS2DRenderer();
-        labelRenderer.setSize(container.offsetWidth, container.offsetHeight);
-        labelRenderer.domElement.style.position = 'absolute';
-        labelRenderer.domElement.style.top = '0px';
-        labelRenderer.domElement.style.pointerEvents = 'none';
-        container.appendChild(labelRenderer.domElement);
+        // Set a proper HDR environment map for realistic lighting and reflections.
+        new RGBELoader()
+            .setDataType(THREE.FloatType) // Required for recent three.js versions
+            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
+                const pmremGenerator = new THREE.PMREMGenerator(renderer);
+                pmremGenerator.compileEquirectangularShader();
 
-        const loader = new GLTFLoader();
-        loader.load(modelUrl,
-            (gltf) => {
-                progressCallback('Procesando modelo...');
-                const model = gltf.scene;
+                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
 
-                const modelCamera = model.getObjectByProperty('type', 'PerspectiveCamera');
-                if (modelCamera) {
-                    modelCamera.parent.remove(modelCamera);
+                scene.background = envMap;
+                scene.environment = envMap;
+
+                texture.dispose();
+                pmremGenerator.dispose();
+            }, undefined, (error) => {
+                console.error('An error occurred while loading the HDR environment map.', error);
+                // Fallback to a simple color background if HDR fails to load
+                scene.background = new THREE.Color(0x333333);
+            });
+
+        const centeredBox = new THREE.Box3().setFromObject(model);
+        const groundY = centeredBox.min.y;
+
+        // Solid grey floor plane instead of a grid
+        const floorGeometry = new THREE.PlaneGeometry(200, 200);
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            color: 0x808080, // A mid-grey color
+            metalness: 0.1,
+            roughness: 0.8
+        });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.y = groundY;
+        floor.receiveShadow = true; // The floor should receive shadows
+        scene.add(floor);
+
+        const size = box.getSize(new THREE.Vector3());
+        if (size.x === 0 && size.y === 0 && size.z === 0) {
+            updateStatus("Error: El modelo está vacío o no es visible.", true);
+            return;
+        }
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        const cameraDistance = (maxDim / 2) / Math.tan(fov / 2);
+
+        // Position the camera relative to the model's new center at the origin.
+        const cameraZ = cameraDistance * 1.2;
+        const cameraY = maxDim / 4;
+        camera.position.set(0, cameraY, cameraZ);
+
+        const lookAtVector = new THREE.Vector3(0, 0, 0);
+        camera.lookAt(lookAtVector);
+        if (controls) {
+            controls.target.copy(lookAtVector);
+            controls.update();
+        }
+
+        modelParts.length = 0;
+        const partNames = new Set();
+        model.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+                if (child.name) {
+                    partNames.add(child.name);
+                    modelParts.push(child);
                 }
-
-                scene.add(model);
-
-                const box = new THREE.Box3().setFromObject(model);
-                const center = box.getCenter(new THREE.Vector3());
-                model.position.sub(center);
-
-                new RGBELoader()
-                    .setDataType(THREE.FloatType)
-                    .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr',
-                        (texture) => {
-                            const pmremGenerator = new THREE.PMREMGenerator(renderer);
-                            pmremGenerator.compileEquirectangularShader();
-                            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-                            scene.background = envMap;
-                            scene.environment = envMap;
-                            texture.dispose();
-                            pmremGenerator.dispose();
-                            finalizeScene();
-                        },
-                        undefined,
-                        (error) => {
-                            console.error('An error occurred while loading the HDR environment map.', error);
-                            scene.background = new THREE.Color(0x333333);
-                            finalizeScene(); // Resolve even if HDR fails
-                        }
-                    );
-
-                function finalizeScene() {
-                    const centeredBox = new THREE.Box3().setFromObject(model);
-                    const groundY = centeredBox.min.y;
-
-                    const floorGeometry = new THREE.PlaneGeometry(200, 200);
-                    const floorMaterial = new THREE.MeshStandardMaterial({
-                        color: 0x808080,
-                        metalness: 0.1,
-                        roughness: 0.8
-                    });
-                    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-                    floor.rotation.x = -Math.PI / 2;
-                    floor.position.y = groundY;
-                    floor.receiveShadow = true;
-                    scene.add(floor);
-
-                    const size = box.getSize(new THREE.Vector3());
-                    if (size.x === 0 && size.y === 0 && size.z === 0) {
-                        return reject(new Error("El modelo está vacío o no es visible."));
-                    }
-
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    const fov = camera.fov * (Math.PI / 180);
-                    const cameraDistance = (maxDim / 2) / Math.tan(fov / 2);
-
-                    const cameraZ = cameraDistance * 1.2;
-                    const cameraY = maxDim / 4;
-                    camera.position.set(0, cameraY, cameraZ);
-
-                    const lookAtVector = new THREE.Vector3(0, 0, 0);
-                    camera.lookAt(lookAtVector);
-                    if (controls) {
-                        controls.target.copy(lookAtVector);
-                        controls.update();
-                    }
-
-                    modelParts.length = 0;
-                    const partNames = new Set();
-                    model.traverse((child) => {
-                        if (child.isMesh) {
-                            child.castShadow = true;
-                            child.receiveShadow = true;
-                            if (child.name) {
-                                partNames.add(child.name);
-                                modelParts.push(child);
-                            }
-                        }
-                    });
-                    renderPartsList(Array.from(partNames));
-                    // All setup is complete, start animation and resolve the promise
-                    setupPostProcessingAndAnimation();
-
-                    const cleanup = () => {
-                        console.log("Cleaning up Visor3D scene.");
-                        window.removeEventListener('resize', onWindowResize);
-                        if (renderer) renderer.dispose();
-                        if (labelRenderer && labelRenderer.domElement.parentNode) {
-                            labelRenderer.domElement.parentNode.removeChild(labelRenderer.domElement);
-                        }
-                        const partsList = document.getElementById('visor3d-parts-list');
-                        if (partsList) partsList.innerHTML = '';
-                    };
-
-                    resolve(cleanup);
-                }
-            },
-            (xhr) => {
-                if (xhr.lengthComputable) {
-                    const percentComplete = (xhr.loaded / xhr.total) * 100;
-                    progressCallback(`Cargando modelo: ${Math.round(percentComplete)}%`);
-                }
-            },
-            (error) => {
-                console.error('An error happened while loading the model:', error);
-                reject(new Error('No se pudo cargar el modelo 3D.'));
             }
-        );
+        });
+        renderPartsList(Array.from(partNames));
+        updateStatus(null);
+    },
+    (xhr) => {
+        if (xhr.lengthComputable) {
+            const percentComplete = (xhr.loaded / xhr.total) * 100;
+            const progressBar = document.getElementById('visor3d-progress-bar');
+            if (progressBar) progressBar.style.width = percentComplete + '%';
+            updateStatus(`Cargando modelo: ${Math.round(percentComplete)}%`, false, true);
+        }
+    },
+    (error) => {
+        console.error('An error happened while loading the model:', error);
+        updateStatus('Error: No se pudo cargar el modelo 3D.', true);
     });
 
-    function setupPostProcessingAndAnimation() {
-        renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
+    renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
 
-        composer = new EffectComposer(renderer);
-        const renderPass = new RenderPass(scene, camera);
-        composer.addPass(renderPass);
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
 
-        state.outlinePass = new OutlinePass(new THREE.Vector2(container.offsetWidth, container.offsetHeight), scene, camera);
-        state.outlinePass.edgeStrength = 5;
-        state.outlinePass.edgeGlow = 0.5;
-        state.outlinePass.edgeThickness = 1;
-        state.outlinePass.visibleEdgeColor.set('#007bff');
-        state.outlinePass.hiddenEdgeColor.set('#007bff');
-        composer.addPass(state.outlinePass);
+    state.outlinePass = new OutlinePass(new THREE.Vector2(container.offsetWidth, container.offsetHeight), scene, camera);
+    state.outlinePass.edgeStrength = 5;
+    state.outlinePass.edgeGlow = 0.5;
+    state.outlinePass.edgeThickness = 1;
+    state.outlinePass.visibleEdgeColor.set('#007bff');
+    state.outlinePass.hiddenEdgeColor.set('#007bff');
+    composer.addPass(state.outlinePass);
 
-        fxaaPass = new ShaderPass(FXAAShader);
-        const pixelRatio = renderer.getPixelRatio();
-        fxaaPass.material.uniforms['resolution'].value.x = 1 / (container.offsetWidth * pixelRatio);
-        fxaaPass.material.uniforms['resolution'].value.y = 1 / (container.offsetHeight * pixelRatio);
-        composer.addPass(fxaaPass);
+    fxaaPass = new ShaderPass(FXAAShader);
+    const pixelRatio = renderer.getPixelRatio();
+    fxaaPass.material.uniforms['resolution'].value.x = 1 / (container.offsetWidth * pixelRatio);
+    fxaaPass.material.uniforms['resolution'].value.y = 1 / (container.offsetHeight * pixelRatio);
+    composer.addPass(fxaaPass);
 
-        initAxisGizmo();
+    initAxisGizmo();
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            TWEEN.update();
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        TWEEN.update();
 
-            if (state.isIsolated) {
-                const isolatedUuids = new Set(state.isolatedObjects.map(obj => obj.uuid));
-                modelParts.forEach(part => {
-                    const shouldBeVisible = isolatedUuids.has(part.uuid);
-                    if (part.visible !== shouldBeVisible) {
-                        part.visible = shouldBeVisible;
-                    }
-                });
-            }
-
-            const container = document.getElementById('visor3d-scene-container');
-            if (container) {
-                const width = container.offsetWidth;
-                const height = container.offsetHeight;
-                renderer.setViewport(0, 0, width, height);
-                renderer.setScissor(0, 0, width, height);
-            }
-            renderer.setScissorTest(true);
-
-            composer.render();
-            if (labelRenderer) labelRenderer.render(scene, camera);
-
-            if (gizmoCamera) {
-                const gizmoContainer = document.getElementById('axis-gizmo-container');
-                const { left, bottom, width, height } = gizmoContainer.getBoundingClientRect();
-                const { innerWidth, innerHeight } = window;
-                renderer.setScissor(left, innerHeight - bottom, width, height);
-                renderer.setViewport(left, innerHeight - bottom, width, height);
-
-                gizmoCamera.position.copy(camera.position);
-                gizmoCamera.quaternion.copy(camera.quaternion);
-                renderer.render(gizmoScene, gizmoCamera);
-            }
+        if (state.isIsolated) {
+            const isolatedUuids = new Set(state.isolatedObjects.map(obj => obj.uuid));
+            modelParts.forEach(part => {
+                const shouldBeVisible = isolatedUuids.has(part.uuid);
+                if (part.visible !== shouldBeVisible) {
+                    part.visible = shouldBeVisible;
+                }
+            });
         }
-        animate();
 
-        window.addEventListener('resize', onWindowResize, false);
+        // render main scene
+        // It's crucial to reset the viewport and scissor before rendering the main scene.
+        // The gizmo render in the previous frame modifies these, and if not reset,
+        // the main scene will be rendered into the tiny gizmo viewport.
+        const container = document.getElementById('visor3d-scene-container');
+        if (container) {
+            const width = container.offsetWidth;
+            const height = container.offsetHeight;
+            renderer.setViewport(0, 0, width, height);
+            renderer.setScissor(0, 0, width, height);
+        }
+        renderer.setScissorTest(true); // Ensure scissor is on for both composer and gizmo
+
+        composer.render();
+        if (labelRenderer) labelRenderer.render(scene, camera);
+
+        // render gizmo
+        if (gizmoCamera) {
+            const gizmoContainer = document.getElementById('axis-gizmo-container');
+            const { left, bottom, width, height } = gizmoContainer.getBoundingClientRect();
+            const { innerWidth, innerHeight } = window;
+            renderer.setScissor(left, innerHeight - bottom, width, height);
+            renderer.setViewport(left, innerHeight - bottom, width, height);
+
+            gizmoCamera.position.copy(camera.position);
+            gizmoCamera.quaternion.copy(camera.quaternion);
+            renderer.render(gizmoScene, gizmoCamera);
+        }
     }
+    animate();
+
+    window.addEventListener('resize', onWindowResize, false);
+
+    return () => {
+        console.log("Cleaning up Visor3D scene.");
+        if (renderer) renderer.dispose();
+        if (labelRenderer && labelRenderer.domElement.parentNode) {
+            labelRenderer.domElement.parentNode.removeChild(labelRenderer.domElement);
+        }
+        window.removeEventListener('resize', onWindowResize);
+        const partsList = document.getElementById('visor3d-parts-list');
+        if(partsList) partsList.innerHTML = '';
+    };
 }
 
 function onWindowResize() {
