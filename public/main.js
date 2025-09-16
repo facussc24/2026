@@ -8432,7 +8432,7 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                 <h3 class="text-xl font-bold">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
                 <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
             </div>
-            <form id="task-form" class="p-6 overflow-y-auto space-y-4" novalidate>
+            <form id="task-form" class="p-6 overflow-y-auto flex flex-col gap-4" novalidate>
                 <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
                 <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
                 <div>
@@ -8482,17 +8482,13 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                             <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
                         </select>
                     </div>
-                    <div class="md:col-span-2">
-                        <div class="flex gap-4">
-                            <div class="flex-1">
-                                <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-                                <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                            </div>
-                            <div class="flex-1">
-                                <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
-                                <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                            </div>
-                        </div>
+                    <div>
+                        <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+                        <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
+                        <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                     </div>
                 </div>
 
