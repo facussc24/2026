@@ -4,7 +4,7 @@ import { jest } from '@jest/globals';
 // that might depend on them, which is crucial in an ES module environment.
 
 jest.unstable_mockModule('../../public/modulos/visor3d/js/components/sceneManager.js', () => ({
-  initThreeScene: jest.fn(() => jest.fn()),
+  initThreeScene: jest.fn(() => Promise.resolve(jest.fn())), // Returns a promise that resolves to a cleanup function
   scene: {},
   camera: {},
   renderer: {},
@@ -84,7 +84,7 @@ describe('Visor3D Refactor with Firebase', () => {
 
     // Assert: Check if the first model was automatically loaded
     expect(getDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ fullPath: 'modelos3d/Raptor.glb' }));
-    expect(initThreeScene).toHaveBeenCalledWith('https://fake.url/raptor.glb', expect.any(Function));
+    expect(initThreeScene).toHaveBeenCalledWith('https://fake.url/raptor.glb', expect.any(Function), expect.any(Function));
   });
 
   test('Clicking a model button should load the corresponding model', async () => {
@@ -113,7 +113,7 @@ describe('Visor3D Refactor with Firebase', () => {
 
     // Assert
     expect(getDownloadURL).toHaveBeenCalledWith(expect.objectContaining({ fullPath: 'modelos3d/Cybertruck.glb' }));
-    expect(initThreeScene).toHaveBeenCalledWith('https://fake.url/cybertruck.glb', expect.any(Function));
+    expect(initThreeScene).toHaveBeenCalledWith('https://fake.url/cybertruck.glb', expect.any(Function), expect.any(Function));
     expect(secondButton.classList.contains('active')).toBe(true);
     // Ensure the first button is no longer active
     const firstButton = buttonContainer.children[0];

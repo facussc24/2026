@@ -7,6 +7,11 @@ export function createVisorUI() {
     container.innerHTML = `
         <div id="visor3d-container">
             <div id="visor3d-scene-container">
+                <!-- Loading Overlay -->
+                <div id="visor3d-loader" class="absolute inset-0 flex-col items-center justify-center bg-slate-900/80 z-20 hidden">
+                    <div class="visor3d-spinner"></div>
+                    <p id="visor3d-loader-text" class="text-white font-semibold text-lg mt-4">Cargando...</p>
+                </div>
                 <div id="visor3d-status" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-100/80 z-10">
                     <p id="visor3d-status-text" class="text-slate-600 font-semibold text-lg animate-pulse mb-4">Seleccione un modelo para comenzar...</p>
                     <div id="visor3d-progress-bar-container" class="w-1/2 bg-slate-300 rounded-full h-4 hidden">
@@ -107,17 +112,35 @@ export function createVisorUI() {
     document.querySelectorAll('.visor-section').forEach(details => details.open = false);
 }
 
-export function updateStatus(message, isError = false, showProgressBar = false) {
+export function showLoader(message = 'Cargando...') {
+    const loader = document.getElementById('visor3d-loader');
+    const loaderText = document.getElementById('visor3d-loader-text');
+    if (loader && loaderText) {
+        loaderText.textContent = message;
+        loader.classList.remove('hidden');
+        loader.classList.add('flex');
+    }
+}
+
+export function hideLoader() {
+    const loader = document.getElementById('visor3d-loader');
+    if (loader) {
+        loader.classList.add('hidden');
+        loader.classList.remove('flex');
+    }
+}
+
+export function updateStatus(message, isError = false) {
     const statusEl = document.getElementById('visor3d-status');
     const statusText = document.getElementById('visor3d-status-text');
     const progressBarContainer = document.getElementById('visor3d-progress-bar-container');
 
-    if (statusEl && statusText && progressBarContainer) {
+    if (statusEl && statusText) {
         if (message) {
             statusEl.classList.remove('hidden');
             statusText.textContent = message;
             statusText.className = `font-semibold text-lg ${isError ? 'text-red-500' : 'text-slate-600'} ${isError ? '' : 'animate-pulse'}`;
-            progressBarContainer.classList.toggle('hidden', !showProgressBar);
+            if (progressBarContainer) progressBarContainer.classList.add('hidden');
         } else {
             statusEl.classList.add('hidden');
         }
