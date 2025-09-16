@@ -1,5 +1,6 @@
 import { state, selectedObjects, partCharacteristics } from '../visor3d.js';
 import { camera } from './sceneManager.js';
+
 export function createVisorUI() {
     const container = document.getElementById('view-content');
     if (!container) return;
@@ -25,16 +26,32 @@ export function createVisorUI() {
                         </div>
                     </div>
                     <div class="flex justify-between items-center border-t pt-2 mt-2">
-                        <div id="visor3d-controls" class="flex items-center gap-2">
-                            <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
+                        <div id="visor3d-controls" class="flex items-center gap-1">
+                            <!-- Primary Buttons -->
                             <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
-                            <button id="lock-selection-btn" class="visor3d-control-btn" title="Bloquear Selección" disabled><i data-lucide="lock"></i></button>
                             <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
-                            <button id="clipping-btn" class="visor3d-control-btn" title="Vista de Sección"><i data-lucide="scissors"></i></button>
-                            <button id="measure-btn" class="visor3d-control-btn" title="Medir Distancia"><i data-lucide="ruler"></i></button>
-                            <button id="annotation-btn" class="visor3d-control-btn" title="Modo Anotación"><i data-lucide="message-square-plus"></i></button>
-                            <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
                             <button id="report-btn" class="visor3d-control-btn" title="Generar Reporte"><i data-lucide="file-image"></i></button>
+                            <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
+
+                            <div class="h-6 border-l border-slate-300 mx-2"></div>
+
+                            <!-- "More" Dropdown -->
+                            <div class="relative" id="more-controls-dropdown-container">
+                                <button id="more-controls-btn" class="visor3d-control-btn" title="Más herramientas">
+                                    <i data-lucide="more-horizontal"></i>
+                                </button>
+                                <div id="more-controls-menu" class="absolute right-0 mt-2 w-60 bg-white border rounded-lg shadow-xl hidden z-10 p-2 space-y-1">
+                                    <button id="explode-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Vista explosionada"><i data-lucide="move-3d" class="w-5 h-5 text-slate-500"></i><span>Vista Explosionada</span></button>
+                                    <button id="lock-selection-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Bloquear Selección" disabled><i data-lucide="lock" class="w-5 h-5 text-slate-500"></i><span>Bloquear Selección</span></button>
+                                    <button id="clipping-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Vista de Sección"><i data-lucide="scissors" class="w-5 h-5 text-slate-500"></i><span>Vista de Sección</span></button>
+                                    <button id="measure-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Medir Distancia"><i data-lucide="ruler" class="w-5 h-5 text-slate-500"></i><span>Medir Distancia</span></button>
+                                    <button id="annotation-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Modo Anotación"><i data-lucide="message-square-plus" class="w-5 h-5 text-slate-500"></i><span>Modo Anotación</span></button>
+                                </div>
+                            </div>
+
+                            <div class="h-6 border-l border-slate-300 mx-2"></div>
+
+                            <!-- Help button remains separate -->
                             <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
                                 <i data-lucide="help-circle" class="w-6 h-6 text-slate-600"></i>
                             </button>
@@ -108,6 +125,7 @@ export function createVisorUI() {
     lucide.createIcons();
     document.querySelectorAll('.visor-section').forEach(details => details.open = false);
 }
+
 export function updateStatus(message, isError = false, showProgressBar = false) {
     const statusEl = document.getElementById('visor3d-status');
     const statusText = document.getElementById('visor3d-status-text');
