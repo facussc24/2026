@@ -21,11 +21,8 @@ service cloud.firestore {
 
     // --- USUARIOS ---
     match /usuarios/{userId} {
-      // Cualquier usuario autenticado puede listar los usuarios para asignación de tareas.
-      allow list: if request.auth != null;
-
-      // Un usuario puede leer su propio perfil. Los admins pueden leer todos.
-      allow read: if request.auth.uid == userId || isUserAdmin();
+      // Cualquier usuario autenticado puede leer/listar perfiles para asignación de tareas, etc.
+      allow list, read: if request.auth != null;
 
       // Un usuario puede crear su propio documento de perfil durante el registro.
       allow create: if request.auth.uid == userId;
@@ -34,7 +31,7 @@ service cloud.firestore {
       // Los administradores pueden actualizar cualquier perfil (para cambiar roles, etc.).
       allow update: if request.auth.uid == userId || isUserAdmin();
 
-      // Solo los administradores pueden eliminar usuarios.
+      // Solo los administradores pueden eliminar (deshabilitar) usuarios.
       allow delete: if isUserAdmin();
     }
 
