@@ -218,14 +218,32 @@ function toggleClippingView() {
 function generateReport() {
     console.log("Iniciando la generación del reporte...");
 
-    // Forzar un renderizado con el composer para asegurar que los efectos (como el outline) están en el buffer
-    if (state.outlinePass) {
-        state.outlinePass.selectedObjects = selectedObjects;
-    }
-    composer.render();
+    // --- Mejora de Calidad del Reporte: Alta Resolución y Fondo Blanco ---
 
-    // 1. Capturar la imagen del canvas
+    // 1. Guardar estado original
+    const originalSize = new THREE.Vector2();
+    renderer.getSize(originalSize);
+    const originalBackground = scene.background ? scene.background.clone() : null;
+    const reportWidth = 1920;
+    const reportHeight = 1080;
+
+    // 2. Establecer alta resolución y fondo blanco
+    renderer.setSize(reportWidth, reportHeight);
+    camera.aspect = reportWidth / reportHeight;
+    camera.updateProjectionMatrix();
+    scene.background = new THREE.Color(0xffffff);
+    composer.render(); // Renderizar con la nueva configuración
+
+    // 3. Capturar la imagen
     const screenshot = renderer.domElement.toDataURL('image/png');
+
+    // 4. Restaurar estado original
+    renderer.setSize(originalSize.x, originalSize.y);
+    camera.aspect = originalSize.x / originalSize.y;
+    camera.updateProjectionMatrix();
+    scene.background = originalBackground;
+    composer.render(); // Re-renderizar para que la vista del usuario vuelva a la normalidad
+
     if (!screenshot || screenshot === 'data:,') {
         console.error("Error al capturar la imagen del canvas. Puede que esté vacío.");
         alert("No se pudo generar la imagen del reporte. Inténtelo de nuevo.");
@@ -243,15 +261,22 @@ function generateReport() {
         const box = new THREE.Box3().setFromObject(object);
         const center = box.getCenter(new THREE.Vector3());
 
-        // Los metadatos ya están disponibles en `partCharacteristics`
+        // --- Mejora de Calidad: Filtrar piezas no visibles ---
+        // Proyectar el centro del objeto a la pantalla
+        const projectedPosition = center.clone().project(camera);
+        // Si el objeto está fuera del frustum de la cámara (NDC coords fuera de [-1, 1]), no lo incluimos.
+        if (projectedPosition.x < -1 || projectedPosition.x > 1 || projectedPosition.y < -1 || projectedPosition.y > 1) {
+            return null;
+        }
+
         const metadata = partCharacteristics[object.name] || {};
 
         return {
             name: object.name,
-            position3d: center, // Guardamos el Vector3 completo
+            position3d: center,
             metadata: metadata
         };
-    });
+    }).filter(p => p !== null); // Eliminar los nulos del array
 
     console.log("Datos para el reporte recopilados:", {
         screenshotLength: screenshot.length,
