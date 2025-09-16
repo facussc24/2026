@@ -3,7 +3,7 @@ import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.co
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-import { createVisorUI, updateStatus, updateSelectionUI, disableAnnotationFeatures } from './components/uiManager.js';
+import { createVisorUI, updateStatus, updateSelectionUI, disableAnnotationFeatures, showLoader, hideLoader } from './components/uiManager.js';
 import { initThreeScene, scene, camera, renderer, controls } from './components/sceneManager.js';
 import { setupVisor3dEventListeners, onPointerDown, updateSelection, toggleSelectionTransparency, toggleIsolation } from './components/eventManager.js';
 import { initAnnotations } from './components/annotationManager.js';
@@ -79,34 +79,46 @@ async function loadModel(modelRef) {
     console.log(`Loading model from Firebase: ${modelRef.name}`);
     if (currentCleanup) {
         currentCleanup();
+        currentCleanup = null;
     }
 
-    // Sanitize model name and prepare data URL
-    const modelName = modelRef.name.replace(/\.glb$/i, '');
-    const dataUrl = `modulos/visor3d/data/${modelName}.json`;
+    showLoader('Iniciando carga...');
 
-    // Reset and load part characteristics
-    partCharacteristics = {};
     try {
-        const response = await fetch(dataUrl);
-        if (response.ok) {
-            partCharacteristics = await response.json();
-            console.log(`Successfully loaded characteristics for ${modelName}`);
-        } else {
-            console.warn(`Could not find characteristics data for ${modelName} at ${dataUrl}. Using default behavior.`);
+        // Sanitize model name and prepare data URL
+        const modelName = modelRef.name.replace(/\.glb$/i, '');
+        const dataUrl = `modulos/visor3d/data/${modelName}.json`;
+
+        // Reset and load part characteristics
+        partCharacteristics = {};
+        try {
+            const response = await fetch(dataUrl);
+            if (response.ok) {
+                partCharacteristics = await response.json();
+                console.log(`Successfully loaded characteristics for ${modelName}`);
+            } else {
+                console.warn(`Could not find characteristics data for ${modelName} at ${dataUrl}.`);
+            }
+        } catch (error) {
+            console.warn(`Error fetching characteristics for ${modelName}:`, error);
         }
-    } catch (error) {
-        console.warn(`Error fetching characteristics for ${modelName}:`, error);
-    }
 
-    // Load the 3D model
-    try {
+        // Load the 3D model
         const url = await getDownloadURL(modelRef);
-        currentCleanup = initThreeScene(url, onPointerDown);
+
+        const progressCallback = (message) => {
+            showLoader(message);
+        };
+
+        currentCleanup = await initThreeScene(url, onPointerDown, progressCallback);
+
         initAnnotations(modelName, scene);
+
     } catch (error) {
-        console.error("Error getting download URL or initializing scene:", error);
-        updateStatus(`Error al cargar el modelo ${modelName}.`, true);
+        console.error("Error during model loading process:", error);
+        updateStatus(`Error al cargar el modelo: ${error.message}`, true);
+    } finally {
+        hideLoader();
     }
 }
 
