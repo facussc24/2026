@@ -878,6 +878,23 @@ function renderCalendar(date, view) {
     displayTasksOnCalendar(adminTaskViewState.tasks);
 }
 
+export function initTasksModule(dependencies) {
+    db = dependencies.db;
+    functions = dependencies.functions;
+    appState = dependencies.appState;
+    dom = dependencies.dom;
+    showToast = dependencies.showToast;
+    showConfirmationModal = dependencies.showConfirmationModal;
+    switchView = dependencies.switchView;
+    checkUserPermission = dependencies.checkUserPermission;
+    lucide = dependencies.lucide;
+    console.log("Tasks module initialized.");
+}
+
+export function runTasksLogic() {
+    runKanbanBoardLogic();
+}
+
 function renderMonthlyView(date) {
     const calendarGrid = document.getElementById('calendar-grid');
     const calendarTitle = document.getElementById('calendar-title');
