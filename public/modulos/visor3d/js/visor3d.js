@@ -27,6 +27,7 @@ export const explosionVectors = new Map();
 export const transparentMaterials = new Map();
 export const clippingPlanes = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), 10)];
 export let partCharacteristics = {};
+let storage;
 let currentCleanup = null;
 let activeModelButton = null;
 
@@ -83,7 +84,7 @@ async function loadModel(modelRef) {
 }
 
 export async function runVisor3dLogic(app) {
-    const storage = getStorage(app);
+    storage = getStorage(app);
     console.log("Running Visor3D logic with Firebase Storage direct access...");
 
     createVisorUI();
