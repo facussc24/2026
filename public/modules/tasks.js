@@ -81,18 +81,18 @@ function createTaskCard(task) {
     const dragClass = checkUserPermission('edit', task) ? '' : 'no-drag';
 
     return `
-        <div class="task-card bg-white rounded-lg p-4 shadow-sm border ${urgencyClass} cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col gap-3 ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${task.docId}">
-            <div class="flex justify-between items-start gap-2">
+        <div class="task-card bg-white rounded-lg p-4 shadow-sm border ${urgencyClass} cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${task.docId}">
+            <div class="flex justify-between items-start gap-2 mb-2">
                 <h4 class="font-bold text-slate-800 flex-grow">${task.title}</h4>
                 ${taskTypeIcon}
             </div>
 
-            <p class="text-sm text-slate-600 break-words flex-grow">${task.description || ''}</p>
+            <p class="text-sm text-slate-600 break-words flex-grow mb-3">${task.description || ''}</p>
 
             ${subtaskProgressHTML}
 
-            <div class="mt-auto pt-3 border-t border-slate-200/80 space-y-3">
-                <div class="flex justify-between items-center text-xs text-slate-500">
+            <div class="mt-auto pt-3 border-t border-slate-200/80">
+                <div class="flex justify-between items-center text-xs text-slate-500 mb-3">
                     <span class="px-2 py-0.5 rounded-full font-semibold ${priority.color}">${priority.label}</span>
                     <div class="flex items-center gap-3">
                         <span class="flex items-center gap-1.5 font-medium" title="Fecha de creación">
@@ -247,6 +247,265 @@ function formatTimeAgo(timestamp) {
 // --- 7. LÓGICA DE TAREAS (KANBAN BOARD) ---
 // =================================================================================
 
+// --- HELPER FUNCTIONS FOR KANBAN LOGIC (moved outside for clarity) ---
+const loadTelegramConfig = () => {
+    const user = appState.currentUser;
+    if (user) {
+        const chatIdInput = document.getElementById('telegram-chat-id');
+        const onAssignmentCheck = document.getElementById('notify-on-assignment');
+        const onStatusChangeCheck = document.getElementById('notify-on-status-change');
+        const onDueDateReminderCheck = document.getElementById('notify-on-due-date-reminder');
+        if (chatIdInput) chatIdInput.value = user.telegramChatId || '';
+        if (onAssignmentCheck) onAssignmentCheck.checked = user.telegramNotifications?.onAssignment !== false;
+        if (onStatusChangeCheck) onStatusChangeCheck.checked = user.telegramNotifications?.onStatusChange !== false;
+        if (onDueDateReminderCheck) onDueDateReminderCheck.checked = user.telegramNotifications?.onDueDateReminder !== false;
+    }
+};
+const saveTelegramConfig = async () => {
+    const chatId = document.getElementById('telegram-chat-id').value.trim();
+    if (!chatId || !/^-?\d+$/.test(chatId)) {
+        showToast('Por favor, ingrese un Chat ID de Telegram válido (solo números).', 'error');
+        return;
+    }
+    const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
+    try {
+        await updateDoc(userDocRef, {
+            telegramChatId: chatId,
+            telegramNotifications: {
+                onAssignment: document.getElementById('notify-on-assignment').checked,
+                onStatusChange: document.getElementById('notify-on-status-change').checked,
+                onDueDateReminder: document.getElementById('notify-on-due-date-reminder').checked
+            }
+        });
+        showToast('Configuración de Telegram guardada.', 'success');
+    } catch (error) {
+        showToast('Error al guardar la configuración.', 'error');
+    }
+};
+const sendTestTelegram = async (e) => {
+    const button = e.target.closest('button');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Enviando...';
+    button.disabled = true;
+    lucide.createIcons();
+    try {
+        const sendTestMessage = httpsCallable(functions, 'sendTestTelegramMessage');
+        const result = await sendTestMessage();
+        showToast(result.data.message, 'success');
+    } catch (error) {
+        showToast(`Error: ${error.message || "Error desconocido."}`, 'error');
+    } finally {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    }
+};
+
+function runKanbanBoardLogic() {
+    if (taskState.activeFilter === 'supervision' && !taskState.selectedUserId) {
+        renderAdminUserList();
+        return;
+    }
+
+    let topBarHTML = '';
+    if (taskState.selectedUserId) {
+        const selectedUser = appState.collections.usuarios.find(u => u.docId === taskState.selectedUserId);
+        topBarHTML = `
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold">Tareas de ${selectedUser?.name || 'Usuario'}</h3>
+            <button data-action="admin-back-to-supervision" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Volver a Supervisión</button>
+        </div>
+        `;
+    }
+
+    const telegramConfigHTML = `
+    <div id="telegram-config-collapsible" class="bg-white rounded-xl shadow-lg mb-6 border border-blue-200 overflow-hidden">
+        <button id="telegram-config-header" class="w-full flex justify-between items-center p-4">
+            <div class="flex items-center gap-4">
+                <i data-lucide="send" class="w-8 h-8 text-blue-500"></i>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800 text-left">Configuración de Notificaciones de Telegram</h3>
+                    <p class="text-sm text-slate-500 text-left">Recibe notificaciones de tus tareas directamente en tu teléfono.</p>
+                </div>
+            </div>
+            <i data-lucide="chevron-down" id="telegram-config-chevron" class="w-6 h-6 text-slate-500 transition-transform"></i>
+        </button>
+        <div id="telegram-config-body" class="p-6 pt-0" style="display: none;">
+            <div class="mt-4 text-sm text-slate-600 bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
+                <div>
+                    <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="info"></i>¿Cómo funciona?</p>
+                    <ul class="list-disc list-inside space-y-1 pl-5">
+                        <li>Recibirás un mensaje cuando alguien te <strong>asigne una tarea nueva</strong>.</li>
+                        <li>Recibirás un mensaje cuando el estado de una <strong>tarea que tú creaste</strong> cambie (por ejemplo, de "Por Hacer" a "En Progreso").</li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="help-circle"></i>¿Cómo obtener tu Chat ID?</p>
+                    <p class="pl-5">
+                        Abre Telegram y busca el bot <a href="https://t.me/userinfobot" target="_blank" class="text-blue-600 font-semibold hover:underline">@userinfobot</a>. Inicia una conversación con él y te enviará tu Chat ID numérico. Cópialo y pégalo en el campo de abajo.
+                    </p>
+                </div>
+            </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t">
+                <div>
+                    <label for="telegram-chat-id" class="block text-sm font-medium text-gray-700 mb-1">Tu Chat ID de Telegram</label>
+                    <input type="text" id="telegram-chat-id" placeholder="Ingresa tu Chat ID numérico" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">¿Cuándo notificar?</label>
+                    <div class="space-y-2 mt-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-assignment" name="onAssignment" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Cuando se me asigna una tarea nueva.</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-status-change" name="onStatusChange" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Cuando una tarea que creé cambia de estado.</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-due-date-reminder" name="onDueDateReminder" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Un día antes del vencimiento de una tarea asignada.</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex items-center gap-4">
+                <button id="save-telegram-config-btn" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Configuración</button>
+                <button id="send-test-telegram-btn" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold">Enviar Mensaje de Prueba</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    // 1. Set up the basic HTML layout for the board
+    dom.viewContent.innerHTML = `
+        ${telegramConfigHTML}
+        ${topBarHTML}
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 ${taskState.selectedUserId ? 'hidden' : ''}">
+            <div id="task-filters" class="flex items-center gap-2 rounded-lg bg-slate-200 p-1 flex-wrap"></div>
+
+            <div class="flex items-center gap-2 flex-grow w-full md:w-auto">
+                <div class="relative flex-grow">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
+                    <input type="text" id="task-search-input" placeholder="Buscar tareas..." class="w-full pl-10 pr-4 py-2 border rounded-full bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                </div>
+                <div class="relative">
+                    <select id="task-priority-filter" class="pl-4 pr-8 py-2 border rounded-full bg-white shadow-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        <option value="all">Prioridad (todas)</option>
+                        <option value="high">Alta</option>
+                        <option value="medium">Media</option>
+                        <option value="low">Baja</option>
+                    </select>
+                    <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none"></i>
+                </div>
+            </div>
+
+            <div id="kanban-header-buttons" class="flex items-center gap-4 flex-shrink-0">
+                <button id="go-to-stats-view-btn" class="bg-slate-700 text-white px-5 py-2.5 rounded-full hover:bg-slate-800 flex items-center shadow-md transition-transform transform hover:scale-105 flex-shrink-0">
+                    <i data-lucide="bar-chart-2" class="mr-2 h-5 w-5"></i>Ver Estadísticas
+                </button>
+                <button id="add-new-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                    <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
+                </button>
+            </div>
+        </div>
+        <div id="task-board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="task-column bg-slate-100/80 rounded-xl" data-status="todo">
+                <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
+                    <span class="flex items-center gap-3"><i data-lucide="list-todo" class="w-5 h-5 text-yellow-600"></i>Por Hacer</span>
+                    <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
+                </h3>
+                <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
+            </div>
+            <div class="task-column bg-slate-100/80 rounded-xl" data-status="inprogress">
+                <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
+                    <span class="flex items-center gap-3"><i data-lucide="timer" class="w-5 h-5 text-blue-600"></i>En Progreso</span>
+                    <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
+                </h3>
+                <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
+            </div>
+            <div class="task-column bg-slate-100/80 rounded-xl" data-status="done">
+                <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
+                    <span class="flex items-center gap-3"><i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>Completadas</span>
+                    <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
+                </h3>
+                <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
+            </div>
+        </div>
+    `;
+    lucide.createIcons();
+
+    // Defer the rest of the setup to ensure the DOM is ready.
+    setTimeout(() => {
+        // 2. Set up event listeners
+        const addNewTaskBtn = document.getElementById('add-new-task-btn');
+        if(addNewTaskBtn) addNewTaskBtn.addEventListener('click', () => openTaskFormModal());
+
+        const goToStatsBtn = document.getElementById('go-to-stats-view-btn');
+        if(goToStatsBtn) goToStatsBtn.addEventListener('click', renderTaskDashboardView);
+
+        const telegramHeader = document.getElementById('telegram-config-header');
+        if(telegramHeader) {
+            telegramHeader.addEventListener('click', () => {
+                const body = document.getElementById('telegram-config-body');
+                const chevron = document.getElementById('telegram-config-chevron');
+                const isHidden = body.style.display === 'none';
+
+                body.style.display = isHidden ? 'block' : 'none';
+                chevron.classList.toggle('rotate-180', isHidden);
+            });
+        }
+
+        const saveTelegramBtn = document.getElementById('save-telegram-config-btn');
+        if(saveTelegramBtn) saveTelegramBtn.addEventListener('click', saveTelegramConfig);
+
+        const testTelegramBtn = document.getElementById('send-test-telegram-btn');
+        if(testTelegramBtn) testTelegramBtn.addEventListener('click', sendTestTelegram);
+
+        loadTelegramConfig();
+
+        const taskBoard = document.getElementById('task-board');
+        if(taskBoard) {
+            taskBoard.addEventListener('click', e => {
+                const header = e.target.closest('.kanban-column-header');
+                if (header) {
+                    header.parentElement.classList.toggle('collapsed');
+                }
+            });
+        }
+
+        const searchInput = document.getElementById('task-search-input');
+        if(searchInput) {
+            searchInput.addEventListener('input', e => {
+                taskState.searchTerm = e.target.value.toLowerCase();
+                fetchAndRenderTasks();
+            });
+        }
+
+        const priorityFilter = document.getElementById('task-priority-filter');
+        if(priorityFilter) {
+            priorityFilter.addEventListener('change', e => {
+                taskState.priorityFilter = e.target.value;
+                fetchAndRenderTasks();
+            });
+        }
+
+        setupTaskFilters();
+
+        // 3. Initial fetch and render
+        renderTaskFilters();
+        fetchAndRenderTasks();
+
+        // 4. Cleanup logic
+        appState.currentViewCleanup = () => {
+            taskState.unsubscribers.forEach(unsub => unsub());
+            taskState.unsubscribers = [];
+            taskState.searchTerm = '';
+            taskState.priorityFilter = 'all';
+            taskState.selectedUserId = null;
+        };
+    }, 0);
+}
+
 export function renderTaskDashboardView() {
     const isAdmin = appState.currentUser.role === 'admin';
     const title = isAdmin ? "Estadísticas del Equipo" : "Mis Estadísticas";
@@ -303,9 +562,9 @@ export function renderTaskDashboardView() {
                 <!-- Dashboard Panel (Always visible) -->
                 <div id="tab-panel-dashboard" class="admin-tab-panel">
                     <div id="task-charts-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3><div id="status-chart-container" class="h-64 flex items-center justify-center"><canvas id="status-chart"></canvas></div></div>
-                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3><div id="priority-chart-container" class="h-64 flex items-center justify-center"><canvas id="priority-chart"></canvas></div></div>
-                        <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'} lg:col-span-2"><h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3><div id="user-load-chart-container" class="h-64 flex items-center justify-center"><canvas id="user-load-chart"></canvas></div></div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3><div class="relative h-64"><canvas id="status-chart"></canvas></div></div>
+                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3><div class="relative h-64"><canvas id="priority-chart"></canvas></div></div>
+                        <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'} lg:col-span-2"><h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3><div class="relative h-80"><canvas id="user-load-chart"></canvas></div></div>
                     </div>
                 </div>
 
@@ -396,13 +655,16 @@ export function renderTaskDashboardView() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const allTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
 
-        if(isAdmin) {
-            adminTaskViewState.tasks = allTasks;
-            updateAdminDashboardData(allTasks);
-        } else {
-            const myTasks = allTasks.filter(t => t.assigneeUid === appState.currentUser.uid || t.creatorUid === appState.currentUser.uid);
-            renderAdminTaskCharts(myTasks); // Directly render charts with user's tasks
-        }
+        // Defer rendering to prevent race conditions, ensuring the DOM is ready.
+        setTimeout(() => {
+            if(isAdmin) {
+                adminTaskViewState.tasks = allTasks;
+                updateAdminDashboardData(allTasks);
+            } else {
+                const myTasks = allTasks.filter(t => t.assigneeUid === appState.currentUser.uid || t.creatorUid === appState.currentUser.uid);
+                renderAdminTaskCharts(myTasks); // Directly render charts with user's tasks
+            }
+        }, 0);
     }, (error) => {
         console.error("Error fetching tasks for dashboard:", error);
         showToast('Error al cargar las tareas del dashboard.', 'error');
