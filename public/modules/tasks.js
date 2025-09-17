@@ -36,9 +36,9 @@ let adminCharts = { statusChart: null, priorityChart: null, userLoadChart: null 
 function createTaskCard(task) {
     const assignee = (appState.collections.usuarios || []).find(u => u.docId === task.assigneeUid);
     const priorities = {
-        low: { label: 'Baja', color: 'bg-gray-200 text-gray-800' },
-        medium: { label: 'Media', color: 'bg-yellow-200 text-yellow-800' },
-        high: { label: 'Alta', color: 'bg-red-200 text-red-800' }
+        low: { label: 'Baja', color: 'bg-slate-100 text-slate-800' },
+        medium: { label: 'Media', color: 'bg-yellow-100 text-yellow-800' },
+        high: { label: 'Alta', color: 'bg-red-100 text-red-800' }
     };
     const priority = priorities[task.priority] || priorities.medium;
 
@@ -47,7 +47,7 @@ function createTaskCard(task) {
     today.setHours(0,0,0,0);
     const isOverdue = dueDate && dueDate < today;
     const dueDateStr = dueDate ? dueDate.toLocaleDateString('es-AR') : 'Sin fecha';
-    const urgencyClass = isOverdue ? 'border-red-400 bg-red-50/50' : 'border-slate-200';
+    const urgencyClass = isOverdue ? 'border-red-600 bg-red-50/50' : 'border-slate-200';
     const dateClass = isOverdue ? 'text-red-600 font-bold' : 'text-slate-500';
 
     const creationDate = task.createdAt?.seconds ? new Date(task.createdAt.seconds * 1000) : null;
