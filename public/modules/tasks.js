@@ -227,6 +227,13 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
     const modalElement = document.getElementById('task-form-modal');
 
     // Ensure users are loaded before populating the dropdown
+    if (!appState.collections.usuarios || appState.collections.usuarios.length === 0) {
+        console.log("User collection is empty, fetching...");
+        const usersSnapshot = await getDocs(collection(db, COLLECTIONS.USUARIOS));
+        appState.collections.usuarios = usersSnapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
+        appState.collectionsById.usuarios = new Map(appState.collections.usuarios.map(u => [u.docId, u]));
+        console.log("User collection fetched and populated.");
+    }
     populateTaskAssigneeDropdown();
     
     const subtaskListEl = modalElement.querySelector('#subtasks-list');
