@@ -157,32 +157,28 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
                     <textarea id="task-description" name="description" rows="4">${isEditing && task.description ? task.description : ''}</textarea>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-                    <div class="input-group">
-                        <label for="task-assignee">Asignar a</label>
-                        <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}">
-                            <option value="">Cargando...</option>
-                        </select>
-                    </div>
-                    <div class="input-group">
-                        <label for="task-priority">Prioridad</label>
-                        <select id="task-priority" name="priority">
-                            <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
-                            <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
-                            <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
-                        </select>
-                    </div>
+                <div class="input-group">
+                    <label for="task-assignee">Asignar a</label>
+                    <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}">
+                        <option value="">Cargando...</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label for="task-priority">Prioridad</label>
+                    <select id="task-priority" name="priority">
+                        <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
+                        <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
+                        <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
+                    </select>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-                    <div class="input-group">
-                        <label for="task-startdate">Fecha de Inicio</label>
-                        <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}">
-                    </div>
-                    <div class="input-group">
-                        <label for="task-duedate">Fecha Límite</label>
-                        <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
-                    </div>
+                <div class="input-group">
+                    <label for="task-startdate">Fecha de Inicio</label>
+                    <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}">
+                </div>
+                <div class="input-group">
+                    <label for="task-duedate">Fecha Límite</label>
+                    <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
                 </div>
 
                 <!-- Subtasks -->
@@ -1094,10 +1090,17 @@ export function renderTaskDashboardView() {
             <div id="admin-tab-content">
                 <!-- Dashboard Panel (Always visible) -->
                 <div id="tab-panel-dashboard" class="admin-tab-panel">
-                    <div id="task-charts-container" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3><div class="relative h-64"><canvas id="status-chart"></canvas></div></div>
-                        <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3><div class="relative h-64"><canvas id="priority-chart"></canvas></div></div>
-                        <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'} lg:col-span-2"><h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3><div class="relative h-80"><canvas id="user-load-chart"></canvas></div></div>
+                    <div id="task-charts-container" class="flex flex-col gap-6">
+                        <!-- First row for the two smaller charts -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3><div class="relative h-64"><canvas id="status-chart"></canvas></div></div>
+                            <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3><div class="relative h-64"><canvas id="priority-chart"></canvas></div></div>
+                        </div>
+                        <!-- Second row for the full-width chart -->
+                        <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'}">
+                            <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3>
+                            <div class="relative h-80"><canvas id="user-load-chart"></canvas></div>
+                        </div>
                     </div>
                 </div>
 
