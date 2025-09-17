@@ -232,7 +232,7 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
 
     // Ensure users are loaded before populating the dropdown
     populateTaskAssigneeDropdown();
-
+    
     const subtaskListEl = modalElement.querySelector('#subtasks-list');
     const newSubtaskInput = modalElement.querySelector('#new-subtask-title');
 
@@ -719,7 +719,7 @@ function fetchAndRenderTasks() {
                 queryConstraints.unshift(where('isPublic', '==', true));
             }
         }
-
+        
         const q = query(tasksRef, ...queryConstraints);
 
         const unsub = onSnapshot(q, (snapshot) => {
