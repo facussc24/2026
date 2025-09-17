@@ -247,7 +247,7 @@ function formatTimeAgo(timestamp) {
 // --- 7. LÓGICA DE TAREAS (KANBAN BOARD) ---
 // =================================================================================
 
-function renderTaskDashboardView() {
+export function renderTaskDashboardView() {
     const isAdmin = appState.currentUser.role === 'admin';
     const title = isAdmin ? "Estadísticas del Equipo" : "Mis Estadísticas";
     const subtitle = isAdmin ? "Analiza, filtra y gestiona las tareas del equipo." : "Un resumen de tu carga de trabajo y progreso.";
