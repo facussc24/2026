@@ -1457,7 +1457,7 @@ async function switchView(viewName, params = null) {
     
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
-    if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic();
+    if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic(app);
     else if (viewName === 'dashboard') await runDashboardLogic();
     else if (viewName === 'sinoptico') await runSinopticoLogic();
     else if (viewName === 'sinoptico_tabular') await runSinopticoTabularLogic();
