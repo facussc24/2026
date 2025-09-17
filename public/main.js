@@ -9310,7 +9310,7 @@ async function handlePasswordReset(form, email) {
     showAuthScreen('login');
 }
 
-async function handleAuthForms(e) {
+export async function handleAuthForms(e) {
     e.preventDefault();
     const form = e.target;
     const formId = form.id;
@@ -9366,12 +9366,10 @@ async function handleAuthForms(e) {
                 friendlyMessage = 'Error de autenticación. Intente de nuevo más tarde.';
         }
         showToast(friendlyMessage, 'error');
-    } finally {
-        // Restore button state only on failure, as success is handled by onAuthStateChanged
-        if (!auth.currentUser || (formId === 'register-form' && error)) {
-             submitButton.disabled = false;
-             submitButton.innerHTML = originalButtonHTML;
-        }
+
+        // Restore button state on failure
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonHTML;
     }
 }
 
