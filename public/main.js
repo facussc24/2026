@@ -6973,6 +6973,1061 @@ async function guardarEstructura(button) {
 
 
 
+function runKanbanBoardLogic() {
+    if (taskState.activeFilter === 'supervision' && !taskState.selectedUserId) {
+        renderAdminUserList();
+        return;
+    }
+
+    let topBarHTML = '';
+    if (taskState.selectedUserId) {
+        const selectedUser = appState.collections.usuarios.find(u => u.docId === taskState.selectedUserId);
+        topBarHTML = `
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold">Tareas de ${selectedUser?.name || 'Usuario'}</h3>
+            <button data-action="admin-back-to-supervision" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Volver a Supervisión</button>
+        </div>
+        `;
+    }
+
+    const telegramConfigHTML = `
+    <div id="telegram-config-collapsible" class="bg-white rounded-xl shadow-lg mb-6 border border-blue-200 overflow-hidden">
+        <button id="telegram-config-header" class="w-full flex justify-between items-center p-4">
+            <div class="flex items-center gap-4">
+                <i data-lucide="send" class="w-8 h-8 text-blue-500"></i>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800 text-left">Configuración de Notificaciones de Telegram</h3>
+                    <p class="text-sm text-slate-500 text-left">Recibe notificaciones de tus tareas directamente en tu teléfono.</p>
+                </div>
+            </div>
+            <i data-lucide="chevron-down" id="telegram-config-chevron" class="w-6 h-6 text-slate-500 transition-transform"></i>
+        </button>
+        <div id="telegram-config-body" class="p-6 pt-0" style="display: none;">
+            <div class="mt-4 text-sm text-slate-600 bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
+                <div>
+                    <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="info"></i>¿Cómo funciona?</p>
+                    <ul class="list-disc list-inside space-y-1 pl-5">
+                        <li>Recibirás un mensaje cuando alguien te <strong>asigne una tarea nueva</strong>.</li>
+                        <li>Recibirás un mensaje cuando el estado de una <strong>tarea que tú creaste</strong> cambie (por ejemplo, de "Por Hacer" a "En Progreso").</li>
+                    </ul>
+                </div>
+                <div>
+                    <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="help-circle"></i>¿Cómo obtener tu Chat ID?</p>
+                    <p class="pl-5">
+                        Abre Telegram y busca el bot <a href="https://t.me/userinfobot" target="_blank" class="text-blue-600 font-semibold hover:underline">@userinfobot</a>. Inicia una conversación con él y te enviará tu Chat ID numérico. Cópialo y pégalo en el campo de abajo.
+                    </p>
+                </div>
+            </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t">
+                <div>
+                    <label for="telegram-chat-id" class="block text-sm font-medium text-gray-700 mb-1">Tu Chat ID de Telegram</label>
+                    <input type="text" id="telegram-chat-id" placeholder="Ingresa tu Chat ID numérico" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">¿Cuándo notificar?</label>
+                    <div class="space-y-2 mt-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-assignment" name="onAssignment" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Cuando se me asigna una tarea nueva.</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-status-change" name="onStatusChange" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Cuando una tarea que creé cambia de estado.</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="notify-on-due-date-reminder" name="onDueDateReminder" class="h-4 w-4 rounded text-blue-600">
+                            <span class="ml-2 text-sm">Un día antes del vencimiento de una tarea asignada.</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex items-center gap-4">
+                <button id="save-telegram-config-btn" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Configuración</button>
+                <button id="send-test-telegram-btn" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold">Enviar Mensaje de Prueba</button>
+            </div>
+        </div>
+    </div>
+    `;
+
+    // 1. Set up the basic HTML layout for the board
+    dom.viewContent.innerHTML = `
+        ${telegramConfigHTML}
+        ${topBarHTML}
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 ${taskState.selectedUserId ? 'hidden' : ''}">
+            <div id="task-filters" class="flex items-center gap-2 rounded-lg bg-slate-200 p-1 flex-wrap"></div>
+
+            <div class="flex items-center gap-2 flex-grow w-full md:w-auto">
+                <div class="relative flex-grow">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
+                    <input type="text" id="task-search-input" placeholder="Buscar tareas..." class="w-full pl-10 pr-4 py-2 border rounded-full bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                </div>
+                <div class="relative">
+                    <select id="task-priority-filter" class="pl-4 pr-8 py-2 border rounded-full bg-white shadow-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                        <option value="all">Prioridad (todas)</option>
+                        <option value="high">Alta</option>
+                        <option value="medium">Media</option>
+                        <option value="low">Baja</option>
+                    </select>
+                    <i data-lucide="chevron-down" class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none"></i>
+                </div>
+            </div>
+
+            <div id="kanban-header-buttons" class="flex items-center gap-4 flex-shrink-0">
+                <button id="go-to-stats-view-btn" class="bg-slate-700 text-white px-5 py-2.5 rounded-full hover:bg-slate-800 flex items-center shadow-md transition-transform transform hover:scale-105 flex-shrink-0">
+                    <i data-lucide="bar-chart-2" class="mr-2 h-5 w-5"></i>Ver Estadísticas
+                </button>
+                <button id="add-new-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                    <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
+                </button>
+            </div>
+        </div>
+        <div id="task-board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="task-column bg-slate-100/80 rounded-xl" data-status="todo">
+                <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
+                    <span class="flex items-center gap-3"><i data-lucide="list-todo" class="w-5 h-5 text-yellow-600"></i>Por Hacer</span>
+                    <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
+                </h3>
+                <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
+            </div>
+            <div class="task-column bg-slate-100/80 rounded-xl" data-status="inprogress">
+                <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
+                    <span class="flex items-center gap-3"><i data-lucide="timer" class="w-5 h-5 text-blue-600"></i>En Progreso</span>
+                    <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
+                </h3>
+                <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
+            </div>
+            <div class="task-column bg-slate-100/80 rounded-xl" data-status="done">
+                <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
+                    <span class="flex items-center gap-3"><i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>Completadas</span>
+                    <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
+                </h3>
+                <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
+            </div>
+        </div>
+    `;
+    lucide.createIcons();
+
+    // 2. Set up event listeners for filters and the add button
+    document.getElementById('add-new-task-btn').addEventListener('click', () => openTaskFormModal());
+    document.getElementById('go-to-stats-view-btn').addEventListener('click', renderTaskDashboardView);
+
+    document.getElementById('telegram-config-header').addEventListener('click', () => {
+        const body = document.getElementById('telegram-config-body');
+        const chevron = document.getElementById('telegram-config-chevron');
+        const isHidden = body.style.display === 'none';
+
+        body.style.display = isHidden ? 'block' : 'none';
+        chevron.classList.toggle('rotate-180', isHidden);
+    });
+
+    // --- Telegram Config Logic ---
+    const loadTelegramConfig = () => {
+        const user = appState.currentUser;
+        if (user) {
+            const chatIdInput = document.getElementById('telegram-chat-id');
+            const onAssignmentCheck = document.getElementById('notify-on-assignment');
+            const onStatusChangeCheck = document.getElementById('notify-on-status-change');
+            const onDueDateReminderCheck = document.getElementById('notify-on-due-date-reminder');
+
+            if (chatIdInput) {
+                chatIdInput.value = user.telegramChatId || '';
+            }
+            if (onAssignmentCheck) {
+                // Default to true if not set
+                onAssignmentCheck.checked = user.telegramNotifications?.onAssignment !== false;
+            }
+            if (onStatusChangeCheck) {
+                // Default to true if not set
+                onStatusChangeCheck.checked = user.telegramNotifications?.onStatusChange !== false;
+            }
+            if (onDueDateReminderCheck) {
+                // Default to true if not set
+                onDueDateReminderCheck.checked = user.telegramNotifications?.onDueDateReminder !== false;
+            }
+        }
+    };
+
+    const saveTelegramConfig = async () => {
+        const chatId = document.getElementById('telegram-chat-id').value.trim();
+        const onAssignment = document.getElementById('notify-on-assignment').checked;
+        const onStatusChange = document.getElementById('notify-on-status-change').checked;
+        const onDueDateReminder = document.getElementById('notify-on-due-date-reminder').checked;
+
+        if (!chatId || !/^-?\d+$/.test(chatId)) {
+            showToast('Por favor, ingrese un Chat ID de Telegram válido (solo números).', 'error');
+            return;
+        }
+
+        const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
+        try {
+            await updateDoc(userDocRef, {
+                telegramChatId: chatId,
+                telegramNotifications: {
+                    onAssignment: onAssignment,
+                    onStatusChange: onStatusChange,
+                    onDueDateReminder: onDueDateReminder
+                }
+            });
+            showToast('Configuración de Telegram guardada.', 'success');
+        } catch (error) {
+            console.error("Error saving Telegram config:", error);
+            showToast('Error al guardar la configuración.', 'error');
+        }
+    };
+
+    document.getElementById('save-telegram-config-btn')?.addEventListener('click', saveTelegramConfig);
+
+    const testButton = document.getElementById('send-test-telegram-btn');
+    if (testButton) {
+        testButton.addEventListener('click', async () => {
+            const originalText = testButton.textContent;
+            testButton.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Enviando...';
+            testButton.disabled = true;
+            lucide.createIcons();
+
+            try {
+                const sendTestMessage = httpsCallable(functions, 'sendTestTelegramMessage');
+                const result = await sendTestMessage();
+                showToast(result.data.message, 'success');
+            } catch (error) {
+                console.error("Error sending test message:", error);
+                const errorMessage = error.message || "Error desconocido.";
+                showToast(`Error: ${errorMessage}`, 'error');
+            } finally {
+                testButton.innerHTML = originalText;
+                testButton.disabled = false;
+            }
+        });
+    }
+
+    loadTelegramConfig();
+
+    document.getElementById('task-board').addEventListener('click', e => {
+        const header = e.target.closest('.kanban-column-header');
+        if (header) {
+            header.parentElement.classList.toggle('collapsed');
+        }
+    });
+
+    document.getElementById('task-search-input').addEventListener('input', e => {
+        taskState.searchTerm = e.target.value.toLowerCase();
+        fetchAndRenderTasks();
+    });
+    document.getElementById('task-priority-filter').addEventListener('change', e => {
+        taskState.priorityFilter = e.target.value;
+        fetchAndRenderTasks();
+    });
+    setupTaskFilters();
+
+    // 3. Initial fetch and render
+    renderTaskFilters();
+    fetchAndRenderTasks();
+
+    // The admin button is no longer needed as the entry point is unified.
+    // Admins can switch between dashboard and board using the back button.
+
+    // 4. Cleanup logic
+    appState.currentViewCleanup = () => {
+        taskState.unsubscribers.forEach(unsub => unsub());
+        taskState.unsubscribers = [];
+        // Reset filters when leaving view
+        taskState.searchTerm = '';
+        taskState.priorityFilter = 'all';
+        taskState.selectedUserId = null;
+    };
+}
+
+function renderAdminUserList() {
+    const users = appState.collections.usuarios || [];
+    const tasks = appState.collections.tareas || [];
+    const adminId = appState.currentUser.uid;
+
+    const userTaskStats = users
+        .filter(user => user.docId !== adminId)
+        .map(user => {
+            const userTasks = tasks.filter(task => task.assigneeUid === user.docId);
+            return {
+                ...user,
+                stats: {
+                    todo: userTasks.filter(t => t.status === 'todo').length,
+                    inprogress: userTasks.filter(t => t.status === 'inprogress').length,
+                    done: userTasks.filter(t => t.status === 'done').length
+                }
+            };
+        });
+
+    let content = `
+        <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold">Supervisión de Tareas de Usuarios</h3>
+                <button data-action="admin-back-to-board" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Volver al Tablero</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    `;
+
+    if (userTaskStats.length === 0) {
+        content += `<p class="text-slate-500 col-span-full text-center py-12">No hay otros usuarios para supervisar.</p>`;
+    } else {
+        userTaskStats.forEach(user => {
+            content += `
+            <div class="border rounded-lg p-4 hover:shadow-md transition-shadow animate-fade-in-up">
+                    <div class="flex items-center space-x-4">
+                        <img src="${user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.name || user.email)}`}" alt="Avatar" class="w-12 h-12 rounded-full">
+                        <div>
+                            <p class="font-bold text-slate-800">${user.name || user.email}</p>
+                            <p class="text-sm text-slate-500">${user.email}</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-around text-center">
+                        <div>
+                            <p class="text-2xl font-bold text-yellow-600">${user.stats.todo}</p>
+                            <p class="text-xs text-slate-500">Por Hacer</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-blue-600">${user.stats.inprogress}</p>
+                            <p class="text-xs text-slate-500">En Progreso</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-green-600">${user.stats.done}</p>
+                            <p class="text-xs text-slate-500">Completadas</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <button data-action="view-user-tasks" data-user-id="${user.docId}" class="flex-1 bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Ver Tareas</button>
+                        <button data-action="assign-task-to-user" data-user-id="${user.docId}" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-semibold">Asignar Tarea</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    content += `</div></div>`;
+
+    dom.viewContent.innerHTML = content;
+    lucide.createIcons();
+}
+
+function setupTaskFilters() {
+    const filterContainer = document.getElementById('task-filters');
+    filterContainer.addEventListener('click', e => {
+        const button = e.target.closest('button');
+        if (button && button.dataset.filter) {
+            taskState.activeFilter = button.dataset.filter;
+            renderTaskFilters();
+            fetchAndRenderTasks();
+        }
+    });
+}
+
+function renderTaskFilters() {
+    const filters = [
+        { key: 'engineering', label: 'Ingeniería' },
+        { key: 'personal', label: 'Mis Tareas' }
+    ];
+    if (appState.currentUser.role === 'admin') {
+        filters.push({ key: 'all', label: 'Todas' });
+    }
+    const filterContainer = document.getElementById('task-filters');
+    filterContainer.innerHTML = filters.map(f => `
+        <button data-filter="${f.key}" class="px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${taskState.activeFilter === f.key ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-slate-300/50'}">
+            ${f.label}
+        </button>
+    `).join('');
+}
+
+function fetchAndRenderTasks() {
+    // Clear previous listeners
+    taskState.unsubscribers.forEach(unsub => unsub());
+    taskState.unsubscribers = [];
+
+    const tasksRef = collection(db, COLLECTIONS.TAREAS);
+    const user = appState.currentUser;
+
+    // Clear board before fetching and show loading indicator
+    document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-slate-500"><i data-lucide="loader" class="h-8 w-8 animate-spin mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`);
+    lucide.createIcons();
+
+    const handleError = (error) => {
+        console.error("Error fetching tasks: ", error);
+        let message = "Error al cargar las tareas.";
+        if (error.code === 'failed-precondition') {
+            message = "Error: Faltan índices en Firestore. Revise la consola para crear el índice necesario.";
+        }
+        showToast(message, "error", 5000);
+        document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">Error al cargar.</p></div>`);
+        lucide.createIcons();
+    };
+
+    let queryConstraints = [orderBy('createdAt', 'desc')];
+
+    // Add base filter (personal, engineering, all)
+    if (taskState.selectedUserId) {
+        queryConstraints.unshift(where('assigneeUid', '==', taskState.selectedUserId));
+    } else if (taskState.activeFilter === 'personal') {
+        queryConstraints.unshift(or(
+            where('assigneeUid', '==', user.uid),
+            where('creatorUid', '==', user.uid)
+        ));
+    } else if (taskState.activeFilter === 'engineering') {
+        queryConstraints.unshift(where('isPublic', '==', true));
+    } else if (taskState.activeFilter !== 'all' || user.role !== 'admin') {
+        // For admin 'all' view, no additional filter is needed.
+        // For non-admin, default to public tasks if no other filter matches.
+        if (taskState.activeFilter !== 'all') {
+            queryConstraints.unshift(where('isPublic', '==', true));
+        }
+    }
+
+    // Add priority filter
+    if (taskState.priorityFilter !== 'all') {
+        queryConstraints.unshift(where('priority', '==', taskState.priorityFilter));
+    }
+
+    const q = query(tasksRef, ...queryConstraints);
+
+    const unsub = onSnapshot(q, (snapshot) => {
+        let tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+
+        // Apply client-side text search
+        if (taskState.searchTerm) {
+            tasks = tasks.filter(task =>
+                task.title.toLowerCase().includes(taskState.searchTerm) ||
+                (task.description && task.description.toLowerCase().includes(taskState.searchTerm))
+            );
+        }
+
+        // Defer rendering to prevent race conditions as per AGENTS.md Lesson #6
+        setTimeout(() => renderTasks(tasks), 0);
+    }, handleError);
+
+    taskState.unsubscribers.push(unsub);
+}
+
+function renderTasks(tasks) {
+    const getEmptyColumnHTML = (status) => {
+        const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Completada' };
+        return `
+            <div class="p-4 text-center text-slate-500 border-2 border-dashed border-slate-200 rounded-lg h-full flex flex-col justify-center items-center no-drag animate-fade-in">
+                <i data-lucide="inbox" class="h-10 w-10 mx-auto text-slate-400"></i>
+                <h4 class="mt-4 font-semibold text-slate-600">Columna Vacía</h4>
+                <p class="text-sm mt-1 mb-4">No hay tareas en estado "${statusMap[status]}".</p>
+                <button data-action="add-task-to-column" data-status="${status}" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm py-1.5 px-3 rounded-full mx-auto flex items-center">
+                    <i data-lucide="plus" class="mr-1.5 h-4 w-4"></i>Añadir Tarea
+                </button>
+            </div>
+        `;
+    };
+
+    const tasksByStatus = { todo: [], inprogress: [], done: [] };
+    tasks.forEach(task => {
+        tasksByStatus[task.status || 'todo'].push(task);
+    });
+
+    document.querySelectorAll('.task-column').forEach(columnEl => {
+        const status = columnEl.dataset.status;
+        const taskListEl = columnEl.querySelector('.task-list');
+        const columnTasks = tasksByStatus[status];
+
+        if (columnTasks.length === 0) {
+            taskListEl.innerHTML = getEmptyColumnHTML(status);
+        } else {
+            taskListEl.innerHTML = '';
+            columnTasks.forEach(task => {
+                const taskCardHTML = createTaskCard(task);
+                const template = document.createElement('template');
+                template.innerHTML = taskCardHTML.trim();
+                const cardNode = template.content.firstChild;
+                cardNode.addEventListener('click', (e) => {
+                    if (e.target.closest('.task-actions')) return;
+                    openTaskFormModal(task);
+                });
+                taskListEl.appendChild(cardNode);
+            });
+        }
+    });
+
+    initTasksSortable();
+    lucide.createIcons();
+}
+
+function createTaskCard(task) {
+    const assignee = (appState.collections.usuarios || []).find(u => u.docId === task.assigneeUid);
+    const priorities = {
+        low: { label: 'Baja', color: 'bg-gray-200 text-gray-800' },
+        medium: { label: 'Media', color: 'bg-yellow-200 text-yellow-800' },
+        high: { label: 'Alta', color: 'bg-red-200 text-red-800' }
+    };
+    const priority = priorities[task.priority] || priorities.medium;
+
+    const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00") : null;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const isOverdue = dueDate && dueDate < today;
+    const dueDateStr = dueDate ? dueDate.toLocaleDateString('es-AR') : 'Sin fecha';
+    const urgencyClass = isOverdue ? 'border-red-400 bg-red-50/50' : 'border-slate-200';
+    const dateClass = isOverdue ? 'text-red-600 font-bold' : 'text-slate-500';
+
+    const creationDate = task.createdAt?.seconds ? new Date(task.createdAt.seconds * 1000) : null;
+    const creationDateStr = creationDate ? creationDate.toLocaleDateString('es-AR') : 'N/A';
+
+    const taskTypeIcon = task.isPublic
+        ? `<span title="Tarea de Ingeniería (Pública)"><i data-lucide="briefcase" class="w-4 h-4 text-slate-400"></i></span>`
+        : `<span title="Tarea Privada"><i data-lucide="lock" class="w-4 h-4 text-slate-400"></i></span>`;
+
+    // --- AUDITORÍA: Verificación de Sub-tareas y Barra de Progreso ---
+    // La lógica de sub-tareas y su barra de progreso se ha verificado como correcta.
+    // 1. `openTaskFormModal` permite añadir, eliminar y marcar sub-tareas como completadas.
+    //    Estos cambios se gestionan en el estado local del modal y se guardan con la tarea.
+    // 2. La siguiente lógica calcula correctamente el porcentaje de sub-tareas completadas.
+    // 3. El `div` con la clase `bg-blue-600` se actualiza con el `width` correspondiente
+    //    a este porcentaje, reflejando el progreso visualmente.
+    //
+    // RESULTADO: CORRECTO. Todos los campos del formulario, incluyendo sub-tareas
+    // y su progreso, se reflejan correctamente en la tarjeta de la tarea.
+    // -------------------------------------------------------------------------
+    let subtaskProgressHTML = '';
+    if (task.subtasks && task.subtasks.length > 0) {
+        const totalSubtasks = task.subtasks.length;
+        const completedSubtasks = task.subtasks.filter(st => st.completed).length;
+        const progressPercentage = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
+
+        subtaskProgressHTML = `
+            <div class="mt-3">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs font-semibold text-slate-500 flex items-center">
+                        <i data-lucide="check-square" class="w-3.5 h-3.5 mr-1.5"></i>
+                        Sub-tareas
+                    </span>
+                    <span class="text-xs font-bold text-slate-600">${completedSubtasks} / ${totalSubtasks}</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-1.5">
+                    <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style="width: ${progressPercentage}%"></div>
+                </div>
+            </div>
+        `;
+    }
+    const dragClass = checkUserPermission('edit', task) ? '' : 'no-drag';
+
+    return `
+        <div class="task-card bg-white rounded-lg p-4 shadow-sm border ${urgencyClass} cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col gap-3 ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${task.docId}">
+            <div class="flex justify-between items-start gap-2">
+                <h4 class="font-bold text-slate-800 flex-grow">${task.title}</h4>
+                ${taskTypeIcon}
+            </div>
+
+            <p class="text-sm text-slate-600 break-words flex-grow">${task.description || ''}</p>
+
+            ${subtaskProgressHTML}
+
+            <div class="mt-auto pt-3 border-t border-slate-200/80 space-y-3">
+                <div class="flex justify-between items-center text-xs text-slate-500">
+                    <span class="px-2 py-0.5 rounded-full font-semibold ${priority.color}">${priority.label}</span>
+                    <div class="flex items-center gap-3">
+                        <span class="flex items-center gap-1.5 font-medium" title="Fecha de creación">
+                            <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> ${creationDateStr}
+                        </span>
+                        <span class="flex items-center gap-1.5 font-medium ${dateClass}" title="Fecha de entrega">
+                            <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> ${dueDateStr}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        ${assignee ? `<img src="${assignee.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(assignee.name || assignee.email)}`}" title="Asignada a: ${assignee.name || assignee.email}" class="w-6 h-6 rounded-full">` : '<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="No asignada"><i data-lucide="user-x" class="w-4 h-4 text-gray-500"></i></div>'}
+                        <span class="text-sm text-slate-500">${assignee ? (assignee.name || assignee.email.split('@')[0]) : 'No asignada'}</span>
+                    </div>
+                    <div class="task-actions">
+                    ${checkUserPermission('delete', task) ? `
+                        <button data-action="delete-task" data-doc-id="${task.docId}" class="text-gray-400 hover:text-red-600 p-1 rounded-full" title="Eliminar tarea">
+                            <i data-lucide="trash-2" class="h-4 w-4 pointer-events-none"></i>
+                        </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderSubtask(subtask) {
+    const titleClass = subtask.completed ? 'line-through text-slate-500' : 'text-slate-800';
+    const containerClass = subtask.completed ? 'opacity-70' : '';
+    const checkboxId = `subtask-checkbox-${subtask.id}`;
+    return `
+        <div class="subtask-item group flex items-center gap-3 p-2 bg-slate-100 hover:bg-slate-200/70 rounded-md transition-all duration-150 ${containerClass}" data-subtask-id="${subtask.id}">
+            <label for="${checkboxId}" class="flex-grow flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="${checkboxId}" name="${checkboxId}" class="subtask-checkbox h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer" ${subtask.completed ? 'checked' : ''}>
+                <span class="flex-grow text-sm font-medium ${titleClass}">${subtask.title}</span>
+            </label>
+            <button type="button" class="subtask-delete-btn text-slate-400 hover:text-red-500 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="trash-2" class="h-4 w-4 pointer-events-none"></i></button>
+        </div>
+    `;
+}
+
+function initTasksSortable() {
+    const lists = document.querySelectorAll('.task-list');
+    lists.forEach(list => {
+        // Destroy existing instance if it exists
+        if (list.sortable) {
+            list.sortable.destroy();
+        }
+
+        list.sortable = new Sortable(list, {
+            group: 'tasks',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            filter: '.no-drag', // Ignore elements with the 'no-drag' class
+            onEnd: async (evt) => {
+                const taskId = evt.item.dataset.taskId;
+                const newStatus = evt.to.closest('.task-column').dataset.status;
+                const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+                try {
+                    await updateDoc(taskRef, { status: newStatus });
+                    showToast('Tarea actualizada.', 'success');
+                } catch (error) {
+                    console.error("Error updating task status:", error);
+                    showToast('Error al mover la tarea.', 'error');
+                }
+            }
+        });
+    });
+}
+
+async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
+    const isEditing = task !== null;
+
+    // Determine the UID to be pre-selected in the dropdown.
+    let selectedUid = defaultAssigneeUid || ''; // Prioritize passed-in UID
+    if (!selectedUid) { // If no default is provided, use existing logic
+        if (isEditing && task.assigneeUid) {
+            selectedUid = task.assigneeUid;
+        } else if (!isEditing && taskState.activeFilter === 'personal') {
+            // When creating a new personal task, assign it to self by default
+            selectedUid = appState.currentUser.uid;
+        }
+    }
+
+    const modalHTML = `
+    <div id="task-form-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 modal-content">
+            <div class="flex justify-between items-center p-5 border-b">
+                <h3 class="text-xl font-bold">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
+                <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
+            </div>
+            <form id="task-form" class="p-6 overflow-y-auto" novalidate>
+                <!-- Using simple block layout with margin -->
+                <div class="space-y-6">
+                    <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
+                    <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
+
+                    <div>
+                        <label for="task-title" class="block text-sm font-medium text-gray-700 mb-1">Título</label>
+                        <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
+                    </div>
+
+                    <div>
+                        <label for="task-description" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                        <textarea id="task-description" name="description" rows="4" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">${isEditing && task.description ? task.description : ''}</textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
+                            <select id="task-assignee" name="assigneeUid" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" data-selected-uid="${selectedUid}">
+                                <option value="">Cargando...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
+                            <select id="task-priority" name="priority" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                                <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
+                                <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
+                                <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+                            <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                        </div>
+                        <div>
+                            <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
+                            <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
+                        </div>
+                    </div>
+
+                    <!-- Subtasks -->
+                    <div class="space-y-2 pt-2">
+                        <label class="block text-sm font-medium text-gray-700">Sub-tareas</label>
+                        <div id="subtasks-list" class="space-y-2 max-h-48 overflow-y-auto p-2 rounded-md bg-slate-50 border"></div>
+                        <div class="flex items-center gap-2">
+                            <label for="new-subtask-title" class="sr-only">Añadir sub-tarea</label>
+                            <input type="text" id="new-subtask-title" name="new-subtask-title" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Añadir sub-tarea y presionar Enter">
+                        </div>
+                    </div>
+
+                    <!-- Comments -->
+                    <div class="space-y-2 pt-4 border-t mt-4">
+                        <label class="block text-sm font-medium text-gray-700">Comentarios</label>
+                        <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-50 border custom-scrollbar">
+                            <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
+                        </div>
+                        <div class="flex items-start gap-2">
+                            <textarea id="new-task-comment" placeholder="Escribe un comentario..." rows="2" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></textarea>
+                            <button type="button" id="post-comment-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold h-full">
+                                <i data-lucide="send" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    ${appState.currentUser.role === 'admin' ? `
+                    <div class="pt-2">
+                        <label class="flex items-center space-x-3 cursor-pointer">
+                            <input type="checkbox" id="task-is-public" name="isPublic" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isEditing && task.isPublic ? 'checked' : ''}>
+                            <span class="text-sm font-medium text-gray-700">Tarea Pública (Visible para todos en Ingeniería)</span>
+                        </label>
+                    </div>
+                    ` : ''}
+                </div>
+            </form>
+            <div class="flex justify-end items-center p-4 border-t bg-gray-50 space-x-3">
+                ${isEditing ? `<button data-action="delete" class="text-red-600 font-semibold mr-auto px-4 py-2 rounded-md hover:bg-red-50">Eliminar Tarea</button>` : ''}
+                <button data-action="close" type="button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
+                <button type="submit" form="task-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Tarea</button>
+            </div>
+        </div>
+    </div>
+    `;
+    dom.modalContainer.innerHTML = modalHTML;
+    lucide.createIcons();
+
+    const modalElement = document.getElementById('task-form-modal');
+
+    // Ensure users are loaded before populating the dropdown
+    ensureCollectionsAreLoaded([COLLECTIONS.USUARIOS])
+        .then(() => {
+            populateTaskAssigneeDropdown();
+        })
+        .catch(error => {
+            console.error("Failed to load users for task form:", error);
+            showToast('Error al cargar la lista de usuarios.', 'error');
+            const select = modalElement.querySelector('#task-assignee');
+            if (select) {
+                select.innerHTML = '<option value="">Error al cargar</option>';
+                select.disabled = true;
+            }
+        });
+    const subtaskListEl = modalElement.querySelector('#subtasks-list');
+    const newSubtaskInput = modalElement.querySelector('#new-subtask-title');
+
+    let currentSubtasks = isEditing && task.subtasks ? [...task.subtasks] : [];
+
+    const rerenderSubtasks = () => {
+        subtaskListEl.innerHTML = currentSubtasks.map(renderSubtask).join('') || '<p class="text-xs text-center text-slate-400 py-2">No hay sub-tareas.</p>';
+        modalElement.dataset.subtasks = JSON.stringify(currentSubtasks);
+        lucide.createIcons();
+    };
+
+    newSubtaskInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const title = newSubtaskInput.value.trim();
+            if (title) {
+                currentSubtasks.push({
+                    id: `sub_${Date.now()}`,
+                    title: title,
+                    completed: false
+                });
+                newSubtaskInput.value = '';
+                rerenderSubtasks();
+            }
+        }
+    });
+
+    subtaskListEl.addEventListener('click', e => {
+        const subtaskItem = e.target.closest('.subtask-item');
+        if (!subtaskItem) return;
+
+        const subtaskId = subtaskItem.dataset.subtaskId;
+        const subtask = currentSubtasks.find(st => st.id === subtaskId);
+
+        if (e.target.matches('.subtask-checkbox')) {
+            if (subtask) {
+                subtask.completed = e.target.checked;
+                rerenderSubtasks();
+            }
+        }
+
+        if (e.target.closest('.subtask-delete-btn')) {
+            if (subtask) {
+                currentSubtasks = currentSubtasks.filter(st => st.id !== subtaskId);
+                rerenderSubtasks();
+            }
+        }
+    });
+
+    rerenderSubtasks(); // Initial render
+
+    // --- Comments Logic ---
+    const commentsListEl = modalElement.querySelector('#task-comments-list');
+    const newCommentInput = modalElement.querySelector('#new-task-comment');
+    const postCommentBtn = modalElement.querySelector('#post-comment-btn');
+    let commentsUnsubscribe = null;
+
+    const renderTaskComments = (comments) => {
+        if (!commentsListEl) return;
+        if (comments.length === 0) {
+            commentsListEl.innerHTML = '<p class="text-xs text-center text-slate-400 py-2">No hay comentarios todavía.</p>';
+            return;
+        }
+        commentsListEl.innerHTML = comments.map(comment => {
+            const author = (appState.collections.usuarios || []).find(u => u.docId === comment.creatorUid) || { name: 'Usuario Desconocido', photoURL: '' };
+            const timestamp = comment.createdAt?.toDate ? formatTimeAgo(comment.createdAt.toDate()) : 'hace un momento';
+            return `
+                <div class="flex items-start gap-3">
+                    <img src="${author.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(author.name)}`}" alt="Avatar" class="w-8 h-8 rounded-full mt-1">
+                    <div class="flex-1 bg-white p-3 rounded-lg border">
+                        <div class="flex justify-between items-center">
+                            <p class="font-bold text-sm text-slate-800">${author.name}</p>
+                            <p class="text-xs text-slate-400">${timestamp}</p>
+                        </div>
+                        <p class="text-sm text-slate-600 mt-1 whitespace-pre-wrap">${comment.text}</p>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        lucide.createIcons();
+        // Scroll to the bottom of the comments list
+        commentsListEl.scrollTop = commentsListEl.scrollHeight;
+    };
+
+    if (isEditing) {
+        postCommentBtn.disabled = false;
+        newCommentInput.disabled = false;
+        const commentsRef = collection(db, 'tareas', task.docId, 'comments');
+        const q = query(commentsRef, orderBy('createdAt', 'asc'));
+        commentsUnsubscribe = onSnapshot(q, (snapshot) => {
+            const comments = snapshot.docs.map(doc => doc.data());
+            renderTaskComments(comments);
+        });
+    } else {
+        renderTaskComments([]); // Show "No hay comentarios" for new tasks
+        postCommentBtn.disabled = true;
+        newCommentInput.disabled = true;
+        newCommentInput.placeholder = 'Guarde la tarea para poder añadir comentarios.';
+    }
+
+    const postComment = async () => {
+        const text = newCommentInput.value.trim();
+        if (!text || !isEditing) return;
+
+        postCommentBtn.disabled = true;
+        const commentsRef = collection(db, 'tareas', task.docId, 'comments');
+        try {
+            await addDoc(commentsRef, {
+                text: text,
+                creatorUid: appState.currentUser.uid,
+                createdAt: new Date()
+            });
+            newCommentInput.value = '';
+        } catch (error) {
+            console.error("Error posting comment: ", error);
+            showToast('Error al publicar el comentario.', 'error');
+        } finally {
+            postCommentBtn.disabled = false;
+        }
+    };
+
+    postCommentBtn.addEventListener('click', postComment);
+    newCommentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            postComment();
+        }
+    });
+
+    // Autofocus the title field for new tasks
+    if (!isEditing) {
+        modalElement.querySelector('#task-title').focus();
+    }
+    modalElement.querySelector('form').addEventListener('submit', handleTaskFormSubmit);
+
+    modalElement.addEventListener('click', e => {
+        const button = e.target.closest('button');
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === 'close') {
+            if (commentsUnsubscribe) {
+                commentsUnsubscribe();
+            }
+            modalElement.remove();
+        } else if (action === 'delete') {
+            showConfirmationModal('Eliminar Tarea', '¿Estás seguro de que quieres eliminar esta tarea?', async () => {
+                try {
+                    if (commentsUnsubscribe) {
+                        commentsUnsubscribe();
+                    }
+                    await deleteDoc(doc(db, COLLECTIONS.TAREAS, task.docId));
+                    showToast('Tarea eliminada.', 'success');
+                    modalElement.remove();
+                } catch (error) {
+                    showToast('No tienes permiso para eliminar esta tarea.', 'error');
+                }
+            });
+        }
+    });
+}
+
+// =================================================================================
+// --- 8. LÓGICA DE ECR/ECO (MÁQUINA DE ESTADOS Y NOTIFICACIONES) ---
+// =================================================================================
+
+/**
+ * Envía una notificación a un usuario.
+ * Por ahora, usa 'showToast', pero está diseñado para ser extendido (ej: email).
+ * @param {string} userId - El UID del usuario a notificar.
+ * @param {string} message - El mensaje de la notificación.
+ * @param {string} view - La vista a la que debe navegar el usuario al hacer clic.
+ */
+async function sendNotification(userId, message, view, params = {}) {
+    if (!userId || !message || !view) {
+        console.error('sendNotification called with invalid parameters:', { userId, message, view });
+        return;
+    }
+
+    try {
+        await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), {
+            userId,
+            message,
+            view,
+            params,
+            createdAt: new Date(),
+            isRead: false,
+        });
+    } catch (error) {
+        console.error("Error sending notification:", error);
+    }
+}
+
+/**
+ * Registra la decisión de un departamento sobre un ECR y evalúa si el estado general del ECR debe cambiar.
+ * @param {string} ecrId - El ID del ECR a modificar.
+ * @param {string} departmentId - El ID del departamento que emite la decisión (ej: 'calidad').
+ * @param {string} decision - La decisión tomada ('approved', 'rejected', 'stand-by').
+ * @param {string} comment - Un comentario opcional sobre la decisión.
+ */
+async function handleTaskFormSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const taskId = form.querySelector('[name="taskId"]').value;
+    const isEditing = !!taskId;
+
+    const modalElement = form.closest('#task-form-modal');
+    const data = {
+        title: form.querySelector('[name="title"]').value,
+        description: form.querySelector('[name="description"]').value,
+        assigneeUid: form.querySelector('[name="assigneeUid"]').value,
+        priority: form.querySelector('[name="priority"]').value,
+        startDate: form.querySelector('[name="startDate"]').value,
+        dueDate: form.querySelector('[name="dueDate"]').value,
+        updatedAt: new Date(),
+        subtasks: modalElement.dataset.subtasks ? JSON.parse(modalElement.dataset.subtasks) : []
+    };
+
+    if (!data.title) {
+        showToast('El título es obligatorio.', 'error');
+        return;
+    }
+
+    // --- AUDITORÍA: Verificación de visibilidad de tareas (Pública/Privada) ---
+    // La siguiente lógica cumple con el requisito de la auditoría:
+    // 1. Para usuarios no-administradores, la visibilidad se asigna automáticamente.
+    //    - Si el filtro activo es 'engineering', la tarea se crea como PÚBLICA (`isPublic` = true).
+    //    - Si el filtro es 'personal', la tarea se crea como PRIVADA (`isPublic` = false).
+    // 2. Para administradores, se muestra un checkbox que les permite anular este comportamiento
+    //    y elegir la visibilidad manualmente.
+    //
+    // RESULTADO: CORRECTO. El sistema asigna la visibilidad según el filtro activo.
+    // -------------------------------------------------------------------------
+    const isPublicCheckbox = form.querySelector('[name="isPublic"]');
+    if (isPublicCheckbox) {
+        data.isPublic = isPublicCheckbox.checked;
+    } else if (!isEditing) {
+        // Fallback for non-admins creating tasks.
+        // When editing, non-admins won't see the checkbox, so the value remains unchanged.
+        data.isPublic = taskState.activeFilter === 'engineering';
+    }
+
+    const saveButton = form.closest('.modal-content').querySelector('button[type="submit"]');
+    const originalButtonHTML = saveButton.innerHTML;
+    saveButton.disabled = true;
+    saveButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5"></i>`;
+    lucide.createIcons();
+
+    let success = false;
+    try {
+        if (isEditing) {
+            const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+            await updateDoc(taskRef, data);
+            showToast('Tarea actualizada con éxito.', 'success');
+        } else {
+            data.creatorUid = appState.currentUser.uid;
+            data.createdAt = new Date();
+            data.status = form.querySelector('[name="status"]').value || 'todo';
+            await addDoc(collection(db, COLLECTIONS.TAREAS), data);
+            showToast('Tarea creada con éxito.', 'success');
+        }
+        success = true;
+        document.getElementById('task-form-modal').remove();
+    } catch (error) {
+        console.error('Error saving task:', error);
+        showToast('Error al guardar la tarea.', 'error');
+    } finally {
+        if (!success) {
+            saveButton.disabled = false;
+            saveButton.innerHTML = originalButtonHTML;
+        }
+    }
+}
+
+// --- AUDITORÍA: Verificación de asignación de tareas ---
+// La lógica para asignar tareas a usuarios se ha verificado como correcta.
+// 1. `openTaskFormModal` prepara el dropdown `task-assignee`.
+// 2. `populateTaskAssigneeDropdown` (abajo) lo llena con la lista de usuarios activos.
+// 3. `handleTaskFormSubmit` recoge el `assigneeUid` seleccionado y lo guarda en Firestore.
+// 4. `createTaskCard` muestra correctamente el avatar y nombre del usuario asignado.
+//
+// RESULTADO: CORRECTO. El campo de asignación funciona y se refleja en la tarjeta.
+// -------------------------------------------------------------------------
+function populateTaskAssigneeDropdown() {
+    const select = document.getElementById('task-assignee');
+    if (!select) return; // Modal is not open
+
+    const users = appState.collections.usuarios || [];
+    if (users.length === 0) {
+        select.disabled = true; // Keep it disabled until users are loaded
+        return;
+    }
+
+    select.disabled = false;
+    const selectedUid = select.dataset.selectedUid;
+
+    const userOptions = users
+        .filter(u => u.disabled !== true)
+        .map(u => {
+            const displayName = u.name || u.email.split('@')[0];
+            return `<option value="${u.docId}">${displayName}</option>`;
+        }).join('');
+
+    select.innerHTML = `<option value="">No asignada</option>${userOptions}`;
+
+    if (selectedUid) {
+        select.value = selectedUid;
+    }
+}
 
 
 async function seedDefaultSectors() {
@@ -7172,7 +8227,7 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, openTaskFormModal, setupTaskFilters, ensureCollectionsAreLoaded };
+            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide };
             initTasksModule(appDependencies);
 
 
