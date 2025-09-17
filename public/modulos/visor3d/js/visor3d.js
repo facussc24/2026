@@ -9,9 +9,6 @@ import { initAnnotations } from './components/annotationManager.js';
 // Re-export functions and variables for tests
 export { setupVisor3dEventListeners, updateSelection, toggleSelectionTransparency, toggleIsolation, scene, camera, renderer, controls };
 
-// The Firebase app instance will be passed in from main.js
-let storage;
-
 // --- SHARED STATE AND VARIABLES ---
 export const state = {
     outlinePass: null, isExploded: false, isIsolated: false, isolatedObjects: [],
@@ -85,9 +82,9 @@ async function loadModel(modelRef) {
     }
 }
 
-export async function runVisor3dLogic(firebaseApp) {
-    console.log("Running Visor3D logic with shared Firebase app...");
-    storage = getStorage(firebaseApp);
+export async function runVisor3dLogic(app) {
+    const storage = getStorage(app);
+    console.log("Running Visor3D logic with Firebase Storage direct access...");
 
     createVisorUI();
 
