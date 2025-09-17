@@ -137,91 +137,87 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
     }
 
     const modalHTML = `
-    <div id="task-form-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 modal-content">
-            <div class="flex justify-between items-center p-5 border-b">
-                <h3 class="text-xl font-bold">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
-                <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
+    <div id="task-form-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-5 border-b border-slate-200">
+                <h3 class="text-xl font-bold text-slate-800">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors"><i data-lucide="x" class="h-6 w-6"></i></button>
             </div>
-            <form id="task-form" class="p-6 overflow-y-auto" novalidate>
-                <!-- Using simple block layout with margin -->
-                <div class="space-y-6">
-                    <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
-                    <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
+            <form id="task-form" class="p-6 overflow-y-auto auth-form" novalidate>
+                <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
+                <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
 
-                    <div>
-                        <label for="task-title" class="block text-sm font-medium text-gray-700 mb-1">Título</label>
-                        <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
-                    </div>
-
-                    <div>
-                        <label for="task-description" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                        <textarea id="task-description" name="description" rows="4" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">${isEditing && task.description ? task.description : ''}</textarea>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="task-assignee" class="block text-sm font-medium text-gray-700 mb-1">Asignar a</label>
-                            <select id="task-assignee" name="assigneeUid" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" data-selected-uid="${selectedUid}">
-                                <option value="">Cargando...</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="task-priority" class="block text-sm font-medium text-gray-700 mb-1">Prioridad</label>
-                            <select id="task-priority" name="priority" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                                <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
-                                <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
-                                <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="task-startdate" class="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-                            <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        </div>
-                        <div>
-                            <label for="task-duedate" class="block text-sm font-medium text-gray-700 mb-1">Fecha Límite</label>
-                            <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                        </div>
-                    </div>
-
-                    <!-- Subtasks -->
-                    <div class="space-y-2 pt-2">
-                        <label class="block text-sm font-medium text-gray-700">Sub-tareas</label>
-                        <div id="subtasks-list" class="space-y-2 max-h-48 overflow-y-auto p-2 rounded-md bg-slate-50 border"></div>
-                        <div class="flex items-center gap-2">
-                            <label for="new-subtask-title" class="sr-only">Añadir sub-tarea</label>
-                            <input type="text" id="new-subtask-title" name="new-subtask-title" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" placeholder="Añadir sub-tarea y presionar Enter">
-                        </div>
-                    </div>
-
-                    <!-- Comments -->
-                    <div class="space-y-2 pt-4 border-t mt-4">
-                        <label class="block text-sm font-medium text-gray-700">Comentarios</label>
-                        <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-50 border custom-scrollbar">
-                            <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
-                        </div>
-                        <div class="flex items-start gap-2">
-                            <textarea id="new-task-comment" placeholder="Escribe un comentario..." rows="2" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></textarea>
-                            <button type="button" id="post-comment-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold h-full">
-                                <i data-lucide="send" class="w-5 h-5"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    ${appState.currentUser.role === 'admin' ? `
-                    <div class="pt-2">
-                        <label class="flex items-center space-x-3 cursor-pointer">
-                            <input type="checkbox" id="task-is-public" name="isPublic" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isEditing && task.isPublic ? 'checked' : ''}>
-                            <span class="text-sm font-medium text-gray-700">Tarea Pública (Visible para todos en Ingeniería)</span>
-                        </label>
-                    </div>
-                    ` : ''}
+                <div class="input-group">
+                    <label for="task-title">Título</label>
+                    <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" required>
                 </div>
+
+                <div class="input-group">
+                    <label for="task-description">Descripción</label>
+                    <textarea id="task-description" name="description" rows="4">${isEditing && task.description ? task.description : ''}</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                    <div class="input-group">
+                        <label for="task-assignee">Asignar a</label>
+                        <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}">
+                            <option value="">Cargando...</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="task-priority">Prioridad</label>
+                        <select id="task-priority" name="priority">
+                            <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
+                            <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
+                            <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                    <div class="input-group">
+                        <label for="task-startdate">Fecha de Inicio</label>
+                        <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}">
+                    </div>
+                    <div class="input-group">
+                        <label for="task-duedate">Fecha Límite</label>
+                        <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
+                    </div>
+                </div>
+
+                <!-- Subtasks -->
+                <div class="input-group">
+                    <label>Sub-tareas</label>
+                    <div id="subtasks-list" class="space-y-2 max-h-48 overflow-y-auto p-2 rounded-md bg-slate-50 border"></div>
+                    <div class="flex items-center gap-2 mt-2">
+                        <input type="text" id="new-subtask-title" placeholder="Añadir sub-tarea y presionar Enter">
+                    </div>
+                </div>
+
+                <!-- Comments -->
+                <div class="input-group">
+                    <label>Comentarios</label>
+                    <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-50 border custom-scrollbar">
+                        <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
+                    </div>
+                    <div class="flex items-start gap-2 mt-2">
+                        <textarea id="new-task-comment" placeholder="Escribe un comentario..." rows="2"></textarea>
+                        <button type="button" id="post-comment-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold h-full">
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+
+                ${appState.currentUser.role === 'admin' ? `
+                <div class="input-group">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" id="task-is-public" name="isPublic" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isEditing && task.isPublic ? 'checked' : ''}>
+                        <span>Tarea Pública (Visible para todos en Ingeniería)</span>
+                    </label>
+                </div>
+                ` : ''}
             </form>
-            <div class="flex justify-end items-center p-4 border-t bg-gray-50 space-x-3">
+            <div class="flex justify-end items-center p-4 border-t border-slate-200 bg-slate-50 space-x-3">
                 ${isEditing ? `<button data-action="delete" class="text-red-600 font-semibold mr-auto px-4 py-2 rounded-md hover:bg-red-50">Eliminar Tarea</button>` : ''}
                 <button data-action="close" type="button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
                 <button type="submit" form="task-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Tarea</button>
@@ -236,7 +232,7 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
 
     // Ensure users are loaded before populating the dropdown
     populateTaskAssigneeDropdown();
-
+    
     const subtaskListEl = modalElement.querySelector('#subtasks-list');
     const newSubtaskInput = modalElement.querySelector('#new-subtask-title');
 
@@ -650,14 +646,12 @@ function renderTaskFilters() {
 }
 
 function fetchAndRenderTasks() {
-    // Clear previous listeners
     taskState.unsubscribers.forEach(unsub => unsub());
     taskState.unsubscribers = [];
 
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     const user = appState.currentUser;
 
-    // Clear board before fetching and show loading indicator
     document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-slate-500"><i data-lucide="loader" class="h-8 w-8 animate-spin mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`);
     lucide.createIcons();
 
@@ -666,55 +660,76 @@ function fetchAndRenderTasks() {
         let message = "Error al cargar las tareas.";
         if (error.code === 'failed-precondition') {
             message = "Error: Faltan índices en Firestore. Revise la consola para crear el índice necesario.";
+        } else if (error.code === 'permission-denied') {
+            message = "Error de permisos al cargar las tareas. Verifique las reglas de seguridad de Firestore.";
         }
         showToast(message, "error", 5000);
-        document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">Error al cargar.</p></div>`);
+        document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">${message}</p></div>`);
         lucide.createIcons();
     };
 
-    let queryConstraints = [orderBy('createdAt', 'desc')];
-
-    // Add base filter (personal, engineering, all)
-    if (taskState.selectedUserId) {
-        queryConstraints.unshift(where('assigneeUid', '==', taskState.selectedUserId));
-    } else if (taskState.activeFilter === 'personal') {
-        queryConstraints.unshift(or(
-            where('assigneeUid', '==', user.uid),
-            where('creatorUid', '==', user.uid)
-        ));
-    } else if (taskState.activeFilter === 'engineering') {
-        queryConstraints.unshift(where('isPublic', '==', true));
-    } else if (taskState.activeFilter !== 'all' || user.role !== 'admin') {
-        // For admin 'all' view, no additional filter is needed.
-        // For non-admin, default to public tasks if no other filter matches.
-        if (taskState.activeFilter !== 'all') {
-            queryConstraints.unshift(where('isPublic', '==', true));
+    const applyClientSideFilters = (tasks) => {
+        let filtered = [...tasks];
+        if (taskState.priorityFilter !== 'all') {
+            filtered = filtered.filter(t => (t.priority || 'medium') === taskState.priorityFilter);
         }
-    }
-
-    // Add priority filter
-    if (taskState.priorityFilter !== 'all') {
-        queryConstraints.unshift(where('priority', '==', taskState.priorityFilter));
-    }
-
-    const q = query(tasksRef, ...queryConstraints);
-
-    const unsub = onSnapshot(q, (snapshot) => {
-        let tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-
-        // Apply client-side text search
         if (taskState.searchTerm) {
-            tasks = tasks.filter(task =>
+            filtered = filtered.filter(task =>
                 task.title.toLowerCase().includes(taskState.searchTerm) ||
                 (task.description && task.description.toLowerCase().includes(taskState.searchTerm))
             );
         }
+        return filtered;
+    };
 
-        // Defer rendering to prevent race conditions as per AGENTS.md Lesson #6
-        setTimeout(() => renderTasks(tasks), 0);
-    }, handleError);
+    if (taskState.activeFilter === 'personal') {
+        let assignedTasks = [];
+        let createdTasks = [];
 
-    taskState.unsubscribers.push(unsub);
+        const mergeAndRender = () => {
+            const allPersonalTasks = [...assignedTasks, ...createdTasks];
+            const uniqueTasks = Array.from(new Map(allPersonalTasks.map(t => [t.docId, t])).values());
+            const filtered = applyClientSideFilters(uniqueTasks);
+            setTimeout(() => renderTasks(filtered), 0);
+        };
+
+        const assignedQuery = query(tasksRef, where('assigneeUid', '==', user.uid));
+        const createdQuery = query(tasksRef, where('creatorUid', '==', user.uid));
+
+        const unsubAssigned = onSnapshot(assignedQuery, (snapshot) => {
+            assignedTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+            mergeAndRender();
+        }, handleError);
+
+        const unsubCreated = onSnapshot(createdQuery, (snapshot) => {
+            createdTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+            mergeAndRender();
+        }, handleError);
+
+        taskState.unsubscribers.push(unsubAssigned, unsubCreated);
+
+    } else {
+        let queryConstraints = [orderBy('createdAt', 'desc')];
+        if (taskState.selectedUserId) {
+            queryConstraints.unshift(where('assigneeUid', '==', taskState.selectedUserId));
+        } else if (taskState.activeFilter === 'engineering') {
+            queryConstraints.unshift(where('isPublic', '==', true));
+        } else if (taskState.activeFilter !== 'all' || user.role !== 'admin') {
+             if (taskState.activeFilter !== 'all') {
+                queryConstraints.unshift(where('isPublic', '==', true));
+            }
+        }
+        
+        const q = query(tasksRef, ...queryConstraints);
+
+        const unsub = onSnapshot(q, (snapshot) => {
+            const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+            const filtered = applyClientSideFilters(tasks);
+            setTimeout(() => renderTasks(filtered), 0);
+        }, handleError);
+
+        taskState.unsubscribers.push(unsub);
+    }
 }
 
 function renderTasks(tasks) {
@@ -1030,32 +1045,33 @@ export function renderTaskDashboardView() {
 
     // Main layout is the same, but we will hide elements for non-admins
     dom.viewContent.innerHTML = `
-        <div class="space-y-4">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 class="text-2xl font-bold text-slate-800">${title}</h2>
-                    <p class="text-sm text-slate-500">${subtitle}</p>
-                </div>
-                <button data-action="admin-back-to-board" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold flex items-center flex-shrink-0">
-                    <i data-lucide="arrow-left" class="mr-2 h-5 w-5"></i>
-                    <span>Volver al Tablero</span>
-                </button>
+    <div class="space-y-6">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h2 class="text-2xl font-bold text-slate-800">${title}</h2>
+                <p class="text-sm text-slate-500">${subtitle}</p>
             </div>
+            <button data-action="admin-back-to-board" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold flex items-center flex-shrink-0">
+                <i data-lucide="arrow-left" class="mr-2 h-5 w-5"></i>
+                <span>Volver al Tablero</span>
+            </button>
+        </div>
 
-            <!-- Global Admin Filters (Admin only) -->
-            <div id="admin-filters-container" class="bg-white p-3 rounded-xl shadow-sm border items-center gap-4 ${isAdmin ? 'flex' : 'hidden'}">
-                 <label for="admin-view-filter" class="text-sm font-bold text-slate-600 flex-shrink-0">Vista:</label>
-                 <select id="admin-view-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm">
+        <!-- Global Admin Filters (Admin only) -->
+        <div id="admin-filters-container" class="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-6 ${isAdmin ? 'flex' : 'hidden'}">
+             <div class="flex items-center gap-2">
+                <label for="admin-view-filter" class="text-sm font-bold text-slate-600 flex-shrink-0">Vista:</label>
+                <select id="admin-view-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm">
                     <option value="all">Todas las Tareas</option>
                     <option value="my-tasks">Mis Tareas</option>
-                 </select>
-                 <div id="admin-user-filter-container" class="hidden">
-                    <label for="admin-specific-user-filter" class="text-sm font-bold text-slate-600 flex-shrink-0 ml-4">Usuario:</label>
-                    <select id="admin-specific-user-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm">
-                        <!-- User options will be populated here -->
-                    </select>
-                 </div>
-            </div>
+                </select>
+             </div>
+             <div id="admin-user-filter-container" class="hidden items-center gap-2">
+                <label for="admin-specific-user-filter" class="text-sm font-bold text-slate-600 flex-shrink-0">Usuario:</label>
+                <select id="admin-specific-user-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm">
+                    <!-- User options will be populated here -->
+                </select>
+             </div>
         </div>
 
         <!-- Tabs Navigation (Admin only) -->
@@ -1073,7 +1089,7 @@ export function renderTaskDashboardView() {
             </nav>
         </div>
 
-        <div class="py-6 animate-fade-in-up">
+        <div class="animate-fade-in-up">
             <!-- Tab Panels -->
             <div id="admin-tab-content">
                 <!-- Dashboard Panel (Always visible) -->
@@ -1137,6 +1153,7 @@ export function renderTaskDashboardView() {
                 </div>
             </div>
         </div>
+    </div>
     `;
     lucide.createIcons();
 
