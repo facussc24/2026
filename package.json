@@ -5,7 +5,8 @@
   "main": "public/main.js",
   "type": "module",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "build:css": "npx @tailwindcss/cli -i ./src/input.css -o ./public/bundle.css"
   },
   "repository": {
     "type": "git",
@@ -20,6 +21,7 @@
   "homepage": "https://github.com/barackbarack123456-arch/Barack-original#readme",
   "devDependencies": {
     "@babel/preset-env": "^7.28.3",
+    "@tailwindcss/cli": "^4.1.13",
     "assert": "^2.1.0",
     "babel-jest": "^30.1.2",
     "firebase-tools": "^14.16.0",
@@ -27,7 +29,7 @@
     "jest-environment-jsdom": "^30.1.2",
     "jest-playwright-preset": "^4.0.0",
     "playwright": "^1.55.0",
-    "tailwindcss": "^4.1.12",
+    "tailwindcss": "^4.1.13",
     "three": "^0.180.0"
   },
   "dependencies": {
