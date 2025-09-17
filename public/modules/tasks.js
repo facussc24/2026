@@ -12,6 +12,8 @@ let showConfirmationModal;
 let switchView;
 let checkUserPermission;
 let lucide;
+let openTaskFormModal;
+let setupTaskFilters;
 
 // Module-specific state
 let taskState = {
@@ -246,6 +248,218 @@ function formatTimeAgo(timestamp) {
 // =================================================================================
 // --- 7. LÓGICA DE TAREAS (KANBAN BOARD) ---
 // =================================================================================
+function renderAdminUserList() {
+    const users = appState.collections.usuarios || [];
+    const tasks = appState.collections.tareas || [];
+    const adminId = appState.currentUser.uid;
+
+    const userTaskStats = users
+        .filter(user => user.docId !== adminId)
+        .map(user => {
+            const userTasks = tasks.filter(task => task.assigneeUid === user.docId);
+            return {
+                ...user,
+                stats: {
+                    todo: userTasks.filter(t => t.status === 'todo').length,
+                    inprogress: userTasks.filter(t => t.status === 'inprogress').length,
+                    done: userTasks.filter(t => t.status === 'done').length
+                }
+            };
+        });
+
+    let content = `
+        <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold">Supervisión de Tareas de Usuarios</h3>
+                <button data-action="admin-back-to-board" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Volver al Tablero</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    `;
+
+    if (userTaskStats.length === 0) {
+        content += `<p class="text-slate-500 col-span-full text-center py-12">No hay otros usuarios para supervisar.</p>`;
+    } else {
+        userTaskStats.forEach(user => {
+            content += `
+            <div class="border rounded-lg p-4 hover:shadow-md transition-shadow animate-fade-in-up">
+                    <div class="flex items-center space-x-4">
+                        <img src="${user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.name || user.email)}`}" alt="Avatar" class="w-12 h-12 rounded-full">
+                        <div>
+                            <p class="font-bold text-slate-800">${user.name || user.email}</p>
+                            <p class="text-sm text-slate-500">${user.email}</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex justify-around text-center">
+                        <div>
+                            <p class="text-2xl font-bold text-yellow-600">${user.stats.todo}</p>
+                            <p class="text-xs text-slate-500">Por Hacer</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-blue-600">${user.stats.inprogress}</p>
+                            <p class="text-xs text-slate-500">En Progreso</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-green-600">${user.stats.done}</p>
+                            <p class="text-xs text-slate-500">Completadas</p>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <button data-action="view-user-tasks" data-user-id="${user.docId}" class="flex-1 bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Ver Tareas</button>
+                        <button data-action="assign-task-to-user" data-user-id="${user.docId}" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-semibold">Asignar Tarea</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    content += `</div></div>`;
+
+    dom.viewContent.innerHTML = content;
+    lucide.createIcons();
+}
+
+function setupTaskFilters() {
+    const filterContainer = document.getElementById('task-filters');
+    filterContainer.addEventListener('click', e => {
+        const button = e.target.closest('button');
+        if (button && button.dataset.filter) {
+            taskState.activeFilter = button.dataset.filter;
+            renderTaskFilters();
+            fetchAndRenderTasks();
+        }
+    });
+}
+
+function renderTaskFilters() {
+    const filters = [
+        { key: 'engineering', label: 'Ingeniería' },
+        { key: 'personal', label: 'Mis Tareas' }
+    ];
+    if (appState.currentUser.role === 'admin') {
+        filters.push({ key: 'all', label: 'Todas' });
+    }
+    const filterContainer = document.getElementById('task-filters');
+    filterContainer.innerHTML = filters.map(f => `
+        <button data-filter="${f.key}" class="px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${taskState.activeFilter === f.key ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-slate-300/50'}">
+            ${f.label}
+        </button>
+    `).join('');
+}
+
+function fetchAndRenderTasks() {
+    // Clear previous listeners
+    taskState.unsubscribers.forEach(unsub => unsub());
+    taskState.unsubscribers = [];
+
+    const tasksRef = collection(db, COLLECTIONS.TAREAS);
+    const user = appState.currentUser;
+
+    // Clear board before fetching and show loading indicator
+    document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-slate-500"><i data-lucide="loader" class="h-8 w-8 animate-spin mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`);
+    lucide.createIcons();
+
+    const handleError = (error) => {
+        console.error("Error fetching tasks: ", error);
+        let message = "Error al cargar las tareas.";
+        if (error.code === 'failed-precondition') {
+            message = "Error: Faltan índices en Firestore. Revise la consola para crear el índice necesario.";
+        }
+        showToast(message, "error", 5000);
+        document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">Error al cargar.</p></div>`);
+        lucide.createIcons();
+    };
+
+    let queryConstraints = [orderBy('createdAt', 'desc')];
+
+    // Add base filter (personal, engineering, all)
+    if (taskState.selectedUserId) {
+        queryConstraints.unshift(where('assigneeUid', '==', taskState.selectedUserId));
+    } else if (taskState.activeFilter === 'personal') {
+        queryConstraints.unshift(or(
+            where('assigneeUid', '==', user.uid),
+            where('creatorUid', '==', user.uid)
+        ));
+    } else if (taskState.activeFilter === 'engineering') {
+        queryConstraints.unshift(where('isPublic', '==', true));
+    } else if (taskState.activeFilter !== 'all' || user.role !== 'admin') {
+        // For admin 'all' view, no additional filter is needed.
+        // For non-admin, default to public tasks if no other filter matches.
+        if (taskState.activeFilter !== 'all') {
+            queryConstraints.unshift(where('isPublic', '==', true));
+        }
+    }
+
+    // Add priority filter
+    if (taskState.priorityFilter !== 'all') {
+        queryConstraints.unshift(where('priority', '==', taskState.priorityFilter));
+    }
+
+    const q = query(tasksRef, ...queryConstraints);
+
+    const unsub = onSnapshot(q, (snapshot) => {
+        let tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+
+        // Apply client-side text search
+        if (taskState.searchTerm) {
+            tasks = tasks.filter(task =>
+                task.title.toLowerCase().includes(taskState.searchTerm) ||
+                (task.description && task.description.toLowerCase().includes(taskState.searchTerm))
+            );
+        }
+
+        // Defer rendering to prevent race conditions as per AGENTS.md Lesson #6
+        setTimeout(() => renderTasks(tasks), 0);
+    }, handleError);
+
+    taskState.unsubscribers.push(unsub);
+}
+
+function renderTasks(tasks) {
+    const getEmptyColumnHTML = (status) => {
+        const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Completada' };
+        return `
+            <div class="p-4 text-center text-slate-500 border-2 border-dashed border-slate-200 rounded-lg h-full flex flex-col justify-center items-center no-drag animate-fade-in">
+                <i data-lucide="inbox" class="h-10 w-10 mx-auto text-slate-400"></i>
+                <h4 class="mt-4 font-semibold text-slate-600">Columna Vacía</h4>
+                <p class="text-sm mt-1 mb-4">No hay tareas en estado "${statusMap[status]}".</p>
+                <button data-action="add-task-to-column" data-status="${status}" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm py-1.5 px-3 rounded-full mx-auto flex items-center">
+                    <i data-lucide="plus" class="mr-1.5 h-4 w-4"></i>Añadir Tarea
+                </button>
+            </div>
+        `;
+    };
+
+    const tasksByStatus = { todo: [], inprogress: [], done: [] };
+    tasks.forEach(task => {
+        tasksByStatus[task.status || 'todo'].push(task);
+    });
+
+    document.querySelectorAll('.task-column').forEach(columnEl => {
+        const status = columnEl.dataset.status;
+        const taskListEl = columnEl.querySelector('.task-list');
+        const columnTasks = tasksByStatus[status];
+
+        if (columnTasks.length === 0) {
+            taskListEl.innerHTML = getEmptyColumnHTML(status);
+        } else {
+            taskListEl.innerHTML = '';
+            columnTasks.forEach(task => {
+                const taskCardHTML = createTaskCard(task);
+                const template = document.createElement('template');
+                template.innerHTML = taskCardHTML.trim();
+                const cardNode = template.content.firstChild;
+                cardNode.addEventListener('click', (e) => {
+                    if (e.target.closest('.task-actions')) return;
+                    openTaskFormModal(task);
+                });
+                taskListEl.appendChild(cardNode);
+            });
+        }
+    });
+
+    initTasksSortable();
+    lucide.createIcons();
+}
 
 // --- HELPER FUNCTIONS FOR KANBAN LOGIC (moved outside for clarity) ---
 const loadTelegramConfig = () => {
@@ -1150,6 +1364,8 @@ export function initTasksModule(dependencies) {
     switchView = dependencies.switchView;
     checkUserPermission = dependencies.checkUserPermission;
     lucide = dependencies.lucide;
+    openTaskFormModal = dependencies.openTaskFormModal;
+    setupTaskFilters = dependencies.setupTaskFilters;
     console.log("Tasks module initialized.");
 }
 
