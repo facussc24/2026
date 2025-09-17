@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
 import { createVisorUI, updateStatus, updateSelectionUI, disableAnnotationFeatures } from './components/uiManager.js';
 import { initThreeScene, scene, camera, renderer, controls } from './components/sceneManager.js';
@@ -9,8 +11,31 @@ import { initAnnotations } from './components/annotationManager.js';
 // Re-export functions and variables for tests
 export { setupVisor3dEventListeners, updateSelection, toggleSelectionTransparency, toggleIsolation, scene, camera, renderer, controls };
 
-// The Firebase app instance will be passed in from main.js
-let storage;
+// --- FIREBASE CONFIG ---
+const firebaseConfig = {
+  apiKey: "AIzaSyAUQxlBCiYoR4-tlGL-S3xR8LXrrMkx1Tk",
+  authDomain: "barackingenieria-e763c.firebaseapp.com",
+  projectId: "barackingenieria-e763c",
+  storageBucket: "barackingenieria-e763c.firebasestorage.app",
+  messagingSenderId: "44704892099",
+  appId: "1:44704892099:web:738c8cbc3cea65808a8e76",
+  measurementId: "G-ZHZ3R9XXDM"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig, "visor3d-app");
+const storage = getStorage(app);
+const auth = getAuth(app);
+
+// Authenticate anonymously
+signInAnonymously(auth).catch((error) => {
+    console.error("Anonymous sign-in failed:", error);
+    if (error.code === 'auth/admin-restricted-operation') {
+        disableAnnotationFeatures();
+    } else {
+        updateStatus("Error de autenticación. No se podrán guardar anotaciones.", true);
+    }
+});
 
 // --- SHARED STATE AND VARIABLES ---
 export const state = {
@@ -85,9 +110,8 @@ async function loadModel(modelRef) {
     }
 }
 
-export async function runVisor3dLogic(firebaseApp) {
-    console.log("Running Visor3D logic with shared Firebase app...");
-    storage = getStorage(firebaseApp);
+export async function runVisor3dLogic() {
+    console.log("Running Visor3D logic with Firebase Storage direct access...");
 
     createVisorUI();
 
