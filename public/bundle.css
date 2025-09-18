@@ -230,7 +230,7 @@ body { font-family: var(--font-family-sans); background-color: var(--color-bg-pr
 .toast { display: flex; align-items: center; padding: var(--spacing-3) var(--spacing-5); border-radius: var(--border-radius-lg); color: white; font-weight: var(--font-weight-medium); box-shadow: var(--box-shadow-lg); z-index: 1100; opacity: 0; transform: translateX(100%); transition: var(--transition-medium); }
 .toast.show { opacity: 1; transform: translateX(0); }
 .toast.success { background-color: var(--color-success); } .toast.error { background-color: var(--color-error); } .toast.info { background-color: var(--color-primary); }
-.toast svg { margin-right: 10px; }
+.toast i { margin-right: 10px; }
 
 /* --- Barra de Navegación Superior --- */
 body {

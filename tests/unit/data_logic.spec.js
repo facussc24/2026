@@ -20,47 +20,7 @@ const mockFirestore = {
     collection: jest.fn((db, collection) => ({ db, collection })),
     query: jest.fn(),
     where: jest.fn(),
-    setDoc: jest.fn(),
 };
-
-describe('Firestore Security', () => {
-    beforeEach(() => {
-        // Clear the mock
-        mockFirestore.setDoc.mockClear();
-        mockFirestore.doc.mockClear();
-    });
-
-    // Helper function to simulate a client trying to write to a protected document.
-    // The `isAllowedByRules` parameter simulates the outcome of the Firestore security rule check.
-    async function simulateProtectedWrite(isAllowedByRules) {
-        if (!isAllowedByRules) {
-            // This is what should happen for a non-admin user after the fix.
-            return Promise.reject(new Error('Permission Denied'));
-        }
-        // If rules allow, the client proceeds with the write.
-        const docRef = mockFirestore.doc(mockDb, 'counters', 'ecr_counter');
-        await mockFirestore.setDoc(docRef, { count: 123 });
-        return Promise.resolve();
-    }
-
-    test('[FIX-VERIFY] A non-admin user should be blocked from writing to ecr_counter', async () => {
-        // Arrange:
-        // We now simulate the CORRECT behavior. The Firestore rules should prevent a non-admin
-        // from writing to the counter.
-        // Therefore, `isAllowedByRules` is false.
-        const isAllowedByCorrectRules = false;
-        mockFirestore.setDoc.mockResolvedValue(); // The underlying write shouldn't even be called.
-
-        // Act:
-        // Simulate a non-admin user ('lector') performing the action.
-        const promise = simulateProtectedWrite(isAllowedByCorrectRules);
-
-        // Assert:
-        // The operation should be rejected, confirming the security fix.
-        await expect(promise).rejects.toThrow('Permission Denied');
-        expect(mockFirestore.setDoc).not.toHaveBeenCalled();
-    });
-});
 
 describe('deleteProductAndOrphanedSubProducts', () => {
     beforeEach(() => {

@@ -1,7 +1,6 @@
 import { jest } from '@jest/globals';
 
 export const getAuth = jest.fn();
-export const signInAnonymously = jest.fn(() => Promise.resolve({ user: { uid: 'test-uid' } }));
 export const onAuthStateChanged = jest.fn();
 export const createUserWithEmailAndPassword = jest.fn();
 export const signInWithEmailAndPassword = jest.fn();

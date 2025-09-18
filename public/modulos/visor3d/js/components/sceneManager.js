@@ -12,9 +12,9 @@ import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { state, modelParts, partCharacteristics, selectedObjects, clippingPlanes } from '../visor3d.js';
 import { renderPartsList, updateStatus } from './uiManager.js';
 
-export let scene, camera, renderer, controls, labelRenderer, composer;
+export let scene, camera, renderer, controls, labelRenderer;
 let ambientLight, directionalLight;
-let fxaaPass;
+let composer, fxaaPass;
 let gizmoScene, gizmoCamera;
 
 function setupScene() {
@@ -23,8 +23,7 @@ function setupScene() {
 }
 
 function setupCamera(container) {
-    // Adjusted near and far planes to improve depth buffer precision and reduce Z-fighting.
-    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 2000);
+    camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.01, 5000);
     camera.position.z = 5;
 }
 
@@ -109,25 +108,11 @@ export function initThreeScene(modelUrl, onPointerDown) {
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
 
-        // Set a proper HDR environment map for realistic lighting and reflections.
-        new RGBELoader()
-            .setDataType(THREE.FloatType) // Required for recent three.js versions
-            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
-                const pmremGenerator = new THREE.PMREMGenerator(renderer);
-                pmremGenerator.compileEquirectangularShader();
-
-                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-
-                scene.background = envMap;
-                scene.environment = envMap;
-
-                texture.dispose();
-                pmremGenerator.dispose();
-            }, undefined, (error) => {
-                console.error('An error occurred while loading the HDR environment map.', error);
-                // Fallback to a simple color background if HDR fails to load
-                scene.background = new THREE.Color(0x333333);
-            });
+        // Set a neutral environment map to provide some basic reflections
+        const envScene = new THREE.Scene();
+        envScene.background = new THREE.Color(0xffffff);
+        scene.environment = new THREE.PMREMGenerator(renderer).fromScene(envScene).texture;
+        scene.background = new THREE.Color(0x333333); // A darker grey for a more professional look
 
         const centeredBox = new THREE.Box3().setFromObject(model);
         const groundY = centeredBox.min.y;
@@ -154,11 +139,9 @@ export function initThreeScene(modelUrl, onPointerDown) {
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
         const cameraDistance = (maxDim / 2) / Math.tan(fov / 2);
-
-        // Position the camera relative to the model's new center at the origin.
-        const cameraZ = cameraDistance * 1.2;
-        const cameraY = maxDim / 4;
-        camera.position.set(0, cameraY, cameraZ);
+        const cameraZ = center.z + cameraDistance * 1.2;
+        const cameraY = center.y + maxDim / 4;
+        camera.position.set(center.x, cameraY, cameraZ);
 
         const lookAtVector = new THREE.Vector3(0, 0, 0);
         camera.lookAt(lookAtVector);
@@ -233,17 +216,9 @@ export function initThreeScene(modelUrl, onPointerDown) {
         }
 
         // render main scene
-        // It's crucial to reset the viewport and scissor before rendering the main scene.
-        // The gizmo render in the previous frame modifies these, and if not reset,
-        // the main scene will be rendered into the tiny gizmo viewport.
-        const container = document.getElementById('visor3d-scene-container');
-        if (container) {
-            const width = container.offsetWidth;
-            const height = container.offsetHeight;
-            renderer.setViewport(0, 0, width, height);
-            renderer.setScissor(0, 0, width, height);
-        }
-        renderer.setScissorTest(true); // Ensure scissor is on for both composer and gizmo
+        renderer.setScissorTest(false);
+        renderer.clear();
+        renderer.setScissorTest(true);
 
         composer.render();
         if (labelRenderer) labelRenderer.render(scene, camera);

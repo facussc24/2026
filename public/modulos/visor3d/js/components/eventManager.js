@@ -1,11 +1,8 @@
 import * as THREE from 'three';
-import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, clippingPlanes, partCharacteristics, measurementState } from '../visor3d.js';
-import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene, composer } from './sceneManager.js';
-import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton, createReportModal } from './uiManager.js';
+import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, measurementLine, measurementLabel, clippingPlanes } from '../visor3d.js';
+import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setBackgroundColor, setSunIntensity, setAmbientLightIntensity, scene } from './sceneManager.js';
+import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton } from './uiManager.js';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { Line2 } from 'three/examples/jsm/lines/Line2.js';
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -38,29 +35,11 @@ export function onPointerDown(event) {
             createAnnotationAtPoint(pt);
         }
     } else {
-        if (!targetObject && !event.ctrlKey && !state.isSelectionLocked) {
+        if (!targetObject && !event.ctrlKey) {
             updateSelection(null, false);
         } else if (targetObject && targetObject.name) {
             updateSelection(targetObject, event.ctrlKey);
         }
-    }
-}
-
-export function toggleSelectionLock() {
-    state.isSelectionLocked = !state.isSelectionLocked;
-    toggleButtonActive('lock-selection-btn', state.isSelectionLocked);
-
-    const lockButton = document.getElementById('lock-selection-btn');
-    if (lockButton) {
-        const icon = lockButton.querySelector('i');
-        if (state.isSelectionLocked) {
-            lockButton.setAttribute('title', 'Desbloquear Selección');
-            if (icon) icon.setAttribute('data-lucide', 'unlock');
-        } else {
-            lockButton.setAttribute('title', 'Bloquear Selección');
-            if (icon) icon.setAttribute('data-lucide', 'lock');
-        }
-        if (window.lucide) window.lucide.createIcons();
     }
 }
 
@@ -85,11 +64,6 @@ export function updateSelection(objectToSelect, isCtrlPressed) {
         state.outlinePass.selectedObjects = selectedObjects;
     }
 
-    // If the selection is cleared, unlock it.
-    if (selectedObjects.length === 0 && state.isSelectionLocked) {
-        toggleSelectionLock();
-    }
-
     updateSelectionUI();
     applySelectionTransparency();
 }
@@ -109,9 +83,9 @@ function applySelectionTransparency(forceRestore = false) {
                 const makeTransparent = (material) => {
                     const transparentMat = material.clone();
                     transparentMat.transparent = true;
-                    transparentMat.opacity = 0.2; // Increased opacity
+                    transparentMat.opacity = 0.1;
                     transparentMat.emissive = new THREE.Color(0x000000);
-                    transparentMat.depthWrite = true; // Enable depth write
+                    transparentMat.depthWrite = false;
                     return transparentMat;
                 };
                 part.material = Array.isArray(part.material) ? part.material.map(makeTransparent) : makeTransparent(part.material);
@@ -215,107 +189,12 @@ function toggleClippingView() {
     }
 }
 
-function generateReport() {
-    console.log("Iniciando la generación del reporte...");
-
-    // --- Mejora de Calidad del Reporte: Alta Resolución y Fondo Blanco ---
-
-    // 1. Guardar estado original
-    const originalSize = new THREE.Vector2();
-    renderer.getSize(originalSize);
-    const originalBackground = scene.background ? scene.background.clone() : null;
-    const reportWidth = 1920;
-    const reportHeight = 1080;
-
-    // 2. Establecer alta resolución y fondo blanco
-    renderer.setSize(reportWidth, reportHeight);
-    camera.aspect = reportWidth / reportHeight;
-    camera.updateProjectionMatrix();
-    scene.background = new THREE.Color(0xffffff);
-    composer.render(); // Renderizar con la nueva configuración
-
-    // 3. Capturar la imagen
-    const screenshot = renderer.domElement.toDataURL('image/png');
-
-    // 4. Restaurar estado original
-    renderer.setSize(originalSize.x, originalSize.y);
-    camera.aspect = originalSize.x / originalSize.y;
-    camera.updateProjectionMatrix();
-    scene.background = originalBackground;
-    composer.render(); // Re-renderizar para que la vista del usuario vuelva a la normalidad
-
-    if (!screenshot || screenshot === 'data:,') {
-        console.error("Error al capturar la imagen del canvas. Puede que esté vacío.");
-        alert("No se pudo generar la imagen del reporte. Inténtelo de nuevo.");
-        return;
-    }
-
-    // 2. Obtener la lista de piezas seleccionadas
-    if (selectedObjects.length === 0) {
-        alert("Por favor, seleccione al menos una pieza para generar el reporte.");
-        return;
-    }
-
-    // 3. Recopilar datos de las piezas (nombre, coordenadas 3D y metadatos)
-    const reportData = selectedObjects.map(object => {
-        const box = new THREE.Box3().setFromObject(object);
-        const center = box.getCenter(new THREE.Vector3());
-
-        // --- Mejora de Calidad: Filtrar piezas no visibles ---
-        // Proyectar el centro del objeto a la pantalla
-        const projectedPosition = center.clone().project(camera);
-        // Si el objeto está fuera del frustum de la cámara (NDC coords fuera de [-1, 1]), no lo incluimos.
-        if (projectedPosition.x < -1 || projectedPosition.x > 1 || projectedPosition.y < -1 || projectedPosition.y > 1) {
-            return null;
-        }
-
-        const metadata = partCharacteristics[object.name] || {};
-
-        return {
-            name: object.name,
-            position3d: center,
-            metadata: metadata
-        };
-    }).filter(p => p !== null); // Eliminar los nulos del array
-
-    console.log("Datos para el reporte recopilados:", {
-        screenshotLength: screenshot.length,
-        parts: reportData
-    });
-
-    // Llamar a la función para crear y mostrar el modal
-    createReportModal(screenshot, reportData);
-}
-
 export function setupVisor3dEventListeners() {
-    const moreControlsBtn = document.getElementById('more-controls-btn');
-    if (moreControlsBtn) {
-        moreControlsBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const menu = document.getElementById('more-controls-menu');
-            if (menu) {
-                menu.classList.toggle('hidden');
-            }
-        });
-    }
-
-    // Add a global click listener to close the dropdown
-    document.addEventListener('click', (e) => {
-        const container = document.getElementById('more-controls-dropdown-container');
-        const menu = document.getElementById('more-controls-menu');
-        if (menu && !menu.classList.contains('hidden') && container && !container.contains(e.target)) {
-            menu.classList.add('hidden');
-        }
-    });
-
     const explodeBtn = document.getElementById('explode-btn');
     if (explodeBtn) explodeBtn.addEventListener('click', toggleExplodeView);
 
     const isolateBtn = document.getElementById('isolate-btn');
     if (isolateBtn) isolateBtn.addEventListener('click', toggleIsolation);
-
-    const lockSelectionBtn = document.getElementById('lock-selection-btn');
-    if (lockSelectionBtn) lockSelectionBtn.addEventListener('click', toggleSelectionLock);
 
     const selectionTransparencyBtn = document.getElementById('selection-transparency-btn');
     if (selectionTransparencyBtn) selectionTransparencyBtn.addEventListener('click', toggleSelectionTransparency);
@@ -333,6 +212,9 @@ export function setupVisor3dEventListeners() {
     if (explodeFactor) explodeFactor.addEventListener('input', (e) => {
         if(state.isExploded) updateExplosion(e.target.value);
     });
+
+    const bgColor = document.getElementById('bg-color');
+    if (bgColor) bgColor.addEventListener('input', (e) => setBackgroundColor(e.target.value));
 
     const sunIntensity = document.getElementById('sun-intensity');
     if (sunIntensity) sunIntensity.addEventListener('input', (e) => setSunIntensity(e.target.value));
@@ -385,16 +267,13 @@ export function setupVisor3dEventListeners() {
         const actionButton = e.target.closest('button[data-action]');
         if (actionButton && actionButton.dataset.action === 'toggle-visibility') {
             partToAffect.visible = !partToAffect.visible;
-            const iconName = partToAffect.visible ? 'eye' : 'eye-off';
-            actionButton.innerHTML = `<i data-lucide="${iconName}" class="pointer-events-none"></i>`;
+            const icon = actionButton.querySelector('i');
+            icon.setAttribute('data-lucide', partToAffect.visible ? 'eye' : 'eye-off');
             lucide.createIcons();
         } else {
             updateSelection(partToAffect, e.ctrlKey);
         }
     });
-
-    const reportBtn = document.getElementById('report-btn');
-    if (reportBtn) reportBtn.addEventListener('click', generateReport);
 
     const resetBtn = document.getElementById('reset-view-btn');
     if (resetBtn) resetBtn.addEventListener('click', () => {
@@ -404,7 +283,6 @@ export function setupVisor3dEventListeners() {
         if (state.isIsolated) toggleIsolation();
         if (state.isClipping) toggleClippingView();
         if (state.isAnnotationMode) toggleAnnotationMode();
-        if (state.isSelectionLocked) toggleSelectionLock();
 
         modelParts.forEach(part => { part.visible = true; });
         document.querySelectorAll('#visor3d-parts-list button[data-action="toggle-visibility"] i').forEach(icon => {
@@ -517,47 +395,35 @@ function toggleMeasurement() {
 
 export function updateMeasurementVisuals() {
     // Remove existing line and label
-    if (measurementState.line) {
-        scene.remove(measurementState.line);
-        measurementState.line.geometry.dispose();
-        measurementState.line.material.dispose();
-        measurementState.line = null;
+    if (measurementLine) {
+        scene.remove(measurementLine);
+        measurementLine.geometry.dispose();
+        measurementLine.material.dispose();
+        measurementLine = null;
     }
-    if (measurementState.label) {
-        scene.remove(measurementState.label);
-        // CSS2DObject doesn't have a dispose method for its element, it's just removed.
-        measurementState.label = null;
+    if (measurementLabel) {
+        scene.remove(measurementLabel);
+        measurementLabel = null;
     }
 
     if (measurementPoints.length === 2) {
         const [p1, p2] = measurementPoints;
 
-        // Create line with Line2 for thickness control
-        const positions = [p1.x, p1.y, p1.z, p2.x, p2.y, p2.z];
-        const geometry = new LineGeometry();
-        geometry.setPositions(positions);
-
-        const material = new LineMaterial({
-            color: 0xffff00, // Yellow
-            linewidth: 3, // In pixels
-            resolution: new THREE.Vector2(renderer.domElement.clientWidth, renderer.domElement.clientHeight),
-            depthTest: false, // Render on top
-        });
-
-        measurementState.line = new Line2(geometry, material);
-        measurementState.line.renderOrder = 999; // Ensure it's rendered last (on top)
-        scene.add(measurementState.line);
+        // Create line
+        const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+        const geometry = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+        measurementLine = new THREE.Line(geometry, material);
+        scene.add(measurementLine);
 
         // Create label
         const distance = p1.distanceTo(p2);
-        const distanceInMm = distance * 1000;
         const text = document.createElement('div');
         text.className = 'visor3d-measurement-label';
-        text.textContent = `${distanceInMm.toFixed(2)} mm`;
+        text.textContent = `${distance.toFixed(2)} units`;
 
-        measurementState.label = new CSS2DObject(text);
-        measurementState.label.position.lerpVectors(p1, p2, 0.5);
-        scene.add(measurementState.label);
+        measurementLabel = new CSS2DObject(text);
+        measurementLabel.position.lerpVectors(p1, p2, 0.5);
+        scene.add(measurementLabel);
 
         // Reset for next measurement
         measurementPoints.length = 0;

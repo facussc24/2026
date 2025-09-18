@@ -1,1 +1,1 @@
-export const createIcons = () => {};
+export const createIcons = jest.fn();

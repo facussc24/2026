@@ -20,7 +20,6 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"></noscript>
     <link rel="preload" href="bundle.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link rel="stylesheet" href="bundle.css"></noscript>
-    <link rel="stylesheet" href="css/auth.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/alyssaxuu/flowy/flowy.min.css">
 
 
@@ -28,8 +27,8 @@
     <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com/three@0.167.0/build/three.module.js",
-        "three/examples/jsm/": "https://unpkg.com/three@0.167.0/examples/jsm/",
+        "three": "https://unpkg.com/three@0.132.2/build/three.module.js",
+        "three/examples/jsm/": "https://unpkg.com/three@0.132.2/examples/jsm/",
         "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.js"
       }
     }
@@ -45,31 +44,32 @@
 </div>
 
 <!-- Contenedor de Autenticación -->
-<div id="auth-container" class="fixed inset-0 flex items-center justify-center z-50 hidden">
-    <div class="auth-panel" id="login-panel">
-        <div class="auth-header">
-            <img src="barack_logo.png" alt="Logo" class="logo-img" loading="lazy">
-            <p class="subtitle">Inicie sesión para continuar.</p>
+<div id="auth-container" class="fixed inset-0 bg-white flex items-center justify-center z-50 hidden">
+    <div class="w-full max-w-md animate-scale-in">
+        <!-- Panel de Login -->
+        <div id="login-panel" class="p-8 bg-white shadow-2xl rounded-2xl">
+            <div class="text-center">
+                <img src="barack_logo.png" alt="Logo" class="logo-img mx-auto" loading="lazy">
+                <p class="text-slate-500 mt-2 mb-8">Inicie sesión para continuar.</p>
+            </div>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+                    <input type="email" id="login-email" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" id="login-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
+                </div>
+                <div class="flex items-center justify-between pt-2">
+                    <a href="#" data-auth-screen="reset" class="text-sm text-blue-600 hover:underline">¿Olvidaste tu contraseña?</a>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Iniciar Sesión</button>
+                </div>
+            </form>
+            <div class="text-center mt-6 text-sm">
+                <p class="text-slate-500">¿No tienes cuenta? <a href="#" data-auth-screen="register" class="font-semibold text-blue-600 hover:underline">Regístrate</a></p>
+            </div>
         </div>
-        <form id="login-form" class="auth-form">
-            <div class="input-group">
-                <label for="login-email">Correo electrónico</label>
-                <input type="email" id="login-email" required>
-            </div>
-            <div class="input-group">
-                <label for="login-password">Contraseña</label>
-                <input type="password" id="login-password" required>
-            </div>
-            <div class="forgot-password-link">
-                <a href="#" data-auth-screen="reset" class="auth-link">¿Olvidaste tu contraseña?</a>
-            </div>
-            <button type="submit" class="submit-button">Iniciar Sesión</button>
-        </form>
-        <div class="auth-footer-text">
-            <span>¿No tienes cuenta?</span>
-            <a href="#" data-auth-screen="register" class="auth-link">Regístrate</a>
-        </div>
-    </div>
         <!-- Panel de Registro -->
         <div id="register-panel" class="p-8 bg-white shadow-2xl rounded-2xl hidden">
             <div class="text-center">

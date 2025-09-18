@@ -11,7 +11,8 @@ service cloud.firestore {
     }
 
     function canCreateUpdate() {
-      // Allow the test user to write OR check for 'admin' or 'editor' roles.
+      // Check for Super Admin UID first, then for 'admin' or 'editor' roles.
+      // This ensures the seeder works on a clean install for the Super Admin.
       return request.auth.uid == 'KTIQRzPBRcOFtBRjoFViZPSsbSq2' ||
         (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
          (get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin' ||
@@ -20,8 +21,11 @@ service cloud.firestore {
 
     // --- USUARIOS ---
     match /usuarios/{userId} {
-      // Cualquier usuario autenticado puede leer/listar perfiles para asignación de tareas, etc.
-      allow list, read: if request.auth != null;
+      // Cualquier usuario autenticado puede listar los usuarios para asignación de tareas.
+      allow list: if request.auth != null;
+
+      // Un usuario puede leer su propio perfil. Los admins pueden leer todos.
+      allow read: if request.auth.uid == userId || isUserAdmin();
 
       // Un usuario puede crear su propio documento de perfil durante el registro.
       allow create: if request.auth.uid == userId;
@@ -30,7 +34,7 @@ service cloud.firestore {
       // Los administradores pueden actualizar cualquier perfil (para cambiar roles, etc.).
       allow update: if request.auth.uid == userId || isUserAdmin();
 
-      // Solo los administradores pueden eliminar (deshabilitar) usuarios.
+      // Solo los administradores pueden eliminar usuarios.
       allow delete: if isUserAdmin();
     }
 
@@ -241,9 +245,8 @@ service cloud.firestore {
       allow read: if request.auth != null;
 
       // Allow admins to write to any counter document for seeding/maintenance.
-      // For transaction-based counters like 'ecr_counter', the write operation
-      // must be initiated by a user with appropriate permissions (i.e., admin).
-      allow write: if isUserAdmin();
+      // Allow any authenticated user to write to the 'ecr_counter' for transactions.
+      allow write: if isUserAdmin() || (request.auth != null && counterDoc == 'ecr_counter');
     }
 
     // --- NOTIFICACIONES ---
