@@ -11,12 +11,14 @@ service cloud.firestore {
     }
 
     function canCreateUpdate() {
-      // Check for Super Admin UID first, then for 'admin' or 'editor' roles.
-      // This ensures the seeder works on a clean install for the Super Admin.
-      return request.auth.uid == 'KTIQRzPBRcOFtBRjoFViZPSsbSq2' ||
-        (exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
+      // Allow the test user to write for E2E testing purposes
+      if (request.auth.uid == 'KTIQRzPBRcOFtBRjoFViZPSsbSq2') {
+        return true;
+      }
+      // Check for 'admin' or 'editor' roles.
+      return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
          (get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'admin' ||
-          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'editor'));
+          get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.role == 'editor');
     }
 
     // --- USUARIOS ---
