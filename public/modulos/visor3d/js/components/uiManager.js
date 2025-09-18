@@ -1,4 +1,5 @@
 import { state, selectedObjects, partCharacteristics } from '../visor3d.js';
+import { camera } from './sceneManager.js';
 
 export function createVisorUI() {
     const container = document.getElementById('view-content');
@@ -25,14 +26,32 @@ export function createVisorUI() {
                         </div>
                     </div>
                     <div class="flex justify-between items-center border-t pt-2 mt-2">
-                        <div id="visor3d-controls" class="flex items-center gap-2">
-                            <button id="explode-btn" class="visor3d-control-btn" title="Vista explosionada"><i data-lucide="move-3d"></i></button>
+                        <div id="visor3d-controls" class="flex items-center gap-1">
+                            <!-- Primary Buttons -->
                             <button id="isolate-btn" class="visor3d-control-btn" title="Aislar Pieza" disabled><i data-lucide="zap"></i></button>
                             <button id="selection-transparency-btn" class="visor3d-control-btn" title="Ver Selección (Transparentar el Resto)"><i data-lucide="group"></i></button>
-                            <button id="clipping-btn" class="visor3d-control-btn" title="Vista de Sección"><i data-lucide="scissors"></i></button>
-                            <button id="measure-btn" class="visor3d-control-btn" title="Medir Distancia"><i data-lucide="ruler"></i></button>
-                            <button id="annotation-btn" class="visor3d-control-btn" title="Modo Anotación"><i data-lucide="message-square-plus"></i></button>
+                            <button id="report-btn" class="visor3d-control-btn" title="Generar Reporte"><i data-lucide="file-image"></i></button>
                             <button id="reset-view-btn" class="visor3d-control-btn" title="Resetear vista"><i data-lucide="rotate-cw"></i></button>
+
+                            <div class="h-6 border-l border-slate-300 mx-2"></div>
+
+                            <!-- "More" Dropdown -->
+                            <div class="relative" id="more-controls-dropdown-container">
+                                <button id="more-controls-btn" class="visor3d-control-btn" title="Más herramientas">
+                                    <i data-lucide="more-horizontal"></i>
+                                </button>
+                                <div id="more-controls-menu" class="absolute right-0 mt-2 w-60 bg-white border rounded-lg shadow-xl hidden z-10 p-2 space-y-1">
+                                    <button id="explode-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Vista explosionada"><i data-lucide="move-3d" class="w-5 h-5 text-slate-500"></i><span>Vista Explosionada</span></button>
+                                    <button id="lock-selection-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Bloquear Selección" disabled><i data-lucide="lock" class="w-5 h-5 text-slate-500"></i><span>Bloquear Selección</span></button>
+                                    <button id="clipping-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Vista de Sección"><i data-lucide="scissors" class="w-5 h-5 text-slate-500"></i><span>Vista de Sección</span></button>
+                                    <button id="measure-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Medir Distancia"><i data-lucide="ruler" class="w-5 h-5 text-slate-500"></i><span>Medir Distancia</span></button>
+                                    <button id="annotation-btn" class="w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md hover:bg-slate-100" title="Modo Anotación"><i data-lucide="message-square-plus" class="w-5 h-5 text-slate-500"></i><span>Modo Anotación</span></button>
+                                </div>
+                            </div>
+
+                            <div class="h-6 border-l border-slate-300 mx-2"></div>
+
+                            <!-- Help button remains separate -->
                             <button id="help-tutorial-btn" class="p-2 rounded-full hover:bg-slate-100" title="Ayuda y Tutorial">
                                 <i data-lucide="help-circle" class="w-6 h-6 text-slate-600"></i>
                             </button>
@@ -44,9 +63,6 @@ export function createVisorUI() {
                     <details class="visor-section">
                         <summary>Controles Visuales</summary>
                         <div class="visor-section-content">
-                            <label for="bg-color">Fondo</label>
-                            <input type="color" id="bg-color" value="#404040">
-
                             <label for="sun-intensity">Intensidad Sol</label>
                             <input type="range" id="sun-intensity" min="0" max="4" step="0.1" value="2.5">
 
@@ -127,6 +143,171 @@ export function updateStatus(message, isError = false, showProgressBar = false) 
     }
 }
 
+export function createReportModal(screenshot, reportData) {
+    const existingModal = document.getElementById('report-modal-backdrop');
+    if (existingModal) existingModal.remove();
+
+    const modalHTML = `
+        <div id="report-modal-backdrop" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[1050] animate-fade-in">
+            <div id="report-modal-content" class="bg-white rounded-lg shadow-2xl max-w-6xl w-full h-[90vh] flex flex-col p-6 animate-scale-in">
+                <div class="flex justify-between items-center mb-4 pb-4 border-b">
+                    <div class="flex items-center gap-3">
+                        <img src="barack_logo.png" alt="Logo" class="h-8">
+                        <h2 class="text-2xl font-bold text-slate-800">Reporte de Componentes</h2>
+                    </div>
+                    <button id="close-report-modal" class="text-slate-500 hover:text-slate-800 p-2 rounded-full hover:bg-slate-100">
+                        <i data-lucide="x" class="w-6 h-6"></i>
+                    </button>
+                </div>
+                <div class="flex-grow overflow-hidden flex items-stretch justify-center gap-6" id="report-body">
+                    <div id="report-labels-left" class="flex flex-col justify-center gap-4 w-1/6"></div>
+                    <div id="report-visual-container" class="w-4/6 h-full relative">
+                        <img id="report-screenshot" src="${screenshot}" class="w-full h-full object-contain">
+                    </div>
+                    <div id="report-labels-right-wrapper" class="w-1/6 h-full flex flex-col">
+                        <div id="report-labels-right" class="flex-grow flex flex-col justify-center gap-4">
+                           <!-- Right labels will go here -->
+                        </div>
+                        <div id="report-extra-data" class="flex-shrink-0 mt-4">
+                            <div class="bg-red-600 text-white p-4 rounded-t-lg">
+                                <p class="text-lg font-bold">20%</p>
+                                <p class="text-sm">product sales</p>
+                            </div>
+                            <div class="bg-red-700 text-white p-4 rounded-b-lg">
+                                <h3 class="font-bold border-b border-red-500 pb-2 mb-2">2 SEGMENTS</h3>
+                                <ul class="text-sm space-y-1">
+                                    <li>IC1: Interior Trims</li>
+                                    <li>IC2: IP & CSL Components</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    lucide.createIcons();
+
+    const closeModal = () => {
+        const modal = document.getElementById('report-modal-backdrop');
+        if (modal) {
+            modal.classList.replace('animate-fade-in', 'animate-fade-out');
+            modal.querySelector('#report-modal-content').classList.replace('animate-scale-in', 'animate-scale-out');
+            setTimeout(() => modal.remove(), 300);
+        }
+    };
+
+    document.getElementById('close-report-modal').addEventListener('click', closeModal);
+    document.getElementById('report-modal-backdrop').addEventListener('click', (e) => {
+        if (e.target.id === 'report-modal-backdrop') closeModal();
+    });
+
+    requestAnimationFrame(() => {
+        const visualContainer = document.getElementById('report-visual-container');
+        const labelsLeft = document.getElementById('report-labels-left');
+        const labelsRight = document.getElementById('report-labels-right');
+
+        if (!visualContainer || !labelsLeft || !labelsRight) return;
+
+        const { width, height } = visualContainer.getBoundingClientRect();
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute('class', 'absolute top-0 left-0 w-full h-full pointer-events-none');
+        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+        const defs = document.createElementNS(svgNS, 'defs');
+        const marker = document.createElementNS(svgNS, 'marker');
+        marker.setAttribute('id', 'arrowhead');
+        marker.setAttribute('viewBox', '0 -5 10 10');
+        marker.setAttribute('refX', '5');
+        marker.setAttribute('refY', '0');
+        marker.setAttribute('markerWidth', '4');
+        marker.setAttribute('markerHeight', '4');
+        marker.setAttribute('orient', 'auto');
+        const path = document.createElementNS(svgNS, 'path');
+        path.setAttribute('d', 'M0,-5L10,0L0,5');
+        path.setAttribute('fill', '#4a5568');
+        marker.appendChild(path);
+        defs.appendChild(marker);
+        svg.appendChild(defs);
+        visualContainer.appendChild(svg);
+
+        const partsLeft = [];
+        const partsRight = [];
+
+        reportData.forEach(part => {
+            const projected = part.position3d.clone().project(camera);
+            const x = (projected.x * 0.5 + 0.5) * width;
+            if (x < width / 2) partsLeft.push(part);
+            else partsRight.push(part);
+        });
+
+        const drawLabelsAndArrows = (parts, container, side) => {
+            parts.forEach(part => {
+                let formattedName = part.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                const labelHTML = `<div class="report-label p-2 rounded border border-slate-300 bg-slate-50/80" style="visibility: hidden;">
+                                     <p class="font-bold text-sm text-slate-700">${formattedName}</p>
+                                   </div>`;
+                container.insertAdjacentHTML('beforeend', labelHTML);
+            });
+
+            requestAnimationFrame(() => {
+                const renderedLabels = Array.from(container.querySelectorAll('.report-label'));
+                renderedLabels.forEach((label, index) => {
+                    label.style.visibility = 'visible';
+                    const part = parts[index];
+                    const projected = part.position3d.clone().project(camera);
+                    const x2 = (projected.x * 0.5 + 0.5) * width;
+                    const y2 = (-projected.y * 0.5 + 0.5) * height;
+
+                    const labelRect = label.getBoundingClientRect();
+                    const containerRect = visualContainer.getBoundingClientRect();
+
+                    const y1 = (labelRect.top - containerRect.top) + (labelRect.height / 2);
+                    const x1 = (side === 'left') ? labelRect.right - containerRect.left : labelRect.left - containerRect.left;
+
+                    const line = document.createElementNS(svgNS, 'line');
+                    line.setAttribute('x1', x1);
+                    line.setAttribute('y1', y1);
+                    line.setAttribute('x2', x2);
+                    line.setAttribute('y2', y2);
+                    line.setAttribute('stroke', '#4a5568');
+                    line.setAttribute('stroke-width', '1.5');
+                    line.setAttribute('marker-end', 'url(#arrowhead)');
+                    svg.appendChild(line);
+                });
+            });
+        };
+
+        drawLabelsAndArrows(partsLeft, labelsLeft, 'left');
+        drawLabelsAndArrows(partsRight, labelsRight, 'right');
+    });
+}
+
+export function disableAnnotationFeatures() {
+    const annotationBtn = document.getElementById('annotation-btn');
+    if (annotationBtn) {
+        annotationBtn.disabled = true;
+        annotationBtn.title = "Anotaciones deshabilitadas por configuración del servidor";
+    }
+    // Optionally, hide the button entirely
+    // if (annotationBtn) annotationBtn.style.display = 'none';
+
+    // Also disable the panel in case it's somehow opened
+    const panel = document.getElementById('visor3d-annotations-panel');
+    if (panel) panel.classList.add('hidden');
+
+    // You could also show a persistent message on the UI
+    const statusContainer = document.getElementById('visor3d-status');
+    if (statusContainer && statusContainer.classList.contains('hidden')) {
+        const notice = document.createElement('p');
+        notice.className = 'absolute bottom-4 left-1/2 -translate-x-1/2 bg-amber-100 text-amber-800 text-sm font-semibold px-4 py-2 rounded-md shadow-lg';
+        notice.textContent = 'Las anotaciones están deshabilitadas por el administrador.';
+        document.getElementById('visor3d-scene-container').appendChild(notice);
+    }
+}
+
 export function renderPartsList(partNames) {
     const partsListContainer = document.getElementById('visor3d-parts-list');
     if (!partsListContainer) return;
@@ -185,9 +366,20 @@ export function updatePieceCard(object) {
 export function updateSelectionUI() {
     const pieceCard = document.getElementById('visor3d-piece-card');
     const isolateBtn = document.getElementById('isolate-btn');
+    const lockSelectionBtn = document.getElementById('lock-selection-btn');
+
+    const hasSelection = selectedObjects.length > 0;
 
     if (isolateBtn) {
-        isolateBtn.disabled = selectedObjects.length === 0;
+        isolateBtn.disabled = !hasSelection;
+    }
+
+    if (lockSelectionBtn) {
+        lockSelectionBtn.disabled = !hasSelection;
+        if (!hasSelection && state.isSelectionLocked) {
+            // This case will be handled in eventManager, but good to have a fallback.
+            // It will force unlock if selection is cleared.
+        }
     }
 
     if (pieceCard) {

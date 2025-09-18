@@ -77,23 +77,45 @@ export async function addCommentToAnnotation(annotationId, comment) {
 
     const db = getDb();
     const docRef = doc(db, "annotations", currentModelName);
-    const annotationIndex = currentAnnotations.findIndex(a => a.id === annotationId);
-    if (annotationIndex === -1) {
-        console.error("Annotation not found");
-        return;
-    }
-
-    currentAnnotations[annotationIndex].comments.push(comment);
 
     try {
-        await setDoc(docRef, { annotations: currentAnnotations });
+        // 1. Fetch the latest document from Firestore
+        const docSnap = await getDoc(docRef);
+        if (!docSnap.exists()) {
+            console.error("Annotations document not found in Firestore. Cannot add comment.");
+            return;
+        }
+
+        // 2. Get the current annotations array from the fetched document
+        const annotations = docSnap.data().annotations || [];
+
+        // 3. Find the specific annotation to update
+        const annotationIndex = annotations.findIndex(a => a.id === annotationId);
+        if (annotationIndex === -1) {
+            console.error("Annotation not found in the document. Cannot add comment.");
+            return;
+        }
+
+        // 4. Append the new comment
+        // Ensure the comments array exists
+        if (!annotations[annotationIndex].comments) {
+            annotations[annotationIndex].comments = [];
+        }
+        annotations[annotationIndex].comments.push(comment);
+
+        // 5. Write the entire, updated annotations array back to Firestore
+        await setDoc(docRef, { annotations: annotations });
+
         console.log("Comment added successfully.");
-        // Refresh the panel with the new comment by dispatching an event
-        window.dispatchEvent(new CustomEvent('show-annotation', { detail: currentAnnotations[annotationIndex] }));
+
+        // 6. Update the local state and UI
+        currentAnnotations = annotations;
+        window.dispatchEvent(new CustomEvent('show-annotation', { detail: annotations[annotationIndex] }));
+
     } catch (error) {
         console.error("Error adding comment: ", error);
-        // Revert local change on error
-        currentAnnotations[annotationIndex].comments.pop();
+        // Inform the user that the comment could not be saved
+        alert("Error: No se pudo guardar el comentario.");
     }
 }
 
