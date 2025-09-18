@@ -375,7 +375,7 @@ async function startRealtimeListeners() {
         if (appState.currentView === 'dashboard') {
             // The main dashboard logic already renders the chart once.
             // This listener will just update the task list for now.
-            renderDashboardTasks(appState.collections.tareas);
+            renderMyPendingTasksWidget(appState.collections.tareas);
         }
     }, (error) => console.error("Error listening to user tasks:", error));
     listeners.push(tasksUnsub);
