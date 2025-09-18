@@ -499,7 +499,7 @@ async function handleTaskFormSubmit(e) {
         data.isPublic = taskState.activeFilter === 'engineering';
     }
 
-    const saveButton = form.closest('.modal-content').querySelector('button[type="submit"]');
+    const saveButton = modalElement.querySelector('button[type="submit"]');
     const originalButtonHTML = saveButton.innerHTML;
     saveButton.disabled = true;
     saveButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5"></i>`;
@@ -1441,7 +1441,16 @@ function setupAdminTaskViewListeners() {
             if (action === 'edit-task' && task) {
                 openTaskFormModal(task);
             } else if (action === 'delete-task' && task) {
-                 showConfirmationModal('Eliminar Tarea',`¿Estás seguro de que deseas eliminar la tarea "${task.title}"?`,() => deleteDocument(COLLECTIONS.TAREAS, taskId));
+                 showConfirmationModal('Eliminar Tarea',`¿Estás seguro de que deseas eliminar la tarea "${task.title}"?`, async () => {
+                    try {
+                        await deleteDoc(doc(db, COLLECTIONS.TAREAS, taskId));
+                        showToast('Tarea eliminada con éxito.', 'success');
+                        // No need to call rerenderTable() as the onSnapshot listener will do it automatically.
+                    } catch (error) {
+                        console.error('Error deleting task from table view:', error);
+                        showToast('Error al eliminar la tarea.', 'error');
+                    }
+                });
             }
         }
 
