@@ -9591,11 +9591,15 @@ export async function exportSinopticoTabularToPdf() {
         dom.loadingOverlay.querySelector('p').textContent = 'Generando tabla...';
 
         const flattenedData = getFlattenedData(product, state.activeFilters);
-        const { head, body } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
+        const { head, body: bodyObjects } = prepareDataForPdfAutoTable(flattenedData, appState.collectionsById, product);
+
+        // FIX: Convert array of objects to array of arrays to respect the `head` order.
+        const columnOrder = ['descripcion', 'nivel', 'codigo', 'cantidad', 'comentarios'];
+        const bodyAsArrays = bodyObjects.map(obj => columnOrder.map(key => obj[key] !== undefined ? obj[key] : ''));
 
         doc.autoTable({
             head: head,
-            body: body,
+            body: bodyAsArrays,
             startY: 20,
             theme: 'grid',
             styles: {
