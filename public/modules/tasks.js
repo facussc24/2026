@@ -1077,10 +1077,8 @@ export function renderTaskDashboardView() {
              </div>
         </div>
 
-        <!-- Tabs Wrapper -->
-        <div>
-            <!-- Tabs Navigation (Admin only) -->
-            <div id="admin-tabs-container" class="border-b border-gray-200 ${isAdmin ? 'block' : 'hidden'}">
+        <!-- Tabs Navigation (Admin only) -->
+        <div id="admin-tabs-container" class="border-b border-gray-200 ${isAdmin ? 'block' : 'hidden'}">
             <nav id="admin-task-tabs" class="-mb-px flex space-x-6" aria-label="Tabs">
                 <button data-tab="dashboard" class="admin-task-tab active-tab group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm">
                     <i data-lucide="layout-dashboard" class="mr-2"></i><span>Dashboard</span>
@@ -1165,7 +1163,6 @@ export function renderTaskDashboardView() {
                 </div>
             </div>
         </div>
-        </div>
     </div>
     `;
     lucide.createIcons();
@@ -1221,7 +1218,10 @@ export function renderTaskDashboardView() {
     if(isAdmin) {
         renderCalendar(); // Initialize the calendar structure once
         setupAdminTaskViewListeners();
-        updateAdminDashboardData([]); // Initial call with empty data to render skeletons
+        // Defer the initial data load to prevent a race condition with chart rendering
+        setTimeout(() => {
+            updateAdminDashboardData([]); // Initial call with empty data to render skeletons
+        }, 0);
     }
 
     appState.currentViewCleanup = () => {
