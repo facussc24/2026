@@ -241,8 +241,9 @@ service cloud.firestore {
       allow read: if request.auth != null;
 
       // Allow admins to write to any counter document for seeding/maintenance.
-      // Allow any authenticated user to write to the 'ecr_counter' for transactions.
-      allow write: if isUserAdmin() || (request.auth != null && counterDoc == 'ecr_counter');
+      // For transaction-based counters like 'ecr_counter', the write operation
+      // must be initiated by a user with appropriate permissions (i.e., admin).
+      allow write: if isUserAdmin();
     }
 
     // --- NOTIFICACIONES ---
