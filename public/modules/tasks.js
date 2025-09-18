@@ -1046,9 +1046,10 @@ export function renderTaskDashboardView() {
     const title = isAdmin ? "Estadísticas del Equipo" : "Mis Estadísticas";
     const subtitle = isAdmin ? "Analiza, filtra y gestiona las tareas del equipo." : "Un resumen de tu carga de trabajo y progreso.";
 
-    // Main layout is the same, but we will hide elements for non-admins
+    // This new structure uses a flex column to ensure vertical stacking and proper spacing.
     dom.viewContent.innerHTML = `
-    <div class="space-y-6">
+    <div class="flex flex-col space-y-6">
+        <!-- Header -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
                 <h2 class="text-2xl font-bold text-slate-800">${title}</h2>
@@ -1060,106 +1061,98 @@ export function renderTaskDashboardView() {
             </button>
         </div>
 
-        <!-- Global Admin Filters (Admin only) -->
-        <div id="admin-filters-container" class="bg-white p-4 rounded-xl shadow-sm border flex items-center gap-6 ${isAdmin ? 'flex' : 'hidden'}">
-             <div class="flex items-center gap-2">
+        <!-- Admin Filters -->
+        <div id="admin-filters-container" class="bg-white p-4 rounded-xl shadow-sm border items-center gap-6 ${isAdmin ? 'flex' : 'hidden'}">
+            <div class="flex items-center gap-2">
                 <label for="admin-view-filter" class="text-sm font-bold text-slate-600 flex-shrink-0">Vista:</label>
                 <select id="admin-view-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm">
                     <option value="all">Todas las Tareas</option>
                     <option value="my-tasks">Mis Tareas</option>
+                    <option value="specific-user">Usuario específico...</option>
                 </select>
-             </div>
-             <div id="admin-user-filter-container" class="hidden items-center gap-2">
+            </div>
+            <div id="admin-user-filter-container" class="hidden items-center gap-2">
                 <label for="admin-specific-user-filter" class="text-sm font-bold text-slate-600 flex-shrink-0">Usuario:</label>
-                <select id="admin-specific-user-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm">
-                    <!-- User options will be populated here -->
-                </select>
-             </div>
+                <select id="admin-specific-user-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm"></select>
+            </div>
         </div>
 
-        <!-- Tabs Navigation (Admin only) -->
+        <!-- Tabs Navigation -->
         <div id="admin-tabs-container" class="border-b border-gray-200 ${isAdmin ? 'block' : 'hidden'}">
             <nav id="admin-task-tabs" class="-mb-px flex space-x-6" aria-label="Tabs">
-                <button data-tab="dashboard" class="admin-task-tab active-tab group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm">
-                    <i data-lucide="layout-dashboard" class="mr-2"></i><span>Dashboard</span>
-                </button>
-                <button data-tab="calendar" class="admin-task-tab group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm">
-                    <i data-lucide="calendar-days" class="mr-2"></i><span>Calendario</span>
-                </button>
-                <button data-tab="table" class="admin-task-tab group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm">
-                    <i data-lucide="table" class="mr-2"></i><span>Tabla de Tareas</span>
-                </button>
+                <button data-tab="dashboard" class="admin-task-tab active-tab group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm"><i data-lucide="layout-dashboard" class="mr-2"></i><span>Dashboard</span></button>
+                <button data-tab="calendar" class="admin-task-tab group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm"><i data-lucide="calendar-days" class="mr-2"></i><span>Calendario</span></button>
+                <button data-tab="table" class="admin-task-tab group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm"><i data-lucide="table" class="mr-2"></i><span>Tabla de Tareas</span></button>
             </nav>
         </div>
 
-        <div class="animate-fade-in-up">
-            <!-- Tab Panels -->
-            <div id="admin-tab-content">
-                <!-- Dashboard Panel (Always visible) -->
-                <div id="tab-panel-dashboard" class="admin-tab-panel">
-                    <div id="task-charts-container" class="flex flex-col gap-6">
-                        <!-- First row for the two smaller charts -->
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3><div class="relative h-64"><canvas id="status-chart"></canvas></div></div>
-                            <div class="bg-white p-6 rounded-xl shadow-lg"><h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3><div class="relative h-64"><canvas id="priority-chart"></canvas></div></div>
+        <!-- Tab Panels Content -->
+        <div id="admin-tab-content" class="animate-fade-in-up">
+            <div id="tab-panel-dashboard" class="admin-tab-panel">
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3>
+                        <div class="relative h-72">
+                            <canvas id="status-chart"></canvas>
                         </div>
-                        <!-- Second row for the full-width chart -->
-                        <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg ${isAdmin ? 'block' : 'hidden'}">
-                            <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3>
-                            <div class="relative h-80"><canvas id="user-load-chart"></canvas></div>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3>
+                        <div class="relative h-72">
+                            <canvas id="priority-chart"></canvas>
+                        </div>
+                    </div>
+                    <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg lg:col-span-2 ${isAdmin ? 'block' : 'hidden'}">
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3>
+                        <div class="relative h-96">
+                            <canvas id="user-load-chart"></canvas>
                         </div>
                     </div>
                 </div>
-
-                <!-- Calendar Panel (Admin only) -->
-                <div id="tab-panel-calendar" class="admin-tab-panel hidden">
-                    <div class="bg-white p-6 rounded-xl shadow-lg">
-                        <div id="calendar-header" class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-                            <div class="flex items-center gap-4">
-                                <button id="prev-calendar-btn" class="p-2 rounded-full hover:bg-slate-100"><i data-lucide="chevron-left" class="h-6 w-6"></i></button>
-                                <h3 id="calendar-title" class="text-2xl font-bold text-slate-800 text-center w-48"></h3>
-                                <button id="next-calendar-btn" class="p-2 rounded-full hover:bg-slate-100"><i data-lucide="chevron-right" class="h-6 w-6"></i></button>
-                                <button id="today-calendar-btn" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Hoy</button>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <select id="calendar-priority-filter" class="pl-4 pr-8 py-2 border rounded-full bg-white shadow-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
-                                    <option value="all">Prioridad (todas)</option>
-                                    <option value="high">Alta</option>
-                                    <option value="medium">Media</option>
-                                    <option value="low">Baja</option>
-                                </select>
-                                <div class="flex items-center gap-2 rounded-lg bg-slate-200 p-1">
-                                    <button data-view="monthly" class="calendar-view-btn px-4 py-1.5 text-sm font-semibold rounded-md">Mensual</button>
-                                    <button data-view="weekly" class="calendar-view-btn px-4 py-1.5 text-sm font-semibold rounded-md">Semanal</button>
-                                </div>
-                            </div>
+            </div>
+            <div id="tab-panel-calendar" class="admin-tab-panel hidden">
+                 <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div id="calendar-header" class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                        <div class="flex items-center gap-4">
+                            <button id="prev-calendar-btn" class="p-2 rounded-full hover:bg-slate-100"><i data-lucide="chevron-left" class="h-6 w-6"></i></button>
+                            <h3 id="calendar-title" class="text-2xl font-bold text-slate-800 text-center w-48"></h3>
+                            <button id="next-calendar-btn" class="p-2 rounded-full hover:bg-slate-100"><i data-lucide="chevron-right" class="h-6 w-6"></i></button>
+                            <button id="today-calendar-btn" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Hoy</button>
                         </div>
-                        <div id="calendar-grid" class="mt-6">
-                            <!-- Calendar will be rendered here -->
+                        <div class="flex items-center gap-2">
+                            <select id="calendar-priority-filter" class="pl-4 pr-8 py-2 border rounded-full bg-white shadow-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                                <option value="all">Prioridad (todas)</option>
+                                <option value="high">Alta</option>
+                                <option value="medium">Media</option>
+                                <option value="low">Baja</option>
+                            </select>
+                            <div class="flex items-center gap-2 rounded-lg bg-slate-200 p-1">
+                                <button data-view="monthly" class="calendar-view-btn px-4 py-1.5 text-sm font-semibold rounded-md">Mensual</button>
+                                <button data-view="weekly" class="calendar-view-btn px-4 py-1.5 text-sm font-semibold rounded-md">Semanal</button>
+                            </div>
                         </div>
                     </div>
+                    <div id="calendar-grid" class="mt-6"></div>
                 </div>
-
-                <!-- Table Panel (Admin only) -->
-                <div id="tab-panel-table" class="admin-tab-panel hidden">
-                    <div class="bg-white p-6 rounded-xl shadow-lg">
-                        <div id="task-table-controls" class="flex flex-col md:flex-row gap-4 mb-4">
-                            <div class="relative flex-grow"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i><input type="text" id="admin-task-search" placeholder="Buscar por título..." class="w-full pl-10 pr-4 py-2 border rounded-full bg-slate-50 focus:bg-white"></div>
-                            <div class="flex items-center gap-4 flex-wrap">
-                                <select id="admin-task-user-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white"><option value="all">Todos los usuarios</option></select>
-                                <select id="admin-task-priority-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white"><option value="all">Todas las prioridades</option><option value="high">Alta</option><option value="medium">Media</option><option value="low">Baja</option></select>
-                                <select id="admin-task-status-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white">
-                                    <option value="active">Activas</option>
-                                    <option value="all">Todos los estados</option>
-                                    <option value="todo">Por Hacer</option>
-                                    <option value="inprogress">En Progreso</option>
-                                    <option value="done">Completada</option>
-                                </select>
-                            </div>
-                            <button id="add-new-task-admin-btn" class="bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105 flex-shrink-0"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea</button>
+            </div>
+            <div id="tab-panel-table" class="admin-tab-panel hidden">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div id="task-table-controls" class="flex flex-col md:flex-row gap-4 mb-4">
+                        <div class="relative flex-grow"><i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i><input type="text" id="admin-task-search" placeholder="Buscar por título..." class="w-full pl-10 pr-4 py-2 border rounded-full bg-slate-50 focus:bg-white"></div>
+                        <div class="flex items-center gap-4 flex-wrap">
+                            <select id="admin-task-user-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white"><option value="all">Todos los asignados</option></select>
+                            <select id="admin-task-priority-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white"><option value="all">Todas las prioridades</option><option value="high">Alta</option><option value="medium">Media</option><option value="low">Baja</option></select>
+                            <select id="admin-task-status-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white">
+                                <option value="active">Activas</option>
+                                <option value="all">Todos los estados</option>
+                                <option value="todo">Por Hacer</option>
+                                <option value="inprogress">En Progreso</option>
+                                <option value="done">Completada</option>
+                            </select>
                         </div>
-                        <div id="task-data-table-container" class="overflow-x-auto"><p class="text-center py-16 text-slate-500 flex items-center justify-center gap-3"><i data-lucide="loader" class="h-6 w-6 animate-spin"></i>Cargando tabla de tareas...</p></div>
+                        <button id="add-new-task-admin-btn" class="bg-blue-600 text-white px-5 py-2 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105 flex-shrink-0"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea</button>
                     </div>
+                    <div id="task-data-table-container" class="overflow-x-auto"><p class="text-center py-16 text-slate-500 flex items-center justify-center gap-3"><i data-lucide="loader" class="h-6 w-6 animate-spin"></i>Cargando tabla de tareas...</p></div>
                 </div>
             </div>
         </div>
@@ -1167,46 +1160,42 @@ export function renderTaskDashboardView() {
     `;
     lucide.createIcons();
 
-    // Tab switching logic for admins
+    // The rest of the logic remains the same
     if (isAdmin) {
         const tabs = document.querySelectorAll('.admin-task-tab');
         const panels = document.querySelectorAll('.admin-tab-panel');
-
         document.getElementById('admin-task-tabs').addEventListener('click', (e) => {
             const tabButton = e.target.closest('.admin-task-tab');
             if (!tabButton) return;
-
             const tabName = tabButton.dataset.tab;
 
-            tabs.forEach(tab => {
-                tab.classList.remove('active-tab');
-            });
+            // Update active states
+            tabs.forEach(tab => tab.classList.remove('active-tab'));
             tabButton.classList.add('active-tab');
 
+            // Show the correct panel
             panels.forEach(panel => {
-                if (panel.id === `tab-panel-${tabName}`) {
-                    panel.classList.remove('hidden');
-                } else {
-                    panel.classList.add('hidden');
-                }
+                panel.classList.toggle('hidden', panel.id !== `tab-panel-${tabName}`);
             });
+
+            // If the dashboard tab was selected, re-render the charts to fix size issues
+            if (tabName === 'dashboard') {
+                updateAdminDashboardData(adminTaskViewState.tasks);
+            }
         });
     }
 
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     const q = query(tasksRef);
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const allTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-
-        // Defer rendering to prevent race conditions, ensuring the DOM is ready.
         setTimeout(() => {
-            if(isAdmin) {
+            if (isAdmin) {
                 adminTaskViewState.tasks = allTasks;
                 updateAdminDashboardData(allTasks);
             } else {
                 const myTasks = allTasks.filter(t => t.assigneeUid === appState.currentUser.uid || t.creatorUid === appState.currentUser.uid);
-                renderAdminTaskCharts(myTasks); // Directly render charts with user's tasks
+                renderAdminTaskCharts(myTasks);
             }
         }, 0);
     }, (error) => {
@@ -1214,28 +1203,18 @@ export function renderTaskDashboardView() {
         showToast('Error al cargar las tareas del dashboard.', 'error');
     });
 
-    // Initial render of components for admins
-    if(isAdmin) {
-        renderCalendar(); // Initialize the calendar structure once
+    if (isAdmin) {
         setupAdminTaskViewListeners();
-        // Defer the initial data load to prevent a race condition with chart rendering
-        setTimeout(() => {
-            updateAdminDashboardData([]); // Initial call with empty data to render skeletons
-        }, 0);
+        updateAdminDashboardData([]);
     }
 
     appState.currentViewCleanup = () => {
         unsubscribe();
         destroyAdminTaskCharts();
         adminTaskViewState = {
-            tasks: [],
-            filters: { searchTerm: '', user: 'all', priority: 'all', status: 'all' },
-            sort: { by: 'createdAt', order: 'desc' },
-            pagination: { currentPage: 1, pageSize: 10 },
-            calendar: {
-                currentDate: new Date(),
-                view: 'monthly' // 'monthly' or 'weekly'
-            }
+            tasks: [], viewMode: 'all', filters: { searchTerm: '', user: 'all', priority: 'all', status: 'active' },
+            sort: { by: 'createdAt', order: 'desc' }, pagination: { currentPage: 1, pageSize: 10 },
+            calendar: { currentDate: new Date(), view: 'monthly' }
         };
     };
 }
@@ -1686,6 +1665,129 @@ function renderCalendar(date, view) {
     // After rendering the grid, display tasks
     displayTasksOnCalendar(adminTaskViewState.tasks);
 }
+
+// =================================================================================
+// --- 9. FUNCIONES DE DASHBOARD (EXPORTADAS) ---
+// =================================================================================
+
+export function calculateOverdueTasksCount(tasks) {
+    if (!tasks) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return tasks.filter(t => t.status !== 'done' && t.dueDate && new Date(t.dueDate + "T00:00:00") < today).length;
+}
+
+export async function fetchAllTasks() {
+    const tasksQuery = query(collection(db, COLLECTIONS.TAREAS));
+    const snapshot = await getDocs(tasksQuery);
+    return snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+}
+
+export function renderMyPendingTasksWidget(allTasks) {
+    const container = document.getElementById('dashboard-tasks-container');
+    if (!container) return;
+    const myTasks = allTasks.filter(t => t.assigneeUid === appState.currentUser.uid && t.status !== 'done').slice(0, 5);
+
+    if (myTasks.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-10">
+                <i data-lucide="check-circle-2" class="w-16 h-16 text-green-500 mx-auto"></i>
+                <h4 class="mt-4 text-lg font-semibold text-slate-700">¡Bandeja de entrada limpia!</h4>
+                <p class="text-slate-500">No tienes tareas pendientes.</p>
+            </div>`;
+    } else {
+        container.innerHTML = `<div class="space-y-3">${myTasks.map(task => {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const isOverdue = task.dueDate && new Date(task.dueDate + "T00:00:00") < today;
+            return `
+            <div class="p-3 rounded-lg hover:bg-slate-100/80 transition-all cursor-pointer task-widget-item">
+                <p class="font-bold text-slate-800">${task.title}</p>
+                <div class="flex justify-between items-center text-sm mt-1">
+                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full ${
+                        task.priority === 'high' ? 'bg-red-100 text-red-800' :
+                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-slate-100 text-slate-800'
+                    }">${task.priority || 'Media'}</span>
+                    <span class="font-semibold ${isOverdue ? 'text-red-600' : 'text-slate-500'}">
+                        ${task.dueDate ? `Vence: ${new Date(task.dueDate + "T00:00:00").toLocaleDateString('es-AR')}` : ''}
+                    </span>
+                </div>
+            </div>
+            `;
+        }).join('')}</div>`;
+
+        container.querySelectorAll('.task-widget-item').forEach(item => {
+            item.addEventListener('click', () => switchView('tareas'));
+        });
+    }
+    lucide.createIcons();
+}
+
+export function renderTasksByProjectChart(allTasks, allProjects) {
+    const container = document.getElementById('tasks-by-project-chart-container');
+    if (!container) return null;
+    container.innerHTML = '<canvas id="tasks-by-project-chart"></canvas>';
+    const ctx = document.getElementById('tasks-by-project-chart')?.getContext('2d');
+    if (!ctx) return null;
+
+    const tasksByProject = allTasks.reduce((acc, task) => {
+        const projectId = task.projectId || 'unassigned';
+        if (!acc[projectId]) {
+            acc[projectId] = { todo: 0, inprogress: 0, done: 0 };
+        }
+        if (task.status !== 'done') {
+            acc[projectId][task.status || 'todo']++;
+        }
+        return acc;
+    }, {});
+
+    const projectMap = new Map(allProjects.map(p => [p.docId, p.nombre]));
+    const labels = Object.keys(tasksByProject).map(id => projectMap.get(id) || 'Sin Proyecto');
+
+    const chartData = {
+        labels: labels,
+        datasets: [
+            {
+                label: 'Pendientes',
+                data: Object.values(tasksByProject).map(p => p.todo),
+                backgroundColor: '#FBBF24',
+                borderRadius: 4,
+            },
+            {
+                label: 'En Curso',
+                data: Object.values(tasksByProject).map(p => p.inprogress),
+                backgroundColor: '#3B82F6',
+                borderRadius: 4,
+            }
+        ]
+    };
+
+    try {
+        return new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: true, grid: { display: false }, ticks: { precision: 0, font: { family: "'Inter', sans-serif" } } },
+                    y: { stacked: true, ticks: { font: { family: "'Inter', sans-serif" } } }
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { family: "'Inter', sans-serif", size: 14 } } },
+                    tooltip: { mode: 'index', intersect: false, titleFont: { family: "'Inter', sans-serif", weight: 'bold' }, bodyFont: { family: "'Inter', sans-serif" }, footerFont: { family: "'Inter', sans-serif" } }
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Error rendering Tasks by Project chart:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">Error al renderizar el gráfico de tareas.</p>`;
+        return null;
+    }
+}
+
 
 export function initTasksModule(dependencies) {
     db = dependencies.db;

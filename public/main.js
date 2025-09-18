@@ -7,7 +7,16 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateD
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
 import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
-import { initTasksModule, runTasksLogic as runTasksLogicFromModule, renderTaskDashboardView } from './modules/tasks.js';
+import {
+    initTasksModule,
+    runTasksLogic as runTasksLogicFromModule,
+    renderTaskDashboardView,
+    calculateOverdueTasksCount,
+    fetchAllTasks,
+    renderMyPendingTasksWidget,
+    renderTasksByProjectChart
+} from './modules/tasks.js';
+import { initDashboardModule, runDashboardLogic } from './modules/dashboard.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
@@ -335,9 +344,14 @@ async function startRealtimeListeners() {
         appState.collections.sectores = sectoresSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
         appState.collectionsById.sectores = new Map(appState.collections.sectores.map(s => [s.id, s]));
 
-        console.log("Roles and Sectors loaded.");
+        // Fetch all users for task assignments and dashboard charts
+        const usersSnap = await getDocs(collection(db, COLLECTIONS.USUARIOS));
+        appState.collections.usuarios = usersSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
+        appState.collectionsById.usuarios = new Map(appState.collections.usuarios.map(u => [u.docId, u]));
+
+        console.log("Roles, Sectors, and Users loaded.");
     } catch (error) {
-        console.error("Error fetching initial roles/sectors:", error);
+        console.error("Error fetching initial roles/sectors/users:", error);
         showToast('Error al cargar datos de configuración inicial.', 'error');
     }
 
@@ -1456,7 +1470,7 @@ async function switchView(viewName, params = null) {
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
     if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic(app);
-    else if (viewName === 'dashboard') await runDashboardLogic();
+    else if (viewName === 'dashboard') await runDashboardLogic(app);
     else if (viewName === 'sinoptico') await runSinopticoLogic();
     else if (viewName === 'sinoptico_tabular') await runSinopticoTabularLogic();
     else if (viewName === 'flujograma') await runFlujogramaLogic();
@@ -5259,6 +5273,7 @@ function handleViewContentActions(e) {
     const userId = button.dataset.userId;
 
     const actions = {
+        'admin-back-to-board': () => switchView('tareas'),
         'generate-eco-from-ecr': async () => {
             const ecrId = button.dataset.id;
             if (!ecrId) {
@@ -6602,269 +6617,6 @@ async function openAssociationSearchModal(searchKey, onSelect) {
     modalElement.querySelector('button[data-action="close"]').addEventListener('click', () => modalElement.remove());
 }
 
-function renderDashboardAdminPanel() {
-    const container = document.getElementById('dashboard-admin-panel-container');
-    if (!container) return;
-
-    if (!appState.currentUser.isSuperAdmin) {
-        container.innerHTML = '';
-        return;
-    }
-
-    container.innerHTML = `
-        <div class="bg-slate-50 p-6 rounded-xl border border-slate-200">
-            <h3 class="text-xl font-bold text-slate-800 mb-4">Panel de Administración</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="border border-yellow-300 bg-yellow-50 p-4 rounded-lg">
-                    <h4 class="font-bold text-yellow-800">Poblar con Datos de Prueba</h4>
-                    <p class="text-xs text-yellow-700 my-2">Borra los datos actuales (excepto usuarios) y carga un set de datos de prueba completo para ECR, ECO, productos, etc.</p>
-                    <button data-action="seed-database" class="w-full bg-yellow-500 text-white px-3 py-2 rounded-md hover:bg-yellow-600 font-semibold text-sm">
-                        <i data-lucide="database-zap" class="inline-block mr-1.5 h-4 w-4"></i>Poblar Base de Datos
-                    </button>
-                </div>
-                <div class="border border-orange-300 bg-orange-50 p-4 rounded-lg">
-                    <h4 class="font-bold text-orange-800">Borrar Solo Datos</h4>
-                    <p class="text-xs text-orange-700 my-2">Borra todos los datos pero mantiene a los usuarios.</p>
-                    <button data-action="clear-data-only" class="w-full bg-orange-500 text-white px-3 py-2 rounded-md hover:bg-orange-600 font-semibold text-sm">
-                        <i data-lucide="shield-check" class="inline-block mr-1.5 h-4 w-4"></i>Ejecutar
-                    </button>
-                </div>
-                <div class="border border-red-300 bg-red-50 p-4 rounded-lg">
-                    <h4 class="font-bold text-red-800">Borrar Otros Usuarios</h4>
-                    <p class="text-xs text-red-700 my-2">Elimina a todos los usuarios excepto al admin principal.</p>
-                    <button data-action="clear-other-users" class="w-full bg-red-600 text-white px-3 py-2 rounded-md hover:bg-red-700 font-semibold text-sm">
-                        <i data-lucide="user-x" class="inline-block mr-1.5 h-4 w-4"></i>Ejecutar
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-    lucide.createIcons();
-}
-
-async function runDashboardLogic() {
-    const currentUser = appState.currentUser;
-    dom.viewContent.innerHTML = `
-        <div class="space-y-8">
-            <div>
-                <h1 class="text-4xl font-extrabold text-slate-800">Dashboard de Control</h1>
-                <p class="text-slate-500 mt-1 text-lg">Resumen general del sistema.</p>
-            </div>
-            <div id="dashboard-kpi-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                ${[1,2,3,4].map(() => `<div class="bg-slate-200 h-28 rounded-xl animate-pulse"></div>`).join('')}
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-                <div class="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg border">
-                    <h3 class="text-xl font-bold text-slate-800 mb-4">Carga de Tareas por Proyecto</h3>
-                    <div id="tasks-by-project-chart-container" class="h-96"></div>
-                </div>
-                <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg border">
-                    <h3 class="text-xl font-bold text-slate-800 mb-4">Mis Tareas Pendientes</h3>
-                    <div id="dashboard-tasks-container"></div>
-                </div>
-            </div>
-             <div id="dashboard-admin-panel-container"></div>
-        </div>
-    `;
-    lucide.createIcons();
-
-    // Fetch all data concurrently
-    const kpiPromise = fetchDashboardKpis();
-    const tasksPromise = fetchDashboardTasks();
-    const projectsPromise = getDocs(collection(db, COLLECTIONS.PROYECTOS));
-
-    const [kpiData, tasks, projectsSnap] = await Promise.all([kpiPromise, tasksPromise, projectsPromise]);
-
-    const projects = projectsSnap.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-
-    // Render all components with the fetched data
-    renderDashboardKpis(kpiData, tasks);
-    renderDashboardTasks(tasks);
-    renderTasksByProjectChart(tasks, projects);
-    renderDashboardAdminPanel();
-    lucide.createIcons();
-}
-
-async function fetchDashboardKpis() {
-    const kpiCollections = [
-        { name: 'Productos', key: COLLECTIONS.PRODUCTOS },
-        { name: 'Insumos', key: COLLECTIONS.INSUMOS },
-        { name: 'Proyectos', key: COLLECTIONS.PROYECTOS },
-        { name: 'Usuarios', key: COLLECTIONS.USUARIOS }
-    ];
-    const promises = kpiCollections.map(c => getCountFromServer(collection(db, c.key)));
-    const snapshots = await Promise.all(promises);
-    const kpiData = {};
-    snapshots.forEach((snap, index) => {
-        kpiData[kpiCollections[index].name] = snap.data().count;
-    });
-    return kpiData;
-}
-
-async function fetchDashboardTasks() {
-    const tasksQuery = query(collection(db, COLLECTIONS.TAREAS));
-    const snapshot = await getDocs(tasksQuery);
-    return snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-}
-
-function renderDashboardKpis(kpiData, allTasks) {
-    const container = document.getElementById('dashboard-kpi-container');
-    if (!container) return;
-
-    const overdueTasks = allTasks.filter(t => t.status !== 'done' && t.dueDate && new Date(t.dueDate) < new Date()).length;
-
-    const kpis = [
-        { label: 'Proyectos Activos', value: kpiData['Proyectos'] || 0, icon: 'square-stack', color: 'blue' },
-        { label: 'Productos Totales', value: kpiData['Productos'] || 0, icon: 'package', color: 'indigo' },
-        { label: 'Tareas Vencidas', value: overdueTasks, icon: 'siren', color: 'red' },
-        { label: 'Usuarios Activos', value: kpiData['Usuarios'] || 0, icon: 'users', color: 'emerald' }
-    ];
-
-    container.innerHTML = kpis.map(kpi => `
-        <div class="bg-${kpi.color}-500 text-white p-6 rounded-2xl shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300">
-            <div class="flex justify-between items-start">
-                <p class="text-5xl font-black">${kpi.value}</p>
-                <div class="bg-white/30 p-3 rounded-xl">
-                    <i data-lucide="${kpi.icon}" class="w-8 h-8"></i>
-                </div>
-            </div>
-            <p class="mt-4 text-xl font-bold opacity-90">${kpi.label}</p>
-        </div>
-    `).join('');
-    lucide.createIcons();
-}
-
-function renderDashboardTasks(allTasks) {
-    const container = document.getElementById('dashboard-tasks-container');
-    if (!container) return;
-    const myTasks = allTasks.filter(t => t.assigneeUid === appState.currentUser.uid && t.status !== 'done').slice(0, 5);
-
-    if (myTasks.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-10">
-                <i data-lucide="check-circle-2" class="w-16 h-16 text-green-500 mx-auto"></i>
-                <h4 class="mt-4 text-lg font-semibold text-slate-700">¡Bandeja de entrada limpia!</h4>
-                <p class="text-slate-500">No tienes tareas pendientes.</p>
-            </div>`;
-    } else {
-        container.innerHTML = `<div class="space-y-3">${myTasks.map(task => {
-            const isOverdue = task.dueDate && new Date(task.dueDate) < new Date();
-            return `
-            <div class="p-3 rounded-lg hover:bg-slate-100/80 transition-all cursor-pointer" onclick="switchView('tareas')">
-                <p class="font-bold text-slate-800">${task.title}</p>
-                <div class="flex justify-between items-center text-sm mt-1">
-                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full ${
-                        task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                        task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-slate-100 text-slate-800'
-                    }">${task.priority || 'Media'}</span>
-                    <span class="font-semibold ${isOverdue ? 'text-red-600' : 'text-slate-500'}">
-                        ${task.dueDate ? `Vence: ${new Date(task.dueDate).toLocaleDateString('es-AR')}` : ''}
-                    </span>
-                </div>
-            </div>
-            `;
-        }).join('')}</div>`;
-    }
-    lucide.createIcons();
-}
-
-function renderTasksByProjectChart(allTasks, allProjects) {
-    const container = document.getElementById('tasks-by-project-chart-container');
-    if (!container) return;
-    container.innerHTML = '<canvas id="tasks-by-project-chart"></canvas>';
-    const ctx = document.getElementById('tasks-by-project-chart')?.getContext('2d');
-    if (!ctx) return;
-
-    const tasksByProject = allTasks.reduce((acc, task) => {
-        const projectId = task.projectId || 'unassigned';
-        if (!acc[projectId]) {
-            acc[projectId] = { todo: 0, inprogress: 0, done: 0 };
-        }
-        if (task.status !== 'done') {
-            acc[projectId][task.status || 'todo']++;
-        }
-        return acc;
-    }, {});
-
-    const projectMap = new Map(allProjects.map(p => [p.id, p.nombre]));
-    const labels = Object.keys(tasksByProject).map(id => projectMap.get(id) || 'Sin Proyecto');
-
-    const chartData = {
-        labels: labels,
-        datasets: [
-            {
-                label: 'Pendientes',
-                data: Object.values(tasksByProject).map(p => p.todo),
-                backgroundColor: '#FBBF24', // Amber 400
-                borderRadius: 4,
-            },
-            {
-                label: 'En Curso',
-                data: Object.values(tasksByProject).map(p => p.inprogress),
-                backgroundColor: '#3B82F6', // Blue 500
-                borderRadius: 4,
-            }
-        ]
-    };
-
-    if (dashboardCharts.tasksByProjectChart) dashboardCharts.tasksByProjectChart.destroy();
-    try {
-        dashboardCharts.tasksByProjectChart = new Chart(ctx, {
-            type: 'bar',
-            data: chartData,
-            options: {
-                indexAxis: 'y', // This makes the bar chart horizontal
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    x: {
-                        stacked: true,
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            precision: 0,
-                            font: {
-                                family: "'Inter', sans-serif",
-                            }
-                        }
-                    },
-                    y: {
-                        stacked: true,
-                        ticks: {
-                            font: {
-                                family: "'Inter', sans-serif",
-                            }
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            font: {
-                                family: "'Inter', sans-serif",
-                                size: 14
-                            }
-                        }
-                    },
-                    tooltip: {
-                        mode: 'index',
-                        intersect: false,
-                        titleFont: { family: "'Inter', sans-serif", weight: 'bold' },
-                        bodyFont: { family: "'Inter', sans-serif" },
-                        footerFont: { family: "'Inter', sans-serif" },
-                    }
-                }
-            }
-        });
-    } catch (error) {
-        console.error("Error rendering Tasks by Project chart:", error);
-        container.innerHTML = `<p class="text-red-500 text-center">Error al renderizar el gráfico de tareas.</p>`;
-    }
-}
-
 function formatTimeAgo(timestamp) {
     const now = new Date();
     const seconds = Math.floor((now - timestamp) / 1000);
@@ -8167,10 +7919,10 @@ onAuthStateChanged(auth, async (user) => {
         const urlParams = new URLSearchParams(window.location.search);
         const isTestMode = urlParams.get('env') === 'test';
 
-        if (isTestMode && !window.e2eDataSeeded) {
-            await seedMinimalTestDataForE2E();
-            window.e2eDataSeeded = true;
-        }
+        // if (isTestMode && !window.e2eDataSeeded) {
+        //     await seedMinimalTestDataForE2E();
+        //     window.e2eDataSeeded = true;
+        // }
 
         if (user.emailVerified || isTestMode) {
             const wasAlreadyLoggedIn = !!appState.currentUser;
@@ -8230,6 +7982,16 @@ onAuthStateChanged(auth, async (user) => {
             const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide };
             initTasksModule(appDependencies);
 
+            const dashboardDependencies = {
+                ...appDependencies,
+                renderTaskDashboardView,
+                calculateOverdueTasksCount,
+                fetchAllTasks,
+                renderMyPendingTasksWidget,
+                renderTasksByProjectChart
+            };
+            initDashboardModule(dashboardDependencies);
+
 
             if (!isTestMode) {
                 if (appState.currentUser.isSuperAdmin) {
@@ -8246,8 +8008,10 @@ onAuthStateChanged(auth, async (user) => {
             renderUserMenu();
             renderNotificationCenter();
 
+            console.log("About to switch view to dashboard...");
             // This is the critical sequence: render the content, THEN hide the loading screen.
             await switchView('dashboard');
+            console.log("switchView('dashboard') completed.");
 
             // FIX: Per AGENTS.md, defer UI updates to prevent race conditions with E2E tests.
             // A longer delay is used for E2E tests to ensure rendering completes before screenshotting.
