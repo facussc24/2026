@@ -147,15 +147,15 @@ export function populateTaskAssigneeDropdown() {
     }
 }
 
-export function renderTaskFilters() {
+export function renderTaskFilters(container) {
     const filters = [
-        { key: 'engineering', label: 'Ingeniería' },
         { key: 'personal', label: 'Mis Tareas' }
     ];
     if (appState.currentUser.role === 'admin') {
+        filters.push({ key: 'supervision', label: 'Supervisión' });
         filters.push({ key: 'all', label: 'Todas' });
     }
-    const filterContainer = document.getElementById('task-filters');
+    const filterContainer = container.querySelector('#task-filters');
     if (filterContainer) {
         filterContainer.innerHTML = filters.map(f => `
             <button data-filter="${f.key}" class="px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${getState().kanban.activeFilter === f.key ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-slate-300/50'}">

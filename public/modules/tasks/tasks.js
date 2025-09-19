@@ -3,7 +3,7 @@ import { initTaskService } from './task.service.js';
 import { initTaskUI, renderMyPendingTasksWidget, renderTasksByProjectChart } from './task.ui.js';
 import { initKanban, runKanbanBoardLogic } from './task.kanban.js';
 import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
-import { initCalendar, renderCalendar } from './task.calendar.js';
+import { initCalendar, renderTaskCalendar } from './task.calendar.js';
 import { calculateOverdueTasksCount, fetchAllTasks } from './task.service.js';
 
 // Module-level variables to hold dependencies
@@ -43,7 +43,7 @@ export function runTasksLogic() {
             btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
         });
 
-        const activeButton = document.querySelector(`.task-nav-btn[data-view="${view}"]`);
+        const activeButton = document.querySelector(`.task-nav-btn[data-task-view="${view}"]`);
         if (activeButton) {
             activeButton.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
             activeButton.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
@@ -52,7 +52,7 @@ export function runTasksLogic() {
         if (view === 'dashboard') {
             renderTaskDashboardView(viewContainer);
         } else if (view === 'calendar') {
-            renderCalendar(viewContainer);
+            renderTaskCalendar(viewContainer);
         } else if (view === 'kanban') {
             runKanbanBoardLogic(viewContainer);
         }
@@ -63,13 +63,13 @@ export function runTasksLogic() {
              <div class="flex flex-wrap justify-between items-center gap-4 mb-2">
                  <h2 class="text-3xl font-bold text-slate-800">Gestor de Tareas</h2>
                  <nav id="task-navigation" class="flex items-center gap-2 rounded-lg bg-slate-200 p-1">
-                     <button data-view="kanban" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
+                     <button data-task-view="kanban" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
                          <i data-lucide="columns" class="w-4 h-4 mr-1.5"></i>Tabla de Tareas
                      </button>
-                     <button data-view="dashboard" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
+                     <button data-task-view="dashboard" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
                          <i data-lucide="layout-dashboard" class="w-4 h-4 mr-1.5"></i>Dashboard
                      </button>
-                     <button data-view="calendar" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
+                     <button data-task-view="calendar" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
                          <i data-lucide="calendar" class="w-4 h-4 mr-1.5"></i>Calendario
                      </button>
                  </nav>
@@ -84,8 +84,8 @@ export function runTasksLogic() {
     if (taskNav) {
         taskNav.addEventListener('click', (e) => {
             const button = e.target.closest('.task-nav-btn');
-            if (button && button.dataset.view) {
-                renderView(button.dataset.view);
+            if (button && button.dataset.taskView) {
+                renderView(button.dataset.taskView);
             }
         });
     }

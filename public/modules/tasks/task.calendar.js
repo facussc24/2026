@@ -13,9 +13,47 @@ Date.prototype.getWeekNumber = function() {
   return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
 };
 
-export function renderCalendar(container) {
+// This is the original function used by the admin dashboard.
+// We leave it untouched to avoid breaking existing functionality.
+export function renderCalendar(date, view) {
+    const state = getState();
+    if (!state.dashboard.calendar) return;
+
+    const calendarGrid = document.getElementById('calendar-grid');
+    const calendarTitle = document.getElementById('calendar-title');
+
+    if (!calendarGrid || !calendarTitle) return;
+
+    const aDate = date || state.dashboard.calendar.currentDate;
+    const aView = view || state.dashboard.calendar.view;
+
+    state.dashboard.calendar.currentDate = aDate;
+    state.dashboard.calendar.view = aView;
+
+    document.querySelectorAll('.calendar-view-btn').forEach(btn => {
+        if (btn.dataset.view === aView) {
+            btn.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
+            btn.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
+        } else {
+            btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
+            btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
+        }
+    });
+
+    if (aView === 'monthly') {
+        renderMonthlyView(aDate);
+    } else {
+        renderWeeklyView(aDate);
+    }
+
+    displayTasksOnCalendar(state.dashboard.allTasks);
+}
+
+// This is the new function for the main tasks module view.
+export function renderTaskCalendar(container) {
     const state = getState();
     const calendarState = state.dashboard.calendar; // Use the existing state structure
+    const lucide = state.dependencies.lucide;
 
     container.innerHTML = `
         <div class="bg-white p-6 rounded-xl shadow-lg">
@@ -55,7 +93,7 @@ export function renderCalendar(container) {
     };
 
     const updateActiveViewButton = () => {
-        document.querySelectorAll('.calendar-view-btn').forEach(btn => {
+        container.querySelectorAll('.calendar-view-btn').forEach(btn => {
             if (btn.dataset.view === calendarState.view) {
                 btn.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
                 btn.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
@@ -67,7 +105,7 @@ export function renderCalendar(container) {
     };
 
     // Event Listeners
-    document.getElementById('prev-calendar-btn').addEventListener('click', () => {
+    container.querySelector('#prev-calendar-btn').addEventListener('click', () => {
         if (calendarState.view === 'monthly') {
             calendarState.currentDate.setMonth(calendarState.currentDate.getMonth() - 1);
         } else {
@@ -76,7 +114,7 @@ export function renderCalendar(container) {
         rerender();
     });
 
-    document.getElementById('next-calendar-btn').addEventListener('click', () => {
+    container.querySelector('#next-calendar-btn').addEventListener('click', () => {
         if (calendarState.view === 'monthly') {
             calendarState.currentDate.setMonth(calendarState.currentDate.getMonth() + 1);
         } else {
@@ -85,12 +123,12 @@ export function renderCalendar(container) {
         rerender();
     });
 
-    document.getElementById('today-calendar-btn').addEventListener('click', () => {
+    container.querySelector('#today-calendar-btn').addEventListener('click', () => {
         calendarState.currentDate = new Date();
         rerender();
     });
 
-    document.getElementById('calendar-priority-filter').addEventListener('change', (e) => {
+    container.querySelector('#calendar-priority-filter').addEventListener('change', (e) => {
         calendarState.priorityFilter = e.target.value;
         rerender();
     });
@@ -104,7 +142,7 @@ export function renderCalendar(container) {
 
     // Initial Render
     rerender();
-    getState().dependencies.lucide.createIcons();
+    lucide.createIcons();
 }
 
 function renderMonthlyView(date) {
