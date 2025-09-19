@@ -9,28 +9,60 @@ import { COLLECTIONS } from './utils.js';
 let auth;
 let db;
 
-// This is not ideal, but for a simple refactor it's ok.
-// A better way would be to pass them in or have a central dom mapping.
-const dom = {
-    loginPanel: document.getElementById('login-panel'),
-    registerPanel: document.getElementById('register-panel'),
-    resetPanel: document.getElementById('reset-panel'),
-    verifyEmailPanel: document.getElementById('verify-email-panel'),
-    resendVerificationBtn: document.getElementById('resend-verification-btn'),
-    resendTimer: document.getElementById('resend-timer'),
-    loginForm: document.getElementById('login-form'),
-    registerForm: document.getElementById('register-form'),
-    resetForm: document.getElementById('reset-form')
+/**
+ * @constant {Object} DOM_ELEMENTS
+ * @description Centraliza los IDs de los elementos del DOM utilizados por el módulo.
+ * Esto facilita el mantenimiento si los IDs cambian en el HTML.
+ */
+const DOM_ELEMENTS = {
+    loginPanel: 'login-panel',
+    registerPanel: 'register-panel',
+    resetPanel: 'reset-panel',
+    verifyEmailPanel: 'verify-email-panel',
+    resendVerificationBtn: 'resend-verification-btn',
+    resendTimer: 'resend-timer',
+    loginForm: 'login-form',
+    registerForm: 'register-form',
+    resetForm: 'reset-form',
+    logoutButton: 'logout-button'
 };
 
+/**
+ * @type {Object.<string, HTMLElement>}
+ * @description Un objeto proxy para acceder a los elementos del DOM de forma dinámica.
+ * En lugar de buscar todos los elementos al inicio, los busca bajo demanda
+ * y los cachea para futuras referencias.
+ */
+const dom = new Proxy({}, {
+    get: function(target, prop) {
+        if (prop in target) {
+            return target[prop];
+        }
+        const elementId = DOM_ELEMENTS[prop];
+        if (elementId) {
+            const element = document.getElementById(elementId);
+            target[prop] = element; // Cache the element
+            return element;
+        }
+        return undefined;
+    }
+});
 
 export function showAuthScreen(screenName) {
-    ['login-panel', 'register-panel', 'reset-panel', 'verify-email-panel'].forEach(id => {
+    const screens = [
+        DOM_ELEMENTS.loginPanel,
+        DOM_ELEMENTS.registerPanel,
+        DOM_ELEMENTS.resetPanel,
+        DOM_ELEMENTS.verifyEmailPanel
+    ];
+
+    screens.forEach(id => {
         const panel = document.getElementById(id);
-        if(panel) panel.classList.add('hidden');
+        if (panel) panel.classList.add('hidden');
     });
+
     const panelToShow = document.getElementById(`${screenName}-panel`);
-    if(panelToShow) panelToShow.classList.remove('hidden');
+    if (panelToShow) panelToShow.classList.remove('hidden');
 }
 
 async function handleResendVerificationEmail() {
@@ -178,22 +210,26 @@ export async function logOutUser() {
     }
 }
 
-
-export function initAuthModule(_auth, _db) {
-    auth = _auth;
-    db = _db;
-
+/**
+ * Configura todos los manejadores de eventos para el módulo de autenticación.
+ */
+function setupEventListeners() {
     dom.loginForm?.addEventListener('submit', handleAuthForms);
     dom.registerForm?.addEventListener('submit', handleAuthForms);
     dom.resetForm?.addEventListener('submit', handleAuthForms);
 
-    // This is in main.js, but it's part of the auth flow
+    // Utiliza un único listener en el documento para manejar clics en enlaces
+    // y botones relacionados con la autenticación, mejorando el rendimiento.
     document.addEventListener('click', (e) => {
         const authLink = e.target.closest('a[data-auth-screen]');
+        const logoutButton = e.target.closest(`#${DOM_ELEMENTS.logoutButton}`);
+        const resendButton = e.target.closest(`#${DOM_ELEMENTS.resendVerificationBtn}`);
+
         if (authLink) {
             e.preventDefault();
-            const verifyPanel = document.getElementById('verify-email-panel');
-            if (verifyPanel && !verifyPanel.classList.contains('hidden')) {
+            // Si el panel de verificación está visible, un clic en un enlace de autenticación
+            // probablemente signifique que el usuario ha verificado y quiere volver a iniciar sesión.
+            if (dom.verifyEmailPanel && !dom.verifyEmailPanel.classList.contains('hidden')) {
                 location.reload();
             } else {
                 showAuthScreen(authLink.dataset.authScreen);
@@ -201,14 +237,31 @@ export function initAuthModule(_auth, _db) {
             return;
         }
 
-        if(e.target.closest('#logout-button')) {
+        if (logoutButton) {
             e.preventDefault();
             logOutUser();
+            return;
         }
-        if(e.target.closest('#resend-verification-btn')) {
+
+        if (resendButton) {
+            e.preventDefault();
             handleResendVerificationEmail();
         }
     });
+}
+
+
+/**
+ * Inicializa el módulo de autenticación.
+ * Esta función es llamada desde `main.js` para configurar el módulo.
+ * @param {*} _auth - La instancia de autenticación de Firebase.
+ * @param {*} _db - La instancia de Firestore de Firebase.
+ */
+export function initAuthModule(_auth, _db) {
+    auth = _auth;
+    db = _db;
+
+    setupEventListeners();
 
     console.log("Authentication module initialized.");
 }
