@@ -148,7 +148,9 @@ export function populateTaskAssigneeDropdown() {
 }
 
 export function renderTaskFilters(container) {
+    const state = getState();
     const filters = [
+        { key: 'engineering', label: 'Ingeniería' },
         { key: 'personal', label: 'Mis Tareas' }
     ];
     if (appState.currentUser.role === 'admin') {
@@ -158,14 +160,14 @@ export function renderTaskFilters(container) {
     const filterContainer = container.querySelector('#task-filters');
     if (filterContainer) {
         filterContainer.innerHTML = filters.map(f => `
-            <button data-filter="${f.key}" class="px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${getState().kanban.activeFilter === f.key ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-slate-300/50'}">
+            <button data-filter="${f.key}" class="px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${state.kanban.activeFilter === f.key ? 'bg-white shadow-sm text-blue-600' : 'text-slate-600 hover:bg-slate-300/50'}">
                 ${f.label}
             </button>
         `).join('');
     }
 }
 
-export function renderTasks(tasks) {
+export function renderTasks(tasks, container) {
     const getEmptyColumnHTML = (status) => {
         const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Completada' };
         return `
@@ -185,7 +187,7 @@ export function renderTasks(tasks) {
         tasksByStatus[task.status || 'todo'].push(task);
     });
 
-    document.querySelectorAll('.task-column').forEach(columnEl => {
+    container.querySelectorAll('.task-column').forEach(columnEl => {
         const status = columnEl.dataset.status;
         const taskListEl = columnEl.querySelector('.task-list');
         const columnTasks = tasksByStatus[status];
@@ -208,7 +210,7 @@ export function renderTasks(tasks) {
         }
     });
 
-    initTasksSortable();
+    initTasksSortable(container);
     lucide.createIcons();
 }
 

@@ -1,4 +1,4 @@
-import { initTaskState, getState } from './task.state.js';
+import { initTaskState } from './task.state.js';
 import { initTaskService } from './task.service.js';
 import { initTaskUI, renderMyPendingTasksWidget, renderTasksByProjectChart } from './task.ui.js';
 import { initKanban, runKanbanBoardLogic } from './task.kanban.js';
@@ -6,23 +6,15 @@ import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
 import { initCalendar, renderTaskCalendar } from './task.calendar.js';
 import { calculateOverdueTasksCount, fetchAllTasks } from './task.service.js';
 
-// Module-level variables to hold dependencies
-let dom, lucide;
-
 // Exported functions for other modules to use
 export {
     calculateOverdueTasksCount,
     fetchAllTasks,
     renderMyPendingTasksWidget,
-    renderTasksByProjectChart,
-    renderTaskDashboardView
+    renderTasksByProjectChart
 };
 
 export function initTasksModule(dependencies) {
-    // Store dependencies for use within this module
-    dom = dependencies.dom;
-    lucide = dependencies.lucide;
-
     initTaskState(dependencies);
     initTaskService(dependencies);
     initTaskUI(dependencies);
@@ -34,16 +26,16 @@ export function initTasksModule(dependencies) {
 
 export function runTasksLogic() {
     const renderView = (view) => {
-        const viewContainer = document.getElementById('task-view-container');
+        const viewContainer = dom.viewContent.querySelector('#task-view-container');
         if (!viewContainer) return;
         viewContainer.innerHTML = ''; // Clear previous view
 
-        document.querySelectorAll('.task-nav-btn').forEach(btn => {
+        dom.viewContent.querySelectorAll('.task-nav-btn').forEach(btn => {
             btn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
             btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
         });
 
-        const activeButton = document.querySelector(`.task-nav-btn[data-task-view="${view}"]`);
+        const activeButton = dom.viewContent.querySelector(`.task-nav-btn[data-task-view="${view}"]`);
         if (activeButton) {
             activeButton.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
             activeButton.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
@@ -80,7 +72,7 @@ export function runTasksLogic() {
          </div>
     `;
 
-    const taskNav = document.getElementById('task-navigation');
+    const taskNav = dom.viewContent.querySelector('#task-navigation');
     if (taskNav) {
         taskNav.addEventListener('click', (e) => {
             const button = e.target.closest('.task-nav-btn');

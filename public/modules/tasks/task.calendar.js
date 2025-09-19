@@ -1,10 +1,15 @@
-import { getState } from './task.state.js';
+import { getState, setCalendarView, setCalendarDate, setCalendarPriorityFilter } from './task.state.js';
 import { openTaskFormModal } from './task.ui.js';
 
+let appState;
+let lucide;
+
 export function initCalendar(dependencies) {
-    // any future dependencies
+    appState = dependencies.appState;
+    lucide = dependencies.lucide;
 }
 
+// Helper to get week number
 Date.prototype.getWeekNumber = function() {
   var d = new Date(Date.UTC(this.getFullYear(), this.getMonth(), this.getDate()));
   var dayNum = d.getUTCDay() || 7;
@@ -13,49 +18,8 @@ Date.prototype.getWeekNumber = function() {
   return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
 };
 
-// This is the original function used by the admin dashboard.
-// We leave it untouched to avoid breaking existing functionality.
-export function renderCalendar(date, view) {
-    const state = getState();
-    if (!state.dashboard.calendar) return;
-
-    const calendarGrid = document.getElementById('calendar-grid');
-    const calendarTitle = document.getElementById('calendar-title');
-
-    if (!calendarGrid || !calendarTitle) return;
-
-    const aDate = date || state.dashboard.calendar.currentDate;
-    const aView = view || state.dashboard.calendar.view;
-
-    state.dashboard.calendar.currentDate = aDate;
-    state.dashboard.calendar.view = aView;
-
-    document.querySelectorAll('.calendar-view-btn').forEach(btn => {
-        if (btn.dataset.view === aView) {
-            btn.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
-            btn.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
-        } else {
-            btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
-            btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
-        }
-    });
-
-    if (aView === 'monthly') {
-        renderMonthlyView(aDate);
-    } else {
-        renderWeeklyView(aDate);
-    }
-
-    displayTasksOnCalendar(state.dashboard.allTasks);
-}
-
-// This is the new function for the main tasks module view.
 export function renderTaskCalendar(container) {
-    const state = getState();
-    const calendarState = state.dashboard.calendar; // Use the existing state structure
-    const lucide = state.dependencies.lucide;
-
-    container.innerHTML = `
+    const calendarHTML = `
         <div class="bg-white p-6 rounded-xl shadow-lg">
             <div id="calendar-header" class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
                 <div class="flex items-center gap-4">
@@ -80,74 +44,86 @@ export function renderTaskCalendar(container) {
             <div id="calendar-grid" class="mt-6"></div>
         </div>
     `;
+    container.innerHTML = calendarHTML;
+    lucide.createIcons();
 
-    const rerender = () => {
-        const { currentDate, view } = calendarState;
-        if (view === 'monthly') {
-            renderMonthlyView(currentDate);
-        } else {
-            renderWeeklyView(currentDate);
-        }
-        displayTasksOnCalendar(state.dashboard.allTasks);
-        updateActiveViewButton();
-    };
+    const state = getState().dashboard.calendar;
 
-    const updateActiveViewButton = () => {
-        container.querySelectorAll('.calendar-view-btn').forEach(btn => {
-            if (btn.dataset.view === calendarState.view) {
-                btn.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
-                btn.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
-            } else {
-                btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
-                btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
-            }
-        });
-    };
-
-    // Event Listeners
+    // Setup event listeners
     container.querySelector('#prev-calendar-btn').addEventListener('click', () => {
-        if (calendarState.view === 'monthly') {
-            calendarState.currentDate.setMonth(calendarState.currentDate.getMonth() - 1);
+        const newDate = new Date(state.currentDate);
+        if (state.view === 'monthly') {
+            newDate.setMonth(newDate.getMonth() - 1);
         } else {
-            calendarState.currentDate.setDate(calendarState.currentDate.getDate() - 7);
+            newDate.setDate(newDate.getDate() - 7);
         }
-        rerender();
+        setCalendarDate(newDate);
+        updateCalendarDisplay(container);
     });
 
     container.querySelector('#next-calendar-btn').addEventListener('click', () => {
-        if (calendarState.view === 'monthly') {
-            calendarState.currentDate.setMonth(calendarState.currentDate.getMonth() + 1);
+        const newDate = new Date(state.currentDate);
+        if (state.view === 'monthly') {
+            newDate.setMonth(newDate.getMonth() + 1);
         } else {
-            calendarState.currentDate.setDate(calendarState.currentDate.getDate() + 7);
+            newDate.setDate(newDate.getDate() + 7);
         }
-        rerender();
+        setCalendarDate(newDate);
+        updateCalendarDisplay(container);
     });
 
     container.querySelector('#today-calendar-btn').addEventListener('click', () => {
-        calendarState.currentDate = new Date();
-        rerender();
-    });
-
-    container.querySelector('#calendar-priority-filter').addEventListener('change', (e) => {
-        calendarState.priorityFilter = e.target.value;
-        rerender();
+        setCalendarDate(new Date());
+        updateCalendarDisplay(container);
     });
 
     container.querySelectorAll('.calendar-view-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            calendarState.view = e.target.dataset.view;
-            rerender();
+        btn.addEventListener('click', () => {
+            setCalendarView(btn.dataset.view);
+            updateCalendarDisplay(container);
         });
     });
 
-    // Initial Render
-    rerender();
-    lucide.createIcons();
+    container.querySelector('#calendar-priority-filter').addEventListener('change', (e) => {
+        setCalendarPriorityFilter(e.target.value);
+        updateCalendarDisplay(container);
+    });
+
+    // Initial render
+    updateCalendarDisplay(container);
 }
 
-function renderMonthlyView(date) {
-    const calendarGrid = document.getElementById('calendar-grid');
-    const calendarTitle = document.getElementById('calendar-title');
+
+function updateCalendarDisplay(container) {
+    const state = getState().dashboard;
+    if (!state.calendar) return;
+
+    const { currentDate, view, priorityFilter } = state.calendar;
+
+    container.querySelector('#calendar-priority-filter').value = priorityFilter;
+
+    container.querySelectorAll('.calendar-view-btn').forEach(btn => {
+        if (btn.dataset.view === view) {
+            btn.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
+            btn.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
+        } else {
+            btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
+            btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
+        }
+    });
+
+    if (view === 'monthly') {
+        renderMonthlyView(container, currentDate);
+    } else {
+        renderWeeklyView(container, currentDate);
+    }
+
+    displayTasksOnCalendar(container, state.allTasks);
+}
+
+function renderMonthlyView(container, date) {
+    const calendarGrid = container.querySelector('#calendar-grid');
+    const calendarTitle = container.querySelector('#calendar-title');
 
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -203,9 +179,9 @@ function renderMonthlyView(date) {
     calendarGrid.innerHTML = html;
 }
 
-function renderWeeklyView(date) {
-    const calendarGrid = document.getElementById('calendar-grid');
-    const calendarTitle = document.getElementById('calendar-title');
+function renderWeeklyView(container, date) {
+    const calendarGrid = container.querySelector('#calendar-grid');
+    const calendarTitle = container.querySelector('#calendar-title');
 
     let dayOfWeek = date.getDay();
     let dateOffset = (dayOfWeek === 0) ? 6 : dayOfWeek - 1;
@@ -246,16 +222,17 @@ function renderWeeklyView(date) {
     calendarGrid.innerHTML = html;
 }
 
-function displayTasksOnCalendar(tasks) {
-    document.querySelectorAll('#calendar-grid .task-list').forEach(list => {
+function displayTasksOnCalendar(container, tasks) {
+    container.querySelectorAll('.task-list').forEach(list => {
         list.innerHTML = '';
     });
 
     if (!tasks) return;
 
+    const state = getState().dashboard.calendar;
+
     const tasksToDisplay = tasks.filter(task => {
-        const { priorityFilter } = getState().dashboard.calendar;
-        if (priorityFilter !== 'all' && (task.priority || 'medium') !== priorityFilter) {
+        if (state.priorityFilter !== 'all' && (task.priority || 'medium') !== state.priorityFilter) {
             return false;
         }
         return true;
@@ -264,7 +241,7 @@ function displayTasksOnCalendar(tasks) {
     tasksToDisplay.forEach(task => {
         if (task.dueDate) {
             const taskDateStr = task.dueDate;
-            const dayCell = document.querySelector(`#calendar-grid .task-list[data-date="${taskDateStr}"]`);
+            const dayCell = container.querySelector(`.task-list[data-date="${taskDateStr}"]`);
 
             if (dayCell) {
                 const priorityClasses = {

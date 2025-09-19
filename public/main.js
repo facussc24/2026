@@ -7320,34 +7320,7 @@ function renderSubtask(subtask) {
     `;
 }
 
-function initTasksSortable() {
-    const lists = document.querySelectorAll('.task-list');
-    lists.forEach(list => {
-        // Destroy existing instance if it exists
-        if (list.sortable) {
-            list.sortable.destroy();
-        }
-
-        list.sortable = new Sortable(list, {
-            group: 'tasks',
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            filter: '.no-drag', // Ignore elements with the 'no-drag' class
-            onEnd: async (evt) => {
-                const taskId = evt.item.dataset.taskId;
-                const newStatus = evt.to.closest('.task-column').dataset.status;
-                const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
-                try {
-                    await updateDoc(taskRef, { status: newStatus });
-                    showToast('Tarea actualizada.', 'success');
-                } catch (error) {
-                    console.error("Error updating task status:", error);
-                    showToast('Error al mover la tarea.', 'error');
-                }
-            }
-        });
-    });
-}
+// This function was removed as it is a duplicate and now lives in task.kanban.js
 
 async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
     const isEditing = task !== null;

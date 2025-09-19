@@ -24,7 +24,7 @@ export async function fetchAllTasks() {
     return snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
 }
 
-export async function loadTelegramConfig() {
+export async function loadTelegramConfig(container) {
     const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
     const userDoc = await getDoc(userDocRef);
     if (userDoc.exists()) {
@@ -32,15 +32,23 @@ export async function loadTelegramConfig() {
         const chatId = userData.telegramChatId || '';
         const notifications = userData.telegramNotifications || {};
 
-        document.getElementById('telegram-chat-id').value = chatId;
-        document.getElementById('notify-on-assignment').checked = !!notifications.onAssignment;
-        document.getElementById('notify-on-status-change').checked = !!notifications.onStatusChange;
-        document.getElementById('notify-on-due-date-reminder').checked = !!notifications.onDueDateReminder;
+        const chatIdInput = container.querySelector('#telegram-chat-id');
+        const onAssignmentCheck = container.querySelector('#notify-on-assignment');
+        const onStatusChangeCheck = container.querySelector('#notify-on-status-change');
+        const onDueDateReminderCheck = container.querySelector('#notify-on-due-date-reminder');
+
+        if(chatIdInput) chatIdInput.value = chatId;
+        if(onAssignmentCheck) onAssignmentCheck.checked = !!notifications.onAssignment;
+        if(onStatusChangeCheck) onStatusChangeCheck.checked = !!notifications.onStatusChange;
+        if(onDueDateReminderCheck) onDueDateReminderCheck.checked = !!notifications.onDueDateReminder;
     }
 }
 
-export async function saveTelegramConfig() {
-    const chatId = document.getElementById('telegram-chat-id').value.trim();
+export async function saveTelegramConfig(container) {
+    const chatIdInput = container.querySelector('#telegram-chat-id');
+    if (!chatIdInput) return;
+
+    const chatId = chatIdInput.value.trim();
     if (!chatId || !/^-?\d+$/.test(chatId)) {
         showToast('Por favor, ingrese un Chat ID de Telegram válido (solo números).', 'error');
         return;
@@ -50,9 +58,9 @@ export async function saveTelegramConfig() {
         await updateDoc(userDocRef, {
             telegramChatId: chatId,
             telegramNotifications: {
-                onAssignment: document.getElementById('notify-on-assignment').checked,
-                onStatusChange: document.getElementById('notify-on-status-change').checked,
-                onDueDateReminder: document.getElementById('notify-on-due-date-reminder').checked
+                onAssignment: container.querySelector('#notify-on-assignment').checked,
+                onStatusChange: container.querySelector('#notify-on-status-change').checked,
+                onDueDateReminder: container.querySelector('#notify-on-due-date-reminder').checked
             }
         });
         showToast('Configuración de Telegram guardada.', 'success');
@@ -61,8 +69,10 @@ export async function saveTelegramConfig() {
     }
 };
 
-export async function sendTestTelegram(e) {
-    const button = e.target.closest('button');
+export async function sendTestTelegram(container) {
+    const button = container.querySelector('#send-test-telegram-btn');
+    if(!button) return;
+
     const originalText = button.innerHTML;
     button.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Enviando...';
     button.disabled = true;
