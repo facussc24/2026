@@ -17,18 +17,22 @@ export function initDashboard(dependencies) {
     lucide = dependencies.lucide;
 }
 
-export function renderTaskDashboardView(container) {
+export function renderTaskDashboardView() {
     const isAdmin = appState.currentUser.role === 'admin';
     const title = isAdmin ? "Estadísticas del Equipo" : "Mis Estadísticas";
     const subtitle = isAdmin ? "Analiza, filtra y gestiona las tareas del equipo." : "Un resumen de tu carga de trabajo y progreso.";
 
-    container.innerHTML = `
+    dom.viewContent.innerHTML = `
     <!-- Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
             <h2 class="text-2xl font-bold text-slate-800">${title}</h2>
             <p class="text-sm text-slate-500">${subtitle}</p>
         </div>
+        <button data-action="admin-back-to-board" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold flex items-center flex-shrink-0">
+            <i data-lucide="arrow-left" class="mr-2 h-5 w-5"></i>
+            <span>Volver al Tablero</span>
+        </button>
     </div>
 
     <!-- Admin Filters -->
@@ -138,33 +142,37 @@ export function renderTaskDashboardView(container) {
     lucide.createIcons();
 
     if (isAdmin) {
-        const tabs = document.querySelectorAll('.admin-task-tab');
-        const panels = document.querySelectorAll('.admin-tab-panel');
-        document.getElementById('admin-task-tabs').addEventListener('click', (e) => {
-            const tabButton = e.target.closest('.admin-task-tab');
-            if (!tabButton) return;
-            const tabName = tabButton.dataset.tab;
+        const tabs = container.querySelectorAll('.admin-task-tab');
+        const panels = container.querySelectorAll('.admin-tab-panel');
+        const adminTaskTabs = container.querySelector('#admin-task-tabs');
 
-            tabs.forEach(tab => tab.classList.remove('active-tab'));
-            tabButton.classList.add('active-tab');
+        if (adminTaskTabs) {
+            adminTaskTabs.addEventListener('click', (e) => {
+                const tabButton = e.target.closest('.admin-task-tab');
+                if (!tabButton) return;
+                const tabName = tabButton.dataset.tab;
 
-            panels.forEach(panel => {
-                const isActive = panel.id === `tab-panel-${tabName}`;
-                if (isActive) {
-                    panel.classList.remove('panel-hidden');
-                    panel.classList.add('panel-visible');
-                } else {
-                    panel.classList.add('panel-hidden');
-                    panel.classList.remove('panel-visible');
+                tabs.forEach(tab => tab.classList.remove('active-tab'));
+                tabButton.classList.add('active-tab');
+
+                panels.forEach(panel => {
+                    const isActive = panel.id === `tab-panel-${tabName}`;
+                    if (isActive) {
+                        panel.classList.remove('panel-hidden');
+                        panel.classList.add('panel-visible');
+                    } else {
+                        panel.classList.add('panel-hidden');
+                        panel.classList.remove('panel-visible');
+                    }
+                });
+
+                if (tabName === 'dashboard') {
+                    setTimeout(() => {
+                        updateAdminDashboardData(getState().dashboard.allTasks);
+                    }, 0);
                 }
             });
-
-            if (tabName === 'dashboard') {
-                setTimeout(() => {
-                    updateAdminDashboardData(getState().dashboard.allTasks);
-                }, 0);
-            }
-        });
+        }
     }
 
     const onTasksReceived = (allTasks) => {
