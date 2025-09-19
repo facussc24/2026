@@ -23,6 +23,13 @@ export function renderTaskDashboardView(container) {
     const subtitle = isAdmin ? "Analiza, filtra y gestiona las tareas del equipo." : "Un resumen de tu carga de trabajo y progreso.";
 
     container.innerHTML = `
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-800">${title}</h2>
+            <p class="text-sm text-slate-500">${subtitle}</p>
+        </div>
+    </div>
 
     <!-- Admin Filters -->
     <div id="admin-filters-container" class="bg-white p-4 rounded-xl shadow-sm border items-center gap-6 mb-6 ${isAdmin ? 'flex' : 'hidden'}">

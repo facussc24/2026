@@ -6,6 +6,9 @@ import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
 import { initCalendar } from './task.calendar.js';
 import { calculateOverdueTasksCount, fetchAllTasks } from './task.service.js';
 
+// Module-level variables to hold dependencies
+let dom, lucide;
+
 // Exported functions for other modules to use
 export {
     calculateOverdueTasksCount,
@@ -16,6 +19,10 @@ export {
 };
 
 export function initTasksModule(dependencies) {
+    // Store dependencies for use within this module
+    dom = dependencies.dom;
+    lucide = dependencies.lucide;
+
     initTaskState(dependencies);
     initTaskService(dependencies);
     initTaskUI(dependencies);
@@ -26,8 +33,6 @@ export function initTasksModule(dependencies) {
 }
 
 export function runTasksLogic() {
-    const dom = getState().dependencies.dom;
-
     const renderView = (view) => {
         // Clear previous content and remove active state from all buttons
         const viewContainer = document.getElementById('task-view-container');
@@ -44,8 +49,6 @@ export function runTasksLogic() {
             renderTaskDashboardView(viewContainer);
         } else if (view === 'calendar') {
             // Calendar logic needs a container, let's provide one.
-            // This part is an assumption based on how other modules work.
-            // We might need to adjust based on the actual implementation of renderCalendar.
             viewContainer.innerHTML = `<div id="calendar-container" class="bg-white p-6 rounded-xl shadow-lg"></div>`;
             renderCalendar(new Date(), 'monthly'); // Or some default state
         } else if (view === 'kanban') {
@@ -89,5 +92,5 @@ export function runTasksLogic() {
 
     // Initial render
     renderView('dashboard');
-    getState().dependencies.lucide.createIcons();
+    lucide.createIcons();
 }
