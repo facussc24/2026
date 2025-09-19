@@ -546,6 +546,28 @@ export function renderTasksByProjectChart(tasks) {
     });
 }
 
+export function renderAdminUserList(users, container) {
+    container.innerHTML = `
+        <div class="bg-white p-8 rounded-xl shadow-lg border animate-fade-in-up">
+            <div class="max-w-3xl mx-auto text-center">
+                <i data-lucide="users" class="w-16 h-16 mx-auto text-slate-300"></i>
+                <h2 class="text-3xl font-extrabold text-slate-800 mt-4">Modo Supervisión</h2>
+                <p class="text-slate-500 mt-2 text-lg">Selecciona un usuario para ver su tablero de tareas.</p>
+            </div>
+            <div id="admin-user-list-container" class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                ${users.map(user => `
+                    <div class="admin-user-card text-center p-6 bg-slate-50 rounded-lg hover:shadow-xl hover:bg-white hover:-translate-y-1 transition-all duration-200 cursor-pointer border" data-user-id="${user.docId}">
+                        <img src="${user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.name)}`}" alt="Avatar" class="w-20 h-20 rounded-full mx-auto mb-4 border-4 border-white shadow-md">
+                        <h3 class="font-bold text-slate-800">${user.name}</h3>
+                        <p class="text-sm text-slate-500">${user.email}</p>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    lucide.createIcons();
+}
+
 function formatTimeAgo(timestamp) {
     const now = new Date();
     const seconds = Math.floor((now - timestamp) / 1000);
