@@ -502,3 +502,58 @@ function formatTimeAgo(timestamp) {
     if (interval > 1) return `hace ${Math.floor(interval)} minutos`;
     return `hace ${Math.floor(seconds)} segundos`;
 }
+
+export function renderMyPendingTasksWidget(tasks) {
+    const container = document.getElementById('my-pending-tasks-widget');
+    const countEl = document.getElementById('my-pending-tasks-count');
+
+    if (!container || !countEl) {
+        return;
+    }
+
+    countEl.textContent = tasks.length;
+
+    if (tasks.length === 0) {
+        container.innerHTML = '<p class="text-sm text-slate-500 text-center py-4">¡No tienes tareas pendientes!</p>';
+        return;
+    }
+
+    container.innerHTML = tasks.map(task => {
+        const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00") : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isOverdue = dueDate && dueDate < today;
+        const dateClass = isOverdue ? 'text-red-500 font-semibold' : 'text-slate-500';
+        const dueDateStr = dueDate ? `Vence: ${dueDate.toLocaleDateString('es-AR')}` : 'Sin fecha';
+
+        const priorityClasses = {
+            high: 'border-red-500',
+            medium: 'border-yellow-500',
+            low: 'border-slate-300',
+        };
+        const priorityBorder = priorityClasses[task.priority] || 'border-slate-300';
+
+        return `
+            <div class="p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border-l-4 ${priorityBorder} cursor-pointer" data-action="view-task" data-task-id="${task.docId}">
+                <div class="flex justify-between items-center">
+                    <p class="font-bold text-slate-800 text-sm">${task.title}</p>
+                    <span class="text-xs ${dateClass}">${dueDateStr}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add event listener to navigate to the task
+    container.addEventListener('click', (e) => {
+        const taskEl = e.target.closest('[data-action="view-task"]');
+        if (taskEl) {
+            const taskId = taskEl.dataset.taskId;
+            // Assuming openTaskFormModal is available globally or imported
+            // In task.ui.js, it is available.
+            const task = tasks.find(t => t.docId === taskId);
+            if(task) {
+                openTaskFormModal(task);
+            }
+        }
+    });
+}
