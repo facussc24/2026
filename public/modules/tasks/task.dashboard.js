@@ -3,6 +3,7 @@ import { COLLECTIONS } from '/utils.js';
 import { showToast } from '/main.js';
 import { getState, setDashboardTasks, setDashboardViewMode, resetDashboardState, addUnsubscriber, clearUnsubscribers } from './task.state.js';
 import { openTaskFormModal } from './task.ui.js';
+import { renderCalendar } from './task.calendar.js';
 
 let db;
 let appState;
@@ -185,6 +186,40 @@ export function renderTaskDashboardView() {
         destroyAdminTaskCharts();
         resetDashboardState();
     };
+}
+
+function setupAdminTaskViewListeners() {
+    const viewFilter = document.getElementById('admin-view-filter');
+    const userFilterContainer = document.getElementById('admin-user-filter-container');
+    const userFilter = document.getElementById('admin-specific-user-filter');
+
+    // Populate user dropdown
+    if (userFilter) {
+        const users = appState.collections.usuarios || [];
+        userFilter.innerHTML = users
+            .map(u => `<option value="${u.docId}">${u.name || u.email}</option>`)
+            .join('');
+    }
+
+    viewFilter?.addEventListener('change', (e) => {
+        const selection = e.target.value;
+        if (selection === 'specific-user') {
+            userFilterContainer?.classList.remove('hidden');
+            userFilterContainer?.classList.add('flex');
+            // Trigger change to apply the filter for the currently selected user
+            userFilter?.dispatchEvent(new Event('change'));
+        } else {
+            userFilterContainer?.classList.add('hidden');
+            setDashboardViewMode(selection);
+            updateAdminDashboardData(getState().dashboard.allTasks);
+        }
+    });
+
+    userFilter?.addEventListener('change', (e) => {
+        const selectedUserId = e.target.value;
+        setDashboardViewMode(selectedUserId);
+        updateAdminDashboardData(getState().dashboard.allTasks);
+    });
 }
 
 function updateAdminDashboardData(tasks) {
