@@ -47,11 +47,11 @@ export function initTasksSortable() {
 import { collection, query, where, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { COLLECTIONS } from '../../utils.js';
 
-export function runKanbanBoardLogic() {
+export function runKanbanBoardLogic(container) {
     const state = getState();
     if (state.kanban.activeFilter === 'supervision' && !state.kanban.selectedUserId) {
         const users = appState.collections.usuarios.filter(u => u.docId !== appState.currentUser.uid);
-        renderAdminUserList(users, dom.viewContent);
+        renderAdminUserList(users, container);
 
         const userListContainer = document.getElementById('admin-user-list-container');
         if (userListContainer) {
@@ -59,7 +59,7 @@ export function runKanbanBoardLogic() {
                 const card = e.target.closest('.admin-user-card');
                 if (card && card.dataset.userId) {
                     setKanbanSelectedUser(card.dataset.userId);
-                    runKanbanBoardLogic(); // Re-run to show the selected user's board
+                    runKanbanBoardLogic(container); // Re-run to show the selected user's board
                 }
             });
         }
@@ -136,7 +136,7 @@ export function runKanbanBoardLogic() {
     </div>
     `;
 
-    dom.viewContent.innerHTML = `
+    container.innerHTML = `
         ${telegramConfigHTML}
         ${topBarHTML}
         <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 ${state.kanban.selectedUserId ? 'hidden' : ''}">

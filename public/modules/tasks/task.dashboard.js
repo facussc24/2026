@@ -17,23 +17,12 @@ export function initDashboard(dependencies) {
     lucide = dependencies.lucide;
 }
 
-export function renderTaskDashboardView() {
+export function renderTaskDashboardView(container) {
     const isAdmin = appState.currentUser.role === 'admin';
     const title = isAdmin ? "Estadísticas del Equipo" : "Mis Estadísticas";
     const subtitle = isAdmin ? "Analiza, filtra y gestiona las tareas del equipo." : "Un resumen de tu carga de trabajo y progreso.";
 
-    dom.viewContent.innerHTML = `
-    <!-- Header -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-        <div>
-            <h2 class="text-2xl font-bold text-slate-800">${title}</h2>
-            <p class="text-sm text-slate-500">${subtitle}</p>
-        </div>
-        <button data-action="admin-back-to-board" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold flex items-center flex-shrink-0">
-            <i data-lucide="arrow-left" class="mr-2 h-5 w-5"></i>
-            <span>Volver al Tablero</span>
-        </button>
-    </div>
+    container.innerHTML = `
 
     <!-- Admin Filters -->
     <div id="admin-filters-container" class="bg-white p-4 rounded-xl shadow-sm border items-center gap-6 mb-6 ${isAdmin ? 'flex' : 'hidden'}">
@@ -65,7 +54,7 @@ export function renderTaskDashboardView() {
         <div id="tab-panel-dashboard" class="admin-tab-panel">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- User Load Chart -->
-                <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col mt-6">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Carga de Tareas por Usuario</h3>
                     <div class="relative flex-grow min-h-[400px]">
                         <canvas id="user-load-chart"></canvas>
