@@ -24,6 +24,21 @@ export async function fetchAllTasks() {
     return snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
 }
 
+export async function loadTelegramConfig() {
+    const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
+    const userDoc = await getDoc(userDocRef);
+    if (userDoc.exists()) {
+        const userData = userDoc.data();
+        const chatId = userData.telegramChatId || '';
+        const notifications = userData.telegramNotifications || {};
+
+        document.getElementById('telegram-chat-id').value = chatId;
+        document.getElementById('notify-on-assignment').checked = !!notifications.onAssignment;
+        document.getElementById('notify-on-status-change').checked = !!notifications.onStatusChange;
+        document.getElementById('notify-on-due-date-reminder').checked = !!notifications.onDueDateReminder;
+    }
+}
+
 export async function saveTelegramConfig() {
     const chatId = document.getElementById('telegram-chat-id').value.trim();
     if (!chatId || !/^-?\d+$/.test(chatId)) {
