@@ -63,29 +63,29 @@ export function renderTaskDashboardView() {
     <!-- Tab Panels Content -->
     <div id="admin-tab-content" class="animate-fade-in-up mt-8">
         <div id="tab-panel-dashboard" class="admin-tab-panel">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- User Load Chart (Full Width) -->
-                <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg flex flex-col">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- User Load Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Carga de Tareas por Usuario</h3>
-                    <div class="relative flex-grow min-h-[300px]">
+                    <div class="relative flex-grow min-h-[400px]">
                         <canvas id="user-load-chart"></canvas>
                         <p id="user-load-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de carga de usuarios para mostrar.</p>
                     </div>
                 </div>
 
-                <!-- Status Chart (Half Width) -->
+                <!-- Status Chart -->
                 <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Estado de Tareas Abiertas</h3>
-                    <div class="relative flex-grow min-h-[300px]">
+                    <div class="relative flex-grow min-h-[400px]">
                         <canvas id="status-chart"></canvas>
                         <p id="status-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de estado para mostrar.</p>
                     </div>
                 </div>
 
-                <!-- Priority Chart (Half Width) -->
+                <!-- Priority Chart -->
                 <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3>
-                    <div class="relative flex-grow min-h-[300px]">
+                    <div class="relative flex-grow min-h-[400px]">
                         <canvas id="priority-chart"></canvas>
                         <p id="priority-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de prioridad para mostrar.</p>
                     </div>
