@@ -61,7 +61,7 @@ export function renderTaskDashboardView() {
     </div>
 
     <!-- Tab Panels Content -->
-    <div id="admin-tab-content" class="animate-fade-in-up mt-8">
+    <div id="admin-tab-content" class="animate-fade-in-up mt-12">
         <div id="tab-panel-dashboard" class="admin-tab-panel">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <!-- User Load Chart -->
