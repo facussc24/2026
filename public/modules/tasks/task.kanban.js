@@ -1,5 +1,5 @@
-import { updateTaskStatus, subscribeToTasks } from './task.service.js';
-import { openTaskFormModal, renderTaskFilters, renderTasks } from './task.ui.js';
+import { updateTaskStatus, subscribeToTasks, saveTelegramConfig, sendTestTelegram, loadTelegramConfig } from './task.service.js';
+import { openTaskFormModal, renderTaskFilters, renderTasks, renderAdminUserList } from './task.ui.js';
 import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, addUnsubscriber, clearUnsubscribers } from './task.state.js';
 import { showToast } from '/main.js';
 
@@ -50,7 +50,19 @@ import { COLLECTIONS } from '/utils.js';
 export function runKanbanBoardLogic() {
     const state = getState();
     if (state.kanban.activeFilter === 'supervision' && !state.kanban.selectedUserId) {
-        renderAdminUserList();
+        const users = appState.collections.usuarios.filter(u => u.docId !== appState.currentUser.uid);
+        renderAdminUserList(users, dom.viewContent);
+
+        const userListContainer = document.getElementById('admin-user-list-container');
+        if (userListContainer) {
+            userListContainer.addEventListener('click', e => {
+                const card = e.target.closest('.admin-user-card');
+                if (card && card.dataset.userId) {
+                    setKanbanSelectedUser(card.dataset.userId);
+                    runKanbanBoardLogic(); // Re-run to show the selected user's board
+                }
+            });
+        }
         return;
     }
 
