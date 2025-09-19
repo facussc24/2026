@@ -976,7 +976,7 @@ function runKanbanBoardLogic() {
         if(addNewTaskBtn) addNewTaskBtn.addEventListener('click', () => openTaskFormModal());
 
         const goToStatsBtn = document.getElementById('go-to-stats-view-btn');
-        if(goToStatsBtn) goToStatsBtn.addEventListener('click', renderTaskDashboardView);
+        if(goToStatsBtn) goToStatsBtn.addEventListener('click', () => switchView('task-dashboard'));
 
         const telegramHeader = document.getElementById('telegram-config-header');
         if(telegramHeader) {
