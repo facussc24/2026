@@ -336,20 +336,23 @@ async function startRealtimeListeners() {
     // --- One-time fetches for small, critical collections (Roles & Sectors) ---
     // These are small and used in many places, so loading them once is efficient.
     try {
-        const rolesSnap = await getDocs(collection(db, COLLECTIONS.ROLES));
+        const rolesPromise = getDocs(collection(db, COLLECTIONS.ROLES));
+        const sectoresPromise = getDocs(collection(db, COLLECTIONS.SECTORES));
+        const usersPromise = getDocs(collection(db, COLLECTIONS.USUARIOS));
+
+        const [rolesSnap, sectoresSnap, usersSnap] = await Promise.all([rolesPromise, sectoresPromise, usersPromise]);
+
         appState.collections.roles = rolesSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
         appState.collectionsById.roles = new Map(appState.collections.roles.map(r => [r.id, r]));
 
-        const sectoresSnap = await getDocs(collection(db, COLLECTIONS.SECTORES));
         appState.collections.sectores = sectoresSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
         appState.collectionsById.sectores = new Map(appState.collections.sectores.map(s => [s.id, s]));
 
         // Fetch all users for task assignments and dashboard charts
-        const usersSnap = await getDocs(collection(db, COLLECTIONS.USUARIOS));
         appState.collections.usuarios = usersSnap.docs.map(d => ({ ...d.data(), docId: d.id }));
         appState.collectionsById.usuarios = new Map(appState.collections.usuarios.map(u => [u.docId, u]));
 
-        console.log("Roles, Sectors, and Users loaded.");
+        console.log("Roles, Sectors, and Users loaded successfully.");
     } catch (error) {
         console.error("Error fetching initial roles/sectors/users:", error);
         showToast('Error al cargar datos de configuración inicial.', 'error');
