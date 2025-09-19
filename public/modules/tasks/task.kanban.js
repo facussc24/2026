@@ -17,8 +17,8 @@ export function initKanban(dependencies) {
     switchView = dependencies.switchView;
 }
 
-export function initTasksSortable() {
-    const lists = document.querySelectorAll('.task-list');
+export function initTasksSortable(container) {
+    const lists = container.querySelectorAll('#task-board .task-list');
     lists.forEach(list => {
         if (list.sortable) {
             list.sortable.destroy();
@@ -44,22 +44,70 @@ export function initTasksSortable() {
     });
 }
 
-import { collection, query, where, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { COLLECTIONS } from '../../utils.js';
 
-export function runKanbanBoardLogic() {
+function fetchAndRenderTasks(container) {
+    clearUnsubscribers();
+
+    container.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-slate-500"><i data-lucide="loader" class="h-8 w-8 animate-spin mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`);
+    lucide.createIcons();
+
+    const onTasksReceived = (tasks) => {
+        const state = getState();
+        let filteredTasks = [...tasks];
+        if (state.kanban.searchTerm) {
+            filteredTasks = filteredTasks.filter(task =>
+                task.title.toLowerCase().includes(state.kanban.searchTerm) ||
+                (task.description && task.description.toLowerCase().includes(state.kanban.searchTerm))
+            );
+        }
+        setTimeout(() => renderTasks(filteredTasks, container), 0);
+    };
+
+    const handleError = (error) => {
+        console.error("Error fetching tasks: ", error);
+        let message = "Error al cargar las tareas.";
+        if (error.code === 'failed-precondition') {
+            message = "Error: Faltan índices en Firestore. Revise la consola para crear el índice necesario.";
+        } else if (error.code === 'permission-denied') {
+            message = "Error de permisos al cargar las tareas. Verifique las reglas de seguridad de Firestore.";
+        }
+        showToast(message, "error", 5000);
+        container.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">${message}</p></div>`);
+        lucide.createIcons();
+    };
+
+    const unsubscribers = subscribeToTasks(onTasksReceived, handleError);
+    addUnsubscriber(unsubscribers);
+}
+
+function setupTaskFilters(container) {
+    const filterContainer = container.querySelector('#task-filters');
+    if (filterContainer) {
+        filterContainer.addEventListener('click', e => {
+            const button = e.target.closest('button');
+            if (button && button.dataset.filter) {
+                setKanbanFilter(button.dataset.filter);
+                renderTaskFilters(container);
+                fetchAndRenderTasks(container);
+            }
+        });
+    }
+}
+
+export function runKanbanBoardLogic(container) {
     const state = getState();
     if (state.kanban.activeFilter === 'supervision' && !state.kanban.selectedUserId) {
         const users = appState.collections.usuarios.filter(u => u.docId !== appState.currentUser.uid);
-        renderAdminUserList(users, dom.viewContent);
+        renderAdminUserList(users, container);
 
-        const userListContainer = document.getElementById('admin-user-list-container');
+        const userListContainer = container.querySelector('#admin-user-list-container');
         if (userListContainer) {
             userListContainer.addEventListener('click', e => {
                 const card = e.target.closest('.admin-user-card');
                 if (card && card.dataset.userId) {
                     setKanbanSelectedUser(card.dataset.userId);
-                    runKanbanBoardLogic(); // Re-run to show the selected user's board
+                    runKanbanBoardLogic(container); // Re-run to show the selected user's board
                 }
             });
         }
@@ -136,7 +184,7 @@ export function runKanbanBoardLogic() {
     </div>
     `;
 
-    dom.viewContent.innerHTML = `
+    container.innerHTML = `
         ${telegramConfigHTML}
         ${topBarHTML}
         <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 ${state.kanban.selectedUserId ? 'hidden' : ''}">
@@ -159,9 +207,6 @@ export function runKanbanBoardLogic() {
             </div>
 
             <div id="kanban-header-buttons" class="flex items-center gap-4 flex-shrink-0">
-                <button id="go-to-stats-view-btn" class="bg-slate-700 text-white px-5 py-2.5 rounded-full hover:bg-slate-800 flex items-center shadow-md transition-transform transform hover:scale-105 flex-shrink-0">
-                    <i data-lucide="bar-chart-2" class="mr-2 h-5 w-5"></i>Ver Estadísticas
-                </button>
                 <button id="add-new-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
                     <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
                 </button>
@@ -199,8 +244,29 @@ export function runKanbanBoardLogic() {
             addTaskBtn.addEventListener('click', () => openTaskFormModal());
         }
 
+
+        const telegramHeader = container.querySelector('#telegram-config-header');
+        if(telegramHeader) {
+            telegramHeader.addEventListener('click', () => {
+                const body = container.querySelector('#telegram-config-body');
+                const chevron = container.querySelector('#telegram-config-chevron');
+                const isHidden = body.style.display === 'none';
+
+                body.style.display = isHidden ? 'block' : 'none';
+                chevron.classList.toggle('rotate-180', isHidden);
+            });
+        }
+
+        const saveTelegramBtn = container.querySelector('#save-telegram-config-btn');
+        if(saveTelegramBtn) saveTelegramBtn.addEventListener('click', () => saveTelegramConfig(container));
+
+        const testTelegramBtn = container.querySelector('#send-test-telegram-btn');
+        if(testTelegramBtn) testTelegramBtn.addEventListener('click', () => sendTestTelegram(container));
+
+        loadTelegramConfig(container);
+
         const taskBoard = container.querySelector('#task-board');
-        if (taskBoard) {
+        if(taskBoard) {
             taskBoard.addEventListener('click', e => {
                 const header = e.target.closest('.kanban-column-header');
                 if (header) {
@@ -210,18 +276,18 @@ export function runKanbanBoardLogic() {
         }
 
         const searchInput = container.querySelector('#task-search-input');
-        if (searchInput) {
+        if(searchInput) {
             searchInput.addEventListener('input', e => {
                 setKanbanSearchTerm(e.target.value.toLowerCase());
-                fetchAndRenderTasks();
+                fetchAndRenderTasks(container);
             });
         }
 
         const priorityFilter = container.querySelector('#task-priority-filter');
-        if (priorityFilter) {
+        if(priorityFilter) {
             priorityFilter.addEventListener('change', e => {
                 setKanbanPriorityFilter(e.target.value);
-                fetchAndRenderTasks();
+                fetchAndRenderTasks(container);
             });
         }
 
@@ -236,53 +302,4 @@ export function runKanbanBoardLogic() {
             setKanbanSelectedUser(null);
         };
     }, 0);
-}
-
-function setupTaskFilters(container) {
-    const filterContainer = container.querySelector('#task-filters');
-    if (filterContainer) {
-        filterContainer.addEventListener('click', e => {
-            const button = e.target.closest('button');
-            if (button && button.dataset.filter) {
-                setKanbanFilter(button.dataset.filter);
-                renderTaskFilters(container);
-                fetchAndRenderTasks(container);
-            }
-        });
-    }
-}
-
-function fetchAndRenderTasks() {
-    clearUnsubscribers();
-
-    document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-slate-500"><i data-lucide="loader" class="h-8 w-8 animate-spin mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`);
-    lucide.createIcons();
-
-    const onTasksReceived = (tasks) => {
-        const state = getState();
-        let filteredTasks = [...tasks];
-        if (state.kanban.searchTerm) {
-            filteredTasks = filteredTasks.filter(task =>
-                task.title.toLowerCase().includes(state.kanban.searchTerm) ||
-                (task.description && task.description.toLowerCase().includes(state.kanban.searchTerm))
-            );
-        }
-        setTimeout(() => renderTasks(filteredTasks), 0);
-    };
-
-    const handleError = (error) => {
-        console.error("Error fetching tasks: ", error);
-        let message = "Error al cargar las tareas.";
-        if (error.code === 'failed-precondition') {
-            message = "Error: Faltan índices en Firestore. Revise la consola para crear el índice necesario.";
-        } else if (error.code === 'permission-denied') {
-            message = "Error de permisos al cargar las tareas. Verifique las reglas de seguridad de Firestore.";
-        }
-        showToast(message, "error", 5000);
-        document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">${message}</p></div>`);
-        lucide.createIcons();
-    };
-
-    const unsubscribers = subscribeToTasks(onTasksReceived, handleError);
-    addUnsubscriber(unsubscribers);
 }
