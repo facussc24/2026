@@ -15,7 +15,7 @@ import {
     fetchAllTasks,
     renderMyPendingTasksWidget,
     renderTasksByProjectChart
-} from './modules/tasks.js';
+} from './modules/tasks/tasks.js';
 import { initDashboardModule, runDashboardLogic } from './modules/dashboard.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
