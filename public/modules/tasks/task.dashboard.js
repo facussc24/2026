@@ -61,25 +61,30 @@ export function renderTaskDashboardView() {
     </div>
 
     <!-- Tab Panels Content -->
-    <div id="admin-tab-content" class="animate-fade-in-up mt-6">
+    <div id="admin-tab-content" class="animate-fade-in-up mt-8">
         <div id="tab-panel-dashboard" class="admin-tab-panel">
-             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Estado</h3>
-                    <div class="relative h-72">
-                        <canvas id="status-chart"></canvas>
+             <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                <!-- Left Column: User Load and Status -->
+                <div class="xl:col-span-3 bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario y Estado (Tareas Abiertas)</h3>
+                    <div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                        <div class="relative h-96">
+                            <canvas id="user-load-chart"></canvas>
+                            <p id="user-load-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de carga de usuarios para mostrar.</p>
+                        </div>
+                        <div class="relative h-96">
+                            <canvas id="status-chart"></canvas>
+                             <p id="status-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de estado para mostrar.</p>
+                        </div>
                     </div>
                 </div>
-                <div class="bg-white p-6 rounded-xl shadow-lg">
+
+                <!-- Right Column: Priority -->
+                <div class="xl:col-span-2 bg-white p-6 rounded-xl shadow-lg flex flex-col">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3>
-                    <div class="relative h-72">
+                    <div class="relative flex-grow h-80 min-h-[320px]">
                         <canvas id="priority-chart"></canvas>
-                    </div>
-                </div>
-                <div id="user-load-chart-wrapper" class="bg-white p-6 rounded-xl shadow-lg lg:col-span-2 ${isAdmin ? 'block' : 'hidden'}">
-                    <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario (Tareas Abiertas)</h3>
-                    <div class="relative h-96">
-                        <canvas id="user-load-chart"></canvas>
+                        <p id="priority-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de prioridad para mostrar.</p>
                     </div>
                 </div>
             </div>
@@ -288,10 +293,23 @@ function renderAdminTaskCharts(tasks) {
 }
 
 function renderStatusChart(tasks) {
-    const ctx = document.getElementById('status-chart')?.getContext('2d');
-    if (!ctx) return;
+    const canvas = document.getElementById('status-chart');
+    const noDataEl = document.getElementById('status-chart-no-data');
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !noDataEl) return null;
 
     const activeTasks = tasks.filter(t => t.status !== 'done');
+
+    if (activeTasks.length === 0) {
+        canvas.classList.add('hidden');
+        noDataEl.classList.remove('hidden');
+        getState().dashboard.charts.statusChart = null;
+        return null;
+    }
+
+    canvas.classList.remove('hidden');
+    noDataEl.classList.add('hidden');
+
     const statusCounts = activeTasks.reduce((acc, task) => {
         const status = task.status || 'todo';
         acc[status] = (acc[status] || 0) + 1;
@@ -306,20 +324,41 @@ function renderStatusChart(tasks) {
                 data: [statusCounts.todo, statusCounts.inprogress],
                 backgroundColor: ['#f59e0b', '#3b82f6'],
                 borderColor: '#ffffff',
-                borderWidth: 2,
+                borderWidth: 4,
+                hoverBorderColor: '#f3f4f6'
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                title: { display: true, text: 'Estado de Tareas' }
+            }
+        }
     });
     getState().dashboard.charts.statusChart = chart;
     return chart;
 }
 
 function renderPriorityChart(tasks) {
-    const ctx = document.getElementById('priority-chart')?.getContext('2d');
-    if (!ctx) return null;
+    const canvas = document.getElementById('priority-chart');
+    const noDataEl = document.getElementById('priority-chart-no-data');
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !noDataEl) return null;
 
     const activeTasks = tasks.filter(t => t.status !== 'done');
+
+    if (activeTasks.length === 0) {
+        canvas.classList.add('hidden');
+        noDataEl.classList.remove('hidden');
+        getState().dashboard.charts.priorityChart = null;
+        return null;
+    }
+
+    canvas.classList.remove('hidden');
+    noDataEl.classList.add('hidden');
+
     const priorityCounts = activeTasks.reduce((acc, task) => {
         const priority = task.priority || 'medium';
         acc[priority] = (acc[priority] || 0) + 1;
@@ -334,20 +373,40 @@ function renderPriorityChart(tasks) {
                 data: [priorityCounts.low, priorityCounts.medium, priorityCounts.high],
                 backgroundColor: ['#6b7280', '#f59e0b', '#ef4444'],
                 borderColor: '#ffffff',
-                borderWidth: 2,
+                borderWidth: 4,
+                hoverBorderColor: '#f3f4f6'
             }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            }
+        }
     });
     getState().dashboard.charts.priorityChart = chart;
     return chart;
 }
 
 function renderUserLoadChart(tasks) {
-    const ctx = document.getElementById('user-load-chart')?.getContext('2d');
-    if (!ctx) return null;
+    const canvas = document.getElementById('user-load-chart');
+    const noDataEl = document.getElementById('user-load-chart-no-data');
+    const ctx = canvas?.getContext('2d');
+    if (!ctx || !noDataEl) return null;
 
     const openTasks = tasks.filter(t => t.status !== 'done');
+
+    if (openTasks.length === 0) {
+        canvas.classList.add('hidden');
+        noDataEl.classList.remove('hidden');
+        getState().dashboard.charts.userLoadChart = null;
+        return null;
+    }
+
+    canvas.classList.remove('hidden');
+    noDataEl.classList.add('hidden');
+
     const userTaskCounts = openTasks.reduce((acc, task) => {
         const assigneeUid = task.assigneeUid || 'unassigned';
         acc[assigneeUid] = (acc[assigneeUid] || 0) + 1;
@@ -368,15 +427,24 @@ function renderUserLoadChart(tasks) {
                 backgroundColor: '#3b82f6',
                 borderColor: '#1d4ed8',
                 borderWidth: 1,
-                maxBarThickness: data.length < 3 ? 50 : undefined
+                borderRadius: 4,
+                maxBarThickness: 40
             }]
         },
         options: {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } }
+            plugins: {
+                legend: { display: false },
+                title: { display: true, text: 'Carga por Usuario' }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1, precision: 0 }
+                }
+            }
         }
     });
     getState().dashboard.charts.userLoadChart = chart;
