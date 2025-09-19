@@ -6,23 +6,9 @@ def run(playwright):
     page = context.new_page()
 
     try:
-        # Navigate to the login page
-        page.goto("http://localhost:8080", timeout=60000)
+        # Navigate directly to the main page, bypassing login
+        page.goto("http://localhost:8080/public/index.html?e2e-test=true", timeout=60000)
         page.wait_for_load_state('networkidle', timeout=30000)
-        page.reload()
-        page.wait_for_load_state('networkidle', timeout=30000)
-
-        page.screenshot(path="jules-scratch/verification/login-page-debug.png")
-
-        # Wait for the email input to be visible
-        expect(page.locator("#email")).to_be_visible(timeout=30000)
-
-        # Fill in the login credentials
-        page.locator("#email").fill("f.santoro@barackmercosul.com")
-        page.locator("#password").fill("$oof@k24")
-
-        # Click the login button
-        page.locator("button[type='submit']").click()
 
         # Wait for the main app view to be visible
         expect(page.locator("#app-view")).to_be_visible(timeout=10000)
@@ -40,8 +26,14 @@ def run(playwright):
         expect(page.locator("#status-chart")).to_be_visible(timeout=10000)
         expect(page.locator("#priority-chart")).to_be_visible(timeout=10000)
 
+        # Click on the "Tabla de Tareas" tab
+        page.locator('button[data-tab="table"]').click()
+
+        # Wait for the task table to be visible
+        expect(page.locator("#task-data-table-container table")).to_be_visible(timeout=10000)
+
         # Take a screenshot
-        page.screenshot(path="jules-scratch/verification/task-dashboard.png")
+        page.screenshot(path="jules-scratch/verification/task-dashboard-table.png")
 
     finally:
         browser.close()

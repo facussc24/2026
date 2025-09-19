@@ -487,6 +487,92 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     });
 }
 
+export function renderFilteredAdminTaskTable() {
+    const container = document.getElementById('task-data-table-container');
+    if (!container) return;
+
+    const state = getState();
+    const allTasks = state.dashboard.allTasks;
+    const userMap = appState.collectionsById.usuarios;
+
+    // Get filter values
+    const searchTerm = document.getElementById('admin-task-search')?.value.toLowerCase() || '';
+    const selectedUser = document.getElementById('admin-task-user-filter')?.value || 'all';
+    const selectedPriority = document.getElementById('admin-task-priority-filter')?.value || 'all';
+    const selectedStatus = document.getElementById('admin-task-status-filter')?.value || 'active';
+
+    // Apply filters
+    let filteredTasks = allTasks.filter(task => {
+        const matchesSearch = !searchTerm || task.title.toLowerCase().includes(searchTerm);
+        const matchesUser = selectedUser === 'all' || task.assigneeUid === selectedUser;
+        const matchesPriority = selectedPriority === 'all' || task.priority === selectedPriority;
+
+        let matchesStatus = true;
+        if (selectedStatus === 'active') {
+            matchesStatus = task.status !== 'done';
+        } else if (selectedStatus !== 'all') {
+            matchesStatus = task.status === selectedStatus;
+        }
+
+        return matchesSearch && matchesUser && matchesPriority && matchesStatus;
+    });
+
+    if (filteredTasks.length === 0) {
+        container.innerHTML = `<p class="text-center py-16 text-slate-500">No se encontraron tareas con los filtros seleccionados.</p>`;
+        return;
+    }
+
+    const tableHtml = `
+        <table class="w-full text-sm text-left text-slate-600">
+            <thead class="text-xs text-slate-700 uppercase bg-slate-100">
+                <tr>
+                    <th scope="col" class="px-6 py-3">Tarea</th>
+                    <th scope="col" class="px-6 py-3">Asignado a</th>
+                    <th scope="col" class="px-6 py-3">Prioridad</th>
+                    <th scope="col" class="px-6 py-3">Estado</th>
+                    <th scope="col" class="px-6 py-3">Fecha Límite</th>
+                    <th scope="col" class="px-6 py-3"><span class="sr-only">Acciones</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${filteredTasks.map(task => {
+                    const assignee = userMap.get(task.assigneeUid);
+                    const priorityClasses = { high: 'bg-red-100 text-red-800', medium: 'bg-yellow-100 text-yellow-800', low: 'bg-slate-100 text-slate-800' };
+                    const statusClasses = { todo: 'bg-blue-100 text-blue-800', inprogress: 'bg-purple-100 text-purple-800', done: 'bg-green-100 text-green-800' };
+                    const statusText = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Completada' };
+
+                    return `
+                        <tr class="bg-white border-b hover:bg-slate-50">
+                            <th scope="row" class="px-6 py-4 font-bold text-slate-900 whitespace-nowrap">${task.title}</th>
+                            <td class="px-6 py-4">${assignee?.name || 'No asignado'}</td>
+                            <td class="px-6 py-4"><span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${priorityClasses[task.priority] || ''}">${task.priority}</span></td>
+                            <td class="px-6 py-4"><span class="px-2 py-1 font-semibold leading-tight rounded-full text-xs ${statusClasses[task.status] || ''}">${statusText[task.status] || task.status}</span></td>
+                            <td class="px-6 py-4">${task.dueDate || 'N/A'}</td>
+                            <td class="px-6 py-4 text-right">
+                                <button data-action="edit-task" data-task-id="${task.docId}" class="font-medium text-blue-600 hover:underline">Editar</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
+
+    container.innerHTML = tableHtml;
+    lucide.createIcons();
+
+    // Add event listeners for edit buttons
+    container.querySelectorAll('[data-action="edit-task"]').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const taskId = e.target.dataset.taskId;
+            const task = allTasks.find(t => t.docId === taskId);
+            if (task) {
+                openTaskFormModal(task);
+            }
+        });
+    });
+}
+
 export function renderTasksByProjectChart(tasks) {
     const container = document.getElementById('tasks-by-project-chart-container');
     if (!container) return;
