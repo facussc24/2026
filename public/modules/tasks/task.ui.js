@@ -1,4 +1,4 @@
-import { checkUserPermission, showConfirmationModal, showToast } from '/main.js';
+import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
 import { handleTaskFormSubmit, deleteTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';

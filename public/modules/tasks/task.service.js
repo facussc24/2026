@@ -1,6 +1,6 @@
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS } from '/utils.js';
+import { COLLECTIONS } from '../../utils.js';
 import { getState } from './task.state.js';
 
 // Dependencies to be injected
@@ -152,7 +152,8 @@ export function updateTaskStatus(taskId, newStatus) {
 
 export function subscribeToAllTasks(callback, handleError) {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
-    const q = query(tasksRef);
+    // Always order by creation date descending for consistency.
+    const q = query(tasksRef, orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const allTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
         callback(allTasks);
@@ -168,50 +169,42 @@ export function subscribeToTasks(callback, handleError) {
     let queryConstraints = [];
 
     if (state.kanban.activeFilter === 'personal') {
-        const assignedQuery = query(tasksRef, where('assigneeUid', '==', user.uid));
-        const createdQuery = query(tasksRef, where('creatorUid', '==', user.uid));
-
-        let assignedTasks = [];
-        let createdTasks = [];
-
-        const mergeAndCallback = () => {
-            const allPersonalTasks = [...assignedTasks, ...createdTasks];
-            const uniqueTasks = Array.from(new Map(allPersonalTasks.map(t => [t.docId, t])).values());
-            callback(uniqueTasks);
-        };
-
-        const unsubAssigned = onSnapshot(assignedQuery, (snapshot) => {
-            assignedTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-            mergeAndCallback();
-        }, handleError);
-
-        const unsubCreated = onSnapshot(createdQuery, (snapshot) => {
-            createdTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-            mergeAndCallback();
-        }, handleError);
-
-        return [unsubAssigned, unsubCreated];
-    } else {
-        queryConstraints.push(orderBy('createdAt', 'desc'));
-
-        if (state.kanban.selectedUserId) {
-            queryConstraints.push(where('assigneeUid', '==', state.kanban.selectedUserId));
-        } else if (state.kanban.activeFilter === 'engineering') {
-            queryConstraints.push(where('isPublic', '==', true));
-        } else if (state.kanban.activeFilter === 'all' && user.role !== 'admin') {
-            queryConstraints.push(where('isPublic', '==', true));
-        }
+        // Use a single OR query to get tasks created by or assigned to the user.
+        queryConstraints.push(
+            or(
+                where('assigneeUid', '==', user.uid),
+                where('creatorUid', '==', user.uid)
+            )
+        );
+    } else if (state.kanban.selectedUserId) {
+        queryConstraints.push(where('assigneeUid', '==', state.kanban.selectedUserId));
+    } else if (state.kanban.activeFilter === 'engineering') {
+        queryConstraints.push(where('isPublic', '==', true));
+    } else if (state.kanban.activeFilter === 'all' && user.role !== 'admin') {
+        // Non-admins can only see public tasks in the 'all' view.
+        queryConstraints.push(where('isPublic', '==', true));
     }
+    // Note: If 'all' and admin, no user/public constraint is added, showing all tasks.
 
     if (state.kanban.priorityFilter !== 'all') {
         queryConstraints.push(where('priority', '==', state.kanban.priorityFilter));
     }
 
+    // Always sort by creation date for consistent ordering.
+    queryConstraints.push(orderBy('createdAt', 'desc'));
+
     const finalQuery = query(tasksRef, ...queryConstraints);
     const unsubscribe = onSnapshot(finalQuery, (snapshot) => {
         const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
         callback(tasks);
-    }, handleError);
+    }, (error) => {
+        // Enhanced error logging for easier debugging.
+        console.error("Error in subscribeToTasks:", error);
+        if (error.code === 'failed-precondition') {
+            console.error("This error likely means you're missing a Firestore index. Check the browser's developer console for a link to create it automatically.");
+        }
+        handleError(error);
+    });
 
     return [unsubscribe];
 }
