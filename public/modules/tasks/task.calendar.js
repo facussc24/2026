@@ -13,38 +13,98 @@ Date.prototype.getWeekNumber = function() {
   return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
 };
 
-export function renderCalendar(date, view) {
+export function renderCalendar(container) {
     const state = getState();
-    if (!state.dashboard.calendar) return;
+    const calendarState = state.dashboard.calendar; // Use the existing state structure
 
-    const calendarGrid = document.getElementById('calendar-grid');
-    const calendarTitle = document.getElementById('calendar-title');
+    container.innerHTML = `
+        <div class="bg-white p-6 rounded-xl shadow-lg">
+            <div id="calendar-header" class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                <div class="flex items-center gap-4">
+                    <button id="prev-calendar-btn" class="p-2 rounded-full hover:bg-slate-100"><i data-lucide="chevron-left" class="h-6 w-6"></i></button>
+                    <h3 id="calendar-title" class="text-2xl font-bold text-slate-800 text-center w-48"></h3>
+                    <button id="next-calendar-btn" class="p-2 rounded-full hover:bg-slate-100"><i data-lucide="chevron-right" class="h-6 w-6"></i></button>
+                    <button id="today-calendar-btn" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Hoy</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <select id="calendar-priority-filter" class="pl-4 pr-8 py-2 border rounded-full bg-white shadow-sm appearance-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+                        <option value="all">Prioridad (todas)</option>
+                        <option value="high">Alta</option>
+                        <option value="medium">Media</option>
+                        <option value="low">Baja</option>
+                    </select>
+                    <div class="flex items-center gap-2 rounded-lg bg-slate-200 p-1">
+                        <button data-view="monthly" class="calendar-view-btn px-4 py-1.5 text-sm font-semibold rounded-md">Mensual</button>
+                        <button data-view="weekly" class="calendar-view-btn px-4 py-1.5 text-sm font-semibold rounded-md">Semanal</button>
+                    </div>
+                </div>
+            </div>
+            <div id="calendar-grid" class="mt-6"></div>
+        </div>
+    `;
 
-    if (!calendarGrid || !calendarTitle) return;
-
-    const aDate = date || state.dashboard.calendar.currentDate;
-    const aView = view || state.dashboard.calendar.view;
-
-    state.dashboard.calendar.currentDate = aDate;
-    state.dashboard.calendar.view = aView;
-
-    document.querySelectorAll('.calendar-view-btn').forEach(btn => {
-        if (btn.dataset.view === aView) {
-            btn.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
-            btn.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
+    const rerender = () => {
+        const { currentDate, view } = calendarState;
+        if (view === 'monthly') {
+            renderMonthlyView(currentDate);
         } else {
-            btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
-            btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
+            renderWeeklyView(currentDate);
         }
+        displayTasksOnCalendar(state.dashboard.allTasks);
+        updateActiveViewButton();
+    };
+
+    const updateActiveViewButton = () => {
+        document.querySelectorAll('.calendar-view-btn').forEach(btn => {
+            if (btn.dataset.view === calendarState.view) {
+                btn.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
+                btn.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
+            } else {
+                btn.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
+                btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
+            }
+        });
+    };
+
+    // Event Listeners
+    document.getElementById('prev-calendar-btn').addEventListener('click', () => {
+        if (calendarState.view === 'monthly') {
+            calendarState.currentDate.setMonth(calendarState.currentDate.getMonth() - 1);
+        } else {
+            calendarState.currentDate.setDate(calendarState.currentDate.getDate() - 7);
+        }
+        rerender();
     });
 
-    if (aView === 'monthly') {
-        renderMonthlyView(aDate);
-    } else {
-        renderWeeklyView(aDate);
-    }
+    document.getElementById('next-calendar-btn').addEventListener('click', () => {
+        if (calendarState.view === 'monthly') {
+            calendarState.currentDate.setMonth(calendarState.currentDate.getMonth() + 1);
+        } else {
+            calendarState.currentDate.setDate(calendarState.currentDate.getDate() + 7);
+        }
+        rerender();
+    });
 
-    displayTasksOnCalendar(state.dashboard.allTasks);
+    document.getElementById('today-calendar-btn').addEventListener('click', () => {
+        calendarState.currentDate = new Date();
+        rerender();
+    });
+
+    document.getElementById('calendar-priority-filter').addEventListener('change', (e) => {
+        calendarState.priorityFilter = e.target.value;
+        rerender();
+    });
+
+    container.querySelectorAll('.calendar-view-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            calendarState.view = e.target.dataset.view;
+            rerender();
+        });
+    });
+
+    // Initial Render
+    rerender();
+    getState().dependencies.lucide.createIcons();
 }
 
 function renderMonthlyView(date) {
