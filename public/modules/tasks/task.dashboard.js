@@ -2,7 +2,7 @@ import { subscribeToAllTasks } from './task.service.js';
 import { COLLECTIONS } from '/utils.js';
 import { showToast } from '/main.js';
 import { getState, setDashboardTasks, setDashboardViewMode, resetDashboardState, addUnsubscriber, clearUnsubscribers } from './task.state.js';
-import { openTaskFormModal } from './task.ui.js';
+import { openTaskFormModal, renderFilteredAdminTaskTable } from './task.ui.js';
 import { renderCalendar } from './task.calendar.js';
 
 let db;
