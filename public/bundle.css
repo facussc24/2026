@@ -604,6 +604,25 @@ table.data-table .actions-cell button:hover {
     color: var(--color-primary-text); /* blue-800 */
 }
 
+.admin-tab-panel {
+    display: block; /* Ensure it takes up block-level space */
+    width: 100%;
+    transition: opacity 0.3s ease-in-out, height 0.3s ease-in-out;
+}
+
+.panel-hidden {
+    opacity: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+.panel-visible {
+    opacity: 1;
+    height: auto;
+    overflow: visible;
+    pointer-events: auto;
+}
+
 /* --- Custom Timeline Item Styles --- */
 .timeline-item-content {
     display: flex;
