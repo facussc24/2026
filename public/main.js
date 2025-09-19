@@ -5383,7 +5383,7 @@ function handleViewContentActions(e) {
 // --- 5. UI, COMPONENTES Y NOTIFICACIONES ---
 // =================================================================================
 
-window.showToast = function(message, type = 'success', options = {}) {
+export function showToast(message, type = 'success', options = {}) {
     const { duration = 3000, toastId = null } = typeof options === 'number' ? { duration: options } : options;
     const icons = { success: 'check-circle', error: 'alert-circle', info: 'info', loading: 'loader' };
     const icon = icons[type] || 'info';
@@ -5465,7 +5465,7 @@ function renderNotificationCenter() {
     });
 }
 
-function showConfirmationModal(title, message, onConfirm) {
+export function showConfirmationModal(title, message, onConfirm) {
     const modalId = `confirm-modal-${Date.now()}`;
     const modalHTML = `
         <div id="${modalId}" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
