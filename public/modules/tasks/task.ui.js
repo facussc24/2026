@@ -1,4 +1,4 @@
-import { checkUserPermission, showConfirmationModal, showToast } from '/utils.js';
+import { checkUserPermission } from '/main.js';
 import { getState } from './task.state.js';
 import { handleTaskFormSubmit, deleteTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
@@ -441,7 +441,7 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
             newCommentInput.value = '';
         } catch (error) {
             console.error("Error posting comment: ", error);
-            showToast('Error al publicar el comentario.', 'error');
+            window.showToast('Error al publicar el comentario.', 'error');
         } finally {
             postCommentBtn.disabled = false;
         }
@@ -471,16 +471,16 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
             }
             modalElement.remove();
         } else if (action === 'delete') {
-            showConfirmationModal('Eliminar Tarea', '¿Estás seguro de que quieres eliminar esta tarea?', async () => {
+            window.showConfirmationModal('Eliminar Tarea', '¿Estás seguro de que quieres eliminar esta tarea?', async () => {
                 try {
                     if (commentsUnsubscribe) {
                         commentsUnsubscribe();
                     }
                     await deleteTask(task.docId);
-                    showToast('Tarea eliminada.', 'success');
+                    window.showToast('Tarea eliminada.', 'success');
                     modalElement.remove();
                 } catch (error) {
-                    showToast('No tienes permiso para eliminar esta tarea.', 'error');
+                    window.showToast('No tienes permiso para eliminar esta tarea.', 'error');
                 }
             });
         }

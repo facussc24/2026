@@ -1,5 +1,5 @@
 import { subscribeToAllTasks } from './task.service.js';
-import { COLLECTIONS, showToast } from '/utils.js';
+import { COLLECTIONS } from '/utils.js';
 import { getState, setDashboardTasks, setDashboardViewMode, resetDashboardState, addUnsubscriber, clearUnsubscribers } from './task.state.js';
 import { openTaskFormModal } from './task.ui.js';
 
@@ -168,7 +168,7 @@ export function renderTaskDashboardView() {
 
     const handleError = (error) => {
         console.error("Error fetching tasks for dashboard:", error);
-        showToast('Error al cargar las tareas del dashboard.', 'error');
+        window.showToast('Error al cargar las tareas del dashboard.', 'error');
     };
 
     const unsubscribe = subscribeToAllTasks(onTasksReceived, handleError);

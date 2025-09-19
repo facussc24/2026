@@ -1,7 +1,6 @@
 import { updateTaskStatus, subscribeToTasks } from './task.service.js';
 import { openTaskFormModal, renderTaskFilters, renderTasks } from './task.ui.js';
 import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, addUnsubscriber, clearUnsubscribers } from './task.state.js';
-import { showToast } from '/utils.js';
 
 let db;
 let appState;
@@ -34,10 +33,10 @@ export function initTasksSortable() {
                 const newStatus = evt.to.closest('.task-column').dataset.status;
                 try {
                     await updateTaskStatus(taskId, newStatus);
-                    showToast('Tarea actualizada.', 'success');
+                    window.showToast('Tarea actualizada.', 'success');
                 } catch (error) {
                     console.error("Error updating task status:", error);
-                    showToast('Error al mover la tarea.', 'error');
+                    window.showToast('Error al mover la tarea.', 'error');
                 }
             }
         });
@@ -282,7 +281,7 @@ function fetchAndRenderTasks() {
         } else if (error.code === 'permission-denied') {
             message = "Error de permisos al cargar las tareas. Verifique las reglas de seguridad de Firestore.";
         }
-        showToast(message, "error", 5000);
+        window.showToast(message, "error", 5000);
         document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">${message}</p></div>`);
         lucide.createIcons();
     };
