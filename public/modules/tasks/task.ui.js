@@ -487,6 +487,65 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     });
 }
 
+export function renderTasksByProjectChart(tasks) {
+    const container = document.getElementById('tasks-by-project-chart-container');
+    if (!container) return;
+
+    if (tasks.length === 0) {
+        container.innerHTML = '<p class="text-sm text-slate-500 text-center py-4">No hay tareas para mostrar.</p>';
+        return;
+    }
+
+    const tasksByProject = tasks.reduce((acc, task) => {
+        const projectName = task.isPublic ? 'Ingeniería' : 'Personal';
+        acc[projectName] = (acc[projectName] || 0) + 1;
+        return acc;
+    }, {});
+
+    const labels = Object.keys(tasksByProject);
+    const data = Object.values(tasksByProject);
+
+    container.innerHTML = '<canvas id="tasks-by-project-chart"></canvas>';
+    const ctx = document.getElementById('tasks-by-project-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Nº de Tareas',
+                data: data,
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.7)',
+                    'rgba(245, 158, 11, 0.7)'
+                ],
+                borderColor: [
+                    'rgba(59, 130, 246, 1)',
+                    'rgba(245, 158, 11, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+}
+
 function formatTimeAgo(timestamp) {
     const now = new Date();
     const seconds = Math.floor((now - timestamp) / 1000);
