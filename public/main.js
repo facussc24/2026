@@ -8804,10 +8804,15 @@ function openSinopticoEditModal(nodeId) {
                             </div>
                         </div>
 
-                        <div class="bg-gray-50 p-4 rounded-lg border">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Merma de Proceso (%)</label>
-                            <p id="merma-calculada" class="text-lg font-bold text-gray-800">0.00%</p>
-                            <p class="text-xs text-gray-500">Calculado a partir del consumo teórico y real.</p>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="bg-gray-50 p-4 rounded-lg border">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Valor Neto (Teórico)</label>
+                                <p id="valor-neto-display" class="text-lg font-bold text-blue-600">0</p>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg border">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Valor con Merma (Real)</label>
+                                <p id="valor-con-merma-display" class="text-lg font-bold text-blue-600">0</p>
+                            </div>
                         </div>
 
                         <div>
@@ -8858,24 +8863,23 @@ function openSinopticoEditModal(nodeId) {
     if (node.tipo === 'insumo') {
         const consumoTeoricoInput = modalElement.querySelector('#consumoTeorico');
         const consumoRealInput = modalElement.querySelector('#consumoReal');
-        const mermaDisplay = modalElement.querySelector('#merma-calculada');
+        const valorNetoDisplay = modalElement.querySelector('#valor-neto-display');
+        const valorConMermaDisplay = modalElement.querySelector('#valor-con-merma-display');
 
-        const calculateMerma = () => {
+        const updateValoresDisplay = () => {
             const teorico = parseFloat(consumoTeoricoInput.value) || 0;
             const real = parseFloat(consumoRealInput.value) || 0;
-            if (teorico > 0) {
-                const merma = ((real - teorico) / teorico) * 100;
-                mermaDisplay.textContent = `${merma.toFixed(2)}%`;
-                 mermaDisplay.className = `text-lg font-bold ${merma < 0 ? 'text-green-600' : 'text-red-600'}`;
-            } else {
-                mermaDisplay.textContent = 'N/A';
-                mermaDisplay.className = 'text-lg font-bold text-gray-800';
+            if (valorNetoDisplay) {
+                valorNetoDisplay.textContent = teorico.toLocaleString('es-AR');
+            }
+            if (valorConMermaDisplay) {
+                valorConMermaDisplay.textContent = real.toLocaleString('es-AR');
             }
         };
 
-        consumoTeoricoInput.addEventListener('input', calculateMerma);
-        consumoRealInput.addEventListener('input', calculateMerma);
-        calculateMerma(); // Initial calculation
+        consumoTeoricoInput.addEventListener('input', updateValoresDisplay);
+        consumoRealInput.addEventListener('input', updateValoresDisplay);
+        updateValoresDisplay(); // Initial calculation
     }
 
     modalElement.querySelector('form').addEventListener('submit', handleSinopticoFormSubmit);
