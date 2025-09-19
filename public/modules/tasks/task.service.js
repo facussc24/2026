@@ -200,3 +200,19 @@ export function subscribeToTasks(callback, handleError) {
 
     return [unsubscribe];
 }
+
+export function calculateOverdueTasksCount(tasks) {
+    if (!tasks || !Array.isArray(tasks)) {
+        return 0;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to the beginning of the day for accurate comparison
+
+    return tasks.filter(task => {
+        if (task.status === 'done' || !task.dueDate) {
+            return false;
+        }
+        const dueDate = new Date(task.dueDate + "T00:00:00"); // Ensure correct date parsing
+        return dueDate < today;
+    }).length;
+}
