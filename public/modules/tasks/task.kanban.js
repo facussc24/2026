@@ -1,7 +1,7 @@
 import { updateTaskStatus, subscribeToTasks, saveTelegramConfig, sendTestTelegram, loadTelegramConfig } from './task.service.js';
 import { openTaskFormModal, renderTaskFilters, renderTasks, renderAdminUserList } from './task.ui.js';
 import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, addUnsubscriber, clearUnsubscribers } from './task.state.js';
-import { showToast } from '/main.js';
+import { showToast } from '../../main.js';
 
 let db;
 let appState;
@@ -45,7 +45,7 @@ export function initTasksSortable() {
 }
 
 import { collection, query, where, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { COLLECTIONS } from '/utils.js';
+import { COLLECTIONS } from '../../utils.js';
 
 export function runKanbanBoardLogic() {
     const state = getState();
