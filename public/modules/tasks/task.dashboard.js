@@ -63,26 +63,29 @@ export function renderTaskDashboardView() {
     <!-- Tab Panels Content -->
     <div id="admin-tab-content" class="animate-fade-in-up mt-8">
         <div id="tab-panel-dashboard" class="admin-tab-panel">
-             <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
-                <!-- Left Column: User Load and Status -->
-                <div class="xl:col-span-3 bg-white p-6 rounded-xl shadow-lg flex flex-col">
-                    <h3 class="text-lg font-bold text-slate-800 mb-4">Carga por Usuario y Estado (Tareas Abiertas)</h3>
-                    <div class="flex-grow grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                        <div class="relative h-96">
-                            <canvas id="user-load-chart"></canvas>
-                            <p id="user-load-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de carga de usuarios para mostrar.</p>
-                        </div>
-                        <div class="relative h-96">
-                            <canvas id="status-chart"></canvas>
-                             <p id="status-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de estado para mostrar.</p>
-                        </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- User Load Chart (Full Width) -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Carga de Tareas por Usuario</h3>
+                    <div class="relative flex-grow min-h-[300px]">
+                        <canvas id="user-load-chart"></canvas>
+                        <p id="user-load-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de carga de usuarios para mostrar.</p>
                     </div>
                 </div>
 
-                <!-- Right Column: Priority -->
-                <div class="xl:col-span-2 bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                <!-- Status Chart (Half Width) -->
+                <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Estado de Tareas Abiertas</h3>
+                    <div class="relative flex-grow min-h-[300px]">
+                        <canvas id="status-chart"></canvas>
+                        <p id="status-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de estado para mostrar.</p>
+                    </div>
+                </div>
+
+                <!-- Priority Chart (Half Width) -->
+                <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
                     <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3>
-                    <div class="relative flex-grow h-80 min-h-[320px]">
+                    <div class="relative flex-grow min-h-[300px]">
                         <canvas id="priority-chart"></canvas>
                         <p id="priority-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de prioridad para mostrar.</p>
                     </div>
@@ -333,7 +336,7 @@ function renderStatusChart(tasks) {
             maintainAspectRatio: false,
             plugins: {
                 legend: { position: 'bottom' },
-                title: { display: true, text: 'Estado de Tareas' }
+                title: { display: false }
             }
         }
     });
@@ -437,7 +440,7 @@ function renderUserLoadChart(tasks) {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                title: { display: true, text: 'Carga por Usuario' }
+                title: { display: false }
             },
             scales: {
                 x: {
