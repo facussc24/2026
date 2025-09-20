@@ -67,12 +67,9 @@ export function runTasksLogic(initialView = 'dashboard') {
         <div id="task-main-container">
             <div class="flex justify-between items-center mb-8">
                 <h2 class="text-3xl font-bold text-text-light dark:text-text-dark">Gestor de Tareas</h2>
-                <button class="bg-primary-DEFAULT text-white px-5 py-2.5 rounded-lg flex items-center shadow-md hover:bg-blue-700 transition-colors duration-300">
-                    <span class="material-symbols-outlined mr-2">add</span> Nueva Tarea
-                </button>
             </div>
 
-            <div class="bg-card-light dark:bg-card-dark p-4 rounded-lg shadow-sm mb-8 flex flex-wrap justify-between items-center border border-border-light dark:border-border-dark">
+            <div class="bg-card-light dark:bg-card-dark p-4 rounded-lg shadow-sm mb-8 flex flex-wrap items-center border border-border-light dark:border-border-dark">
                 <div id="dashboard-filters" class="flex items-center space-x-4 mb-4 md:mb-0 hidden">
                     <label class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark" for="view-select">Vista:</label>
                     <div class="relative">
@@ -87,7 +84,7 @@ export function runTasksLogic(initialView = 'dashboard') {
                     </div>
                 </div>
 
-                <nav id="task-navigation" class="flex items-center bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
+                <nav id="task-navigation" class="flex items-center bg-gray-200 dark:bg-gray-700 rounded-lg p-1 ml-auto">
                     <button data-task-view="kanban" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
                         <span class="material-symbols-outlined mr-2 !text-base">list_alt</span> Mis Tareas
                     </button>
