@@ -1,35 +1,22 @@
-import { jest } from '@jest/globals';
+import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 
-// Mock Firestore
-const mockGetDoc = jest.fn();
-const mockSetDoc = jest.fn();
-jest.unstable_mockModule('https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js', () => ({
-    getFirestore: jest.fn(() => ({})),
-    doc: jest.fn(),
-    getDoc: mockGetDoc,
-    setDoc: mockSetDoc,
-    arrayUnion: jest.fn(data => `arrayUnion(${JSON.stringify(data)})`), // Simple mock
-}));
+// Import the functions to be mocked
+import { getFirestore, doc, getDoc, setDoc, arrayUnion } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
+import { showAnnotationPanel } from '../../public/modulos/visor3d/js/components/eventManager.js';
+import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-// Mock other dependencies
-jest.unstable_mockModule('../../public/modulos/visor3d/js/components/eventManager.js', () => ({
-    showAnnotationPanel: jest.fn(),
-}));
-jest.unstable_mockModule('three/examples/jsm/renderers/CSS2DRenderer.js', () => ({
-    CSS2DObject: jest.fn().mockImplementation(element => ({
-        element,
-        position: { set: jest.fn() },
-    })),
-}));
-// Mock lucide for the icon in the pin
+// Mock the entire modules
+jest.mock('https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js');
+jest.mock('../../public/modulos/visor3d/js/components/eventManager.js');
+jest.mock('three/examples/jsm/renderers/CSS2DRenderer.js');
+
+// Mock lucide globally
 global.lucide = {
     createIcons: jest.fn(),
 };
 
-
-// Dynamically import the module to be tested after mocks are set up
-const { initAnnotations, saveAnnotation, addCommentToAnnotation } = await import('../../public/modulos/visor3d/js/components/annotationManager.js');
-const { showAnnotationPanel } = await import('../../public/modulos/visor3d/js/components/eventManager.js');
+// Import the module to be tested
+import { initAnnotations, saveAnnotation } from '../../public/modulos/visor3d/js/components/annotationManager.js';
 
 describe('Annotation Manager', () => {
     let mockScene;
@@ -39,6 +26,11 @@ describe('Annotation Manager', () => {
         mockScene = {
             add: jest.fn(),
         };
+        // Mock the implementation of CSS2DObject for this test suite
+        CSS2DObject.mockImplementation(element => ({
+            element,
+            position: { set: jest.fn() },
+        }));
     });
 
     describe('initAnnotations', () => {
@@ -49,7 +41,7 @@ describe('Annotation Manager', () => {
                 { id: 'anno1', position: { x: 1, y: 1, z: 1 }, comments: [] },
                 { id: 'anno2', position: { x: 2, y: 2, z: 2 }, comments: [] },
             ];
-            mockGetDoc.mockResolvedValue({
+            getDoc.mockResolvedValue({
                 exists: () => true,
                 data: () => ({ annotations: mockAnnotations }),
             });
@@ -58,14 +50,14 @@ describe('Annotation Manager', () => {
             await initAnnotations(modelName, mockScene);
 
             // Assert
-            expect(mockGetDoc).toHaveBeenCalled();
-            expect(mockScene.add).toHaveBeenCalledTimes(2); // One pin for each annotation
+            expect(getDoc).toHaveBeenCalled();
+            expect(mockScene.add).toHaveBeenCalledTimes(2);
         });
 
         test('should handle cases where no annotations document exists', async () => {
             // Arrange
             const modelName = 'new-model';
-            mockGetDoc.mockResolvedValue({
+            getDoc.mockResolvedValue({
                 exists: () => false,
             });
 
@@ -73,7 +65,7 @@ describe('Annotation Manager', () => {
             await initAnnotations(modelName, mockScene);
 
             // Assert
-            expect(mockGetDoc).toHaveBeenCalled();
+            expect(getDoc).toHaveBeenCalled();
             expect(mockScene.add).not.toHaveBeenCalled();
         });
     });
@@ -83,21 +75,20 @@ describe('Annotation Manager', () => {
             // Arrange
             const modelName = 'test-model';
             const newAnnotation = { id: 'anno3', position: { x: 3, y: 3, z: 3 }, comments: [] };
-            await initAnnotations(modelName, mockScene); // To set currentModelName
+            await initAnnotations(modelName, mockScene);
+
+            // Redefine arrayUnion for this test to wrap the data in an array, matching the test's expectation.
+            arrayUnion.mockImplementation(data => [data]);
 
             // Act
             await saveAnnotation(newAnnotation);
 
             // Assert
-            expect(mockSetDoc).toHaveBeenCalledWith(
-                undefined, // doc() is mocked and returns undefined
-                { annotations: `arrayUnion(${JSON.stringify(newAnnotation)})` },
+            expect(setDoc).toHaveBeenCalledWith(
+                undefined,
+                { annotations: [newAnnotation] },
                 { merge: true }
             );
         });
     });
-
-    // Note: Testing addCommentToAnnotation is more complex due to the read-modify-write logic
-    // and would require a more detailed mock of the internal state.
-    // For this exercise, we focus on the primary load/save paths.
 });

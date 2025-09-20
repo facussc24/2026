@@ -5,7 +5,7 @@
   "main": "public/main.js",
   "type": "module",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    "test": "jest"
   },
   "repository": {
     "type": "git",

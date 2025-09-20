@@ -137,6 +137,7 @@ export class GLTFLoader {
 // Post-processing and loaders added for the new features
 export class RGBELoader {
     setPath() { return this; }
+    setDataType() { return this; } // Add this line
     load(path, onLoad) {
         if (onLoad) onLoad({});
         return this;
