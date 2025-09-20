@@ -1,3 +1,5 @@
+import { getDocs, collection, onSnapshot, query, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { COLLECTIONS } from '../../utils.js';
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
 import { handleTaskFormSubmit, deleteTask } from './task.service.js';
@@ -214,21 +216,10 @@ export function renderTasks(tasks, container) {
     lucide.createIcons();
 }
 
-export async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
+// Helper function to create the modal's HTML
+function createTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDate) {
     const isEditing = task !== null;
-
-    // Determine the UID to be pre-selected in the dropdown.
-    let selectedUid = defaultAssigneeUid || ''; // Prioritize passed-in UID
-    if (!selectedUid) { // If no default is provided, use existing logic
-        if (isEditing && task.assigneeUid) {
-            selectedUid = task.assigneeUid;
-        } else if (!isEditing && getState().kanban.activeFilter === 'personal') {
-            // When creating a new personal task, assign it to self by default
-            selectedUid = appState.currentUser.uid;
-        }
-    }
-
-    const modalHTML = `
+    return `
     <div id="task-form-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
             <div class="flex justify-between items-center p-5 border-b border-slate-200">
@@ -313,24 +304,13 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
         </div>
     </div>
     `;
-    dom.modalContainer.innerHTML = modalHTML;
-    lucide.createIcons();
+}
 
-    const modalElement = document.getElementById('task-form-modal');
-
-    // Ensure users are loaded before populating the dropdown
-    if (!appState.collections.usuarios || appState.collections.usuarios.length === 0) {
-        console.log("User collection is empty, fetching...");
-        const usersSnapshot = await getDocs(collection(db, COLLECTIONS.USUARIOS));
-        appState.collections.usuarios = usersSnapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
-        appState.collectionsById.usuarios = new Map(appState.collections.usuarios.map(u => [u.docId, u]));
-        console.log("User collection fetched and populated.");
-    }
-    populateTaskAssigneeDropdown();
-
+// Helper function to initialize subtask functionality
+function initSubtasks(modalElement, task) {
     const subtaskListEl = modalElement.querySelector('#subtasks-list');
     const newSubtaskInput = modalElement.querySelector('#new-subtask-title');
-
+    const isEditing = task !== null;
     let currentSubtasks = isEditing && task.subtasks ? [...task.subtasks] : [];
 
     const rerenderSubtasks = () => {
@@ -378,11 +358,14 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     });
 
     rerenderSubtasks(); // Initial render
+}
 
-    // --- Comments Logic ---
+// Helper function to initialize comment functionality
+function initComments(modalElement, task) {
     const commentsListEl = modalElement.querySelector('#task-comments-list');
     const newCommentInput = modalElement.querySelector('#new-task-comment');
     const postCommentBtn = modalElement.querySelector('#post-comment-btn');
+    const isEditing = task !== null;
     let commentsUnsubscribe = null;
 
     const renderTaskComments = (comments) => {
@@ -408,7 +391,6 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
             `;
         }).join('');
         lucide.createIcons();
-        // Scroll to the bottom of the comments list
         commentsListEl.scrollTop = commentsListEl.scrollHeight;
     };
 
@@ -422,7 +404,7 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
             renderTaskComments(comments);
         });
     } else {
-        renderTaskComments([]); // Show "No hay comentarios" for new tasks
+        renderTaskComments([]);
         postCommentBtn.disabled = true;
         newCommentInput.disabled = true;
         newCommentInput.placeholder = 'Guarde la tarea para poder añadir comentarios.';
@@ -457,10 +439,11 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
         }
     });
 
-    // Autofocus the title field for new tasks
-    if (!isEditing) {
-        modalElement.querySelector('#task-title').focus();
-    }
+    return commentsUnsubscribe;
+}
+
+// Helper function to initialize modal event listeners
+function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
     modalElement.querySelector('form').addEventListener('submit', handleTaskFormSubmit);
 
     modalElement.addEventListener('click', e => {
@@ -487,6 +470,44 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
             });
         }
     });
+}
+
+export async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
+    const isEditing = task !== null;
+
+    // Determine the UID to be pre-selected in the dropdown.
+    let selectedUid = defaultAssigneeUid || '';
+    if (!selectedUid) {
+        if (isEditing && task.assigneeUid) {
+            selectedUid = task.assigneeUid;
+        } else if (!isEditing && getState().kanban.activeFilter === 'personal') {
+            selectedUid = appState.currentUser.uid;
+        }
+    }
+
+    const modalHTML = createTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDate);
+    dom.modalContainer.innerHTML = modalHTML;
+    lucide.createIcons();
+
+    const modalElement = document.getElementById('task-form-modal');
+
+    // Ensure users are loaded before populating the dropdown
+    if (!appState.collections.usuarios || appState.collections.usuarios.length === 0) {
+        console.log("User collection is empty, fetching...");
+        const usersSnapshot = await getDocs(collection(db, COLLECTIONS.USUARIOS));
+        appState.collections.usuarios = usersSnapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
+        appState.collectionsById.usuarios = new Map(appState.collections.usuarios.map(u => [u.docId, u]));
+        console.log("User collection fetched and populated.");
+    }
+    populateTaskAssigneeDropdown();
+
+    initSubtasks(modalElement, task);
+    const commentsUnsubscribe = initComments(modalElement, task);
+    initModalEventListeners(modalElement, task, commentsUnsubscribe);
+
+    if (!isEditing) {
+        modalElement.querySelector('#task-title').focus();
+    }
 }
 
 export function renderFilteredAdminTaskTable() {
