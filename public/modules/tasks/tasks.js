@@ -30,24 +30,31 @@ export function initTasksModule(dependencies) {
     console.log("Tasks module initialized.");
 }
 
-export function runTasksLogic(initialView = 'kanban') {
+export function runTasksLogic(initialView = 'dashboard') {
     const renderView = (view) => {
         const viewContainer = dom.viewContent.querySelector('#task-view-container');
         if (!viewContainer) return;
         viewContainer.innerHTML = ''; // Clear previous view
 
+        // New class handling for navigation buttons
         dom.viewContent.querySelectorAll('.task-nav-btn').forEach(btn => {
-            btn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
-            btn.classList.add('text-slate-600', 'hover:bg-slate-300/50');
+            btn.classList.remove('bg-white', 'dark:bg-gray-800', 'text-primary-DEFAULT', 'shadow-sm');
+            btn.classList.add('text-text-secondary-light', 'dark:text-text-secondary-dark', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
         });
 
         const activeButton = dom.viewContent.querySelector(`.task-nav-btn[data-task-view="${view}"]`);
         if (activeButton) {
-            activeButton.classList.add('bg-white', 'text-blue-600', 'shadow-sm');
-            activeButton.classList.remove('text-slate-600', 'hover:bg-slate-300/50');
+            activeButton.classList.add('bg-white', 'dark:bg-gray-800', 'text-primary-DEFAULT', 'shadow-sm');
+            activeButton.classList.remove('text-text-secondary-light', 'dark:text-text-secondary-dark', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
+        }
+
+        const dashboardFilters = dom.viewContent.querySelector('#dashboard-filters');
+        if (dashboardFilters) {
+            dashboardFilters.classList.toggle('hidden', view !== 'dashboard');
         }
 
         if (view === 'dashboard') {
+            // The container for the dashboard view is the view-container itself
             renderTaskDashboardView(viewContainer);
         } else if (view === 'calendar') {
             renderTaskCalendar(viewContainer);
@@ -57,25 +64,46 @@ export function runTasksLogic(initialView = 'kanban') {
     };
 
     dom.viewContent.innerHTML = `
-        <div id="task-main-container" class="space-y-4">
-             <div class="flex flex-wrap justify-between items-center gap-4 mb-2">
-                 <h2 class="text-3xl font-bold text-slate-800">Gestor de Tareas</h2>
-                 <nav id="task-navigation" class="flex items-center gap-2 rounded-lg bg-slate-200 p-1">
-                     <button data-task-view="kanban" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
-                         <i data-lucide="columns" class="w-4 h-4 mr-1.5"></i>Mis Tareas
-                     </button>
-                     <button data-task-view="dashboard" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
-                         <i data-lucide="layout-dashboard" class="w-4 h-4 mr-1.5"></i>Dashboard
-                     </button>
-                     <button data-task-view="calendar" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
-                         <i data-lucide="calendar" class="w-4 h-4 mr-1.5"></i>Calendario
-                     </button>
-                 </nav>
-             </div>
-             <div id="task-view-container" class="mt-4">
-                 <!-- Content for the selected view will be rendered here -->
-             </div>
-         </div>
+        <div id="task-main-container">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-bold text-text-light dark:text-text-dark">Gestor de Tareas</h2>
+                <button class="bg-primary-DEFAULT text-white px-5 py-2.5 rounded-lg flex items-center shadow-md hover:bg-blue-700 transition-colors duration-300">
+                    <span class="material-symbols-outlined mr-2">add</span> Nueva Tarea
+                </button>
+            </div>
+
+            <div class="bg-card-light dark:bg-card-dark p-4 rounded-lg shadow-sm mb-8 flex flex-wrap justify-between items-center border border-border-light dark:border-border-dark">
+                <div id="dashboard-filters" class="flex items-center space-x-4 mb-4 md:mb-0 hidden">
+                    <label class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark" for="view-select">Vista:</label>
+                    <div class="relative">
+                        <select class="appearance-none bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark rounded-md text-sm py-2 pl-3 pr-8 focus:ring-2 focus:ring-primary-DEFAULT focus:border-primary-DEFAULT" id="view-select">
+                            <option>Todas las Tareas</option>
+                            <option>Mis Tareas</option>
+                            <option>Tareas Asignadas</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary-light dark:text-text-secondary-dark">
+                            <span class="material-symbols-outlined !text-base">expand_more</span>
+                        </div>
+                    </div>
+                </div>
+
+                <nav id="task-navigation" class="flex items-center bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
+                    <button data-task-view="kanban" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
+                        <span class="material-symbols-outlined mr-2 !text-base">list_alt</span> Mis Tareas
+                    </button>
+                    <button data-task-view="dashboard" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
+                        <span class="material-symbols-outlined mr-2 !text-base">space_dashboard</span> Dashboard
+                    </button>
+                    <button data-task-view="calendar" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
+                        <span class="material-symbols-outlined mr-2 !text-base">calendar_today</span> Calendario
+                    </button>
+                </nav>
+            </div>
+
+            <div id="task-view-container" class="mt-4">
+                <!-- Content for the selected view will be rendered here -->
+            </div>
+        </div>
     `;
 
     const taskNav = dom.viewContent.querySelector('#task-navigation');
@@ -90,7 +118,5 @@ export function runTasksLogic(initialView = 'kanban') {
 
     // Render the initial view passed to the function
     renderView(initialView);
-    if (lucide) {
-        lucide.createIcons();
-    }
+    // No need to call lucide.createIcons() anymore for this part
 }
