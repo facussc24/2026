@@ -14,10 +14,7 @@ export {
     calculateOverdueTasksCount,
     fetchAllTasks,
     renderMyPendingTasksWidget,
-    renderTasksByProjectChart,
-    renderTaskDashboardView,
-    renderTaskCalendar,
-    runKanbanBoardLogic
+    renderTasksByProjectChart
 };
 
 export function initTasksModule(dependencies) {
@@ -32,7 +29,7 @@ export function initTasksModule(dependencies) {
     console.log("Tasks module initialized.");
 }
 
-export function runTasksLogic() {
+export function runTasksLogic(initialView = 'kanban') {
     const renderView = (view) => {
         const viewContainer = dom.viewContent.querySelector('#task-view-container');
         if (!viewContainer) return;
@@ -90,8 +87,8 @@ export function runTasksLogic() {
         });
     }
 
-    // Default to Kanban view as requested
-    renderView('kanban');
+    // Render the initial view passed to the function
+    renderView(initialView);
     if (lucide) {
         lucide.createIcons();
     }

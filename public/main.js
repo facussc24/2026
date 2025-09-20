@@ -10,7 +10,6 @@ import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
 import {
     initTasksModule,
     runTasksLogic as runTasksLogicFromModule,
-    renderTaskDashboardView,
     calculateOverdueTasksCount,
     fetchAllTasks,
     renderMyPendingTasksWidget,
@@ -1479,8 +1478,8 @@ async function switchView(viewName, params = null) {
     else if (viewName === 'flujograma') await runFlujogramaLogic();
     else if (viewName === 'arboles') await renderArbolesInitialView();
     else if (viewName === 'profile') await runProfileLogic();
-    else if (viewName === 'tareas') await runTasksLogicFromModule();
-    else if (viewName === 'task-dashboard') await renderTaskDashboardView();
+    else if (viewName === 'tareas') await runTasksLogicFromModule('kanban');
+    else if (viewName === 'task-dashboard') await runTasksLogicFromModule('dashboard');
     else if (viewName === 'eco') await runEcoLogic();
     else if (viewName === 'ecr') await runEcrLogic();
     else if (viewName === 'control_ecrs') await runControlEcrsLogic();
