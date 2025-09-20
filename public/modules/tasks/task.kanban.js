@@ -153,12 +153,12 @@ export function runKanbanBoardLogic(container) {
                     </p>
                 </div>
             </div>
-            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-4 border-t">
-                <div>
+            <div class="mt-4 grid grid-cols-2 gap-x-6 pt-4 border-t">
+                <div class="col-span-1">
                     <label for="telegram-chat-id" class="block text-sm font-medium text-gray-700 mb-1">Tu Chat ID de Telegram</label>
                     <input type="text" id="telegram-chat-id" placeholder="Ingresa tu Chat ID numérico" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
                 </div>
-                <div>
+                <div class="col-span-1">
                     <label class="block text-sm font-medium text-gray-700 mb-1">¿Cuándo notificar?</label>
                     <div class="space-y-2 mt-2">
                         <label class="flex items-center">

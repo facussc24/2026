@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, or, and } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../../utils.js';
 import { getState } from './task.state.js';
@@ -176,31 +176,34 @@ export function subscribeToTasks(callback, handleError) {
     const user = appState.currentUser;
     const state = getState();
 
-    let queryConstraints = [];
+    let filterConditions = [];
 
     if (state.kanban.activeFilter === 'personal') {
-        // Use a single OR query to get tasks created by or assigned to the user.
-        queryConstraints.push(
+        filterConditions.push(
             or(
                 where('assigneeUid', '==', user.uid),
                 where('creatorUid', '==', user.uid)
             )
         );
     } else if (state.kanban.selectedUserId) {
-        queryConstraints.push(where('assigneeUid', '==', state.kanban.selectedUserId));
+        filterConditions.push(where('assigneeUid', '==', state.kanban.selectedUserId));
     } else if (state.kanban.activeFilter === 'engineering') {
-        queryConstraints.push(where('isPublic', '==', true));
+        filterConditions.push(where('isPublic', '==', true));
     } else if (state.kanban.activeFilter === 'all' && user.role !== 'admin') {
-        // Non-admins can only see public tasks in the 'all' view.
-        queryConstraints.push(where('isPublic', '==', true));
+        filterConditions.push(where('isPublic', '==', true));
     }
-    // Note: If 'all' and admin, no user/public constraint is added, showing all tasks.
 
     if (state.kanban.priorityFilter !== 'all') {
-        queryConstraints.push(where('priority', '==', state.kanban.priorityFilter));
+        filterConditions.push(where('priority', '==', state.kanban.priorityFilter));
     }
 
-    // Always sort by creation date for consistent ordering.
+    let queryConstraints = [];
+    if (filterConditions.length > 1) {
+        queryConstraints.push(and(...filterConditions));
+    } else if (filterConditions.length === 1) {
+        queryConstraints.push(filterConditions[0]);
+    }
+
     queryConstraints.push(orderBy('createdAt', 'desc'));
 
     const finalQuery = query(tasksRef, ...queryConstraints);
@@ -208,7 +211,6 @@ export function subscribeToTasks(callback, handleError) {
         const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
         callback(tasks);
     }, (error) => {
-        // Enhanced error logging for easier debugging.
         console.error("Error in subscribeToTasks:", error);
         if (error.code === 'failed-precondition') {
             console.error("This error likely means you're missing a Firestore index. Check the browser's developer console for a link to create it automatically.");
