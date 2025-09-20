@@ -14,7 +14,8 @@ export {
     calculateOverdueTasksCount,
     fetchAllTasks,
     renderMyPendingTasksWidget,
-    renderTasksByProjectChart
+    renderTasksByProjectChart,
+    renderTaskDashboardView
 };
 
 export function initTasksModule(dependencies) {
