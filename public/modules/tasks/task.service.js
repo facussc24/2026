@@ -233,6 +233,71 @@ export function subscribeToTasks(callback, handleError) {
     return [unsubscribe];
 }
 
+export function subscribeToPaginatedTasks(filters, pagination, callback, handleError) {
+    const { searchTerm, user, status, priority } = filters;
+    const { lastVisible, pageSize = 10 } = pagination;
+
+    const tasksRef = collection(db, COLLECTIONS.TAREAS);
+    let queryConstraints = [orderBy('createdAt', 'desc')];
+
+    if (user && user !== 'all') {
+        queryConstraints.push(where('assigneeUid', '==', user));
+    }
+    if (status && status !== 'all') {
+        queryConstraints.push(where('status', '==', status));
+    }
+    if (priority && priority !== 'all') {
+        queryConstraints.push(where('priority', '==', priority));
+    }
+
+    if (lastVisible) {
+        queryConstraints.push(startAfter(lastVisible));
+    }
+    queryConstraints.push(limit(pageSize));
+
+    const q = query(tasksRef, ...queryConstraints);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+        const newLastVisible = snapshot.docs[snapshot.docs.length - 1];
+
+        // Client-side filtering for search term
+        let filteredTasks = tasks;
+        if (searchTerm) {
+            const lowercasedFilter = searchTerm.toLowerCase();
+            const userMap = appState.collectionsById.usuarios;
+
+            filteredTasks = tasks.filter(task => {
+                const assignee = userMap.get(task.assigneeUid);
+                const assigneeName = assignee ? assignee.name.toLowerCase() : '';
+
+                return task.title.toLowerCase().includes(lowercasedFilter) ||
+                       (task.proyecto && task.proyecto.toLowerCase().includes(lowercasedFilter)) ||
+                       (assigneeName && assigneeName.includes(lowercasedFilter));
+            });
+        }
+
+        callback({
+            tasks: filteredTasks,
+            lastVisible: newLastVisible,
+            isLastPage: snapshot.docs.length < pageSize
+        });
+    }, (error) => {
+        console.error("Error in subscribeToPaginatedTasks:", error);
+        if (error.code === 'failed-precondition') {
+            const indexLink = error.message.match(/(https?:\/\/[^\s]+)/);
+            if (indexLink) {
+                console.error(`Missing Firestore index. Please create it by visiting this link: ${indexLink[0]}`);
+                showToast('Se requiere un índice de base de datos. Consulte la consola para obtener el enlace para crearlo.', 'error', 10000);
+            }
+        }
+        handleError(error);
+    });
+
+    return unsubscribe;
+}
+
+
 export function calculateOverdueTasksCount(tasks) {
     if (!tasks || !Array.isArray(tasks)) {
         return 0;

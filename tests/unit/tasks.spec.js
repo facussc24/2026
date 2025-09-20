@@ -60,11 +60,19 @@ describe('Tasks Module', () => {
       if (selector === '#task-navigation') {
         return mockTaskNav;
       }
+      if (selector === '#dashboard-filters') {
+        return { classList: { toggle: jest.fn() } };
+      }
+       if (selector === '#task-view-container') {
+        return { innerHTML: '' };
+      }
       // Return a generic mock for any other query to prevent errors
       return {
         innerHTML: '',
         querySelectorAll: jest.fn(() => []),
         querySelector: jest.fn(),
+         classList: { add: jest.fn(), remove: jest.fn(), toggle: jest.fn() },
+        addEventListener: jest.fn(),
       };
     });
   });
@@ -95,7 +103,7 @@ describe('Tasks Module', () => {
 
     // Assert
     expect(mockDom.viewContent.innerHTML).toContain('<div id="task-main-container"');
-    expect(mockDom.viewContent.innerHTML).toContain('<h2 class="text-3xl font-bold text-slate-800">Gestor de Tareas</h2>');
+    expect(mockDom.viewContent.innerHTML).toContain('<h2 class="text-3xl font-bold text-text-light dark:text-text-dark">Gestor de Tareas</h2>');
     expect(mockDom.viewContent.innerHTML).toContain('<nav id="task-navigation"');
     expect(mockDom.viewContent.innerHTML).toContain('data-task-view="kanban"');
     expect(mockDom.viewContent.innerHTML).toContain('data-task-view="dashboard"');
@@ -103,7 +111,7 @@ describe('Tasks Module', () => {
     expect(mockDom.viewContent.innerHTML).toContain('<div id="task-view-container"');
   });
 
-  test('runTasksLogic should default to the "kanban" view', () => {
+  test('runTasksLogic should default to the "dashboard" view', () => {
     // Arrange
     const dependencies = { dom: mockDom, lucide: mockLucide };
     initTasksModule(dependencies);
@@ -112,7 +120,8 @@ describe('Tasks Module', () => {
     runTasksLogic();
 
     // Assert
-    expect(taskKanban.runKanbanBoardLogic).toHaveBeenCalled();
+    expect(taskDashboard.renderTaskDashboardView).toHaveBeenCalled();
+    expect(taskKanban.runKanbanBoardLogic).not.toHaveBeenCalled();
   });
 
   test('runTasksLogic should render the dashboard view when specified', () => {
