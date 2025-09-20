@@ -24,6 +24,10 @@ export async function fetchAllTasks() {
     return snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
 }
 
+/**
+ * Carga la configuración de Telegram del usuario actual desde Firestore y la muestra en el formulario.
+ * @param {HTMLElement} container - El elemento contenedor del DOM que contiene el formulario de configuración de Telegram.
+ */
 export async function loadTelegramConfig(container) {
     const userDocRef = doc(db, COLLECTIONS.USUARIOS, appState.currentUser.uid);
     const userDoc = await getDoc(userDocRef);
@@ -44,6 +48,10 @@ export async function loadTelegramConfig(container) {
     }
 }
 
+/**
+ * Guarda la configuración de Telegram del usuario (Chat ID y preferencias de notificación) en Firestore.
+ * @param {HTMLElement} container - El elemento contenedor del DOM que contiene el formulario de configuración.
+ */
 export async function saveTelegramConfig(container) {
     const chatIdInput = container.querySelector('#telegram-chat-id');
     if (!chatIdInput) return;
@@ -69,6 +77,10 @@ export async function saveTelegramConfig(container) {
     }
 };
 
+/**
+ * Llama a una función de Firebase para enviar un mensaje de prueba de Telegram al Chat ID configurado por el usuario.
+ * @param {HTMLElement} container - El elemento contenedor del DOM que contiene el botón de prueba.
+ */
 export async function sendTestTelegram(container) {
     const button = container.querySelector('#send-test-telegram-btn');
     if(!button) return;
