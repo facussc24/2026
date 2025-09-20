@@ -109,6 +109,18 @@ export function resetDashboardState() {
     d.calendar = { currentDate: new Date(), view: 'monthly', priorityFilter: 'all' };
 }
 
+export function setCalendarDate(date) {
+    tasksModuleState.dashboard.calendar.currentDate = date;
+}
+
+export function setCalendarView(view) {
+    tasksModuleState.dashboard.calendar.view = view;
+}
+
+export function setCalendarPriorityFilter(priority) {
+    tasksModuleState.dashboard.calendar.priorityFilter = priority;
+}
+
 export function addUnsubscriber(unsub) {
     if (Array.isArray(unsub)) {
         tasksModuleState.unsubscribers.push(...unsub);

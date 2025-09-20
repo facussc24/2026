@@ -56,7 +56,7 @@ export function runTasksLogic() {
                  <h2 class="text-3xl font-bold text-slate-800">Gestor de Tareas</h2>
                  <nav id="task-navigation" class="flex items-center gap-2 rounded-lg bg-slate-200 p-1">
                      <button data-task-view="kanban" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
-                         <i data-lucide="columns" class="w-4 h-4 mr-1.5"></i>Tabla de Tareas
+                         <i data-lucide="columns" class="w-4 h-4 mr-1.5"></i>Mis Tareas
                      </button>
                      <button data-task-view="dashboard" class="task-nav-btn flex items-center gap-2 px-4 py-1.5 text-sm font-semibold rounded-md transition-colors">
                          <i data-lucide="layout-dashboard" class="w-4 h-4 mr-1.5"></i>Dashboard
