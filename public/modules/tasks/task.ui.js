@@ -693,6 +693,184 @@ function formatTimeAgo(timestamp) {
     return `hace ${Math.floor(seconds)} segundos`;
 }
 
+export function showTableLoading(container) {
+    if (!container) return;
+    container.innerHTML = `
+        <div class="flex items-center justify-center p-10">
+            <i data-lucide="loader" class="w-8 h-8 animate-spin text-primary-DEFAULT"></i>
+        </div>
+    `;
+    if (lucide) {
+        lucide.createIcons();
+    }
+}
+
+export function hideTableLoading() {
+    // The container is cleared by the rendering function, so this can be a no-op
+}
+
+export function renderTasksTable(container, tasks, userMap) {
+    if (!container) return;
+
+    if (tasks.length === 0) {
+        container.innerHTML = `<div class="text-center py-16 text-slate-500 dark:text-slate-400">
+            <i data-lucide="inbox" class="w-12 h-12 mx-auto text-slate-400"></i>
+            <h3 class="mt-4 text-lg font-semibold">No se encontraron tareas</h3>
+            <p class="text-sm text-slate-400 mt-1">Intenta ajustar los filtros de búsqueda.</p>
+        </div>`;
+        if (lucide) {
+            lucide.createIcons();
+        }
+        return;
+    }
+
+    const tableRows = tasks.map(task => {
+        const assignee = userMap.get(task.assigneeUid);
+        const assigneeName = assignee ? assignee.name : 'No asignado';
+        const project = task.proyecto || 'N/A';
+
+        const statusMap = { todo: 'Pendiente', inprogress: 'En progreso', done: 'Completado' };
+        const statusText = statusMap[task.status] || 'Pendiente';
+        const statusColor = { todo: 'btn-warning', inprogress: 'btn-info', done: 'btn-success'}[task.status] || 'btn-secondary';
+
+        const priorityMap = { low: 'Baja', medium: 'Media', high: 'Alta' };
+        const priorityText = priorityMap[task.priority] || 'Media';
+        const priorityColor = { low: 'btn-success', medium: 'btn-warning', high: 'btn-danger'}[task.priority] || 'btn-secondary';
+
+        const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00").toLocaleDateString('es-AR') : 'N/A';
+
+        let progress = 0;
+        if (task.subtasks && task.subtasks.length > 0) {
+            const completed = task.subtasks.filter(st => st.completed).length;
+            progress = Math.round((completed / task.subtasks.length) * 100);
+        } else if (task.status === 'done') {
+            progress = 100;
+        }
+
+        return `
+            <tr class="border-t border-t-[#dbe0e6] dark:border-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors duration-150" data-task-id="${task.docId}" style="cursor: pointer;">
+                <td class="h-[72px] px-4 py-2 text-text-light dark:text-text-dark text-sm font-medium leading-normal">${task.title}</td>
+                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${project}</td>
+                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${assigneeName}</td>
+                <td class="h-[72px] px-4 py-2 w-40 text-sm font-normal leading-normal"><button class="btn btn-sm w-full ${statusColor} !opacity-100" disabled>${statusText}</button></td>
+                <td class="h-[72px] px-4 py-2 w-40 text-sm font-normal leading-normal"><button class="btn btn-sm w-full ${priorityColor} !opacity-100" disabled>${priorityText}</button></td>
+                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${dueDate}</td>
+                <td class="h-[72px] px-4 py-2 w-48 text-sm font-normal leading-normal">
+                    <div class="flex items-center gap-3">
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"><div class="h-2.5 rounded-full bg-primary-DEFAULT" style="width: ${progress}%;"></div></div>
+                        <p class="text-text-light dark:text-text-dark text-sm font-medium leading-normal">${progress}%</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="overflow-x-auto rounded-xl border border-[#dbe0e6] dark:border-slate-700 bg-white dark:bg-card-dark">
+            <table class="min-w-full">
+                <thead>
+                    <tr class="bg-white dark:bg-card-dark">
+                        <th class="px-4 py-3 text-left text-text-light dark:text-text-dark text-sm font-medium leading-normal">Tarea</th>
+                        <th class="px-4 py-3 text-left text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Proyecto</th>
+                        <th class="px-4 py-3 text-left text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Usuario</th>
+                        <th class="px-4 py-3 text-left text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Estado</th>
+                        <th class="px-4 py-3 text-left text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Prioridad</th>
+                        <th class="px-4 py-3 text-left text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Fecha límite</th>
+                        <th class="px-4 py-3 text-left text-text-secondary-light dark:text-text-secondary-dark text-sm font-medium leading-normal">Progreso</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                    ${tableRows}
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    container.querySelectorAll('tr[data-task-id]').forEach(row => {
+        row.addEventListener('click', () => {
+            const taskId = row.dataset.taskId;
+            const task = tasks.find(t => t.docId === taskId);
+            if(task) {
+                openTaskFormModal(task);
+            }
+        });
+    });
+}
+
+export function renderPaginationControls(container, currentPage, isLastPage) {
+    if (!container) return;
+    container.innerHTML = `
+        <div class="flex items-center gap-4">
+            <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark">Página ${currentPage}</span>
+            <button data-page="next" class="btn btn-primary" ${isLastPage ? 'disabled' : ''}>
+                <i data-lucide="arrow-right" class="w-4 h-4 mr-2"></i>
+                Cargar más
+            </button>
+        </div>
+    `;
+    if (lucide) {
+        lucide.createIcons();
+    }
+}
+
+export function renderTaskTableFilters(container, currentUser, users) {
+    if (!container) return;
+
+    let userFilterHTML = '';
+    if (currentUser.role === 'admin') {
+        const userOptions = users.map(u => `<option value="${u.docId}">${u.name || u.email}</option>`).join('');
+        userFilterHTML = `
+            <div class="relative">
+                <i data-lucide="user" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark"></i>
+                <select id="user-filter-select" class="select pl-9">
+                    <option value="all">Todos los Usuarios</option>
+                    ${userOptions}
+                </select>
+            </div>
+        `;
+    }
+
+    const buildFilterGroup = (type, primary, options) => `
+        <div class="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
+            <button data-filter-type="${type}" data-filter-value="${primary.value}" class="btn btn-sm btn-white text-text-light dark:text-text-dark shadow-sm">${primary.label}</button>
+            ${options.map(opt => `<button data-filter-type="${type}" data-filter-value="${opt.value}" class="btn btn-sm btn-ghost text-text-secondary-light dark:text-text-secondary-dark">${opt.label}</button>`).join('')}
+        </div>
+    `;
+
+    const statusFilterHTML = buildFilterGroup('status', {value: 'all', label: 'Estado'}, [
+        {value: 'todo', label: 'Pendiente'},
+        {value: 'inprogress', label: 'En Progreso'},
+        {value: 'done', label: 'Completado'}
+    ]);
+
+    const priorityFilterHTML = buildFilterGroup('priority', {value: 'all', label: 'Prioridad'}, [
+        {value: 'high', label: 'Alta'},
+        {value: 'medium', label: 'Media'},
+        {value: 'low', label: 'Baja'}
+    ]);
+
+    container.innerHTML = userFilterHTML + statusFilterHTML + priorityFilterHTML;
+
+    const userSelect = container.querySelector('#user-filter-select');
+    if (userSelect) {
+        userSelect.addEventListener('change', (e) => {
+            const dashboardFilters = document.getElementById('task-filters-container');
+            if (dashboardFilters) {
+                const fakeButton = document.createElement('button');
+                fakeButton.dataset.filterType = 'user';
+                fakeButton.dataset.filterValue = e.target.value;
+
+                const customEvent = new CustomEvent('filterchange', {
+                    detail: { filterType: 'user', filterValue: e.target.value },
+                    bubbles: true
+                });
+                dashboardFilters.dispatchEvent(customEvent);
+            }
+        });
+    }
+}
+
+
 export function renderMyPendingTasksWidget(tasks) {
     const container = document.getElementById('my-pending-tasks-widget');
     const countEl = document.getElementById('my-pending-tasks-count');
