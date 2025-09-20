@@ -1,485 +1,288 @@
 import { subscribeToAllTasks } from './task.service.js';
-import { COLLECTIONS } from '../../utils.js';
 import { showToast } from '../../main.js';
-import { getState, setDashboardTasks, setDashboardViewMode, resetDashboardState, addUnsubscriber, clearUnsubscribers, setDashboardTableFilter } from './task.state.js';
+import { getState, setDashboardTasks, setDashboardViewMode, resetDashboardState, addUnsubscriber, clearUnsubscribers } from './task.state.js';
 
 let db;
 let appState;
 let dom;
-let lucide;
 
 export function initDashboard(dependencies) {
     db = dependencies.db;
     appState = dependencies.appState;
     dom = dependencies.dom;
-    lucide = dependencies.lucide;
 }
 
 export function renderTaskDashboardView(container) {
-    const isAdmin = appState.currentUser.role === 'admin';
-
-    const tableFiltersHTML = `
-        <div id="dashboard-table-filters" class="flex gap-3 p-3 flex-wrap pr-4 border-t border-b mb-4">
-            <button data-filter="user" class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-xl bg-[#f0f2f4] pl-4 pr-2">
-                <p class="text-[#111418] text-sm font-medium leading-normal">Usuario</p>
-            </button>
-            <button data-filter="status" class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-xl bg-[#f0f2f4] pl-4 pr-2">
-                <p class="text-[#111418] text-sm font-medium leading-normal">Estado</p>
-            </button>
-            <button data-filter="priority" class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-xl bg-[#f0f2f4] pl-4 pr-2">
-                <p class="text-[#111418] text-sm font-medium leading-normal">Prioridad</p>
-            </button>
-        </div>
-    `;
-
-    const tableHTML = `
-        <div class="bg-white p-6 rounded-xl shadow-lg mb-6">
-            <h3 class="text-lg font-bold text-slate-800 mb-4">Tabla de Tareas Recientes</h3>
-            ${isAdmin ? tableFiltersHTML : ''}
-            <div class="overflow-x-auto">
-                <table class="w-full">
-                    <thead>
-                        <tr class="text-left text-xs text-slate-500 uppercase">
-                            <th class="px-4 py-2">Tarea</th>
-                            <th class="px-4 py-2">Usuario</th>
-                            <th class="px-4 py-2">Estado</th>
-                            <th class="px-4 py-2">Prioridad</th>
-                            <th class="px-4 py-2">Fecha Límite</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dashboard-task-table-body" class="text-sm">
-                        <!-- Rows will be injected here -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    `;
-
-    const chartsHTML = `
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-            <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
-                <h3 class="text-lg font-bold text-slate-800 mb-4">Carga de Tareas por Usuario</h3>
-                <div class="relative flex-grow min-h-[400px]">
-                    <canvas id="user-load-chart"></canvas>
-                    <p id="user-load-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de carga de usuarios para mostrar.</p>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
-                <h3 class="text-lg font-bold text-slate-800 mb-4">Estado de Tareas Abiertas</h3>
-                <div class="relative flex-grow min-h-[400px]">
-                    <canvas id="status-chart"></canvas>
-                    <p id="status-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de estado para mostrar.</p>
-                </div>
-            </div>
-            <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col">
-                <h3 class="text-lg font-bold text-slate-800 mb-4">Tareas por Prioridad</h3>
-                <div class="relative flex-grow min-h-[400px]">
-                    <canvas id="priority-chart"></canvas>
-                    <p id="priority-chart-no-data" class="hidden absolute inset-0 flex items-center justify-center text-slate-500">No hay datos de prioridad para mostrar.</p>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const adminViewHTML = `
-        <div id="admin-filters-container" class="bg-white p-4 rounded-xl shadow-sm border items-center gap-6 mb-6 flex">
-            <div class="flex items-center gap-2">
-                <label for="admin-view-filter" class="text-sm font-bold text-slate-600 flex-shrink-0">Vista:</label>
-                <select id="admin-view-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm">
-                    <option value="all">Todas las Tareas</option>
-                    <option value="my-tasks">Mis Tareas</option>
-                    <option value="specific-user">Usuario específico...</option>
-                </select>
-            </div>
-            <div id="admin-user-filter-container" class="hidden items-center gap-2">
-                <label for="admin-specific-user-filter" class="text-sm font-bold text-slate-600 flex-shrink-0">Usuario:</label>
-                <select id="admin-specific-user-filter" class="pl-4 pr-8 py-2 border rounded-full bg-slate-50 appearance-none focus:bg-white text-sm"></select>
-            </div>
-        </div>
-        <div id="dashboard-content-container" class="animate-fade-in-up mt-6">
-            ${tableHTML}
-            ${chartsHTML}
-        </div>
-    `;
-
-    const nonAdminViewHTML = `
-        <div id="dashboard-content-container" class="animate-fade-in-up mt-6">
-            ${tableHTML}
-            ${chartsHTML}
-        </div>
-    `;
-
-    container.innerHTML = isAdmin ? adminViewHTML : nonAdminViewHTML;
-    lucide.createIcons();
+    container.innerHTML = getDashboardHTML();
 
     const onTasksReceived = (allTasks) => {
         setDashboardTasks(allTasks);
-        setTimeout(() => {
-            const dashboardContentContainer = container.querySelector('#dashboard-content-container');
-            updateAdminDashboardData(dashboardContentContainer || container, allTasks);
-        }, 0);
+        hideLoading();
+        updateDashboardData(allTasks);
     };
 
     const handleError = (error) => {
         console.error("Error fetching tasks for dashboard:", error);
         showToast('Error al cargar las tareas del dashboard.', 'error');
+        hideLoading();
     };
 
+    showLoading();
     const unsubscribe = subscribeToAllTasks(onTasksReceived, handleError);
     addUnsubscriber(unsubscribe);
 
-    if (isAdmin) {
-        const dashboardContentContainer = container.querySelector('#dashboard-content-container');
-        setupAdminTaskViewListeners(container, dashboardContentContainer);
-        setupTableFilters(container);
-        if (dashboardContentContainer) {
-            updateAdminDashboardData(dashboardContentContainer, []);
-        }
-    } else {
-        updateAdminDashboardData(container, []);
-    }
+    setupViewListeners();
+    updateDashboardData([]); // Initial render with empty data
 
     appState.currentViewCleanup = () => {
         clearUnsubscribers();
-        destroyAdminTaskCharts();
         resetDashboardState();
     };
 }
 
-function setupAdminTaskViewListeners(mainContainer, dashboardContentContainer) {
-    const viewFilter = mainContainer.querySelector('#admin-view-filter');
-    const userFilterContainer = mainContainer.querySelector('#admin-user-filter-container');
-    const userFilter = mainContainer.querySelector('#admin-specific-user-filter');
+function getDashboardHTML() {
+    return `
+    <div class="font-display bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 relative">
+            <div class="loading-overlay dark:bg-card-dark/70" id="loading-overlay">
+                <div class="spinner"></div>
+            </div>
 
-    if (userFilter) {
+            <!-- Carga de Tareas por Usuario -->
+            <div id="user-load-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col">
+                <h3 class="text-lg font-semibold mb-6 text-text-light dark:text-text-dark flex items-center">
+                    <span class="material-symbols-outlined mr-3 text-primary-DEFAULT">assignment_ind</span>Carga de Tareas por Usuario
+                </h3>
+                <div id="user-load-content" class="space-y-5 flex-grow"></div>
+            </div>
+
+            <!-- Estado de Tareas Abiertas -->
+            <div id="status-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col">
+                <h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center">
+                    <span class="material-symbols-outlined mr-3 text-info">donut_small</span>Estado de Tareas Abiertas
+                </h3>
+                <div id="status-chart-content" class="flex justify-center items-center h-48 flex-grow"></div>
+                <div id="status-legend" class="flex justify-around mt-4 pt-4 border-t border-border-light dark:border-border-dark text-sm"></div>
+            </div>
+
+            <!-- Tareas por Prioridad -->
+            <div id="priority-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col">
+                <h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center">
+                    <span class="material-symbols-outlined mr-3 text-warning">priority_high</span>Tareas por Prioridad
+                </h3>
+                <div id="priority-chart-content" class="flex justify-center items-center h-48 flex-grow"></div>
+                <div id="priority-legend" class="flex justify-around mt-4 pt-4 border-t border-border-light dark:border-border-dark text-sm"></div>
+            </div>
+        </div>
+    `;
+}
+
+function setupViewListeners() {
+    const viewSelect = document.getElementById('view-select');
+    const filtersContainer = document.getElementById('dashboard-filters');
+
+    if (!viewSelect || !filtersContainer) return;
+
+    let userSelectContainer = null;
+
+    if (appState.currentUser.role === 'admin') {
+        const specificUserOption = document.createElement('option');
+        specificUserOption.value = 'specific-user';
+        specificUserOption.textContent = 'Usuario específico...';
+        viewSelect.appendChild(specificUserOption);
+
+        userSelectContainer = document.createElement('div');
+        userSelectContainer.id = 'user-select-container';
+        userSelectContainer.className = 'relative hidden';
+        userSelectContainer.innerHTML = `
+            <select id="user-select" class="appearance-none bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark rounded-md text-sm py-2 pl-3 pr-8 focus:ring-2 focus:ring-primary-DEFAULT focus:border-primary-DEFAULT">
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary-light dark:text-text-secondary-dark">
+                <span class="material-symbols-outlined !text-base">expand_more</span>
+            </div>
+        `;
+        filtersContainer.appendChild(userSelectContainer);
+
+        const userSelect = document.getElementById('user-select');
         const users = appState.collections.usuarios || [];
-        userFilter.innerHTML = users.map(u => `<option value="${u.docId}">${u.name || u.email}</option>`).join('');
+        userSelect.innerHTML = users
+            .map(u => `<option value="${u.docId}">${u.name || u.email}</option>`)
+            .join('');
+
+        userSelect.addEventListener('change', (e) => {
+            setDashboardViewMode(e.target.value);
+            showLoading();
+            updateDashboardData(getState().dashboard.allTasks);
+            setTimeout(hideLoading, 500);
+        });
     }
 
-    viewFilter?.addEventListener('change', (e) => {
-        const selection = e.target.value;
+    const valueMap = {
+        'Todas las Tareas': 'all',
+        'Mis Tareas': 'my-tasks',
+        'Tareas Asignadas': 'assigned-tasks',
+        'Usuario específico...': 'specific-user'
+    };
+
+    viewSelect.addEventListener('change', (e) => {
+        const selection = valueMap[e.target.value] || 'all';
         if (selection === 'specific-user') {
-            userFilterContainer?.classList.remove('hidden');
-            userFilterContainer?.classList.add('flex');
-            userFilter?.dispatchEvent(new Event('change'));
+            if (userSelectContainer) {
+                userSelectContainer.classList.remove('hidden');
+                // Trigger change to set initial user
+                userSelectContainer.querySelector('#user-select').dispatchEvent(new Event('change'));
+            }
         } else {
-            userFilterContainer?.classList.add('hidden');
+            if (userSelectContainer) userSelectContainer.classList.add('hidden');
             setDashboardViewMode(selection);
-            updateAdminDashboardData(dashboardContentContainer, getState().dashboard.allTasks);
+            showLoading();
+            updateDashboardData(getState().dashboard.allTasks);
+            setTimeout(hideLoading, 500);
         }
-    });
-
-    userFilter?.addEventListener('change', (e) => {
-        const selectedUserId = e.target.value;
-        setDashboardViewMode(selectedUserId);
-        updateAdminDashboardData(dashboardContentContainer, getState().dashboard.allTasks);
     });
 }
 
-function setupTableFilters(container) {
-    const filtersContainer = container.querySelector('#dashboard-table-filters');
-    if (!filtersContainer) return;
-
-    filtersContainer.addEventListener('click', (e) => {
-        const button = e.target.closest('button');
-        if (!button || !button.dataset.filter) return;
-
-        const filterType = button.dataset.filter;
-        const state = getState().dashboard.tableFilters;
-
-        let newValue;
-        if (filterType === 'status') {
-            const cycle = { 'all': 'todo', 'todo': 'inprogress', 'inprogress': 'done', 'done': 'all' };
-            newValue = cycle[state.status || 'all'];
-        } else if (filterType === 'priority') {
-            const cycle = { 'all': 'low', 'low': 'medium', 'medium': 'high', 'high': 'all' };
-            newValue = cycle[state.priority || 'all'];
-        } else if (filterType === 'user') {
-            const users = [{docId: 'all', name: 'Todos'}, ...appState.collections.usuarios];
-            const currentIndex = users.findIndex(u => u.docId === state.user);
-            newValue = users[(currentIndex + 1) % users.length].docId;
-        }
-
-        setDashboardTableFilter(filterType, newValue);
-        showToast(`Filtro de tabla '${filterType}' actualizado.`, 'info');
-
-        const dashboardContentContainer = container.querySelector('#dashboard-content-container');
-        updateAdminDashboardData(dashboardContentContainer || container, getState().dashboard.allTasks);
-    });
-}
-
-function updateAdminDashboardData(container, tasks) {
+function updateDashboardData(tasks) {
     let filteredTasks = [...tasks];
-    const { viewMode, tableFilters } = getState().dashboard;
+    const { viewMode } = getState().dashboard;
     const currentUser = appState.currentUser;
 
     if (viewMode === 'my-tasks') {
         filteredTasks = tasks.filter(t => t.creatorUid === currentUser.uid || t.assigneeUid === currentUser.uid);
-    } else if (viewMode !== 'all' && appState.currentUser.role === 'admin') {
-        filteredTasks = tasks.filter(t => t.assigneeUid === viewMode);
-    } else if (appState.currentUser.role !== 'admin') {
-        filteredTasks = tasks.filter(t => t.creatorUid === currentUser.uid || t.assigneeUid === currentUser.uid);
+    } else if (viewMode === 'assigned-tasks') {
+        filteredTasks = tasks.filter(t => t.assigneeUid === currentUser.uid);
+    } else if (viewMode !== 'all') {
+        // This handles the 'specific-user' case, where viewMode is the user's UID
+        filteredTasks = tasks.filter(t => t.assigneeUid === viewMode || t.creatorUid === viewMode);
     }
+    // 'all' view uses all tasks
 
-    renderAdminTaskCharts(container, filteredTasks);
-
-    let tableTasks = [...filteredTasks];
-    if (tableFilters.status && tableFilters.status !== 'all') {
-        tableTasks = tableTasks.filter(t => t.status === tableFilters.status);
-    }
-    if (tableFilters.priority && tableFilters.priority !== 'all') {
-        tableTasks = tableTasks.filter(t => t.priority === tableFilters.priority);
-    }
-    if (tableFilters.user && tableFilters.user !== 'all') {
-        tableTasks = tableTasks.filter(t => t.assigneeUid === tableFilters.user);
-    }
-
-    renderTaskTable(tableTasks);
+    renderUserLoadCard(filteredTasks);
+    renderStatusCard(filteredTasks);
+    renderPriorityCard(filteredTasks);
 }
 
-function renderTaskTable(tasks) {
-    const tableBody = document.getElementById('dashboard-task-table-body');
-    if (!tableBody) return;
-
-    if (tasks.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-500">No hay tareas para mostrar en la tabla.</td></tr>`;
-        return;
-    }
-
-    const userMap = appState.collectionsById.usuarios;
-    const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Completada' };
-    const priorityMap = { low: 'Baja', medium: 'Media', high: 'Alta' };
-
-    tableBody.innerHTML = tasks.slice(0, 10).map(task => {
-        const user = task.assigneeUid ? userMap.get(task.assigneeUid) : null;
-        const userName = user ? user.name : 'No asignado';
-        const status = statusMap[task.status] || 'Desconocido';
-        const priority = priorityMap[task.priority] || 'Normal';
-        const dueDate = task.dueDate ? new Date(task.dueDate + 'T00:00:00').toLocaleDateString('es-AR') : 'N/A';
-
-        return `
-            <tr class="border-b border-gray-200 hover:bg-gray-50">
-                <td class="px-4 py-3">${task.title}</td>
-                <td class="px-4 py-3">${userName}</td>
-                <td class="px-4 py-3">${status}</td>
-                <td class="px-4 py-3">${priority}</td>
-                <td class="px-4 py-3">${dueDate}</td>
-            </tr>
-        `;
-    }).join('');
-}
-
-function destroyAdminTaskCharts() {
-    const charts = getState().dashboard.charts;
-    Object.keys(charts).forEach(key => {
-        if (charts[key]) {
-            charts[key].destroy();
-            charts[key] = null;
-        }
-    });
-}
-
-function renderAdminTaskCharts(container, tasks) {
-    destroyAdminTaskCharts();
-
-    const chartConfigs = [
-        { id: 'status-chart', render: renderStatusChart },
-        { id: 'priority-chart', render: renderPriorityChart },
-        { id: 'user-load-chart', render: renderUserLoadChart }
-    ];
-
-    const chartInstances = [];
-
-    chartConfigs.forEach(config => {
-        const canvas = container.querySelector(`#${config.id}`);
-        if (canvas) {
-            const chart = config.render(container, tasks);
-            if (chart) {
-                chartInstances.push(chart);
-            }
-        }
-    });
-
-    setTimeout(() => {
-        chartInstances.forEach(chart => {
-            if (chart && typeof chart.resize === 'function') {
-                chart.resize();
-            }
-        });
-    }, 150);
-}
-
-function renderStatusChart(container, tasks) {
-    const canvas = container.querySelector('#status-chart');
-    const noDataEl = container.querySelector('#status-chart-no-data');
-    const ctx = canvas?.getContext('2d');
-    if (!ctx || !noDataEl) return null;
-
-    const activeTasks = tasks.filter(t => t.status !== 'done');
-
-    if (activeTasks.length === 0) {
-        canvas.classList.add('hidden');
-        noDataEl.classList.remove('hidden');
-        getState().dashboard.charts.statusChart = null;
-        return null;
-    }
-
-    canvas.classList.remove('hidden');
-    noDataEl.classList.add('hidden');
-
-    const statusCounts = activeTasks.reduce((acc, task) => {
-        const status = task.status || 'todo';
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-    }, { todo: 0, inprogress: 0 });
-
-    const chart = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Por Hacer', 'En Progreso'],
-            datasets: [{
-                data: [statusCounts.todo, statusCounts.inprogress],
-                backgroundColor: ['#f59e0b', '#3b82f6'],
-                borderColor: '#ffffff',
-                borderWidth: 4,
-                hoverBorderColor: '#f3f4f6'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'bottom' },
-                title: { display: false }
-            }
-        }
-    });
-    getState().dashboard.charts.statusChart = chart;
-    return chart;
-}
-
-function renderPriorityChart(container, tasks) {
-    const canvas = container.querySelector('#priority-chart');
-    const noDataEl = container.querySelector('#priority-chart-no-data');
-    const ctx = canvas?.getContext('2d');
-    if (!ctx || !noDataEl) return null;
-
-    const activeTasks = tasks.filter(t => t.status !== 'done');
-
-    if (activeTasks.length === 0) {
-        canvas.classList.add('hidden');
-        noDataEl.classList.remove('hidden');
-        getState().dashboard.charts.priorityChart = null;
-        return null;
-    }
-
-    canvas.classList.remove('hidden');
-    noDataEl.classList.add('hidden');
-
-    const priorityCounts = activeTasks.reduce((acc, task) => {
-        const priority = task.priority || 'medium';
-        acc[priority] = (acc[priority] || 0) + 1;
-        return acc;
-    }, { low: 0, medium: 0, high: 0 });
-
-    const chart = new Chart(ctx, {
-        type: 'pie',
-        data: {
-            labels: ['Baja', 'Media', 'Alta'],
-            datasets: [{
-                data: [priorityCounts.low, priorityCounts.medium, priorityCounts.high],
-                backgroundColor: ['#6b7280', '#f59e0b', '#ef4444'],
-                borderColor: '#ffffff',
-                borderWidth: 4,
-                hoverBorderColor: '#f3f4f6'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'bottom' }
-            }
-        }
-    });
-    getState().dashboard.charts.priorityChart = chart;
-    return chart;
-}
-
-function renderUserLoadChart(container, tasks, retryCount = 0) {
-    const MAX_RETRIES = 5;
-    const RETRY_DELAY = 200; // ms
-
-    const canvas = container.querySelector('#user-load-chart');
-    const noDataEl = container.querySelector('#user-load-chart-no-data');
-    const ctx = canvas?.getContext('2d');
-    if (!ctx || !noDataEl) return null;
+function renderUserLoadCard(tasks) {
+    const container = document.getElementById('user-load-content');
+    if (!container) return;
 
     const openTasks = tasks.filter(t => t.status !== 'done');
-
-    if (openTasks.length === 0) {
-        canvas.classList.add('hidden');
-        noDataEl.classList.remove('hidden');
-        getState().dashboard.charts.userLoadChart = null;
-        return null;
-    }
-
-    const userMap = appState.collectionsById.usuarios;
-    if (!userMap || userMap.size === 0) {
-        if (retryCount < MAX_RETRIES) {
-            console.warn(`User map not ready. Retrying chart render in ${RETRY_DELAY}ms... (Attempt ${retryCount + 1})`);
-            setTimeout(() => renderUserLoadChart(container, tasks, retryCount + 1), RETRY_DELAY);
-            return null;
-        } else {
-            console.error("User map failed to populate after multiple retries. Rendering chart with UIDs.");
-        }
-    }
-
-    canvas.classList.remove('hidden');
-    noDataEl.classList.add('hidden');
-
     const userTaskCounts = openTasks.reduce((acc, task) => {
         const assigneeUid = task.assigneeUid || 'unassigned';
         acc[assigneeUid] = (acc[assigneeUid] || 0) + 1;
         return acc;
     }, {});
 
-    const labels = Object.keys(userTaskCounts).map(uid => {
-        if (uid === 'unassigned') return 'No Asignado';
-        return userMap.get(uid)?.name || `ID: ${uid.substring(0, 5)}...`;
-    });
-    const data = Object.values(userTaskCounts);
+    const userMap = appState.collectionsById.usuarios;
+    let content = '';
 
-    const chart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Tareas Abiertas',
-                data: data,
-                backgroundColor: '#3b82f6',
-                borderColor: '#1d4ed8',
-                borderWidth: 1,
-                borderRadius: 4,
-                maxBarThickness: 40
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                title: { display: false }
-            },
-            scales: {
-                x: {
-                    beginAtZero: true,
-                    ticks: { stepSize: 1, precision: 0 }
-                }
-            }
+    if (Object.keys(userTaskCounts).length === 0) {
+        content = '<p class="text-sm text-text-secondary-light dark:text-text-secondary-dark">No hay tareas asignadas.</p>';
+    } else {
+        const totalTasks = openTasks.length;
+        for (const userId in userTaskCounts) {
+            const count = userTaskCounts[userId];
+            const percentage = totalTasks > 0 ? (count / totalTasks) * 100 : 0;
+            const userName = userId === 'unassigned' ? 'No Asignado' : (userMap.get(userId)?.name || 'Usuario Desconocido');
+            const bgColor = userId === 'unassigned' ? 'bg-gray-400 dark:bg-gray-500' : 'bg-primary-DEFAULT';
+
+            content += `
+                <div class="group relative">
+                    <div class="flex justify-between items-center mb-1.5">
+                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark">${userName}</span>
+                        <span class="text-sm font-medium text-text-light dark:text-text-dark">${count} Tarea${count > 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                        <div class="${bgColor} h-2.5 rounded-full progress-bar-inner" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            `;
         }
-    });
-    getState().dashboard.charts.userLoadChart = chart;
-    return chart;
+    }
+    container.innerHTML = content;
+}
+
+function renderDonutChart(containerId, legendId, data, total, colors) {
+    const chartContainer = document.getElementById(containerId);
+    const legendContainer = document.getElementById(legendId);
+    if (!chartContainer || !legendContainer) return;
+
+    let cumulativeOffset = 0;
+    const segments = data.map((item, index) => {
+        const percentage = total > 0 ? (item.count / total) * 100 : 0;
+        const segment = `
+            <circle class="chart-circle chart-circle-segment text-${colors[index]}"
+                    cx="18" cy="18" r="15.9155" fill="none" stroke="currentColor"
+                    stroke-width="3.8" stroke-dasharray="${percentage}, 100"
+                    stroke-dashoffset="-${cumulativeOffset}">
+            </circle>`;
+        cumulativeOffset += percentage;
+        return segment;
+    }).join('');
+
+    chartContainer.innerHTML = `
+        <div class="relative w-40 h-40 chart-container">
+            <svg class="w-full h-full" viewBox="0 0 36 36">
+                <circle class="text-gray-200 dark:text-gray-700" cx="18" cy="18" fill="none" r="15.9155" stroke="currentColor" stroke-width="3.8"></circle>
+                ${segments}
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span class="text-4xl font-bold text-text-light dark:text-text-dark">${total}</span>
+                <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark">Abiertas</span>
+            </div>
+        </div>
+    `;
+
+    legendContainer.innerHTML = data.map((item, index) => `
+        <div class="flex flex-col items-center">
+            <div class="flex items-center">
+                <span class="w-3 h-3 rounded-full bg-${colors[index]} mr-2"></span>
+                <span class="text-text-secondary-light dark:text-text-secondary-dark">${item.label}</span>
+            </div>
+            <span class="font-bold text-lg text-text-light dark:text-text-dark mt-1">${item.count}</span>
+        </div>
+    `).join('');
+}
+
+function renderStatusCard(tasks) {
+    const openTasks = tasks.filter(t => t.status !== 'done');
+    const statusCounts = openTasks.reduce((acc, task) => {
+        const status = task.status === 'inprogress' ? 'inprogress' : 'todo';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+    }, { todo: 0, inprogress: 0 });
+
+    const data = [
+        { label: 'Por Hacer', count: statusCounts.todo, color: 'warning' },
+        { label: 'En Progreso', count: statusCounts.inprogress, color: 'info' }
+    ];
+
+    renderDonutChart('status-chart-content', 'status-legend', data, openTasks.length, ['warning', 'info']);
+}
+
+function renderPriorityCard(tasks) {
+    const openTasks = tasks.filter(t => t.status !== 'done');
+    const priorityCounts = openTasks.reduce((acc, task) => {
+        const priority = task.priority || 'medium';
+        acc[priority] = (acc[priority] || 0) + 1;
+        return acc;
+    }, { low: 0, medium: 0, high: 0 });
+
+    const data = [
+        { label: 'Alta', count: priorityCounts.high, color: 'danger' },
+        { label: 'Media', count: priorityCounts.medium, color: 'warning' },
+        { label: 'Baja', count: priorityCounts.low, color: 'success' }
+    ];
+
+    renderDonutChart('priority-chart-content', 'priority-legend', data, openTasks.length, ['danger', 'warning', 'success']);
+}
+
+function showLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.add('active');
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.classList.remove('active');
 }
