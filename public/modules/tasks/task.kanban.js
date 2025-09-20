@@ -138,7 +138,7 @@ export function runKanbanBoardLogic(container) {
             <i data-lucide="chevron-down" id="telegram-config-chevron" class="w-6 h-6 text-slate-500 transition-transform"></i>
         </button>
         <div id="telegram-config-body" class="p-6 pt-0" style="display: none;">
-            <div class="mt-4 text-sm text-slate-600 bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
+            <div class="text-sm text-slate-600 bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
                 <div>
                     <p class="font-bold text-blue-800 mb-2 flex items-center gap-2"><i data-lucide="info"></i>¿Cómo funciona?</p>
                     <ul class="list-disc list-inside space-y-1 pl-5">
@@ -153,33 +153,35 @@ export function runKanbanBoardLogic(container) {
                     </p>
                 </div>
             </div>
-            <div class="mt-4 grid grid-cols-2 gap-x-6 pt-4 border-t">
-                <div class="col-span-1">
-                    <label for="telegram-chat-id" class="block text-sm font-medium text-gray-700 mb-1">Tu Chat ID de Telegram</label>
-                    <input type="text" id="telegram-chat-id" placeholder="Ingresa tu Chat ID numérico" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div class="col-span-1">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">¿Cuándo notificar?</label>
-                    <div class="space-y-2 mt-2">
-                        <label class="flex items-center">
-                            <input type="checkbox" id="notify-on-assignment" name="onAssignment" class="h-4 w-4 rounded text-blue-600">
-                            <span class="ml-2 text-sm">Cuando se me asigna una tarea nueva.</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" id="notify-on-status-change" name="onStatusChange" class="h-4 w-4 rounded text-blue-600">
-                            <span class="ml-2 text-sm">Cuando una tarea que creé cambia de estado.</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" id="notify-on-due-date-reminder" name="onDueDateReminder" class="h-4 w-4 rounded text-blue-600">
-                            <span class="ml-2 text-sm">Un día antes del vencimiento de una tarea asignada.</span>
-                        </label>
+            <form id="telegram-config-form" class="auth-form mt-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="input-group">
+                        <label for="telegram-chat-id">Tu Chat ID de Telegram</label>
+                        <input type="text" id="telegram-chat-id" placeholder="Ingresa tu Chat ID numérico">
+                    </div>
+                    <div class="input-group">
+                        <label>¿Cuándo notificar?</label>
+                        <div class="space-y-3 mt-2">
+                            <label class="flex items-center gap-3">
+                                <input type="checkbox" id="notify-on-assignment" name="onAssignment" class="h-4 w-4 rounded text-blue-600">
+                                <span class="text-sm">Cuando se me asigna una tarea nueva.</span>
+                            </label>
+                            <label class="flex items-center gap-3">
+                                <input type="checkbox" id="notify-on-status-change" name="onStatusChange" class="h-4 w-4 rounded text-blue-600">
+                                <span class="text-sm">Cuando una tarea que creé cambia de estado.</span>
+                            </label>
+                            <label class="flex items-center gap-3">
+                                <input type="checkbox" id="notify-on-due-date-reminder" name="onDueDateReminder" class="h-4 w-4 rounded text-blue-600">
+                                <span class="text-sm">Un día antes del vencimiento de una tarea asignada.</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="mt-6 flex items-center gap-4">
-                <button id="save-telegram-config-btn" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Configuración</button>
-                <button id="send-test-telegram-btn" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold">Enviar Mensaje de Prueba</button>
-            </div>
+                <div class="mt-6 flex items-center gap-4 pt-4 border-t border-slate-200">
+                    <button id="save-telegram-config-btn" type="button" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Configuración</button>
+                    <button id="send-test-telegram-btn" type="button" class="bg-slate-200 text-slate-700 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold">Enviar Mensaje de Prueba</button>
+                </div>
+            </form>
         </div>
     </div>
     `;
