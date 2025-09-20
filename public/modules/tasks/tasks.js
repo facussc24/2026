@@ -6,6 +6,9 @@ import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
 import { initCalendar, renderTaskCalendar } from './task.calendar.js';
 import { calculateOverdueTasksCount, fetchAllTasks } from './task.service.js';
 
+let dom;
+let lucide;
+
 // Exported functions for other modules to use
 export {
     calculateOverdueTasksCount,
@@ -18,6 +21,8 @@ export {
 };
 
 export function initTasksModule(dependencies) {
+    dom = dependencies.dom;
+    lucide = dependencies.lucide;
     initTaskState(dependencies);
     initTaskService(dependencies);
     initTaskUI(dependencies);
