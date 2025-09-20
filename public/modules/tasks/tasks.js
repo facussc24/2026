@@ -11,7 +11,10 @@ export {
     calculateOverdueTasksCount,
     fetchAllTasks,
     renderMyPendingTasksWidget,
-    renderTasksByProjectChart
+    renderTasksByProjectChart,
+    renderTaskDashboardView,
+    renderTaskCalendar,
+    runKanbanBoardLogic
 };
 
 export function initTasksModule(dependencies) {
