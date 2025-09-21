@@ -21,8 +21,7 @@ let dashboardState = {
     pagination: {
         lastVisible: null,
         currentPage: 1,
-        isLastPage: false,
-        pageHistory: [null] // Store the first doc of each page
+        isLastPage: false
     }
 };
 
@@ -191,29 +190,23 @@ function fetchAndRenderTasks(resetPagination = false) {
     if (resetPagination) {
         dashboardState.pagination.lastVisible = null;
         dashboardState.pagination.currentPage = 1;
-        dashboardState.pagination.pageHistory = [null];
-    } else {
-        // For "next", we use the last visible doc. "Prev" is not implemented in this version.
-        const pageHistory = dashboardState.pagination.pageHistory;
-        dashboardState.pagination.lastVisible = pageHistory[dashboardState.pagination.currentPage -1];
     }
 
     const tableContainer = document.getElementById('tasks-table-container');
     showTableLoading(tableContainer);
 
     const paginationConfig = {
-        lastVisible: dashboardState.pagination.lastVisible
+        lastVisible: dashboardState.pagination.lastVisible,
+        pageSize: 10
     };
 
     dashboardState.taskSubscription = subscribeToPaginatedTasks(dashboardState.filters, paginationConfig,
-        ({ tasks, lastVisible, isLastPage }) => {
+        ({ tasks, lastVisible: newLastVisible, isLastPage }) => {
             hideTableLoading();
             renderTasksTable(tableContainer, tasks, appState.collectionsById.usuarios);
 
+            dashboardState.pagination.lastVisible = newLastVisible; // This was the critical missing piece
             dashboardState.pagination.isLastPage = isLastPage;
-            if (lastVisible && !dashboardState.pagination.pageHistory.includes(lastVisible)) {
-                 dashboardState.pagination.pageHistory.push(lastVisible);
-            }
 
             renderPaginationControls(document.getElementById('pagination-container'), dashboardState.pagination.currentPage, isLastPage);
         },
