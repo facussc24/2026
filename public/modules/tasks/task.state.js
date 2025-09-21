@@ -25,7 +25,9 @@ const tasksModuleState = {
             order: 'desc'
         },
         tablePagination: {
+            pageHistory: [null], // An array of document snapshots, acting as cursors for each page.
             currentPage: 1,
+            isLastPage: false,
             pageSize: 10
         },
 
@@ -97,6 +99,14 @@ export function setDashboardTableSort(by) {
 
 export function setDashboardTablePage(page) {
     tasksModuleState.dashboard.tablePagination.currentPage = page;
+}
+
+export function setDashboardTablePageHistory(history) {
+    tasksModuleState.dashboard.tablePagination.pageHistory = history;
+}
+
+export function setDashboardTableIsLastPage(isLast) {
+    tasksModuleState.dashboard.tablePagination.isLastPage = isLast;
 }
 
 export function resetDashboardState() {

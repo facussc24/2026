@@ -1,6 +1,7 @@
 import { initTaskState } from './task.state.js';
 import { initTaskService } from './task.service.js';
-import { initTaskUI, renderMyPendingTasksWidget, renderTasksByProjectChart } from './task.ui.js';
+import { initTaskUI, renderMyPendingTasksWidget, renderTasksByProjectChart, openTelegramConfigModal } from './task.ui.js';
+import { initTaskModal } from './task.modal.js';
 import { initKanban, runKanbanBoardLogic } from './task.kanban.js';
 import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
 import { initCalendar, renderTaskCalendar } from './task.calendar.js';
@@ -24,6 +25,7 @@ export function initTasksModule(dependencies) {
     initTaskState(dependencies);
     initTaskService(dependencies);
     initTaskUI(dependencies);
+    initTaskModal(dependencies);
     initKanban(dependencies);
     initDashboard(dependencies);
     initCalendar(dependencies);
@@ -79,20 +81,23 @@ export function runTasksLogic(initialView = 'dashboard') {
                             <option>Tareas Asignadas</option>
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary-light dark:text-text-secondary-dark">
-                            <span class="material-symbols-outlined !text-base">expand_more</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
                         </div>
                     </div>
                 </div>
 
                 <nav id="task-navigation" class="flex items-center bg-gray-200 dark:bg-gray-700 rounded-lg p-1 ml-auto">
                     <button data-task-view="kanban" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
-                        <span class="material-symbols-outlined mr-2 !text-base">list_alt</span> Mis Tareas
+                        <i data-lucide="list-checks" class="w-4 h-4 mr-2"></i> Mis Tareas
                     </button>
                     <button data-task-view="dashboard" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
-                        <span class="material-symbols-outlined mr-2 !text-base">space_dashboard</span> Dashboard
+                        <i data-lucide="layout-dashboard" class="w-4 h-4 mr-2"></i> Dashboard
                     </button>
                     <button data-task-view="calendar" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
-                        <span class="material-symbols-outlined mr-2 !text-base">calendar_today</span> Calendario
+                        <i data-lucide="calendar" class="w-4 h-4 mr-2"></i> Calendario
+                    </button>
+                    <button id="task-settings-btn" class="px-3 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-300 dark:hover:bg-gray-600" title="Configuración">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
                     </button>
                 </nav>
             </div>
@@ -106,14 +111,18 @@ export function runTasksLogic(initialView = 'dashboard') {
     const taskNav = dom.viewContent.querySelector('#task-navigation');
     if (taskNav) {
         taskNav.addEventListener('click', (e) => {
-            const button = e.target.closest('.task-nav-btn');
-            if (button && button.dataset.taskView) {
+            const button = e.target.closest('button');
+            if (!button) return;
+
+            if (button.dataset.taskView) {
                 renderView(button.dataset.taskView);
+            } else if (button.id === 'task-settings-btn') {
+                openTelegramConfigModal();
             }
         });
     }
 
     // Render the initial view passed to the function
     renderView(initialView);
-    // No need to call lucide.createIcons() anymore for this part
+    lucide.createIcons();
 }
