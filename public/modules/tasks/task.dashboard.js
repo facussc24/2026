@@ -80,10 +80,6 @@ function getTaskDashboardLayoutHTML() {
                   Visualiza y gestiona todas las tareas. Utiliza los filtros para encontrar tareas específicas.
                 </p>
             </div>
-            <button id="add-new-task-btn" class="btn btn-primary flex items-center gap-2">
-                <i data-lucide="plus-circle" class="w-5 h-5"></i>
-                <span>Nueva Tarea</span>
-            </button>
         </div>
 
         <!-- Filters and Search -->
@@ -183,11 +179,7 @@ function setupEventListeners(container) {
         }
     });
 
-    // Add new task button
-    const addNewTaskBtn = container.querySelector('#add-new-task-btn');
-    addNewTaskBtn.addEventListener('click', () => {
-        import('./task.ui.js').then(ui => ui.openTaskFormModal(null, 'todo'));
-    });
+    // Add new task button is removed
 }
 
 
