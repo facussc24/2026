@@ -19,7 +19,7 @@ let dashboardState = {
         priority: 'all'
     },
     pagination: {
-        lastVisible: null,
+        pageHistory: [null], // An array of document snapshots, acting as cursors for each page.
         currentPage: 1,
         isLastPage: false
     }
@@ -63,7 +63,7 @@ export function renderTaskDashboardView(container) {
             taskSubscription: null,
             chartsSubscription: null,
             filters: { searchTerm: '', user: 'all', status: 'all', priority: 'all' },
-            pagination: { lastVisible: null, currentPage: 1, isLastPage: false, pageHistory: [null] }
+            pagination: { pageHistory: [null], currentPage: 1, isLastPage: false }
         };
     };
 }
@@ -151,11 +151,13 @@ function setupEventListeners(container) {
 
         // Update active button style
         const group = button.parentElement;
-        const currentActive = group.querySelector('.btn-white');
+        const currentActive = group.querySelector('.btn-primary');
         if (currentActive) {
-            currentActive.classList.replace('btn-white', 'btn-ghost');
+            currentActive.classList.replace('btn-primary', 'btn-ghost');
+            currentActive.classList.remove('text-white');
         }
-        button.classList.replace('btn-ghost', 'btn-white');
+        button.classList.replace('btn-ghost', 'btn-primary');
+        button.classList.add('text-white');
 
         handleFilterChange(filterType, filterValue);
     });
@@ -170,10 +172,17 @@ function setupEventListeners(container) {
     // Pagination
     paginationContainer.addEventListener('click', (e) => {
         const button = e.target.closest('button[data-page]');
-        if (!button) return;
-        const page = button.dataset.page;
-        if (page === 'next') {
+        if (!button || button.disabled) return;
+
+        const pageAction = button.dataset.page;
+
+        if (pageAction === 'next') {
+            if (dashboardState.pagination.isLastPage) return;
             dashboardState.pagination.currentPage++;
+            fetchAndRenderTasks();
+        } else if (pageAction === 'prev') {
+            if (dashboardState.pagination.currentPage <= 1) return;
+            dashboardState.pagination.currentPage--;
             fetchAndRenderTasks();
         }
     });
@@ -188,15 +197,19 @@ function fetchAndRenderTasks(resetPagination = false) {
     }
 
     if (resetPagination) {
-        dashboardState.pagination.lastVisible = null;
+        dashboardState.pagination.pageHistory = [null];
         dashboardState.pagination.currentPage = 1;
+        dashboardState.pagination.isLastPage = false;
     }
 
     const tableContainer = document.getElementById('tasks-table-container');
     showTableLoading(tableContainer);
 
+    const currentPageIndex = dashboardState.pagination.currentPage - 1;
+    const lastVisible = dashboardState.pagination.pageHistory[currentPageIndex];
+
     const paginationConfig = {
-        lastVisible: dashboardState.pagination.lastVisible,
+        lastVisible: lastVisible,
         pageSize: 10
     };
 
@@ -205,8 +218,12 @@ function fetchAndRenderTasks(resetPagination = false) {
             hideTableLoading();
             renderTasksTable(tableContainer, tasks, appState.collectionsById.usuarios);
 
-            dashboardState.pagination.lastVisible = newLastVisible; // This was the critical missing piece
             dashboardState.pagination.isLastPage = isLastPage;
+
+            // Store the cursor for the *next* page, if it doesn't exist already
+            if (!isLastPage && dashboardState.pagination.pageHistory.length === dashboardState.pagination.currentPage) {
+                dashboardState.pagination.pageHistory.push(newLastVisible);
+            }
 
             renderPaginationControls(document.getElementById('pagination-container'), dashboardState.pagination.currentPage, isLastPage);
         },

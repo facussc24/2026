@@ -1,4 +1,4 @@
-import { getDocs, collection, onSnapshot, query, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, onSnapshot, query, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { COLLECTIONS } from '../../utils.js';
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
@@ -472,7 +472,7 @@ function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
     });
 }
 
-export async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
+export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
     const isEditing = task !== null;
 
     // Determine the UID to be pre-selected in the dropdown.
@@ -491,14 +491,7 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
 
     const modalElement = document.getElementById('task-form-modal');
 
-    // Ensure users are loaded before populating the dropdown
-    if (!appState.collections.usuarios || appState.collections.usuarios.length === 0) {
-        console.log("User collection is empty, fetching...");
-        const usersSnapshot = await getDocs(collection(db, COLLECTIONS.USUARIOS));
-        appState.collections.usuarios = usersSnapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
-        appState.collectionsById.usuarios = new Map(appState.collections.usuarios.map(u => [u.docId, u]));
-        console.log("User collection fetched and populated.");
-    }
+    // Users are now pre-loaded globally by main.js
     populateTaskAssigneeDropdown();
 
     initSubtasks(modalElement, task);
@@ -799,12 +792,22 @@ export function renderTasksTable(container, tasks, userMap) {
 
 export function renderPaginationControls(container, currentPage, isLastPage) {
     if (!container) return;
+
+    const prevDisabled = currentPage === 1;
+    const nextDisabled = isLastPage;
+
     container.innerHTML = `
-        <div class="flex items-center gap-4">
-            <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark">Página ${currentPage}</span>
-            <button data-page="next" class="btn btn-primary" ${isLastPage ? 'disabled' : ''}>
-                <i data-lucide="arrow-right" class="w-4 h-4 mr-2"></i>
-                Cargar más
+        <div class="flex items-center justify-center gap-4">
+            <button data-page="prev" class="btn btn-secondary" ${prevDisabled ? 'disabled' : ''}>
+                <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+                Anterior
+            </button>
+            <span class="text-sm font-medium text-text-light dark:text-text-dark px-4 py-2 bg-slate-100 dark:bg-slate-700 rounded-md">
+                Página ${currentPage}
+            </span>
+            <button data-page="next" class="btn btn-secondary" ${nextDisabled ? 'disabled' : ''}>
+                Siguiente
+                <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
             </button>
         </div>
     `;
@@ -832,7 +835,7 @@ export function renderTaskTableFilters(container, currentUser, users) {
 
     const buildFilterGroup = (type, primary, options) => `
         <div class="flex items-center gap-1 bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
-            <button data-filter-type="${type}" data-filter-value="${primary.value}" class="btn btn-sm btn-white text-text-light dark:text-text-dark shadow-sm">${primary.label}</button>
+            <button data-filter-type="${type}" data-filter-value="${primary.value}" class="btn btn-sm btn-primary text-white shadow-sm">${primary.label}</button>
             ${options.map(opt => `<button data-filter-type="${type}" data-filter-value="${opt.value}" class="btn btn-sm btn-ghost text-text-secondary-light dark:text-text-secondary-dark">${opt.label}</button>`).join('')}
         </div>
     `;
