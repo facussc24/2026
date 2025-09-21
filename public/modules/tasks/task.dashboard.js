@@ -1,29 +1,16 @@
 import { subscribeToPaginatedTasks, subscribeToAllTasks } from './task.service.js';
 import { showToast } from '../../main.js';
-import { getState, setDashboardTasks, addUnsubscriber, clearUnsubscribers, resetDashboardState } from './task.state.js';
+import { getState, setDashboardTasks, addUnsubscriber, clearUnsubscribers, resetDashboardState, setDashboardTableFilter, setDashboardTablePage, setDashboardTablePageHistory, setDashboardTableIsLastPage } from './task.state.js';
 import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading } from './task.ui.js'; // I will create these in the next step
+import { getDashboardLayoutHTML } from './task.templates.js';
 
 let db;
 let appState;
 let dom;
 let lucide;
+let taskSubscription = null;
+let chartsSubscription = null;
 
-// State for the dashboard view
-let dashboardState = {
-    taskSubscription: null,
-    chartsSubscription: null,
-    filters: {
-        searchTerm: '',
-        user: 'all',
-        status: 'all',
-        priority: 'all'
-    },
-    pagination: {
-        pageHistory: [null], // An array of document snapshots, acting as cursors for each page.
-        currentPage: 1,
-        isLastPage: false
-    }
-};
 
 export function initDashboard(dependencies) {
     db = dependencies.db;
@@ -38,7 +25,8 @@ export function renderTaskDashboardView(container) {
         appState.currentViewCleanup();
     }
 
-    container.innerHTML = getTaskDashboardLayoutHTML();
+    resetDashboardState();
+    container.innerHTML = getDashboardLayoutHTML();
     lucide.createIcons();
 
     const titleEl = container.querySelector('#task-list-title');
@@ -49,75 +37,13 @@ export function renderTaskDashboardView(container) {
 
     setupEventListeners(container);
 
-    fetchAndRenderTasks(true); // Initial fetch
-
-    // The old charts will now have their own subscription logic, separate from the paginated list
-    const chartsContainer = container.querySelector('#old-charts-container');
-    setupCharts(chartsContainer);
+    fetchAndRenderAll();
 
     appState.currentViewCleanup = () => {
-        if (dashboardState.taskSubscription) dashboardState.taskSubscription();
-        if (dashboardState.chartsSubscription) dashboardState.chartsSubscription();
-        // Reset state for next time
-        dashboardState = {
-            taskSubscription: null,
-            chartsSubscription: null,
-            filters: { searchTerm: '', user: 'all', status: 'all', priority: 'all' },
-            pagination: { pageHistory: [null], currentPage: 1, isLastPage: false }
-        };
+        if (taskSubscription) taskSubscription();
+        if (chartsSubscription) chartsSubscription();
+        resetDashboardState();
     };
-}
-
-function getTaskDashboardLayoutHTML() {
-    return `
-    <div class="flex flex-col flex-1 w-full mx-auto">
-        <!-- Header -->
-        <div class="flex flex-wrap justify-between items-center gap-3 p-4">
-            <div class="flex flex-col gap-2">
-                <h2 id="task-list-title" class="text-text-light dark:text-text-dark tracking-light text-2xl md:text-3xl font-bold leading-tight"></h2>
-                <p class="text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">
-                  Visualiza y gestiona todas las tareas. Utiliza los filtros para encontrar tareas específicas.
-                </p>
-            </div>
-        </div>
-
-        <!-- Filters and Search -->
-        <div class="flex flex-col gap-4 p-4">
-            <div id="task-filters-container" class="flex gap-2 flex-wrap">
-                <!-- Filter buttons will be injected here by renderTaskTableFilters -->
-            </div>
-            <div class="w-full">
-                <div class="relative">
-                    <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-text-secondary-light dark:text-text-secondary-dark"></i>
-                    <input id="task-search-input" type="text" placeholder="Buscar tareas por nombre, proyecto o usuario..." class="input w-full pl-12 pr-4 py-3">
-                </div>
-            </div>
-        </div>
-
-        <!-- Task Table -->
-        <div id="tasks-table-container" class="px-4 py-3">
-            <!-- Table will be rendered here by renderTasksTable -->
-        </div>
-
-        <!-- Pagination -->
-        <div id="pagination-container" class="flex items-center justify-center p-4">
-            <!-- Pagination controls will be rendered here by renderPaginationControls -->
-        </div>
-
-        <!-- Divider -->
-        <div class="px-4 pt-8 pb-4">
-            <div class="border-t border-border-light dark:border-border-dark"></div>
-        </div>
-
-        <!-- Existing Charts Section -->
-        <div class="p-4">
-            <h2 class="text-text-light dark:text-text-dark text-xl md:text-2xl font-bold leading-tight">Resumen del rendimiento del equipo</h2>
-            <div id="old-charts-container" class="grid grid-cols-1 lg:grid-cols-3 gap-6 relative pt-6">
-                <!-- The old charts HTML will be injected here -->
-            </div>
-        </div>
-    </div>
-    `;
 }
 
 function setupEventListeners(container) {
@@ -130,15 +56,18 @@ function setupEventListeners(container) {
     searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-            dashboardState.filters.searchTerm = e.target.value;
-            fetchAndRenderTasks(true); // Reset to first page
+            setDashboardTableFilter('searchTerm', e.target.value);
+            setDashboardTablePage(1);
+            renderFilteredContent();
         }, 500);
     });
 
     const handleFilterChange = (filterType, filterValue) => {
-        if (dashboardState.filters[filterType] !== filterValue) {
-            dashboardState.filters[filterType] = filterValue;
-            fetchAndRenderTasks(true);
+        const state = getState().dashboard.tableFilters;
+        if (state[filterType] !== filterValue) {
+            setDashboardTableFilter(filterType, filterValue);
+            setDashboardTablePage(1);
+            renderFilteredContent();
         }
     };
 
@@ -168,117 +97,90 @@ function setupEventListeners(container) {
         handleFilterChange(filterType, filterValue);
     });
 
-
     // Pagination
     paginationContainer.addEventListener('click', (e) => {
         const button = e.target.closest('button[data-page]');
         if (!button || button.disabled) return;
-
         const pageAction = button.dataset.page;
+        const state = getState().dashboard.tablePagination;
 
-        if (pageAction === 'next') {
-            if (dashboardState.pagination.isLastPage) return;
-            dashboardState.pagination.currentPage++;
-            fetchAndRenderTasks();
-        } else if (pageAction === 'prev') {
-            if (dashboardState.pagination.currentPage <= 1) return;
-            dashboardState.pagination.currentPage--;
-            fetchAndRenderTasks();
+        if (pageAction === 'next' && !state.isLastPage) {
+            setDashboardTablePage(state.currentPage + 1);
+            renderFilteredContent();
+        } else if (pageAction === 'prev' && state.currentPage > 1) {
+            setDashboardTablePage(state.currentPage - 1);
+            renderFilteredContent();
         }
     });
+}
 
-    // Add new task button is removed
+function applyFilters(tasks) {
+    const { tableFilters } = getState().dashboard;
+    const { searchTerm, user, status, priority } = tableFilters;
+    const lowercasedFilter = searchTerm.toLowerCase();
+    const userMap = appState.collectionsById.usuarios;
+
+    return tasks.filter(task => {
+        const matchesUser = user === 'all' || task.assigneeUid === user;
+        const matchesStatus = status === 'all' || task.status === status;
+        const matchesPriority = priority === 'all' || task.priority === priority;
+
+        const assignee = userMap.get(task.assigneeUid);
+        const assigneeName = assignee ? assignee.name.toLowerCase() : '';
+
+        const matchesSearch = !lowercasedFilter ||
+            task.title.toLowerCase().includes(lowercasedFilter) ||
+            (task.proyecto && task.proyecto.toLowerCase().includes(lowercasedFilter)) ||
+            (assigneeName && assigneeName.includes(lowercasedFilter));
+
+        return matchesUser && matchesStatus && matchesPriority && matchesSearch;
+    });
+}
+
+function renderFilteredContent() {
+    const { allTasks, tablePagination } = getState().dashboard;
+    const { currentPage, pageSize } = tablePagination;
+
+    const filteredTasks = applyFilters(allTasks);
+
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    const paginatedTasks = filteredTasks.slice(start, end);
+    const isLastPage = end >= filteredTasks.length;
+
+    const tableContainer = document.getElementById('tasks-table-container');
+    hideTableLoading();
+    renderTasksTable(tableContainer, paginatedTasks, appState.collectionsById.usuarios);
+    renderPaginationControls(document.getElementById('pagination-container'), currentPage, isLastPage);
 }
 
 
-function fetchAndRenderTasks(resetPagination = false) {
-    if (dashboardState.taskSubscription) {
-        dashboardState.taskSubscription();
-    }
-
-    if (resetPagination) {
-        dashboardState.pagination.pageHistory = [null];
-        dashboardState.pagination.currentPage = 1;
-        dashboardState.pagination.isLastPage = false;
-    }
+function fetchAndRenderAll() {
+    if (taskSubscription) taskSubscription();
+    if (chartsSubscription) chartsSubscription();
 
     const tableContainer = document.getElementById('tasks-table-container');
     showTableLoading(tableContainer);
 
-    const currentPageIndex = dashboardState.pagination.currentPage - 1;
-    const lastVisible = dashboardState.pagination.pageHistory[currentPageIndex];
+    chartsSubscription = subscribeToAllTasks((allTasks) => {
+        setDashboardTasks(allTasks);
+        renderFilteredContent();
 
-    const paginationConfig = {
-        lastVisible: lastVisible,
-        pageSize: 10
-    };
-
-    dashboardState.taskSubscription = subscribeToPaginatedTasks(dashboardState.filters, paginationConfig,
-        ({ tasks, lastVisible: newLastVisible, isLastPage }) => {
-            hideTableLoading();
-            renderTasksTable(tableContainer, tasks, appState.collectionsById.usuarios);
-
-            dashboardState.pagination.isLastPage = isLastPage;
-
-            // Store the cursor for the *next* page, if it doesn't exist already
-            if (!isLastPage && dashboardState.pagination.pageHistory.length === dashboardState.pagination.currentPage) {
-                dashboardState.pagination.pageHistory.push(newLastVisible);
-            }
-
-            renderPaginationControls(document.getElementById('pagination-container'), dashboardState.pagination.currentPage, isLastPage);
-        },
-        (error) => {
-            hideTableLoading();
-            showToast('Error al cargar las tareas.', 'error');
-            console.error(error);
-        }
-    );
-}
-
-// Logic for the old charts, mostly unmodified but placed in a separate function
-function setupCharts(container) {
-    container.innerHTML = `
-        <!-- Carga de Tareas por Usuario -->
-        <div id="user-load-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col">
-            <h3 class="text-lg font-semibold mb-6 text-text-light dark:text-text-dark flex items-center">
-                <span class="material-symbols-outlined mr-3 text-primary-DEFAULT">assignment_ind</span>Carga de Tareas por Usuario
-            </h3>
-            <div id="user-load-content" class="space-y-5 flex-grow"></div>
-        </div>
-
-        <!-- Estado de Tareas Abiertas -->
-        <div id="status-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col">
-            <h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center">
-                <span class="material-symbols-outlined mr-3 text-info">donut_small</span>Estado de Tareas Abiertas
-            </h3>
-            <div id="status-chart-content" class="flex justify-center items-center h-48 flex-grow"></div>
-            <div id="status-legend" class="flex justify-around mt-4 pt-4 border-t border-border-light dark:border-border-dark text-sm"></div>
-        </div>
-
-        <!-- Tareas por Prioridad -->
-        <div id="priority-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col">
-            <h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center">
-                <span class="material-symbols-outlined mr-3 text-warning">priority_high</span>Tareas por Prioridad
-            </h3>
-            <div id="priority-chart-content" class="flex justify-center items-center h-48 flex-grow"></div>
-            <div id="priority-legend" class="flex justify-around mt-4 pt-4 border-t border-border-light dark:border-border-dark text-sm"></div>
-        </div>
-    `;
-
-    const onTasksReceived = (allTasks) => {
-        setDashboardTasks(allTasks); // This is from the original implementation
+        // Render charts
+        const chartsContainer = document.getElementById('old-charts-container');
+        chartsContainer.innerHTML = `
+            <div id="user-load-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col"></div>
+            <div id="status-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col"></div>
+            <div id="priority-card" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-md border border-border-light dark:border-border-dark flex flex-col"></div>
+        `;
         renderUserLoadCard(allTasks);
         renderStatusCard(allTasks);
         renderPriorityCard(allTasks);
-    };
-
-    const handleError = (error) => {
-        console.error("Error fetching tasks for charts:", error);
-        showToast('Error al cargar los gráficos.', 'error');
-    };
-
-    // Subscribe to all tasks just for the charts
-    dashboardState.chartsSubscription = subscribeToAllTasks(onTasksReceived, handleError);
+    }, (error) => {
+        hideTableLoading();
+        showToast('Error al cargar las tareas.', 'error');
+        console.error(error);
+    });
 }
 
 // Chart rendering functions from original file, slightly adapted to not rely on document queries as much
@@ -296,7 +198,7 @@ function renderUserLoadCard(tasks) {
     const userMap = appState.collectionsById.usuarios;
     let content = `
         <h3 class="text-lg font-semibold mb-6 text-text-light dark:text-text-dark flex items-center">
-            <span class="material-symbols-outlined mr-3 text-primary-DEFAULT">assignment_ind</span>Carga de Tareas por Usuario
+            <i data-lucide="contact" class="w-5 h-5 mr-3 text-primary-DEFAULT"></i>Carga de Tareas por Usuario
         </h3>
         <div class="space-y-5 flex-grow">
     `;
@@ -380,7 +282,7 @@ function renderStatusCard(tasks) {
         { label: 'Por Hacer', count: statusCounts.todo, color: 'warning' },
         { label: 'En Progreso', count: statusCounts.inprogress, color: 'info' }
     ];
-    const title = `<h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center"><span class="material-symbols-outlined mr-3 text-info">donut_small</span>Estado de Tareas Abiertas</h3>`;
+    const title = `<h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center"><i data-lucide="pie-chart" class="w-5 h-5 mr-3 text-info"></i>Estado de Tareas Abiertas</h3>`;
     renderDonutChart(container, data, openTasks.length, ['warning', 'info'], title);
 }
 
@@ -398,6 +300,6 @@ function renderPriorityCard(tasks) {
         { label: 'Media', count: priorityCounts.medium, color: 'warning' },
         { label: 'Baja', count: priorityCounts.low, color: 'success' }
     ];
-    const title = `<h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center"><span class="material-symbols-outlined mr-3 text-warning">priority_high</span>Tareas por Prioridad</h3>`;
+    const title = `<h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark flex items-center"><i data-lucide="alert-triangle" class="w-5 h-5 mr-3 text-warning"></i>Tareas por Prioridad</h3>`;
     renderDonutChart(container, data, openTasks.length, ['danger', 'warning', 'success'], title);
 }
