@@ -19,6 +19,11 @@ let clearOtherUsers;
  * Renders the main HTML structure of the new landing page.
  */
 function renderLandingPageHTML() {
+    console.log("Attempting to render Landing Page HTML into dom.viewContent");
+    if (!dom || !dom.viewContent) {
+        console.error("DOM object or dom.viewContent is not available. Cannot render landing page.");
+        return;
+    }
     dom.viewContent.innerHTML = `
         <div class="animate-fade-in-up">
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
@@ -96,6 +101,7 @@ function renderLandingPageHTML() {
         </div>
     `;
     lucide.createIcons();
+    console.log("Landing Page HTML rendered.");
 }
 
 /**
@@ -269,16 +275,19 @@ async function getPerformanceChartData() {
  */
 async function fetchUpcomingTasks() {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
+    const today = new Date().toISOString().split('T')[0];
     const q = query(
         tasksRef,
         where('assigneeUid', '==', appState.currentUser.uid),
-        where('status', '!=', 'done'),
-        where('dueDate', '!=', null),
+        where('dueDate', '>=', today),
         orderBy('dueDate', 'asc'),
-        limit(5)
+        limit(10) // Fetch more to filter on the client
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({...doc.data(), docId: doc.id }));
+    const tasks = querySnapshot.docs.map(doc => ({...doc.data(), docId: doc.id }));
+
+    // Filter out completed tasks on the client and get the top 5
+    return tasks.filter(t => t.status !== 'done').slice(0, 5);
 }
 
 
@@ -319,26 +328,46 @@ function setupActionButtons() {
  * Main logic runner for the landing page.
  */
 export async function runLandingPageLogic() {
+    console.log("runLandingPageLogic called.");
     renderLandingPageHTML();
 
     try {
-        // Fetch all data in parallel
-        const [kpiData, chartData, upcomingTasks] = await Promise.all([
+        // Use Promise.allSettled to allow parts of the page to load even if one promise fails
+        const results = await Promise.allSettled([
             fetchKpiData(),
             getPerformanceChartData(),
             fetchUpcomingTasks()
         ]);
 
-        // Update the UI with the fetched data
-        updateKpiCards(kpiData);
-        renderPerformanceChart(chartData);
-        renderUpcomingTasks(upcomingTasks);
+        const kpiDataResult = results[0];
+        const chartDataResult = results[1];
+        const upcomingTasksResult = results[2];
+
+        if (kpiDataResult.status === 'fulfilled') {
+            updateKpiCards(kpiDataResult.value);
+        } else {
+            console.error("Failed to fetch KPI data:", kpiDataResult.reason);
+        }
+
+        if (chartDataResult.status === 'fulfilled') {
+            renderPerformanceChart(chartDataResult.value);
+        } else {
+            console.error("Failed to fetch chart data:", chartDataResult.reason);
+        }
+
+        if (upcomingTasksResult.status === 'fulfilled') {
+            renderUpcomingTasks(upcomingTasksResult.value);
+        } else {
+            console.error("Failed to fetch upcoming tasks:", upcomingTasksResult.reason);
+            document.getElementById('upcoming-tasks-container').innerHTML = '<p class="text-red-500 text-center text-sm">Error al cargar tareas: Se requiere un índice de Firestore.</p>';
+        }
 
     } catch (error) {
         console.error("Error loading landing page data:", error);
         showToast("Error al cargar los datos del dashboard.", "error");
-        // Optionally, render error states in the UI components
-        document.getElementById('upcoming-tasks-container').innerHTML = '<p class="text-red-500 text-center">Error al cargar tareas.</p>';
+        if (dom && dom.viewContent) {
+            dom.viewContent.innerHTML = '<p class="text-red-500 p-8 text-center">Ocurrió un error al cargar la página de inicio. Por favor, revise la consola.</p>';
+        }
     }
 
     setupActionButtons();
@@ -359,4 +388,5 @@ export function initLandingPageModule(dependencies) {
     seedDatabase = dependencies.seedDatabase;
     clearDataOnly = dependencies.clearDataOnly;
     clearOtherUsers = dependencies.clearOtherUsers;
+    console.log("Landing Page Module Initialized.");
 }
