@@ -16,7 +16,7 @@ import {
     renderTasksByProjectChart,
     renderTaskDashboardView
 } from './modules/tasks/tasks.js';
-import { initDashboardModule, runDashboardLogic } from './modules/dashboard.js';
+import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts, registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './data_logic.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
@@ -68,7 +68,7 @@ const PREDEFINED_AVATARS = [
 // --- Configuración de Vistas ---
 const viewConfig = {
     visor3d: { title: 'Visor 3D', singular: 'Visor 3D' },
-    dashboard: { title: 'Dashboard', singular: 'Dashboard' },
+    'landing-page': { title: 'Página Principal', singular: 'Página Principal' },
     sinoptico_tabular: { title: 'Lista de Materiales (Tabular)', singular: 'Lista de Materiales (Tabular)' },
     eco_form: { title: 'ECO de Producto / Proceso', singular: 'Formulario ECO' },
     eco: { title: 'Gestión de ECO', singular: 'ECO' },
@@ -244,7 +244,7 @@ const viewConfig = {
 
 // --- Estado Global de la Aplicación ---
 export let appState = {
-    currentView: 'dashboard', 
+    currentView: 'landing-page',
     currentData: [], 
     arbolActivo: null,
     currentUser: null,
@@ -1473,7 +1473,7 @@ async function switchView(viewName, params = null) {
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
     if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic(app);
-    else if (viewName === 'dashboard') await runDashboardLogic(app);
+    else if (viewName === 'landing-page') await runLandingPageLogic();
     else if (viewName === 'sinoptico') await runSinopticoLogic();
     else if (viewName === 'sinoptico_tabular') await runSinopticoTabularLogic();
     else if (viewName === 'flujograma') await runFlujogramaLogic();
@@ -7692,18 +7692,9 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide };
+            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers };
             initTasksModule(appDependencies);
-
-            const dashboardDependencies = {
-                ...appDependencies,
-                renderTaskDashboardView,
-                calculateOverdueTasksCount,
-                fetchAllTasks,
-                renderMyPendingTasksWidget,
-                renderTasksByProjectChart
-            };
-            initDashboardModule(dashboardDependencies);
+            initLandingPageModule(appDependencies);
 
 
             if (!isTestMode) {
@@ -7721,10 +7712,10 @@ onAuthStateChanged(auth, async (user) => {
             renderUserMenu();
             renderNotificationCenter();
 
-            console.log("About to switch view to dashboard...");
+            console.log("About to switch view to landing-page...");
             // This is the critical sequence: render the content, THEN hide the loading screen.
-            await switchView('dashboard');
-            console.log("switchView('dashboard') completed.");
+            await switchView('landing-page');
+            console.log("switchView('landing-page') completed.");
 
             // FIX: Per AGENTS.md, defer UI updates to prevent race conditions with E2E tests.
             // A longer delay is used for E2E tests to ensure rendering completes before screenshotting.
