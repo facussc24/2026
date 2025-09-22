@@ -67,10 +67,6 @@ export function runTasksLogic(initialView = 'dashboard') {
 
     dom.viewContent.innerHTML = `
         <div id="task-main-container">
-            <div class="flex justify-between items-center mb-8">
-                <h2 class="text-3xl font-bold text-text-light dark:text-text-dark">Gestor de Tareas</h2>
-            </div>
-
             <div class="bg-card-light dark:bg-card-dark p-4 rounded-lg shadow-sm mb-8 flex flex-wrap items-center border border-border-light dark:border-border-dark">
                 <div id="dashboard-filters" class="flex items-center space-x-4 mb-4 md:mb-0 hidden">
                     <label class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark" for="view-select">Vista:</label>

@@ -632,8 +632,8 @@ export function getDashboardLayoutHTML() {
             </div>
             <div class="flex items-center gap-2">
                 <button id="export-tasks-btn" class="btn btn-primary flex items-center gap-2">
-                    <i data-lucide="download" class="w-4 h-4"></i>
-                    <span>Exportar CSV</span>
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+                    <span>Exportar Excel</span>
                 </button>
             </div>
         </div>
