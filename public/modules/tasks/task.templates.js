@@ -630,6 +630,12 @@ export function getDashboardLayoutHTML() {
                   Visualiza y gestiona todas las tareas. Utiliza los filtros para encontrar tareas específicas.
                 </p>
             </div>
+            <div class="flex items-center gap-2">
+                <button id="export-tasks-btn" class="btn btn-primary flex items-center gap-2">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    <span>Exportar CSV</span>
+                </button>
+            </div>
         </div>
 
         <!-- Filters and Search -->
