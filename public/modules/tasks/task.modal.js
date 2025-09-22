@@ -3,6 +3,7 @@
  */
 
 import { collection, onSnapshot, query, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
 import { handleTaskFormSubmit, deleteTask } from './task.service.js';
@@ -60,19 +61,32 @@ function initSubtasks(modalElement, task) {
         lucide.createIcons();
     };
 
+    const addSubtask = (title) => {
+        if (title) {
+            currentSubtasks.push({
+                id: `sub_${Date.now()}`,
+                title: title,
+                completed: false
+            });
+            rerenderSubtasks();
+        }
+    };
+
+    const setSubtasks = (titles) => {
+        currentSubtasks = titles.map(title => ({
+            id: `sub_${Date.now()}_${Math.random()}`,
+            title: title,
+            completed: false
+        }));
+        rerenderSubtasks();
+    };
+
     newSubtaskInput.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
             e.preventDefault();
             const title = newSubtaskInput.value.trim();
-            if (title) {
-                currentSubtasks.push({
-                    id: `sub_${Date.now()}`,
-                    title: title,
-                    completed: false
-                });
-                newSubtaskInput.value = '';
-                rerenderSubtasks();
-            }
+            addSubtask(title);
+            newSubtaskInput.value = '';
         }
     });
 
@@ -99,6 +113,8 @@ function initSubtasks(modalElement, task) {
     });
 
     rerenderSubtasks(); // Initial render
+
+    return { addSubtask, setSubtasks };
 }
 
 function formatTimeAgo(timestamp) {
@@ -250,11 +266,44 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
     const modalElement = document.getElementById('task-form-modal');
 
     populateTaskAssigneeDropdown();
-    initSubtasks(modalElement, task);
+    const subtaskManager = initSubtasks(modalElement, task);
     const commentsUnsubscribe = initComments(modalElement, task);
     initModalEventListeners(modalElement, task, commentsUnsubscribe);
 
+    const organizeWithAiBtn = modalElement.querySelector('#organize-with-ai-btn');
+    organizeWithAiBtn.addEventListener('click', async () => {
+        const brainDumpText = modalElement.querySelector('#task-ai-braindump').value;
+        if (!brainDumpText.trim()) {
+            showToast('Por favor, introduce el texto de la tarea a organizar.', 'warning');
+            return;
+        }
+
+        organizeWithAiBtn.disabled = true;
+        organizeWithAiBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 mr-2 animate-spin"></i> Organizando...';
+        lucide.createIcons();
+
+        try {
+            const functions = getFunctions();
+            const organizeTaskWithAI = httpsCallable(functions, 'organizeTaskWithAI');
+            const result = await organizeTaskWithAI({ text: brainDumpText });
+
+            const { title, subtasks } = result.data;
+
+            modalElement.querySelector('#task-title').value = title;
+            subtaskManager.setSubtasks(subtasks);
+            showToast('¡Tarea organizada con IA!', 'success');
+
+        } catch (error) {
+            console.error("Error calling organizeTaskWithAI function:", error);
+            showToast(error.message || 'Ocurrió un error al contactar a la IA.', 'error');
+        } finally {
+            organizeWithAiBtn.disabled = false;
+            organizeWithAiBtn.innerHTML = '<i data-lucide="sparkles" class="w-4 h-4 mr-2"></i> Organizar Tarea';
+            lucide.createIcons();
+        }
+    });
+
     if (!isEditing) {
-        modalElement.querySelector('#task-title').focus();
+        modalElement.querySelector('#task-ai-braindump').focus();
     }
 }

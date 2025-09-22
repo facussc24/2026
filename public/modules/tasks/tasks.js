@@ -32,7 +32,7 @@ export function initTasksModule(dependencies) {
     console.log("Tasks module initialized.");
 }
 
-export function runTasksLogic(initialView = 'dashboard') {
+export function runTasksLogic(initialView = 'kanban') {
     const renderView = (view) => {
         const viewContainer = dom.viewContent.querySelector('#task-view-container');
         if (!viewContainer) return;
@@ -84,7 +84,7 @@ export function runTasksLogic(initialView = 'dashboard') {
 
                 <nav id="task-navigation" class="flex items-center bg-gray-200 dark:bg-gray-700 rounded-lg p-1 ml-auto">
                     <button data-task-view="kanban" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
-                        <i data-lucide="list-checks" class="w-4 h-4 mr-2"></i> Mis Tareas
+                        <i data-lucide="list-checks" class="w-4 h-4 mr-2"></i> Kanban
                     </button>
                     <button data-task-view="dashboard" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
                         <i data-lucide="layout-dashboard" class="w-4 h-4 mr-2"></i> Dashboard

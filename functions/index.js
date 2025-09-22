@@ -255,6 +255,77 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
+const { GoogleGenerativeAI } = require("@google/genai");
+
+exports.organizeTaskWithAI = functions
+  .runWith({ secrets: ["GEMINI_API_KEY"] })
+  .https.onCall(async (data, context) => {
+    // 1. Authentication
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated."
+      );
+    }
+
+    // 2. Input validation
+    const text = data.text;
+    if (!text || typeof text !== "string" || text.trim().length === 0) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "The function must be called with a non-empty 'text' argument."
+      );
+    }
+
+    try {
+      // 3. Initialize Gemini AI
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+      // 4. Construct the prompt
+      const prompt = `
+        Analiza el siguiente texto que describe una tarea. Extrae un título conciso y claro (máximo 10 palabras) para la tarea y una lista de subtareas accionables.
+        El texto es: "${text}"
+
+        Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string) y "subtasks" (un array de strings). No incluyas ninguna otra explicación ni formato, solo el JSON.
+        Ejemplo de salida:
+        {
+          "title": "Preparar presentación para cliente",
+          "subtasks": [
+            "Investigar datos del cliente",
+            "Armar PowerPoint con gráficos de rendimiento",
+            "Coordinar reunión de prueba con ventas"
+          ]
+        }
+      `;
+
+      // 5. Call the Gemini API
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const responseText = response.text();
+
+      // 6. Parse the JSON response from the model
+      // The model sometimes returns the JSON wrapped in ```json ... ```, so we clean it.
+      const cleanedJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsedData = JSON.parse(cleanedJson);
+
+      // 7. Validate the parsed data structure
+      if (!parsedData.title || !Array.isArray(parsedData.subtasks)) {
+          throw new Error("La respuesta de la IA no tiene el formato esperado.");
+      }
+
+      return parsedData;
+
+    } catch (error) {
+      console.error("Error calling Gemini API:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Ocurrió un error al procesar la solicitud con la IA.",
+        error.message
+      );
+    }
+  });
+
 exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }).pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires")
   .onRun(async (context) => {
