@@ -543,6 +543,21 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                 <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
                 <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
 
+                <div class="input-group bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                    <label for="task-ai-braindump" class="flex items-center gap-2 font-bold text-blue-800">
+                        <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+                        Organizador de Tareas con IA
+                    </label>
+                    <p class="text-sm text-slate-600 mt-1 mb-3">
+                        Escribe todas tus ideas o lo que necesitas hacer en el siguiente campo. La IA lo analizará para crear un título y una lista de subtareas automáticamente.
+                    </p>
+                    <textarea id="task-ai-braindump" placeholder="Ej: Necesito preparar la presentación para el cliente nuevo. Tengo que investigar sus datos, armar el powerpoint con los gráficos de rendimiento y coordinar una reunión de prueba con el equipo de ventas para el viernes." rows="4" class="w-full"></textarea>
+                    <button type="button" id="organize-with-ai-btn" class="btn btn-primary w-full mt-3">
+                        <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>
+                        Organizar Tarea
+                    </button>
+                </div>
+
                 <div class="input-group">
                     <label for="task-title">Título</label>
                     <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" required>
