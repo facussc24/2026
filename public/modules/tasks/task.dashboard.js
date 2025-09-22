@@ -1,4 +1,4 @@
-import { subscribeToAllTasks } from './task.service.js';
+import { subscribeToAllTasks, exportTasksToExcel } from './task.service.js';
 import { showToast } from '../../main.js';
 import { getState, setDashboardTasks, resetDashboardState, setDashboardTableFilter, setDashboardTablePage } from './task.state.js';
 import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading } from './task.ui.js';
@@ -53,7 +53,7 @@ function setupEventListeners(container) {
     const exportButton = container.querySelector('#export-tasks-btn');
 
     if (exportButton) {
-        exportButton.addEventListener('click', () => handleExportTasks(exportButton));
+        exportButton.addEventListener('click', () => exportTasksToExcel());
     }
 
     // Debounced search
@@ -141,184 +141,6 @@ function applyFilters(tasks) {
         return matchesUser && matchesStatus && matchesPriority && matchesSearch;
     });
 }
-
-function handleExportTasks(button) {
-    if (!button) return;
-
-    const originalHTML = button.innerHTML;
-    button.disabled = true;
-    button.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Generando...</span>`;
-    lucide.createIcons();
-
-    try {
-        const { allTasks } = getState().dashboard;
-        const filteredTasks = applyFilters(allTasks);
-
-        if (filteredTasks.length === 0) {
-            showToast('No hay tareas para exportar con los filtros actuales.', 'info');
-            return;
-        }
-
-        const csvContent = buildTasksCsv(filteredTasks);
-        triggerCsvDownload(csvContent);
-
-        const taskWord = filteredTasks.length === 1 ? 'tarea' : 'tareas';
-        showToast(`Se exportaron ${filteredTasks.length} ${taskWord}.`, 'success');
-    } catch (error) {
-        console.error('Error exporting tasks:', error);
-        showToast('No se pudo exportar las tareas. Intente nuevamente.', 'error');
-    } finally {
-        button.disabled = false;
-        button.innerHTML = originalHTML;
-        lucide.createIcons();
-    }
-}
-
-function buildTasksCsv(tasks) {
-    const headers = [
-        'Título',
-        'Descripción',
-        'Proyecto',
-        'Responsable',
-        'Creada por',
-        'Estado',
-        'Prioridad',
-        'Fecha de inicio',
-        'Fecha de vencimiento',
-        'Subtareas completadas',
-        'Progreso (%)',
-        'Es pública',
-        'Creada el',
-        'Actualizada el'
-    ];
-
-    const userMap = appState.collectionsById.usuarios;
-    const rows = [headers.map(formatCsvField).join(',')];
-
-    tasks.forEach(task => {
-        const assignee = userMap.get(task.assigneeUid);
-        const creator = userMap.get(task.creatorUid);
-        const assigneeName = assignee ? assignee.name : 'No asignado';
-        const creatorName = creator ? creator.name : 'No disponible';
-        const statusLabel = STATUS_LABELS[task.status] || STATUS_LABELS.todo;
-        const priorityLabel = PRIORITY_LABELS[task.priority] || PRIORITY_LABELS.medium;
-        const startDate = formatDateForCsv(task.startDate);
-        const dueDate = formatDateForCsv(task.dueDate);
-        const createdAt = formatDateForCsv(task.createdAt, { includeTime: true });
-        const updatedAt = formatDateForCsv(task.updatedAt, { includeTime: true });
-
-        let progress = 0;
-        let subtasksSummary = 'Sin subtareas';
-        if (Array.isArray(task.subtasks) && task.subtasks.length > 0) {
-            const completed = task.subtasks.filter(st => st.completed).length;
-            progress = Math.round((completed / task.subtasks.length) * 100);
-            subtasksSummary = `${completed}/${task.subtasks.length}`;
-        } else if (task.status === 'done') {
-            progress = 100;
-        }
-
-        const rowValues = [
-            task.title || '',
-            task.description || '',
-            task.proyecto || 'N/A',
-            assigneeName,
-            creatorName,
-            statusLabel,
-            priorityLabel,
-            startDate,
-            dueDate,
-            subtasksSummary,
-            progress,
-            task.isPublic ? 'Sí' : 'No',
-            createdAt,
-            updatedAt
-        ];
-
-        rows.push(rowValues.map(formatCsvField).join(','));
-    });
-
-    return `\ufeff${rows.join('\r\n')}`;
-}
-
-function triggerCsvDownload(csvContent) {
-    if (!csvContent) return;
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const urlCreator = (typeof window !== 'undefined' && (window.URL || window.webkitURL)) || URL;
-
-    if (!urlCreator || typeof urlCreator.createObjectURL !== 'function') {
-        throw new Error('El navegador no soporta la descarga de archivos.');
-    }
-
-    const url = urlCreator.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const timestamp = new Date().toISOString().split('T')[0];
-    link.download = `tareas_${timestamp}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    urlCreator.revokeObjectURL(url);
-}
-
-function formatCsvField(value) {
-    if (value === null || value === undefined) {
-        return '""';
-    }
-    const stringValue = String(value).replace(/"/g, '""');
-    return `"${stringValue}"`;
-}
-
-function formatDateForCsv(value, options = {}) {
-    const date = parseDateValue(value);
-    if (!date) return '';
-
-    const { includeTime = false } = options;
-    if (includeTime) {
-        return date.toLocaleString('es-AR');
-    }
-    return date.toLocaleDateString('es-AR');
-}
-
-function parseDateValue(value) {
-    if (!value) return null;
-
-    if (value instanceof Date) {
-        return value;
-    }
-
-    if (typeof value === 'string') {
-        const asDateTime = new Date(value);
-        if (!Number.isNaN(asDateTime.getTime())) {
-            return asDateTime;
-        }
-
-        const asDate = new Date(`${value}T00:00:00`);
-        if (!Number.isNaN(asDate.getTime())) {
-            return asDate;
-        }
-
-        return null;
-    }
-
-    if (typeof value.toDate === 'function') {
-        return value.toDate();
-    }
-
-    return null;
-}
-
-const STATUS_LABELS = {
-    todo: 'Pendiente',
-    inprogress: 'En progreso',
-    done: 'Completado'
-};
-
-const PRIORITY_LABELS = {
-    high: 'Alta',
-    medium: 'Media',
-    low: 'Baja'
-};
 
 function renderFilteredContent() {
     const { allTasks, tablePagination } = getState().dashboard;

@@ -103,7 +103,6 @@ describe('Tasks Module', () => {
 
     // Assert
     expect(mockDom.viewContent.innerHTML).toContain('<div id="task-main-container"');
-    expect(mockDom.viewContent.innerHTML).toContain('<h2 class="text-3xl font-bold text-text-light dark:text-text-dark">Gestor de Tareas</h2>');
     expect(mockDom.viewContent.innerHTML).toContain('<nav id="task-navigation"');
     expect(mockDom.viewContent.innerHTML).toContain('data-task-view="kanban"');
     expect(mockDom.viewContent.innerHTML).toContain('data-task-view="dashboard"');

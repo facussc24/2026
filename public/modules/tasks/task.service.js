@@ -313,3 +313,102 @@ export function calculateOverdueTasksCount(tasks) {
         return dueDate < today;
     }).length;
 }
+
+/**
+ * Fetches all tasks, formats them into a user-friendly structure, and exports them to an Excel file.
+ * The exported file will have formatted headers and adjusted column widths.
+ */
+export async function exportTasksToExcel() {
+    showToast('Generando reporte de tareas...', 'info');
+
+    try {
+        const tasks = await fetchAllTasks();
+        const users = appState.collectionsById.usuarios || new Map();
+
+        const statusMap = {
+            todo: 'Por Hacer',
+            inprogress: 'En Progreso',
+            done: 'Completada'
+        };
+
+        const priorityMap = {
+            low: 'Baja',
+            medium: 'Media',
+            high: 'Alta'
+        };
+
+        const tasksToExport = tasks.map(task => {
+            const assignee = users.get(task.assigneeUid);
+            const creator = users.get(task.creatorUid);
+            const formatDate = (dateString) => {
+                if (!dateString) return '';
+                // Add T00:00:00 to ensure date is parsed in local time zone, not UTC
+                return new Date(dateString + "T00:00:00").toLocaleDateString('es-AR');
+            };
+
+            return {
+                'ID Tarea': task.docId,
+                'Título': task.title,
+                'Descripción': task.description,
+                'Estado': statusMap[task.status] || task.status,
+                'Prioridad': priorityMap[task.priority] || task.priority,
+                'Fecha de Creación': task.createdAt?.toDate ? task.createdAt.toDate().toLocaleDateString('es-AR') : '',
+                'Fecha de Inicio': formatDate(task.startDate),
+                'Fecha Límite': formatDate(task.dueDate),
+                'Asignada a': assignee ? assignee.name : 'No asignado',
+                'Creada por': creator ? creator.name : 'Desconocido',
+                'Es Pública': task.isPublic ? 'Sí' : 'No'
+            };
+        });
+
+        if (tasksToExport.length === 0) {
+            showToast('No hay tareas para exportar.', 'info');
+            return;
+        }
+
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(tasksToExport);
+
+        // Define column widths
+        const columnWidths = [
+            { wch: 15 }, // ID Tarea
+            { wch: 40 }, // Título
+            { wch: 60 }, // Descripción
+            { wch: 15 }, // Estado
+            { wch: 12 }, // Prioridad
+            { wch: 18 }, // Fecha de Creación
+            { wch: 18 }, // Fecha de Inicio
+            { wch: 18 }, // Fecha Límite
+            { wch: 25 }, // Asignada a
+            { wch: 25 }, // Creada por
+            { wch: 12 }  // Es Pública
+        ];
+        ws['!cols'] = columnWidths;
+
+        // Style header row
+        const headerStyle = {
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: "4F81BD" } },
+            alignment: { horizontal: "center", vertical: "center" }
+        };
+
+        // Get the range of the header
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const address = XLSX.utils.encode_cell({ r: 0, c: C });
+            if (!ws[address]) continue;
+            ws[address].s = headerStyle;
+        }
+
+        // Create workbook and export
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Tareas');
+        XLSX.writeFile(wb, 'Reporte_de_Tareas.xlsx');
+
+        showToast('Reporte de tareas exportado con éxito.', 'success');
+
+    } catch (error) {
+        console.error("Error exporting tasks to Excel:", error);
+        showToast('Error al exportar las tareas.', 'error');
+    }
+}
