@@ -6636,21 +6636,36 @@ function formatTimeAgo(timestamp) {
     return `hace ${Math.floor(seconds)} segundos`;
 }
 
-async function handleProductSelect(productId) {
-    // Buscamos el producto en los datos actualmente cargados en la tabla.
-    // Esto es más eficiente que buscar en toda la colección si ya está en la vista.
-    let producto = appState.currentData.find(p => p.id === productId);
-    if (!producto) {
-        producto = appState.collections[COLLECTIONS.PRODUCTOS].find(p => p.id === productId);
-    }
-    if (!producto) {
-        showToast("Error: Producto no encontrado.", "error");
-        return;
+export async function handleProductSelect(productIdentifier) {
+    const matchProduct = (producto, identifier) =>
+        producto && (producto.id === identifier || producto.docId === identifier);
+
+    let producto = appState.currentData.find(p => matchProduct(p, productIdentifier));
+    if (!producto && Array.isArray(appState.collections[COLLECTIONS.PRODUCTOS])) {
+        producto = appState.collections[COLLECTIONS.PRODUCTOS].find(p => matchProduct(p, productIdentifier));
     }
 
+    let documentId = producto?.docId || null;
+    let preloadedSnapshot = null;
+
     try {
-        const productoRef = doc(db, COLLECTIONS.PRODUCTOS, producto.docId);
-        const productoSnap = await getDoc(productoRef);
+        if (!documentId) {
+            const potentialRef = doc(db, COLLECTIONS.PRODUCTOS, productIdentifier);
+            const potentialSnap = await getDoc(potentialRef);
+            if (potentialSnap.exists()) {
+                documentId = potentialSnap.id;
+                preloadedSnapshot = potentialSnap;
+                producto = { ...potentialSnap.data(), docId: potentialSnap.id };
+            }
+        }
+
+        if (!documentId) {
+            showToast("Error: Producto no encontrado.", "error");
+            return;
+        }
+
+        const productoRef = doc(db, COLLECTIONS.PRODUCTOS, documentId);
+        const productoSnap = preloadedSnapshot || await getDoc(productoRef);
 
         if (!productoSnap.exists()) {
             showToast("Error: El documento del producto ya no existe.", "error");
@@ -6673,7 +6688,7 @@ async function handleProductSelect(productId) {
             ...productoData,
             docId: productoSnap.id,
             nombre: `Árbol de ${productoData.descripcion}`,
-            productoPrincipalId: productoData.id // Mantenemos consistencia
+            productoPrincipalId: productoData.id || producto?.id || productIdentifier
         };
 
         renderArbolDetalle();
@@ -8058,14 +8073,21 @@ function initSortable(treeArea) {
     });
 }
 
-function handleDropEvent(evt) {
+export function handleDropEvent(evt) {
+    if (!appState.arbolActivo || !evt?.item?.dataset) {
+        renderArbol();
+        return;
+    }
+
     const movedItemId = evt.item.dataset.nodeId;
     const newParentEl = evt.to;
-    const newParentId = newParentEl.closest('li[data-node-id]').dataset.nodeId;
+    const parentListItem = newParentEl.closest('li[data-node-id]');
+    const newParentId = parentListItem ? parentListItem.dataset.nodeId : null;
     const newIndex = evt.newIndex;
-    
+
     let movedNode = null;
     let oldParentNode = null;
+
     function findAndRemove(nodes, parent) {
         for (let i = 0; i < nodes.length; i++) {
             if (nodes[i].id === movedItemId) {
@@ -8079,19 +8101,45 @@ function handleDropEvent(evt) {
         }
         return false;
     }
+
     findAndRemove(appState.arbolActivo.estructura, null);
-    if (movedNode) {
-        const newParentNode = findNode(newParentId, appState.arbolActivo.estructura);
-        if (newParentNode && newParentNode.tipo !== 'insumo') {
-            if (!newParentNode.children) newParentNode.children = [];
-            newParentNode.children.splice(newIndex, 0, movedNode);
-        } else {
-            if (oldParentNode) {
-                 oldParentNode.children.splice(evt.oldIndex, 0, movedNode);
-            }
-            showToast('No se puede anidar un componente dentro de un insumo.', 'error');
-        }
+
+    if (!movedNode) {
+        renderArbol();
+        return;
     }
+
+    const restoreNode = () => {
+        const targetArray = oldParentNode ? oldParentNode.children : appState.arbolActivo.estructura;
+        const originalIndex = typeof evt.oldIndex === 'number' ? evt.oldIndex : targetArray.length;
+        targetArray.splice(originalIndex, 0, movedNode);
+    };
+
+    if (!newParentId) {
+        restoreNode();
+        showToast('No se puede mover este componente al nivel raíz.', 'error');
+        renderArbol();
+        return;
+    }
+
+    const newParentNode = findNode(newParentId, appState.arbolActivo.estructura);
+    if (!newParentNode) {
+        restoreNode();
+        showToast('No se pudo encontrar el nodo de destino.', 'error');
+        renderArbol();
+        return;
+    }
+
+    if (newParentNode.tipo === 'insumo') {
+        restoreNode();
+        showToast('No se puede anidar un componente dentro de un insumo.', 'error');
+        renderArbol();
+        return;
+    }
+
+    if (!newParentNode.children) newParentNode.children = [];
+    newParentNode.children.splice(newIndex, 0, movedNode);
+
     renderArbol();
 }
 
