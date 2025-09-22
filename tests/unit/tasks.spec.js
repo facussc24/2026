@@ -110,7 +110,7 @@ describe('Tasks Module', () => {
     expect(mockDom.viewContent.innerHTML).toContain('<div id="task-view-container"');
   });
 
-  test('runTasksLogic should default to the "dashboard" view', () => {
+  test('runTasksLogic should default to the "kanban" view', () => {
     // Arrange
     const dependencies = { dom: mockDom, lucide: mockLucide };
     initTasksModule(dependencies);
@@ -119,8 +119,8 @@ describe('Tasks Module', () => {
     runTasksLogic();
 
     // Assert
-    expect(taskDashboard.renderTaskDashboardView).toHaveBeenCalled();
-    expect(taskKanban.runKanbanBoardLogic).not.toHaveBeenCalled();
+    expect(taskDashboard.renderTaskDashboardView).not.toHaveBeenCalled();
+    expect(taskKanban.runKanbanBoardLogic).toHaveBeenCalled();
   });
 
   test('runTasksLogic should render the dashboard view when specified', () => {
