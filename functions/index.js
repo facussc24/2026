@@ -304,8 +304,8 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
         const telegramChatId = userData.telegramChatId;
         const notificationPrefs = userData.telegramNotifications || {};
 
-        // La preferencia 'onDueDateReminder' se añadirá en el siguiente paso del plan.
-        // La función ya está preparada para respetarla.
+        // La preferencia 'onDueDateReminder' se guarda desde el frontend,
+        // por lo que solo se envían recordatorios si no fue deshabilitada.
         if (telegramChatId && notificationPrefs.onDueDateReminder !== false) {
           const mensaje = `🔔 *Recordatorio de Vencimiento* 🔔\n\nLa tarea "*${task.title}*" vence mañana, ${task.dueDate}.`;
           const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;

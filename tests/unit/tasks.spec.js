@@ -137,6 +137,19 @@ describe('Tasks Module', () => {
     expect(taskKanban.runKanbanBoardLogic).not.toHaveBeenCalled();
   });
 
+  test('runTasksLogic should render the kanban view when specified', () => {
+    // Arrange
+    const dependencies = { dom: mockDom, lucide: mockLucide };
+    initTasksModule(dependencies);
+
+    // Act
+    runTasksLogic('kanban');
+
+    // Assert
+    expect(taskKanban.runKanbanBoardLogic).toHaveBeenCalledWith(expect.objectContaining({ innerHTML: '' }));
+    expect(taskDashboard.renderTaskDashboardView).not.toHaveBeenCalled();
+  });
+
   test('runTasksLogic should render the calendar view when specified', () => {
     // Arrange
     const dependencies = { dom: mockDom, lucide: mockLucide };
