@@ -126,7 +126,7 @@ const viewConfig = {
             { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
             { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
             { key: 'peso', label: 'Peso (gr)', type: 'number' },
-            { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
+            { key: 'imagen', label: 'Imagen (URL)', type: 'text' },
             { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
         ]
     },
@@ -147,7 +147,7 @@ const viewConfig = {
             { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
             { key: 'peso_gr', label: 'Peso (gr)', type: 'number' },
             { key: 'tolerancia_gr', label: 'Tolerancia (gr)', type: 'number' },
-            { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
+            { key: 'imagen', label: 'Imagen (URL)', type: 'text' },
         ]
     },
     insumos: {
@@ -165,7 +165,7 @@ const viewConfig = {
             { key: 'codigo_proveedor', label: 'Código de proveedor', type: 'text', required: true },
             { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
             { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
-            { key: 'imagen', label: 'Imágen (URL)', type: 'text' },
+            { key: 'imagen', label: 'Imagen (URL)', type: 'text' },
             { key: 'proveedor', label: 'Proveedor', type: 'select', searchKey: COLLECTIONS.PROVEEDORES, required: true },
             { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
             { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },

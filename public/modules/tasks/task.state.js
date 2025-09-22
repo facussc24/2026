@@ -18,7 +18,7 @@ const tasksModuleState = {
             searchTerm: '',
             user: 'all',
             priority: 'all',
-            status: 'active'
+            status: 'all'
         },
         tableSort: {
             by: 'createdAt',
@@ -113,7 +113,7 @@ export function resetDashboardState() {
     const d = tasksModuleState.dashboard;
     d.allTasks = [];
     d.viewMode = 'all';
-    d.tableFilters = { searchTerm: '', user: 'all', priority: 'all', status: 'active' };
+    d.tableFilters = { searchTerm: '', user: 'all', priority: 'all', status: 'all' };
     d.tableSort = { by: 'createdAt', order: 'desc' };
     d.tablePagination = { currentPage: 1, pageSize: 10 };
     d.calendar = { currentDate: new Date(), view: 'monthly', priorityFilter: 'all' };
