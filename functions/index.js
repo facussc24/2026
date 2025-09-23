@@ -3,7 +3,6 @@ const admin = require("firebase-admin");
 const cors = require('cors')({origin: true});
 const axios = require("axios");
 const nodemailer = require('nodemailer');
-const { generateEcrDraft, generateEcoActionPlan } = require("./ai_assistant.js");
 
 if (admin.apps.length === 0) {
     admin.initializeApp();
@@ -741,6 +740,3 @@ exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00"
       return null;
     }
   });
-
-exports.generateEcrDraft = generateEcrDraft;
-exports.generateEcoActionPlan = generateEcoActionPlan;
