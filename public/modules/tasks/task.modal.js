@@ -299,6 +299,9 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
             if (dueDate) {
                 modalElement.querySelector('#task-duedate').value = dueDate;
             }
+            if (startDate) {
+                modalElement.querySelector('#task-startdate').value = startDate;
+            }
             if (isPublic !== undefined) {
                 const isPublicCheckbox = modalElement.querySelector('#task-is-public');
                 if (isPublicCheckbox) {
