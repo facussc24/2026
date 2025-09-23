@@ -287,7 +287,7 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
             const organizeTaskWithAI = httpsCallable(functions, 'organizeTaskWithAI');
             const result = await organizeTaskWithAI({ text: brainDumpText });
 
-            const { title, description, subtasks, priority, dueDate, assignee, isPublic } = result.data;
+            const { title, description, subtasks, priority, dueDate, startDate, assignee, isPublic } = result.data;
 
             modalElement.querySelector('#task-title').value = title || '';
             modalElement.querySelector('#task-description').value = description || '';
@@ -296,12 +296,18 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
             if (priority) {
                 modalElement.querySelector('#task-priority').value = priority;
             }
+
+            if (startDate) {
+                modalElement.querySelector('#task-startdate').value = startDate;
+            } else {
+                const today = new Date().toISOString().split('T')[0];
+                modalElement.querySelector('#task-startdate').value = today;
+            }
+
             if (dueDate) {
                 modalElement.querySelector('#task-duedate').value = dueDate;
             }
-            if (startDate) {
-                modalElement.querySelector('#task-startdate').value = startDate;
-            }
+
             if (isPublic !== undefined) {
                 const isPublicCheckbox = modalElement.querySelector('#task-is-public');
                 if (isPublicCheckbox) {
