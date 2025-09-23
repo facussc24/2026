@@ -6,7 +6,7 @@ import { getAuth, onAuthStateChanged, updatePassword, reauthenticateWithCredenti
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
 import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
 import {
     initTasksModule,
@@ -5404,14 +5404,7 @@ async function runEcrFormLogic(params = null) {
 
             // If a new ECR was created, delete the draft from Firestore.
             if (!isEditing) {
-                try {
-                    const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, appState.currentUser.uid);
-                    await deleteDoc(draftRef);
-                    console.log("ECR draft deleted successfully.");
-                } catch (draftError) {
-                    console.error("Could not delete ECR draft:", draftError);
-                    // This is not a critical failure, so we just log it and don't bother the user.
-                }
+                deleteEcrDraftFromFirestore(db, appState.currentUser.uid);
             }
 
             showToast('ECR guardado con éxito.', 'success', { toastId });
