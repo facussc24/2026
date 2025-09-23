@@ -280,7 +280,7 @@ exports.organizeTaskWithAI = functions
     try {
       // 3. Initialize Gemini AI
       const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
       // 4. Construct the prompt
       const prompt = `
