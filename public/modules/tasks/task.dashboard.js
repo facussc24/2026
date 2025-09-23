@@ -1,7 +1,7 @@
 import { subscribeToAllTasks, exportTasksToExcel } from './task.service.js';
 import { showToast } from '../../main.js';
 import { getState, setDashboardTasks, resetDashboardState, setDashboardTableFilter, setDashboardTablePage } from './task.state.js';
-import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading } from './task.ui.js';
+import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading, openAIAssistantModal } from './task.ui.js';
 import { getDashboardLayoutHTML } from './task.templates.js';
 
 let db;
@@ -51,9 +51,14 @@ function setupEventListeners(container) {
     const filtersContainer = container.querySelector('#task-filters-container');
     const paginationContainer = container.querySelector('#pagination-container');
     const exportButton = container.querySelector('#export-tasks-btn');
+    const aiAssistantButton = container.querySelector('#ai-assistant-btn');
 
     if (exportButton) {
         exportButton.addEventListener('click', () => exportTasksToExcel());
+    }
+
+    if (aiAssistantButton) {
+        aiAssistantButton.addEventListener('click', () => openAIAssistantModal());
     }
 
     // Debounced search

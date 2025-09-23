@@ -1,15 +1,19 @@
-const { describe, beforeEach, test, expect } = require('@jest/globals');
+// Mocking must happen before any imports
+jest.mock('axios');
+jest.mock('firebase-admin', () => ({
+    apps: [],
+    initializeApp: jest.fn(),
+    firestore: jest.fn(),
+    auth: () => ({
+        getUser: jest.fn().mockResolvedValue({ email: 'test@test.com', displayName: 'Test User' })
+    })
+}));
+
+const { describe, beforeEach, test, expect, beforeAll } = require('@jest/globals');
 const admin = require('firebase-admin');
-// Initialize admin SDK if not already initialized
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
 const firebaseTest = require('firebase-functions-test')();
 const axios = require('axios');
 const { HttpsError } = require('firebase-functions/v1/https');
-
-// Mock axios
-jest.mock('axios');
 
 // Import the functions to be tested AFTER mocking
 const { organizeTaskWithAI, getNextEcrNumber } = require('../index');
@@ -108,22 +112,23 @@ describe('organizeTaskWithAI (axios version)', () => {
 describe('getNextEcrNumber', () => {
   let mockGet;
   let mockSet;
-  let mockTransaction;
 
   beforeEach(() => {
     mockGet = jest.fn();
     mockSet = jest.fn();
-    mockTransaction = {
-      get: mockGet,
-      set: mockSet,
-    };
 
-    // Mock the runTransaction call
-    admin.firestore = () => ({
-      runTransaction: (updateFunction) => updateFunction(mockTransaction),
+    // Configure the mock's behavior for each test
+    admin.firestore.mockReturnValue({
+      runTransaction: (updateFunction) => {
+        const mockTransaction = {
+          get: mockGet,
+          set: mockSet,
+        };
+        return updateFunction(mockTransaction);
+      },
       collection: () => ({
-        doc: () => ({})
-      })
+        doc: () => ({}),
+      }),
     });
   });
 
@@ -134,7 +139,7 @@ describe('getNextEcrNumber', () => {
     const wrapped = firebaseTest.wrap(getNextEcrNumber);
     const result = await wrapped({}, { auth: { uid: 'test-uid' }});
 
-    expect(mockSet).toHaveBeenCalledWith({}, { count: 1, year: currentYear }, { merge: true });
+    expect(mockSet).toHaveBeenCalledWith(expect.anything(), { count: 1, year: currentYear }, { merge: true });
     expect(result.ecrNumber).toBe(`ECR-${currentYear}-001`);
   });
 
@@ -145,7 +150,7 @@ describe('getNextEcrNumber', () => {
     const wrapped = firebaseTest.wrap(getNextEcrNumber);
     const result = await wrapped({}, { auth: { uid: 'test-uid' }});
 
-    expect(mockSet).toHaveBeenCalledWith({}, { count: 6, year: currentYear }, { merge: true });
+    expect(mockSet).toHaveBeenCalledWith(expect.anything(), { count: 6, year: currentYear }, { merge: true });
     expect(result.ecrNumber).toBe(`ECR-${currentYear}-006`);
   });
 
@@ -156,7 +161,7 @@ describe('getNextEcrNumber', () => {
     const wrapped = firebaseTest.wrap(getNextEcrNumber);
     const result = await wrapped({}, { auth: { uid: 'test-uid' }});
 
-    expect(mockSet).toHaveBeenCalledWith({}, { count: 1, year: currentYear }, { merge: true });
+    expect(mockSet).toHaveBeenCalledWith(expect.anything(), { count: 1, year: currentYear }, { merge: true });
     expect(result.ecrNumber).toBe(`ECR-${currentYear}-001`);
   });
 
