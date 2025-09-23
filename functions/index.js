@@ -337,6 +337,94 @@ exports.organizeTaskWithAI = functions
     }
   });
 
+exports.generateEcrDraftWithAI = functions
+  .runWith({ secrets: ["GEMINI_API_KEY"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const text = data.text;
+    if (!text || typeof text !== "string" || text.trim().length === 0) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
+    }
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = "gemini-1.5-pro-latest";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+      const prompt = `
+        Analiza el siguiente texto que describe una solicitud de cambio de ingeniería (ECR). Tu objetivo es extraer la información y estructurarla en un formato JSON que coincida con los campos de un formulario ECR.
+        El texto es: "${text}"
+
+        Realiza las siguientes acciones y formatea la salida como un objeto JSON. No incluyas explicaciones, solo el JSON.
+
+        1.  **origen_cliente**: Si el texto menciona que la solicitud viene de un 'cliente', 'customer', o una empresa externa, retorna 'true'. Si no, 'false'.
+        2.  **origen_interno**: Si el texto sugiere un origen interno (mejora de proceso, reducción de costos, etc.), retorna 'true'. Si no, 'false'.
+        3.  **proyecto**: Extrae el nombre del proyecto si se menciona (ej. "Proyecto Titán"). Si no, null.
+        4.  **cliente**: Extrae el nombre del cliente si se menciona (ej. "Cliente ABC"). Si no, null.
+        5.  **codigo_barack**: Busca un código de producto interno (ej. "PROD-1234"). Si no, null.
+        6.  **denominacion_producto**: Extrae la descripción o nombre del producto/componente afectado.
+        7.  **situacion_existente**: Resume en 1-2 frases la situación actual, el problema o el estado previo al cambio.
+        8.  **situacion_propuesta**: Resume en 1-2 frases la solución propuesta o el estado deseado tras el cambio.
+        9.  **componentes_obsoletos**: Si se menciona una cantidad de componentes obsoletos, extrae el número. Si no, 0.
+        10. **cliente_requiere_ppap**: Si se menciona 'PPAP', retorna 'true'. Si no, 'false'.
+        11. **afecta_calidad**: Si se mencionan términos como 'calidad', 'tolerancia', 'especificación', 'falla', 'dimensional', retorna 'true'. Si no, 'false'.
+        12. **afecta_costos**: Si se mencionan términos como 'costo', 'precio', 'ahorro', 'inversión', retorna 'true'. Si no, 'false'.
+        13. **afecta_logistica**: Si se mencionan términos como 'logística', 'transporte', 'embalaje', 'almacén', retorna 'true'. Si no, 'false'.
+        14. **afecta_ambiental**: Si se mencionan términos como 'ambiental', 'seguridad', 'HSE', 'ergonomía', retorna 'true'. Si no, 'false'.
+        15. **afecta_proceso**: Si se mencionan términos como 'proceso', 'línea de producción', 'ensamblaje', 'manufactura', retorna 'true'. Si no, 'false'.
+
+        Ejemplo de Salida:
+        {
+          "origen_cliente": true,
+          "origen_interno": false,
+          "proyecto": "Proyecto Titán",
+          "cliente": "Cliente ABC",
+          "codigo_barack": "X-123",
+          "denominacion_producto": "Componente de soporte",
+          "situacion_existente": "El componente actual se fabrica con un polímero que muestra degradación por corrosión.",
+          "situacion_propuesta": "Se propone cambiar el material a acero inoxidable para mejorar la resistencia a la corrosión y la durabilidad.",
+          "componentes_obsoletos": 50,
+          "cliente_requiere_ppap": true,
+          "afecta_calidad": true,
+          "afecta_costos": true,
+          "afecta_logistica": false,
+          "afecta_ambiental": false,
+          "afecta_proceso": true
+        }
+      `;
+
+      const requestBody = {
+        contents: [{
+          parts: [{
+            text: prompt,
+          }],
+        }],
+      };
+
+      const apiResponse = await axios.post(url, requestBody);
+      const responseText = apiResponse.data.candidates[0].content.parts[0].text;
+      const cleanedJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+      const parsedData = JSON.parse(cleanedJson);
+
+      if (!parsedData || typeof parsedData !== 'object' || !parsedData.denominacion_producto) {
+          throw new Error("La respuesta de la IA no es un JSON válido o no contiene los campos mínimos requeridos.");
+      }
+
+      return parsedData;
+
+    } catch (error) {
+      console.error("Error calling Gemini API for ECR Draft Generation:", error.response ? error.response.data : error.message);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Ocurrió un error al procesar la solicitud con la IA para generar el ECR.",
+        error.message
+      );
+    }
+  });
+
 exports.getTaskSummaryWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {

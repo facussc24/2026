@@ -6,7 +6,7 @@ import { getAuth, onAuthStateChanged, updatePassword, reauthenticateWithCredenti
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
 import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
 import {
     initTasksModule,
@@ -75,6 +75,7 @@ const viewConfig = {
     eco_form: { title: 'ECO de Producto / Proceso', singular: 'Formulario ECO' },
     eco: { title: 'Gestión de ECO', singular: 'ECO' },
     ecr: { title: 'Gestión de ECR', singular: 'ECR' },
+    ecr_creation_hub: { title: 'Crear Nuevo ECR', singular: 'ECR' },
     ecr_form: {
         title: 'ECR de Producto / Proceso',
         singular: 'Formulario ECR',
@@ -1504,6 +1505,7 @@ async function switchView(viewName, params = null) {
     else if (viewName === 'ecr_table_view') await runEcrTableViewLogic();
     else if (viewName === 'indicadores_ecm_view') await runIndicadoresEcmViewLogic();
     else if (viewName === 'eco_form') await runEcoFormLogic(params);
+    else if (viewName === 'ecr_creation_hub') await runEcrCreationHubLogic();
     else if (viewName === 'ecr_form') await runEcrFormLogic(params);
     else if (viewName === 'eco_form_mock_for_tutorial') {
         dom.viewContent.innerHTML = `<div id="action-plan-section" class="p-8 bg-white rounded-lg shadow-lg">Este es un plan de acción de ejemplo para el tutorial.</div>`;
@@ -2452,7 +2454,7 @@ async function runEcrLogic() {
         lucide.createIcons();
 
         dom.viewContent.querySelector('[data-action="create-new-ecr"]').addEventListener('click', () => {
-            switchView('ecr_form');
+            switchView('ecr_creation_hub');
         });
 
         const ecrFormsRef = collection(db, COLLECTIONS.ECR_FORMS);
@@ -4600,9 +4602,80 @@ async function ensureCollectionsAreLoaded(collectionNames) {
         `;
     };
 
+async function runEcrCreationHubLogic() {
+    dom.headerActions.style.display = 'none';
+    const viewHTML = `
+        <div class="max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg animate-fade-in-up">
+            <div class="text-center mb-8">
+                <i data-lucide="brain-circuit" class="w-16 h-16 mx-auto text-blue-500"></i>
+                <h2 class="text-3xl font-bold text-slate-800 mt-4">Creación de ECR Asistida por IA</h2>
+                <p class="text-slate-500 mt-2">Describa su solicitud de cambio en lenguaje natural. La IA analizará el texto y generará un borrador del formulario ECR para que usted lo revise.</p>
+            </div>
+
+            <div class="space-y-4">
+                <label for="ai-ecr-braindump" class="block text-sm font-medium text-gray-700">
+                    <strong>Paso 1:</strong> Describa el cambio requerido. Sea lo más detallado posible.
+                    <span class="text-xs text-gray-500">(Ej: "El cliente ABC solicita cambiar el material del componente X-123 a acero inoxidable para mejorar la resistencia a la corrosión. Esto afectará a los proyectos Titán y Apolo.")</span>
+                </label>
+                <textarea id="ai-ecr-braindump" rows="10" class="w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Escriba aquí..."></textarea>
+            </div>
+
+            <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <button id="generate-ecr-with-ai-btn" class="w-full sm:w-auto bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 font-semibold flex items-center justify-center gap-2 transition-all transform hover:scale-105">
+                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                    <span>Generar Borrador con IA</span>
+                </button>
+                <span class="text-sm font-medium text-slate-500">o</span>
+                <button id="create-ecr-manually-btn" class="w-full sm:w-auto text-blue-600 font-semibold hover:underline">
+                    Crear manualmente
+                </button>
+            </div>
+        </div>
+    `;
+    dom.viewContent.innerHTML = viewHTML;
+    lucide.createIcons();
+
+    document.getElementById('create-ecr-manually-btn').addEventListener('click', () => {
+        switchView('ecr_form');
+    });
+
+    document.getElementById('generate-ecr-with-ai-btn').addEventListener('click', async () => {
+        const button = document.getElementById('generate-ecr-with-ai-btn');
+        const braindumpText = document.getElementById('ai-ecr-braindump').value;
+
+        if (braindumpText.trim().length < 20) {
+            showToast('Por favor, ingrese una descripción más detallada (mínimo 20 caracteres).', 'error');
+            return;
+        }
+
+        button.disabled = true;
+        button.innerHTML = `<i data-lucide="loader" class="animate-spin w-5 h-5"></i><span>Analizando...</span>`;
+        lucide.createIcons();
+
+        try {
+            const generateEcrDraftWithAI = httpsCallable(functions, 'generateEcrDraftWithAI');
+            const result = await generateEcrDraftWithAI({ text: braindumpText });
+            const aiData = result.data;
+
+            showToast('Borrador generado con éxito. Abriendo formulario para revisión.', 'success');
+
+            // Switch to the form view, passing the AI data as a parameter
+            switchView('ecr_form', { aiDraftData: aiData });
+
+        } catch (error) {
+            console.error("Error calling generateEcrDraftWithAI function:", error);
+            showToast(`Error de la IA: ${error.message}`, 'error');
+            button.disabled = false;
+            button.innerHTML = `<i data-lucide="sparkles" class="w-5 h-5"></i><span>Generar Borrador con IA</span>`;
+            lucide.createIcons();
+        }
+    });
+}
+
 async function runEcrFormLogic(params = null) {
     const ecrId = params ? params.ecrId : null;
     const scrollToSection = params ? params.scrollToSection : null;
+    const aiDraftData = params ? params.aiDraftData : null;
 
     // Ensure all necessary data for dropdowns is loaded before rendering the form
     try {
@@ -4618,7 +4691,6 @@ async function runEcrFormLogic(params = null) {
     }
 
     const isEditing = !!ecrId;
-    const ECR_FORM_STORAGE_KEY = isEditing ? `inProgressEcrForm_${ecrId}` : 'inProgressEcrForm_new';
 
     // --- Render the basic structure ---
     dom.viewContent.innerHTML = `
@@ -5136,11 +5208,40 @@ async function runEcrFormLogic(params = null) {
     };
 
 
+    // --- Debounce utility for saving drafts ---
+    let debounceTimer;
+    const debounce = (func, delay) => {
+        return function(...args) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func.apply(this, args), delay);
+        };
+    };
+
     // --- Load Data and Attach Listeners ---
-    if (ecrData) {
-        populateEcrForm(formContainer, ecrData);
+    if (aiDraftData) {
+        // If data is coming from the AI, populate the form with it.
+        // This is the highest priority data source for a new form.
+
+        // Match project and client names to their IDs
+        if (aiDraftData.proyecto) {
+            const project = appState.collections[COLLECTIONS.PROYECTOS].find(p => p.nombre.toLowerCase() === aiDraftData.proyecto.toLowerCase());
+            if (project) aiDraftData.proyecto = project.id;
+        }
+        if (aiDraftData.cliente) {
+            const client = appState.collections[COLLECTIONS.CLIENTES].find(c => c.descripcion.toLowerCase() === aiDraftData.cliente.toLowerCase());
+            if (client) aiDraftData.cliente = client.id;
+        }
+
+        populateEcrForm(formContainer, aiDraftData);
+    }
+    else if (isEditing) {
+        // If we are editing an existing ECR, we load its data directly.
+        if (ecrData) {
+            populateEcrForm(formContainer, ecrData);
+        }
     } else {
-        loadEcrFormFromLocalStorage(formContainer, ECR_FORM_STORAGE_KEY, populateEcrForm);
+        // If creating a new ECR without AI, try to load a saved draft.
+        loadEcrDraftFromFirestore(db, appState.currentUser.uid, formContainer, populateEcrForm);
     }
 
     // --- Image Upload Listeners ---
@@ -5157,7 +5258,14 @@ async function runEcrFormLogic(params = null) {
         handleImageUpload(file, 'propuesta');
     });
 
-    formContainer.addEventListener('input', () => saveEcrFormToLocalStorage(formContainer, ECR_FORM_STORAGE_KEY));
+    const debouncedSave = debounce(() => {
+        if (!isEditing) { // Only save drafts for new ECRs
+            const data = getEcrFormData(formContainer);
+            saveEcrDraftToFirestore(db, appState.currentUser.uid, data);
+        }
+    }, 500); // 500ms delay
+
+    formContainer.addEventListener('input', debouncedSave);
 
     formContainer.addEventListener('click', async (e) => {
         const button = e.target.closest('button[data-action]');
@@ -5294,7 +5402,18 @@ async function runEcrFormLogic(params = null) {
                 showToast(`El estado del ECR ha cambiado a: ${dataToSave.status}`, 'info');
             }
 
-            localStorage.removeItem(ECR_FORM_STORAGE_KEY);
+            // If a new ECR was created, delete the draft from Firestore.
+            if (!isEditing) {
+                try {
+                    const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, appState.currentUser.uid);
+                    await deleteDoc(draftRef);
+                    console.log("ECR draft deleted successfully.");
+                } catch (draftError) {
+                    console.error("Could not delete ECR draft:", draftError);
+                    // This is not a critical failure, so we just log it and don't bother the user.
+                }
+            }
+
             showToast('ECR guardado con éxito.', 'success', { toastId });
             switchView('ecr');
 

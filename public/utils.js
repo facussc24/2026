@@ -13,6 +13,7 @@ export const COLLECTIONS = {
     ROLES: 'roles',
     ECO_FORMS: 'eco_forms',
     ECR_FORMS: 'ecr_forms',
+    ECR_DRAFTS: 'ecr_drafts',
     COVER_MASTER: 'cover_master',
     REUNIONES_ECR: 'reuniones_ecr',
     NOTIFICATIONS: 'notifications'
