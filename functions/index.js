@@ -255,7 +255,7 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
-const { GoogleGenerativeAI } = require("@google/genai");
+const { GoogleGenAI } = require("@google/genai");
 
 exports.organizeTaskWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
@@ -279,7 +279,7 @@ exports.organizeTaskWithAI = functions
 
     try {
       // 3. Initialize Gemini AI
-      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
       // 4. Construct the prompt
