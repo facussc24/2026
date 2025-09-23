@@ -1,5 +1,5 @@
 import { describe, test, expect } from '@jest/globals';
-import { checkAndUpdateEcrStatus } from '../../public/data_logic.js';
+import { checkAndUpdateEcrStatus } from '../../public/modules/ecr/ecr-logic.js';
 
 describe('ECR Approval Status Logic', () => {
     test('should transition status to "approved" when a pending requirement is removed', () => {

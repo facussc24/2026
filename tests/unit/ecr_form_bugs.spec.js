@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
-import { getEcrFormData } from '../../public/data_logic.js';
+import { getEcrFormData } from '../../public/modules/ecr/ecr-logic.js';
 
 describe('ECR Form Data Collection', () => {
 
