@@ -2,7 +2,8 @@ import { checkUserPermission, showConfirmationModal, showToast } from '../../mai
 import { getState } from './task.state.js';
 import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
-import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML } from './task.templates.js';
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML } from './task.templates.js';
 import { openTaskFormModal } from './task.modal.js';
 
 let appState;
@@ -187,6 +188,88 @@ export function openTelegramConfigModal() {
     modalElement.querySelector('button[data-action="close"]').addEventListener('click', () => modalElement.remove());
 
     lucide.createIcons();
+}
+
+export function openAIAssistantModal() {
+    const modalId = 'ai-assistant-modal';
+    dom.modalContainer.innerHTML = getAIAssistantModalHTML();
+    lucide.createIcons();
+
+    const modalElement = document.getElementById(modalId);
+    const responseContainer = modalElement.querySelector('#ai-assistant-response-container');
+    const placeholder = modalElement.querySelector('#ai-assistant-placeholder');
+    const loader = modalElement.querySelector('#ai-assistant-loader');
+    const questionButtons = modalElement.querySelectorAll('.ai-question-btn');
+
+    // This is a copy of the filter logic from task.dashboard.js
+    // It's duplicated here to avoid a larger refactor of the state management.
+    const applyFiltersForAI = (tasks) => {
+        const { tableFilters } = getState().dashboard;
+        const { searchTerm, user, status, priority } = tableFilters;
+        const lowercasedFilter = searchTerm.toLowerCase();
+        const userMap = appState.collectionsById.usuarios;
+
+        return tasks.filter(task => {
+            const matchesUser = user === 'all' || task.assigneeUid === user;
+            const matchesStatus = status === 'all' || task.status === status;
+            const matchesPriority = priority === 'all' || task.priority === priority;
+
+            const assignee = userMap.get(task.assigneeUid);
+            const assigneeName = assignee ? assignee.name.toLowerCase() : '';
+
+            const matchesSearch = !lowercasedFilter ||
+                task.title.toLowerCase().includes(lowercasedFilter) ||
+                (task.proyecto && task.proyecto.toLowerCase().includes(lowercasedFilter)) ||
+                (assigneeName && assigneeName.includes(lowercasedFilter));
+
+            return matchesUser && matchesStatus && matchesPriority && matchesSearch;
+        });
+    };
+
+    const handleQuestionClick = async (e) => {
+        const button = e.currentTarget;
+        const question = button.dataset.question;
+
+        // Disable all buttons to prevent multiple requests
+        questionButtons.forEach(btn => btn.disabled = true);
+
+        placeholder.classList.add('hidden');
+        responseContainer.innerHTML = ''; // Clear previous response
+        responseContainer.appendChild(loader);
+        loader.classList.remove('hidden');
+
+        try {
+            const allTasks = getState().dashboard.allTasks;
+            const visibleTasks = applyFiltersForAI(allTasks);
+
+            if (visibleTasks.length === 0) {
+                throw new Error("No hay tareas visibles para analizar. Por favor, ajusta los filtros e inténtalo de nuevo.");
+            }
+
+            const functions = getFunctions();
+            const getTaskSummaryWithAI = httpsCallable(functions, 'getTaskSummaryWithAI');
+            const result = await getTaskSummaryWithAI({ tasks: visibleTasks, question });
+
+            // The AI response is expected to be simple markdown.
+            // We can inject it directly as the 'prose' class will style it.
+            responseContainer.innerHTML = result.data.summary;
+
+        } catch (error) {
+            const errorMessage = error.details?.message || error.message || "Ocurrió un error desconocido.";
+            showToast(`Error del Asistente IA: ${errorMessage}`, 'error');
+            responseContainer.innerHTML = `<p class="text-red-500">${errorMessage}</p>`;
+            console.error("Error calling getTaskSummaryWithAI:", error);
+        } finally {
+            loader.classList.add('hidden');
+            // Re-enable all buttons
+            questionButtons.forEach(btn => btn.disabled = false);
+        }
+    };
+
+    modalElement.querySelector('button[data-action="close"]').addEventListener('click', () => modalElement.remove());
+    questionButtons.forEach(button => {
+        button.addEventListener('click', handleQuestionClick);
+    });
 }
 
 export function renderAdminUserList(users, container) {

@@ -4,7 +4,9 @@ const cors = require('cors')({origin: true});
 const axios = require("axios");
 const nodemailer = require('nodemailer');
 
-admin.initializeApp();
+if (admin.apps.length === 0) {
+    admin.initializeApp();
+}
 
 // Nodemailer transporter setup
 const transporter = nodemailer.createTransport({
@@ -330,6 +332,88 @@ exports.organizeTaskWithAI = functions
       throw new functions.https.HttpsError(
         "internal",
         "Ocurrió un error al procesar la solicitud con la IA.",
+        error.message
+      );
+    }
+  });
+
+exports.getTaskSummaryWithAI = functions
+  .runWith({ secrets: ["GEMINI_API_KEY"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const { tasks, question } = data;
+    if (!tasks || !Array.isArray(tasks) || !question) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'tasks' (array) and 'question' (string) arguments.");
+    }
+
+    // To make the prompt more robust, we map the simple question key to a full, descriptive question.
+    const questionMap = {
+      summary: "Genera un resumen conciso del estado general de las tareas. Indica cuántas hay en cada estado (Por Hacer, En Progreso, Completadas) y cualquier observación general.",
+      urgent: "Identifica las 3 tareas más urgentes. Basa tu criterio en la combinación de su fecha de vencimiento (dueDate) y su prioridad (priority). Menciona por qué cada una es urgente.",
+      at_risk: "Analiza las tareas y detecta cuáles están en riesgo de no completarse a tiempo. Considera tareas con alta prioridad y fechas de vencimiento cercanas que no estén 'En Progreso', o tareas que lleven mucho tiempo sin actualizarse.",
+      blocked: "Revisa los títulos, descripciones y comentarios de las tareas para identificar si alguna está bloqueada. Busca frases como 'bloqueado por', 'esperando a', 'no puedo continuar hasta', etc. Si no encuentras ninguna, indícalo explícitamente."
+    };
+
+    const fullQuestion = questionMap[question];
+    if (!fullQuestion) {
+      throw new functions.https.HttpsError("invalid-argument", "The 'question' provided is not a valid one.");
+    }
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = "gemini-1.5-pro-latest";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+      // We are sending a subset of task data to avoid sending too much information
+      const tasksForPrompt = tasks.map(t => ({
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.dueDate,
+          description: t.description ? t.description.substring(0, 100) : undefined // Limit description length
+      }));
+
+      const prompt = `
+        Eres un asistente de gestión de proyectos experto y muy conciso. Tu tarea es analizar una lista de tareas en formato JSON y responder a una pregunta específica sobre ellas.
+
+        **Contexto:**
+        - Hoy es ${new Date().toLocaleDateString('es-AR')}.
+        - Las tareas se encuentran en el siguiente arreglo JSON:
+        \`\`\`json
+        ${JSON.stringify(tasksForPrompt, null, 2)}
+        \`\`\`
+
+        **Pregunta del usuario:**
+        "${fullQuestion}"
+
+        **Instrucciones de formato para tu respuesta:**
+        - Responde en español.
+        - Usa un lenguaje claro y directo.
+        - Utiliza viñetas (markdown) para listar los puntos clave.
+        - Si una tarea es relevante, menciónala usando **negrita** para el título.
+        - Tu respuesta debe ser solo el texto del análisis, sin saludos ni despedidas. No envuelvas tu respuesta en JSON o markdown.
+      `;
+
+      const requestBody = {
+        contents: [{
+          parts: [{ text: prompt }],
+        }],
+      };
+
+      const apiResponse = await axios.post(url, requestBody);
+
+      const responseText = apiResponse.data.candidates[0].content.parts[0].text;
+
+      return { summary: responseText };
+
+    } catch (error) {
+      console.error("Error calling Gemini API for task summary:", error.response ? error.response.data : error.message);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Ocurrió un error al generar el resumen con la IA.",
         error.message
       );
     }

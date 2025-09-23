@@ -661,6 +661,60 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
     `;
 }
 
+export function getAIAssistantModalHTML() {
+    return `
+    <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-lg sticky top-0">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                    <i data-lucide="brain-circuit" class="w-6 h-6 text-primary-DEFAULT"></i>
+                    Asistente de Tareas IA
+                </h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    <i data-lucide="x" class="h-6 w-6"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-6">
+                <div>
+                    <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Selecciona una pregunta para obtener un resumen de las tareas visibles actualmente:</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button data-question="summary" class="ai-question-btn">
+                            <i data-lucide="align-left"></i>
+                            <span>Generar resumen del estado actual</span>
+                        </button>
+                        <button data-question="urgent" class="ai-question-btn">
+                             <i data-lucide="alert-triangle"></i>
+                            <span>¿Cuáles son las 3 tareas más urgentes?</span>
+                        </button>
+                        <button data-question="at_risk" class="ai-question-btn">
+                             <i data-lucide="shield-alert"></i>
+                            <span>¿Qué tareas están en riesgo?</span>
+                        </button>
+                         <button data-question="blocked" class="ai-question-btn">
+                             <i data-lucide="hand"></i>
+                            <span>¿Hay alguna tarea bloqueada?</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
+                     <h5 class="text-base font-bold text-slate-800 dark:text-slate-200 mb-3">Respuesta del Asistente:</h5>
+                     <div id="ai-assistant-response-container" class="bg-white dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[150px] text-sm text-slate-700 dark:text-slate-300 prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-li:my-1">
+                        <div id="ai-assistant-placeholder" class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
+                            <i data-lucide="sparkles" class="w-10 h-10 mb-2"></i>
+                            <p>La respuesta de la IA aparecerá aquí.</p>
+                        </div>
+                        <div id="ai-assistant-loader" class="hidden animate-pulse flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
+                            <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
+                            <p>Analizando tareas...</p>
+                        </div>
+                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
 export function getDashboardLayoutHTML() {
     return `
     <div class="flex flex-col flex-1 w-full mx-auto">
@@ -673,6 +727,10 @@ export function getDashboardLayoutHTML() {
                 </p>
             </div>
             <div class="flex items-center gap-2">
+                <button id="ai-assistant-btn" class="btn btn-secondary flex items-center gap-2">
+                    <i data-lucide="brain-circuit" class="w-4 h-4"></i>
+                    <span>Asistente IA</span>
+                </button>
                 <button id="export-tasks-btn" class="btn btn-primary flex items-center gap-2">
                     <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
                     <span>Exportar Excel</span>
