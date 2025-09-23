@@ -269,7 +269,7 @@ exports.organizeTaskWithAI = functions
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-pro";
+      const model = "gemini-1.5-pro-latest";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       const prompt = `
