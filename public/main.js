@@ -4672,6 +4672,9 @@ async function runEcrCreationHubLogic() {
     });
 }
 
+// This variable will hold the debounced function and must be accessible by the cleanup function.
+let debouncedSave = null;
+
 async function runEcrFormLogic(params = null) {
     const ecrId = params ? params.ecrId : null;
     const scrollToSection = params ? params.scrollToSection : null;
@@ -4698,8 +4701,12 @@ async function runEcrFormLogic(params = null) {
             <div id="ecr-progress-bar" class="sticky top-0 bg-white/80 backdrop-blur-sm z-10 p-4 shadow-sm mb-4 rounded-lg border">
             </div>
             <form id="ecr-form" class="bg-white p-8 rounded-lg shadow-lg border"></form>
-            <div id="action-buttons-container" class="mt-8 flex justify-end items-center gap-4">
-                <button type="button" id="ecr-back-button" class="bg-slate-200 text-slate-800 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors mr-auto">Volver a la Lista</button>
+            <div id="action-buttons-container" class="mt-8 flex items-center gap-4">
+                <button type="button" id="ecr-back-button" class="bg-slate-200 text-slate-800 px-6 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors mr-auto flex items-center">
+                    <i data-lucide="arrow-left" class="mr-2 h-4 w-4"></i>
+                    Volver
+                </button>
+                <div class="flex-grow"></div>
                 <button type="button" id="ecr-save-button" class="bg-slate-500 text-white px-6 py-2 rounded-md hover:bg-slate-600 font-semibold transition-colors">Guardar Progreso</button>
                 <button type="button" id="ecr-clear-button" class="bg-yellow-500 text-white px-6 py-2 rounded-md hover:bg-yellow-600 font-semibold transition-colors">Limpiar</button>
                 <button type="button" id="ecr-approve-button" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 font-semibold transition-colors">Aprobar y Guardar</button>
@@ -5037,7 +5044,7 @@ async function runEcrFormLogic(params = null) {
             }, data)}
             ${buildDepartmentSection({
                 title: 'CALIDAD', id: 'calidad', icon: 'award',
-                checklist: ['AFECTA DIMENSIONAL CLIENTE?', 'AFECTA FUNCIONAL Y MONTABILIDAD?', 'ACTUALIZAR PLANO DE CONTROLES/ INSTRUCCIONES', 'AFECTA ASPECTO/ACTUALIZAR BIBLIA DE DEFECTOS/PZA PATRÓN?', 'AFECTA CAPABILIDAD (AFECTA CAPACIDAD)', 'MODIFICAR DISPOSITIVO DE CONTROL Y SU MODO DE CONTROL', 'NUEVO ESTUDIO DE MSA / CALIBRACIÓN', 'NECESITA VALIDACIÓN (PLANO DEBE ESTAR EN ANEXO)', 'NECESARIO NUEVO PPAP/PSW CLIENTE', 'ANÁLISIS DE MATERIA PRIMA', 'IMPLEMENTAR MURO DE CALIDAD', 'NECESITA AUDITORÍA S&R', 'AFECTA POKA-YOKE?', 'AFECTA AUDITORÍA DE PRODUCTO?'].map(l => ({label: l, name: `calidad_${l.toLowerCase().replace(/ /g,'_')}`}))
+                checklist: ['AFECTA DIMENSIONAL CLIENTE?', 'AFECTA FUNCIONAL Y MONTABILIDAD?', 'ACTUALIZAR PLANO DE CONTROLES/ INSTRUCCIONES', 'AFECTA ASPECTO/ACTUALIZAR BIBLIA DE DEFECTOS/PZA PATRÓN?', 'AFECTA CAPABILIDAD (AFECTA CAPACIDAD)', 'MODIFICAR DISPOSITIVO DE CONTROL E SU MODO DE CONTROL', 'NUEVO ESTUDIO DE MSA / CALIBRACIÓN', 'NECESITA VALIDACIÓN (PLANO DEBE ESTAR EN ANEXO)', 'NECESARIO NUEVO PPAP/PSW CLIENTE', 'ANÁLISIS DE MATERIA PRIMA', 'IMPLEMENTAR MURO DE CALIDAD', 'NECESITA AUDITORÍA S&R', 'AFECTA POKA-YOKE?', 'AFECTA AUDITORÍA DE PRODUCTO?'].map(l => ({label: l, name: `calidad_${l.toLowerCase().replace(/ /g,'_')}`}))
             }, data)}
             </div>
         </div>
@@ -5258,7 +5265,7 @@ async function runEcrFormLogic(params = null) {
         handleImageUpload(file, 'propuesta');
     });
 
-    const debouncedSave = debounce(() => {
+    debouncedSave = debounce(() => {
         if (!isEditing) { // Only save drafts for new ECRs
             const data = getEcrFormData(formContainer);
             saveEcrDraftToFirestore(db, appState.currentUser.uid, data);
@@ -5320,11 +5327,41 @@ async function runEcrFormLogic(params = null) {
     });
 
     // --- Button Event Listeners ---
-    document.getElementById('ecr-back-button').addEventListener('click', () => switchView('ecr'));
+    const backButton = document.getElementById('ecr-back-button');
+    const cameFromAIHub = !!(params && params.aiDraftData);
+
+    if (cameFromAIHub) {
+        backButton.innerHTML = `Volver al Hub de IA`;
+    }
+
+    backButton.addEventListener('click', () => {
+        const targetView = cameFromAIHub ? 'ecr_creation_hub' : 'ecr';
+
+        if (!isEditing) {
+            showConfirmationModal(
+                'Salir del Formulario',
+                '¿Desea guardar los cambios en un borrador antes de salir?',
+                () => { // onConfirm: Save and exit
+                    const data = getEcrFormData(formContainer);
+                    saveEcrDraftToFirestore(db, appState.currentUser.uid, data);
+                    showToast('Borrador guardado.', 'success');
+                    switchView(targetView);
+                },
+                () => { // onCancel: Exit without saving
+                    deleteEcrDraftFromFirestore(db, appState.currentUser.uid);
+                    switchView(targetView);
+                }
+            );
+        } else {
+            switchView(targetView);
+        }
+    });
+
     document.getElementById('ecr-clear-button').addEventListener('click', () => {
         showConfirmationModal('Limpiar Formulario', '¿Está seguro? Se borrará todo el progreso no guardado.', () => {
             formContainer.reset();
-            localStorage.removeItem(ECR_FORM_STORAGE_KEY);
+            // Also clear the draft from Firestore
+            deleteEcrDraftFromFirestore(db, appState.currentUser.uid);
             showToast('Formulario limpiado.', 'info');
         });
     });
@@ -5439,7 +5476,7 @@ async function runEcrFormLogic(params = null) {
                 return;
             }
 
-            const input = formContainer.querySelector(`[name="${field.name}"]`);
+            const input = formContainer.querySelector(`[name="${field.key}"]`);
             if (input && !input.value.trim()) {
                 isValid = false;
                 input.classList.add('validation-error');
@@ -5489,7 +5526,9 @@ async function runEcrFormLogic(params = null) {
 
     // --- Cleanup ---
     appState.currentViewCleanup = () => {
-        formContainer.removeEventListener('input', saveEcrFormToLocalStorage);
+        if (debouncedSave) {
+            formContainer.removeEventListener('input', debouncedSave);
+        }
     };
 }
 
