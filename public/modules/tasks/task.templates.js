@@ -534,89 +534,116 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
     const isEditing = task !== null;
     return `
     <div id="task-form-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
-            <div class="flex justify-between items-center p-5 border-b border-slate-200">
+        <div class="bg-slate-50 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-4 border-b border-slate-200 bg-white rounded-t-lg sticky top-0">
                 <h3 class="text-xl font-bold text-slate-800">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
                 <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors"><i data-lucide="x" class="h-6 w-6"></i></button>
             </div>
-            <form id="task-form" class="p-6 overflow-y-auto auth-form" novalidate>
+            <form id="task-form" class="p-6 overflow-y-auto space-y-6" novalidate>
                 <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
                 <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
 
-                <div class="input-group bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                    <label for="task-ai-braindump" class="flex items-center gap-2 font-bold text-blue-800">
-                        <i data-lucide="brain-circuit" class="w-5 h-5"></i>
-                        Organizador de Tareas con IA
-                    </label>
-                    <p class="text-sm text-slate-600 mt-1 mb-3">
-                        Escribe todas tus ideas o lo que necesitas hacer en el siguiente campo. La IA lo analizará para crear un título y una lista de subtareas automáticamente.
-                    </p>
-                    <textarea id="task-ai-braindump" placeholder="Ej: Necesito preparar la presentación para el cliente nuevo. Tengo que investigar sus datos, armar el powerpoint con los gráficos de rendimiento y coordinar una reunión de prueba con el equipo de ventas para el viernes." rows="4" class="w-full"></textarea>
-                    <button type="button" id="organize-with-ai-btn" class="btn btn-primary w-full mt-3">
-                        <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>
-                        Organizar Tarea
-                    </button>
-                </div>
-
-                <div class="input-group">
-                    <label for="task-title">Título</label>
-                    <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" required>
-                </div>
-
-                <div class="input-group">
-                    <label for="task-description">Descripción</label>
-                    <textarea id="task-description" name="description" rows="4">${isEditing && task.description ? task.description : ''}</textarea>
-                </div>
-
-                <div class="input-group">
-                    <label for="task-assignee">Asignar a</label>
-                    <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}">
-                        <option value="">Cargando...</option>
-                    </select>
-                </div>
-                <div class="input-group">
-                    <label for="task-priority">Prioridad</label>
-                    <select id="task-priority" name="priority">
-                        <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
-                        <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
-                        <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
-                    </select>
-                </div>
-
-                <div class="input-group">
-                    <label for="task-startdate">Fecha de Inicio</label>
-                    <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}">
-                </div>
-                <div class="input-group">
-                    <label for="task-duedate">Fecha Límite</label>
-                    <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
-                </div>
-
-                <!-- Subtasks -->
-                <div class="input-group">
-                    <label>Sub-tareas</label>
-                    <div id="subtasks-list" class="space-y-2 max-h-48 overflow-y-auto p-2 rounded-md bg-slate-50 border"></div>
-                    <div class="flex items-center gap-2 mt-2">
-                        <input type="text" id="new-subtask-title" placeholder="Añadir sub-tarea y presionar Enter">
+                <!-- AI Section -->
+                <div class="task-form-section bg-blue-50 border border-blue-200">
+                    <div class="form-section-header">
+                        <i data-lucide="brain-circuit" class="w-5 h-5 text-blue-600"></i>
+                        <h4 class="font-bold text-blue-800">Organizador de Tareas con IA</h4>
                     </div>
-                </div>
-
-                <!-- Comments -->
-                <div class="input-group">
-                    <label>Comentarios</label>
-                    <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-50 border custom-scrollbar">
-                        <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
-                    </div>
-                    <div class="flex items-start gap-2 mt-2">
-                        <textarea id="new-task-comment" placeholder="Escribe un comentario..." rows="2"></textarea>
-                        <button type="button" id="post-comment-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold h-full">
-                            <i data-lucide="send" class="w-5 h-5"></i>
+                    <div class="p-4">
+                        <p class="text-sm text-slate-600 mb-3">
+                            Escribe todas tus ideas o lo que necesitas hacer. La IA lo analizará para rellenar los campos automáticamente.
+                        </p>
+                        <textarea id="task-ai-braindump" placeholder="Ej: Necesito preparar la presentación para el cliente nuevo para el viernes. Tengo que investigar sus datos, armar el powerpoint y coordinar con Marcelo." rows="4" class="w-full"></textarea>
+                        <button type="button" id="organize-with-ai-btn" class="btn btn-primary w-full mt-3">
+                            <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>
+                            Organizar Tarea
                         </button>
                     </div>
                 </div>
 
+                <!-- Core Details Section -->
+                <div class="task-form-section">
+                     <div class="form-section-header">
+                        <i data-lucide="file-text" class="w-5 h-5"></i>
+                        <h4>Detalles Principales</h4>
+                    </div>
+                    <div class="p-4 space-y-4">
+                        <div class="input-group">
+                            <label for="task-title">Título</label>
+                            <input type="text" id="task-title" name="title" value="${isEditing && task.title ? task.title : ''}" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="task-description">Descripción</label>
+                            <textarea id="task-description" name="description" rows="4">${isEditing && task.description ? task.description : ''}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Planning Section -->
+                <div class="task-form-section">
+                     <div class="form-section-header">
+                        <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+                        <h4>Planificación</h4>
+                    </div>
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                        <div class="input-group">
+                            <label for="task-assignee">Asignar a</label>
+                            <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}"><option value="">Cargando...</option></select>
+                        </div>
+                        <div class="input-group">
+                            <label for="task-priority">Prioridad</label>
+                            <select id="task-priority" name="priority">
+                                <option value="low" ${isEditing && task.priority === 'low' ? 'selected' : ''}>Baja</option>
+                                <option value="medium" ${!isEditing || (isEditing && task.priority === 'medium') ? 'selected' : ''}>Media</option>
+                                <option value="high" ${isEditing && task.priority === 'high' ? 'selected' : ''}>Alta</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="task-startdate">Fecha de Inicio</label>
+                            <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}">
+                        </div>
+                        <div class="input-group">
+                            <label for="task-duedate">Fecha Límite</label>
+                            <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subtasks Section -->
+                <div class="task-form-section">
+                     <div class="form-section-header">
+                        <i data-lucide="check-square" class="w-5 h-5"></i>
+                        <h4>Sub-tareas</h4>
+                    </div>
+                    <div class="p-4">
+                        <div id="subtasks-list" class="space-y-2 max-h-48 overflow-y-auto p-2 rounded-md bg-slate-100 border"></div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <input type="text" id="new-subtask-title" placeholder="Añadir sub-tarea y presionar Enter">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comments Section -->
+                <div class="task-form-section">
+                    <div class="form-section-header">
+                        <i data-lucide="message-square" class="w-5 h-5"></i>
+                        <h4>Comentarios</h4>
+                    </div>
+                    <div class="p-4">
+                        <div id="task-comments-list" class="space-y-3 max-h-60 overflow-y-auto p-3 rounded-md bg-slate-100 border custom-scrollbar">
+                            <p class="text-xs text-center text-slate-400 py-2">Cargando comentarios...</p>
+                        </div>
+                        <div class="flex items-start gap-2 mt-2">
+                            <textarea id="new-task-comment" placeholder="Escribe un comentario..." rows="2"></textarea>
+                            <button type="button" id="post-comment-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold h-full">
+                                <i data-lucide="send" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 ${isAdmin ? `
-                <div class="input-group">
+                <div class="task-form-section p-4">
                     <label class="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" id="task-is-public" name="isPublic" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isEditing && task.isPublic ? 'checked' : ''}>
                         <span>Tarea Pública (Visible para todos en Ingeniería)</span>
@@ -624,10 +651,10 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                 </div>
                 ` : ''}
             </form>
-            <div class="flex justify-end items-center p-4 border-t border-slate-200 bg-slate-50 space-x-3">
+            <div class="flex justify-end items-center p-4 border-t border-slate-200 bg-white/70 backdrop-blur-sm sticky bottom-0">
                 ${isEditing ? `<button data-action="delete" class="text-red-600 font-semibold mr-auto px-4 py-2 rounded-md hover:bg-red-50">Eliminar Tarea</button>` : ''}
-                <button data-action="close" type="button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
-                <button type="submit" form="task-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold">Guardar Tarea</button>
+                <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold">Cancelar</button>
+                <button type="submit" form="task-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold ml-3">Guardar Tarea</button>
             </div>
         </div>
     </div>

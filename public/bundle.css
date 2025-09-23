@@ -1837,23 +1837,55 @@ table.data-table .actions-cell button:hover {
     color: var(--color-text-primary);
 }
 
-/* --- FIX FOR TASK MODAL LAYOUT --- */
-#task-form-modal .auth-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem; /* 20px */
+/* --- Task Form Redesign --- */
+.task-form-section {
+    background-color: var(--color-bg-primary); /* white */
+    border: 1px solid var(--color-border-primary); /* slate-200 */
+    border-radius: var(--border-radius-xl); /* 0.75rem */
+    overflow: hidden;
 }
 
-#task-form-modal .input-group {
+.form-section-header {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem; /* 8px */
+    align-items: center;
+    gap: var(--spacing-3); /* 12px */
+    padding: var(--spacing-3) var(--spacing-4); /* 12px 16px */
+    background-color: var(--color-bg-secondary); /* slate-50 */
+    border-bottom: 1px solid var(--color-border-primary); /* slate-200 */
+    color: var(--color-text-primary); /* slate-800 */
+    font-weight: var(--font-weight-semibold);
 }
 
-#task-form-modal .input-group label {
+#task-form .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem; /* 4px */
+}
+
+#task-form .input-group label {
     font-size: 0.875rem; /* 14px */
     font-weight: 500; /* medium */
     color: #334155; /* slate-700 */
+    margin-bottom: 0.25rem;
+}
+
+#task-form input[type="text"],
+#task-form input[type="date"],
+#task-form textarea,
+#task-form select {
+    width: 100%;
+    border: 1px solid var(--color-border-secondary);
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-2) var(--spacing-3);
+    transition: var(--transition-fast);
+}
+
+#task-form input:focus,
+#task-form textarea:focus,
+#task-form select:focus {
+    border-color: var(--color-primary);
+    box-shadow: var(--box-shadow-focus-ring);
+    outline: none;
 }
 
 .input, .select {
