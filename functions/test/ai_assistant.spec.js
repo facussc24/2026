@@ -67,7 +67,13 @@ describe('getTaskSummaryWithAI', () => {
         expect(axios.post).toHaveBeenCalledTimes(1);
         const prompt = axios.post.mock.calls[0][1].contents[0].parts[0].text;
         expect(prompt).toContain('Genera un resumen conciso del estado general de las tareas.');
-        expect(prompt).toContain(JSON.stringify(mockTasks, null, 2));
+        expect(prompt).toContain(JSON.stringify(mockTasks.map(t => ({
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.dueDate,
+          description: t.description ? t.description.substring(0, 100) : undefined
+      })), null, 2));
     });
 
     test('should throw internal error if Gemini API request fails', async () => {

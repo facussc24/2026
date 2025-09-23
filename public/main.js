@@ -1141,6 +1141,96 @@ async function seedDatabase() {
     }
 }
 
+function openAiEcoModal(actionPlan, renderActionPlanCallback, saveProgressCallback) {
+    const modalId = 'ai-eco-modal';
+    const modalHTML = `
+        <div id="${modalId}" class="fixed inset-0 z-[60] flex items-center justify-center modal-backdrop animate-fade-in">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4 modal-content">
+                <div class="flex justify-between items-center p-5 border-b">
+                    <h3 class="text-xl font-bold flex items-center gap-2"><i data-lucide="sparkles" class="text-purple-500"></i>Asistente IA para Plan de Acción ECO</h3>
+                    <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
+                </div>
+                <div class="p-6">
+                    <p class="text-sm text-slate-600 mb-4">Describa los objetivos generales del plan de acción. El asistente generará una lista de tareas sugeridas con responsables y fechas tentativas.</p>
+                    <textarea id="ai-eco-prompt" class="w-full h-40 p-2 border rounded-md" placeholder="Ejemplo: Implementar el cambio de material a aluminio. Notificar al proveedor SQA para el nuevo PSW. Actualizar el plan de control y capacitar al personal de producción antes de fin de mes."></textarea>
+                </div>
+                <div class="flex justify-end items-center p-4 border-t bg-gray-50">
+                    <button data-action="close" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
+                    <button id="generate-eco-plan-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold ml-2">Generar Plan</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
+    lucide.createIcons();
+
+    const modalElement = document.getElementById(modalId);
+    const generateBtn = document.getElementById('generate-eco-plan-btn');
+    const promptTextarea = document.getElementById('ai-eco-prompt');
+
+    const closeModal = () => {
+        modalElement.remove();
+    };
+
+    modalElement.addEventListener('click', (e) => {
+        if (e.target.closest('button[data-action="close"]')) {
+            closeModal();
+        }
+    });
+
+    generateBtn.addEventListener('click', async () => {
+        const prompt = promptTextarea.value.trim();
+        if (!prompt) {
+            showToast('Por favor, ingrese una descripción del plan.', 'error');
+            return;
+        }
+
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Generando...';
+        lucide.createIcons();
+
+        try {
+            const generateEcoActionPlan = httpsCallable(functions, 'generateEcoActionPlan');
+            const result = await generateEcoActionPlan({ prompt });
+            const aiGeneratedPlan = result.data;
+
+            if (!aiGeneratedPlan || !Array.isArray(aiGeneratedPlan)) {
+                throw new Error("La respuesta de la IA no es una lista válida de acciones.");
+            }
+
+            // Append new items to the existing action plan
+            aiGeneratedPlan.forEach(item => {
+                // Find a user that somewhat matches the suggested assignee
+                const suggestedAssignee = item.assignee ? item.assignee.toLowerCase() : '';
+                const foundUser = appState.collections.usuarios.find(u => u.name.toLowerCase().includes(suggestedAssignee));
+
+                actionPlan.push({
+                    id: `task_${Date.now()}_${Math.random()}`,
+                    description: item.description,
+                    assignee: foundUser ? foundUser.name : null,
+                    assigneeUid: foundUser ? foundUser.docId : null,
+                    dueDate: item.dueDate,
+                    status: 'pending'
+                });
+            });
+
+            // Use the callbacks to re-render and save
+            renderActionPlanCallback();
+            saveProgressCallback();
+
+            showToast('Plan de acción actualizado con las sugerencias de la IA.', 'success');
+            closeModal();
+
+        } catch (error) {
+            console.error("Error calling generateEcoActionPlan function:", error);
+            showToast('Error al generar el plan de acción: ' + error.message, 'error');
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = 'Generar Plan';
+        }
+    });
+}
+
 // =================================================================================
 // --- 3.5. CONTROL DE PERMISOS ---
 // =================================================================================
@@ -1666,7 +1756,13 @@ async function runEcoFormLogic(params = null) {
 
             <!-- Action Plan Section -->
             <section id="action-plan-section" class="mt-8">
-                <div class="ecr-checklist-bar">PLAN DE ACCIÓN</div>
+                <div class="ecr-checklist-bar flex justify-between items-center">
+                    <span>PLAN DE ACCIÓN</span>
+                    <button type="button" data-action="open-ai-eco-modal" class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 py-1 rounded-full hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2 text-xs">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        Asistente IA
+                    </button>
+                </div>
                 <div class="p-4 border border-t-0 rounded-b-lg">
                     <div id="action-plan-list" class="space-y-2">
                         <!-- Action items will be rendered here -->
@@ -2064,9 +2160,14 @@ async function runEcoFormLogic(params = null) {
         formElement.addEventListener('input', saveEcoFormToLocalStorage);
 
         formElement.addEventListener('click', async (e) => {
-            const button = e.target.closest('button[data-action="open-ecr-search-for-eco"]');
-            if (button) {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
+
+            const action = button.dataset.action;
+            if (action === 'open-ecr-search-for-eco') {
                 await openEcrSearchModalForEcoForm();
+            } else if (action === 'open-ai-eco-modal') {
+                openAiEcoModal(actionPlan, renderActionPlan, saveEcoFormToLocalStorage);
             }
         });
 
@@ -4714,6 +4815,12 @@ async function runEcrFormLogic(params = null) {
                     <input type="text" name="ecr_no" readonly class="bg-gray-100 cursor-not-allowed" placeholder="Generando...">
                 </div>
             </header>
+            <div class="my-4 flex justify-start">
+                <button type="button" data-action="open-ai-ecr-modal" class="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-3 text-sm">
+                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                    Asistente IA para ECR
+                </button>
+            </div>
             <div class="bg-gray-300 text-center py-1 font-bold my-3">CHECK LIST ECR - ENGINEERING CHANGE REQUEST</div>
 
             <section class="flex items-end gap-6 mb-5">
@@ -5377,9 +5484,100 @@ function handleViewContentActions(e) {
             cloneProduct(deps);
         },
         'view-history': () => showToast('La función de historial de cambios estará disponible próximamente.', 'info'),
+        'open-ai-ecr-modal': () => openAiEcrModal(),
     };
     
     if (actions[action]) actions[action]();
+}
+
+function openAiEcrModal() {
+    const modalId = 'ai-ecr-modal';
+    const modalHTML = `
+        <div id="${modalId}" class="fixed inset-0 z-[60] flex items-center justify-center modal-backdrop animate-fade-in">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4 modal-content">
+                <div class="flex justify-between items-center p-5 border-b">
+                    <h3 class="text-xl font-bold flex items-center gap-2"><i data-lucide="sparkles" class="text-purple-500"></i>Asistente IA para Borrador de ECR</h3>
+                    <button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button>
+                </div>
+                <div class="p-6">
+                    <p class="text-sm text-slate-600 mb-4">Describa el cambio que necesita en lenguaje natural. El asistente intentará rellenar el formulario por usted. Sea lo más específico posible.</p>
+                    <textarea id="ai-ecr-prompt" class="w-full h-40 p-2 border rounded-md" placeholder="Ejemplo: Cambiar el material del componente 'SOPORTE-MOTOR-01' de acero a aluminio para reducir el peso. Esto afecta a la productividad y requiere validación de calidad."></textarea>
+                </div>
+                <div class="flex justify-end items-center p-4 border-t bg-gray-50">
+                    <button data-action="close" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
+                    <button id="generate-ecr-draft-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold ml-2">Generar Borrador</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
+    lucide.createIcons();
+
+    const modalElement = document.getElementById(modalId);
+    const generateBtn = document.getElementById('generate-ecr-draft-btn');
+    const promptTextarea = document.getElementById('ai-ecr-prompt');
+
+    const closeModal = () => {
+        modalElement.remove();
+    };
+
+    modalElement.addEventListener('click', (e) => {
+        if (e.target.closest('button[data-action="close"]')) {
+            closeModal();
+        }
+    });
+
+    generateBtn.addEventListener('click', async () => {
+        const prompt = promptTextarea.value.trim();
+        if (!prompt) {
+            showToast('Por favor, ingrese una descripción del cambio.', 'error');
+            return;
+        }
+
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Generando...';
+        lucide.createIcons();
+
+        try {
+            const generateEcrDraft = httpsCallable(functions, 'generateEcrDraft');
+            const result = await generateEcrDraft({ prompt });
+            const aiData = result.data;
+
+            if (!aiData) {
+                throw new Error("La respuesta de la IA no contiene datos.");
+            }
+
+            const formContainer = document.getElementById('ecr-form');
+            if (formContainer) {
+                for (const key in aiData) {
+                    const elements = formContainer.querySelectorAll(`[name="${key}"]`);
+                    if (elements.length > 0) {
+                        elements.forEach(element => {
+                            if (element.type === 'checkbox' || element.type === 'radio') {
+                                element.checked = !!aiData[key];
+                            } else {
+                                element.value = aiData[key];
+                            }
+                            // Dispatch an input event to trigger local storage saving and other listeners
+                            element.dispatchEvent(new Event('input', { bubbles: true }));
+                        });
+                    }
+                }
+                showToast('Borrador de ECR poblado con la sugerencia de la IA.', 'success');
+            } else {
+                showToast('Error: No se pudo encontrar el formulario ECR para poblar.', 'error');
+            }
+
+            closeModal();
+
+        } catch (error) {
+            console.error("Error calling generateEcrDraft function:", error);
+            showToast('Error al generar el borrador: ' + error.message, 'error');
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = 'Generar Borrador';
+        }
+    });
 }
 
 // =================================================================================
