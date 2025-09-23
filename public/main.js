@@ -4803,10 +4803,10 @@ async function runEcrFormLogic(params = null) {
                     <input type="text" name="ecr_no" readonly class="bg-gray-100 cursor-not-allowed" placeholder="Generando..." data-ai-id="ecr_no">
                 </div>
             </header>
-            <section class="flex items-end gap-6 mb-5">
-                <div class="flex-grow-[2]">
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
+                <div class="form-field">
                     <label class="text-sm font-bold mb-2 block">ORIGEN DEL PEDIDO:</label>
-                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2">
+                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
                         ${createCheckbox('Cliente', 'origen_cliente', '', 'origen_cliente')}
                         ${createCheckbox('Proveedor', 'origen_proveedor', '', 'origen_proveedor')}
                         ${createCheckbox('Interno', 'origen_interno', '', 'origen_interno')}
@@ -4817,10 +4817,10 @@ async function runEcrFormLogic(params = null) {
                 ${createSelectFieldFromCollection('Cliente:', 'cliente', COLLECTIONS.CLIENTES, 'Seleccionar...', 'cliente')}
             </section>
 
-            <section class="flex items-end gap-6 mb-5">
-                <div class="flex-grow-[2]">
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
+                <div class="form-field">
                     <label class="text-sm font-bold mb-2 block">FASE DE PROYECTO:</label>
-                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2">
+                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
                         ${createCheckbox('Programa', 'fase_programa', '', 'fase_programa')}
                         ${createCheckbox('Serie', 'fase_serie', '', 'fase_serie')}
                     </div>
@@ -4829,9 +4829,9 @@ async function runEcrFormLogic(params = null) {
                 ${createDateField('Fecha de Cierre:', 'fecha_cierre', 'fecha_cierre')}
             </section>
 
-            <section class="flex items-end gap-6 mb-5">
-                <div class="flex-1">
-                    <label for="codigo_barack_search" class="text-sm font-bold mb-2 block">Producto Barack</label>
+            <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">
+                <div class="form-field">
+                    <label for="codigo_barack_display" class="text-sm font-bold mb-1 block">Producto Barack</label>
                     <div class="flex items-center gap-2">
                         <input type="text" id="codigo_barack_display" class="w-full bg-gray-100" readonly placeholder="Seleccione un producto..." data-ai-id="codigo_barack_display">
                         <input type="hidden" name="codigo_barack" id="codigo_barack" data-ai-id="codigo_barack">
@@ -4841,7 +4841,7 @@ async function runEcrFormLogic(params = null) {
                 ${createTextField('Código(s) Cliente:', 'codigo_cliente', '...', false, 'codigo_cliente')}
             </section>
             <section class="mb-5">
-                 <div class="w-full">
+                 <div class="form-field w-full">
                     <label for="denominacion_producto" class="text-sm font-bold mb-1 block">Denominación del Producto</label>
                     <input type="text" name="denominacion_producto" id="denominacion_producto" placeholder="..." class="w-full bg-gray-100" readonly data-ai-id="denominacion_producto">
                 </div>
