@@ -1642,6 +1642,23 @@ async function runEcoFormLogic(params = null) {
                 }
             }
         }
+
+        // --- Populate Image Previews ---
+        const situacionExistenteImg = document.getElementById('situacion-existente-image-preview');
+        const situacionPropuestaImg = document.getElementById('situacion-propuesta-image-preview');
+        const situacionExistenteDeleteBtn = document.getElementById('situacion-existente-image-delete');
+        const situacionPropuestaDeleteBtn = document.getElementById('situacion-propuesta-image-delete');
+
+        if (data.situacion_existente_image_url && situacionExistenteImg) {
+            situacionExistenteImg.src = data.situacion_existente_image_url;
+            situacionExistenteImg.classList.remove('hidden');
+            if (situacionExistenteDeleteBtn) situacionExistenteDeleteBtn.classList.remove('hidden');
+        }
+        if (data.situacion_propuesta_image_url && situacionPropuestaImg) {
+            situacionPropuestaImg.src = data.situacion_propuesta_image_url;
+            situacionPropuestaImg.classList.remove('hidden');
+            if (situacionPropuestaDeleteBtn) situacionPropuestaDeleteBtn.classList.remove('hidden');
+        }
     };
 
 
@@ -4556,6 +4573,7 @@ async function ensureCollectionsAreLoaded(collectionNames) {
         const uploadId = `situacion-${type}-image-upload`;
         const previewId = `situacion-${type}-image-preview`;
         const containerId = `situacion-${type}-image-container`;
+        const deleteBtnId = `situacion-${type}-image-delete`;
 
         return `
             <div class="border border-gray-300 rounded-lg shadow-sm flex flex-col" data-ai-id="situacion_${type}_section">
@@ -4565,10 +4583,16 @@ async function ensureCollectionsAreLoaded(collectionNames) {
                 </div>
                 <div id="${containerId}" data-ai-id="situacion_${type}_image_container" class="p-2 border-t border-gray-200 bg-gray-50">
                     <img id="${previewId}" src="" alt="Previsualización de la imagen" class="hidden max-w-full h-auto rounded-md mb-2 max-h-48 object-contain mx-auto"/>
-                    <label for="${uploadId}" class="cursor-pointer text-sm text-blue-600 hover:text-blue-800 font-semibold">
-                        <i data-lucide="upload-cloud" class="inline-block w-4 h-4 mr-1"></i>
-                        Cargar Imagen
-                    </label>
+                    <div class="flex items-center gap-4">
+                        <label for="${uploadId}" class="cursor-pointer text-sm text-blue-600 hover:text-blue-800 font-semibold flex items-center">
+                            <i data-lucide="upload-cloud" class="inline-block w-4 h-4 mr-1"></i>
+                            Cargar Imagen
+                        </label>
+                        <button type="button" id="${deleteBtnId}" data-action="delete-image" data-type="${type}" class="hidden text-sm text-red-600 hover:text-red-800 font-semibold flex items-center">
+                            <i data-lucide="trash-2" class="inline-block w-4 h-4 mr-1"></i>
+                            Eliminar
+                        </button>
+                    </div>
                     <input type="file" id="${uploadId}" name="situacion_${type}_image" class="hidden" accept="image/*">
                     <input type="hidden" name="situacion_${type}_image_url">
                 </div>
@@ -4779,12 +4803,10 @@ async function runEcrFormLogic(params = null) {
                     <input type="text" name="ecr_no" readonly class="bg-gray-100 cursor-not-allowed" placeholder="Generando..." data-ai-id="ecr_no">
                 </div>
             </header>
-            <div class="bg-gray-300 text-center py-1 font-bold my-3">CHECK LIST ECR - ENGINEERING CHANGE REQUEST</div>
-
             <section class="flex items-end gap-6 mb-5">
                 <div class="flex-grow-[2]">
-                    <label class="text-sm font-bold mb-1 block">ORIGEN DEL PEDIDO:</label>
-                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
+                    <label class="text-sm font-bold mb-2 block">ORIGEN DEL PEDIDO:</label>
+                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2">
                         ${createCheckbox('Cliente', 'origen_cliente', '', 'origen_cliente')}
                         ${createCheckbox('Proveedor', 'origen_proveedor', '', 'origen_proveedor')}
                         ${createCheckbox('Interno', 'origen_interno', '', 'origen_interno')}
@@ -4797,8 +4819,8 @@ async function runEcrFormLogic(params = null) {
 
             <section class="flex items-end gap-6 mb-5">
                 <div class="flex-grow-[2]">
-                    <label class="text-sm font-bold mb-1 block">FASE DE PROYECTO:</label>
-                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
+                    <label class="text-sm font-bold mb-2 block">FASE DE PROYECTO:</label>
+                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2">
                         ${createCheckbox('Programa', 'fase_programa', '', 'fase_programa')}
                         ${createCheckbox('Serie', 'fase_serie', '', 'fase_serie')}
                     </div>
@@ -4809,7 +4831,7 @@ async function runEcrFormLogic(params = null) {
 
             <section class="flex items-end gap-6 mb-5">
                 <div class="flex-1">
-                    <label for="codigo_barack_search" class="text-sm font-bold mb-1 block">Producto Barack</label>
+                    <label for="codigo_barack_search" class="text-sm font-bold mb-2 block">Producto Barack</label>
                     <div class="flex items-center gap-2">
                         <input type="text" id="codigo_barack_display" class="w-full bg-gray-100" readonly placeholder="Seleccione un producto..." data-ai-id="codigo_barack_display">
                         <input type="hidden" name="codigo_barack" id="codigo_barack" data-ai-id="codigo_barack">
@@ -4859,14 +4881,14 @@ async function runEcrFormLogic(params = null) {
 
             <section class="border border-black rounded mt-4 overflow-hidden">
                 <div class="bg-gray-200 font-bold p-2 text-center border-b border-black">VALIDACIÓN DEL CLIENTE</div>
-                <div class="p-3 flex gap-4">
-                    <div class="flex-1 flex flex-col gap-2">
+                <div class="p-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="flex flex-col gap-4 justify-center">
                         ${createCheckbox('Requiere Aprobación del Cliente', 'cliente_requiere_aprobacion', '', 'cliente_requiere_aprobacion')}
                         ${createCheckbox('Requiere PPAP', 'cliente_requiere_ppap', '', 'cliente_requiere_ppap')}
                     </div>
-                    <div class="flex-1 flex flex-col gap-2">
-                        <div class="flex-1"><label for="cliente_aprobacion_estado" class="text-sm font-bold block">Estado:</label><select name="cliente_aprobacion_estado" id="cliente_aprobacion_estado" class="w-full text-sm" data-ai-id="cliente_aprobacion_estado"><option value="na">No Aplica</option><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select></div>
-                        <div class="flex-1"><label for="cliente_aprobacion_fecha" class="text-sm font-bold block">Fecha de Decisión:</label><input type="date" name="cliente_aprobacion_fecha" id="cliente_aprobacion_fecha" class="w-full text-sm" data-ai-id="cliente_aprobacion_fecha"></div>
+                    <div class="space-y-4">
+                        <div><label for="cliente_aprobacion_estado" class="text-sm font-bold block mb-1">Estado:</label><select name="cliente_aprobacion_estado" id="cliente_aprobacion_estado" class="w-full text-sm" data-ai-id="cliente_aprobacion_estado"><option value="na">No Aplica</option><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select></div>
+                        <div><label for="cliente_aprobacion_fecha" class="text-sm font-bold block mb-1">Fecha de Decisión:</label><input type="date" name="cliente_aprobacion_fecha" id="cliente_aprobacion_fecha" class="w-full text-sm" data-ai-id="cliente_aprobacion_fecha"></div>
                     </div>
                 </div>
             </section>
@@ -5165,6 +5187,24 @@ async function runEcrFormLogic(params = null) {
             switchView('ecr_form', { ecrId: ecrId });
         } else if (action === 'open-ecr-product-search') {
             openEcrProductSearchModal();
+        } else if (action === 'delete-image') {
+            const type = button.dataset.type;
+            const preview = document.getElementById(`situacion-${type}-image-preview`);
+            const urlInput = document.querySelector(`input[name="situacion_${type}_image_url"]`);
+            const fileInput = document.getElementById(`situacion-${type}-image-upload`);
+
+            if (preview) {
+                preview.src = '';
+                preview.classList.add('hidden');
+            }
+            if (urlInput) {
+                urlInput.value = '';
+            }
+            if(fileInput) {
+                fileInput.value = ''; // Reset file input
+            }
+            button.classList.add('hidden');
+            showToast('Imagen eliminada. Guarde el formulario para confirmar.', 'info');
         }
     });
 
