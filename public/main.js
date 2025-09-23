@@ -4803,49 +4803,52 @@ async function runEcrFormLogic(params = null) {
                     <input type="text" name="ecr_no" readonly class="bg-gray-100 cursor-not-allowed" placeholder="Generando..." data-ai-id="ecr_no">
                 </div>
             </header>
-            <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
+            <div class="space-y-6">
                 <div class="form-field">
                     <label class="text-sm font-bold mb-2 block">ORIGEN DEL PEDIDO:</label>
-                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
+                    <div class="border p-3 rounded-lg flex flex-wrap gap-x-8 gap-y-3 mt-1 bg-slate-50">
                         ${createCheckbox('Cliente', 'origen_cliente', '', 'origen_cliente')}
                         ${createCheckbox('Proveedor', 'origen_proveedor', '', 'origen_proveedor')}
                         ${createCheckbox('Interno', 'origen_interno', '', 'origen_interno')}
                         ${createCheckbox('Reglamentación', 'origen_reglamentacion', '', 'origen_reglamentacion')}
                     </div>
                 </div>
-                ${createSelectFieldFromCollection('Proyecto:', 'proyecto', COLLECTIONS.PROYECTOS, 'Seleccionar...', 'proyecto')}
-                ${createSelectFieldFromCollection('Cliente:', 'cliente', COLLECTIONS.CLIENTES, 'Seleccionar...', 'cliente')}
-            </section>
 
-            <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    ${createSelectFieldFromCollection('Proyecto:', 'proyecto', COLLECTIONS.PROYECTOS, 'Seleccionar...', 'proyecto')}
+                    ${createSelectFieldFromCollection('Cliente:', 'cliente', COLLECTIONS.CLIENTES, 'Seleccionar...', 'cliente')}
+                </div>
+
                 <div class="form-field">
                     <label class="text-sm font-bold mb-2 block">FASE DE PROYECTO:</label>
-                    <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
+                    <div class="border p-3 rounded-lg flex flex-wrap gap-x-8 gap-y-3 mt-1 bg-slate-50">
                         ${createCheckbox('Programa', 'fase_programa', '', 'fase_programa')}
                         ${createCheckbox('Serie', 'fase_serie', '', 'fase_serie')}
                     </div>
                 </div>
-                ${createDateField('Fecha de Emisión:', 'fecha_emision', 'fecha_emision')}
-                ${createDateField('Fecha de Cierre:', 'fecha_cierre', 'fecha_cierre')}
-            </section>
 
-            <section class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-5">
-                <div class="form-field">
-                    <label for="codigo_barack_display" class="text-sm font-bold mb-1 block">Producto Barack</label>
-                    <div class="flex items-center gap-2">
-                        <input type="text" id="codigo_barack_display" class="w-full bg-gray-100" readonly placeholder="Seleccione un producto..." data-ai-id="codigo_barack_display">
-                        <input type="hidden" name="codigo_barack" id="codigo_barack" data-ai-id="codigo_barack">
-                        <button type="button" data-action="open-ecr-product-search" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600"><i data-lucide="search" class="h-5 w-5 pointer-events-none"></i></button>
-                    </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    ${createDateField('Fecha de Emisión:', 'fecha_emision', 'fecha_emision')}
+                    ${createDateField('Fecha de Cierre:', 'fecha_cierre', 'fecha_cierre')}
                 </div>
-                ${createTextField('Código(s) Cliente:', 'codigo_cliente', '...', false, 'codigo_cliente')}
-            </section>
-            <section class="mb-5">
-                 <div class="form-field w-full">
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-field">
+                        <label for="codigo_barack_display" class="text-sm font-bold mb-1 block">Producto Barack</label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="codigo_barack_display" class="w-full bg-gray-100" readonly placeholder="Seleccione un producto..." data-ai-id="codigo_barack_display">
+                            <input type="hidden" name="codigo_barack" id="codigo_barack" data-ai-id="codigo_barack">
+                            <button type="button" data-action="open-ecr-product-search" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600"><i data-lucide="search" class="h-5 w-5 pointer-events-none"></i></button>
+                        </div>
+                    </div>
+                    ${createTextField('Código(s) Cliente:', 'codigo_cliente', '...', false, 'codigo_cliente')}
+                </div>
+
+                <div class="form-field w-full">
                     <label for="denominacion_producto" class="text-sm font-bold mb-1 block">Denominación del Producto</label>
                     <input type="text" name="denominacion_producto" id="denominacion_producto" placeholder="..." class="w-full bg-gray-100" readonly data-ai-id="denominacion_producto">
                 </div>
-            </section>
+            </div>
 
             <section class="mb-5">
                 <div class="flex-1">
