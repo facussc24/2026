@@ -45,6 +45,7 @@ describe('organizeTaskWithAI (axios version)', () => {
 
     const mockApiResponse = {
       title: 'Prepare Client Presentation',
+      description: 'A presentation for the new client.',
       subtasks: ['Research client data', 'Create PowerPoint', 'Coordinate with sales'],
     };
 
@@ -66,7 +67,7 @@ describe('organizeTaskWithAI (axios version)', () => {
     expect(result).toEqual(mockApiResponse);
     expect(axios.post).toHaveBeenCalledTimes(1);
     expect(axios.post).toHaveBeenCalledWith(
-        expect.stringContaining('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=test-api-key'),
+        expect.stringContaining('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=test-api-key'),
         expect.any(Object)
     );
   });
@@ -105,7 +106,7 @@ describe('organizeTaskWithAI (axios version)', () => {
     const context = { auth: { uid: 'test-uid' } };
     const data = { text: 'A task with incomplete response' };
 
-    const incompleteResponse = { title: 'Only a title' }; // Missing 'subtasks'
+    const incompleteResponse = { title: 'Only a title', subtasks: [] }; // Missing 'description'
 
     axios.post.mockResolvedValue({
         data: { candidates: [{ content: { parts: [{ text: JSON.stringify(incompleteResponse) }] } }] }

@@ -273,17 +273,24 @@ exports.organizeTaskWithAI = functions
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       const prompt = `
-        Analiza el siguiente texto que describe una tarea. Extrae un título conciso y claro (máximo 10 palabras) para la tarea y una lista de subtareas accionables.
+        Analiza el siguiente texto que describe una tarea. Tu objetivo es estructurarlo en un formato JSON.
         El texto es: "${text}"
 
-        Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string) y "subtasks" (un array de strings). No incluyas ninguna otra explicación ni formato, solo el JSON.
+        Realiza las siguientes acciones:
+        1.  **Corrige errores ortográficos y gramaticales obvios** en el texto para mejorar la claridad. Si no estás seguro de una palabra o nombre (ej. un acrónimo como 'AMFE'), déjalo como está.
+        2.  **Extrae un título conciso** y claro (máximo 10 palabras) para la tarea.
+        3.  **Genera una descripción corta** (2-3 frases) que resuma el objetivo principal de la tarea.
+        4.  **Crea una lista de subtareas** cortas y accionables.
+
+        Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string), "description" (string), y "subtasks" (un array de strings). No incluyas ninguna otra explicación ni formato.
         Ejemplo de salida:
         {
           "title": "Preparar presentación para cliente",
+          "description": "Elaborar y coordinar la presentación de ventas para el nuevo cliente, asegurando que todos los datos de rendimiento estén incluidos y que el equipo esté alineado.",
           "subtasks": [
             "Investigar datos del cliente",
             "Armar PowerPoint con gráficos de rendimiento",
-            "Coordinar reunión de prueba con ventas"
+            "Coordinar reunión de prueba con el equipo de ventas para el viernes"
           ]
         }
       `;
@@ -298,13 +305,12 @@ exports.organizeTaskWithAI = functions
 
       const apiResponse = await axios.post(url, requestBody);
 
-      // Extract the text content which should be a JSON string
       const responseText = apiResponse.data.candidates[0].content.parts[0].text;
 
       const cleanedJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsedData = JSON.parse(cleanedJson);
 
-      if (!parsedData.title || !Array.isArray(parsedData.subtasks)) {
+      if (!parsedData.title || !parsedData.description || !Array.isArray(parsedData.subtasks)) {
         throw new Error("La respuesta de la IA no tiene el formato esperado.");
       }
 
