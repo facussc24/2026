@@ -1,5 +1,5 @@
 import { initTaskState } from './task.state.js';
-import { initTaskService } from './task.service.js';
+import { initTaskService, deleteTask } from './task.service.js';
 import { initTaskUI, renderMyPendingTasksWidget, renderTasksByProjectChart, openTelegramConfigModal } from './task.ui.js';
 import { initTaskModal } from './task.modal.js';
 import { initKanban, runKanbanBoardLogic } from './task.kanban.js';
@@ -9,6 +9,7 @@ import { calculateOverdueTasksCount, fetchAllTasks } from './task.service.js';
 
 let dom;
 let lucide;
+let dependencies;
 
 // Exported functions for other modules to use
 export {
@@ -19,7 +20,8 @@ export {
     renderTaskDashboardView
 };
 
-export function initTasksModule(dependencies) {
+export function initTasksModule(deps) {
+    dependencies = deps;
     dom = dependencies.dom;
     lucide = dependencies.lucide;
     initTaskState(dependencies);
@@ -121,4 +123,30 @@ export function runTasksLogic(initialView = 'kanban') {
     // Render the initial view passed to the function
     renderView(initialView);
     lucide.createIcons();
+
+    const taskMainContainer = dom.viewContent.querySelector('#task-main-container');
+    if (taskMainContainer) {
+        taskMainContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action="delete-task"]');
+            if (!button) return;
+
+            const taskId = button.dataset.docId;
+            if (!taskId) return;
+
+            dependencies.showConfirmationModal(
+                'Eliminar Tarea',
+                '¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.',
+                async () => {
+                    try {
+                        await deleteTask(taskId);
+                        dependencies.showToast('Tarea eliminada con éxito.', 'success');
+                        // The UI should update automatically via the onSnapshot listener
+                    } catch (error) {
+                        console.error('Error deleting task:', error);
+                        dependencies.showToast('Error al eliminar la tarea.', 'error');
+                    }
+                }
+            );
+        });
+    }
 }

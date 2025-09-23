@@ -1837,6 +1837,25 @@ table.data-table .actions-cell button:hover {
     color: var(--color-text-primary);
 }
 
+/* --- FIX FOR TASK MODAL LAYOUT --- */
+#task-form-modal .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem; /* 20px */
+}
+
+#task-form-modal .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem; /* 8px */
+}
+
+#task-form-modal .input-group label {
+    font-size: 0.875rem; /* 14px */
+    font-weight: 500; /* medium */
+    color: #334155; /* slate-700 */
+}
+
 .input, .select {
     border: var(--border-width) solid var(--color-border-secondary);
     padding: var(--spacing-2) var(--spacing-3);

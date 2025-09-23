@@ -150,7 +150,7 @@ function initComments(modalElement, task) {
             const author = (appState.collections.usuarios || []).find(u => u.docId === comment.creatorUid) || { name: 'Usuario Desconocido', photoURL: '' };
             const timestamp = comment.createdAt?.toDate ? formatTimeAgo(comment.createdAt.toDate()) : 'hace un momento';
             return `
-                <div class="flex items-start gap-3">
+                <div class="flex items-start gap-3 mb-3">
                     <img src="${author.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(author.name)}`}" alt="Avatar" class="w-8 h-8 rounded-full mt-1">
                     <div class="flex-1 bg-white p-3 rounded-lg border">
                         <div class="flex justify-between items-center">
@@ -287,11 +287,36 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
             const organizeTaskWithAI = httpsCallable(functions, 'organizeTaskWithAI');
             const result = await organizeTaskWithAI({ text: brainDumpText });
 
-            const { title, description, subtasks } = result.data;
+            const { title, description, subtasks, priority, dueDate, assignee, isPublic } = result.data;
 
-            modalElement.querySelector('#task-title').value = title;
-            modalElement.querySelector('#task-description').value = description;
-            subtaskManager.setSubtasks(subtasks);
+            modalElement.querySelector('#task-title').value = title || '';
+            modalElement.querySelector('#task-description').value = description || '';
+            subtaskManager.setSubtasks(subtasks || []);
+
+            if (priority) {
+                modalElement.querySelector('#task-priority').value = priority;
+            }
+            if (dueDate) {
+                modalElement.querySelector('#task-duedate').value = dueDate;
+            }
+            if (isPublic !== undefined) {
+                const isPublicCheckbox = modalElement.querySelector('#task-is-public');
+                if (isPublicCheckbox) {
+                    isPublicCheckbox.checked = isPublic;
+                }
+            }
+
+            // Handle assignee suggestion
+            if (assignee) {
+                const assigneeSelect = modalElement.querySelector('#task-assignee');
+                const users = appState.collections.usuarios || [];
+                const foundUser = users.find(u => u.name.toLowerCase().includes(assignee.toLowerCase()));
+                if (foundUser) {
+                    assigneeSelect.value = foundUser.docId;
+                } else {
+                    showToast(`Sugerencia: No se pudo encontrar un usuario llamado "${assignee}".`, 'info');
+                }
+            }
             showToast('¡Tarea organizada con IA!', 'success');
 
         } catch (error) {

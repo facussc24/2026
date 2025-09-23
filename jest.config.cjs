@@ -1,9 +1,13 @@
-export default {
+module.exports = {
   testEnvironment: "jest-environment-jsdom",
 
   transform: {
     "^.+\\.jsx?$": "babel-jest",
   },
+
+  transformIgnorePatterns: [
+    "/node_modules/(?!jose/)",
+  ],
 
   // A list of paths to modules that run some code to configure or set up the testing framework before each test
   setupFilesAfterEnv: [
