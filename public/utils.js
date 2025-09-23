@@ -1,3 +1,5 @@
+import { doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
 export const COLLECTIONS = {
     PRODUCTOS: 'productos',
     SEMITERMINADOS: 'semiterminados',
@@ -97,32 +99,66 @@ export function validateField(fieldConfig, inputElement) {
 }
 
 /**
- * Saves ECR form data to local storage.
- * @param {HTMLElement} formContainer - The form element.
- * @param {string} storageKey - The key for local storage.
+ * Saves the current ECR form data as a draft in Firestore.
+ * Each user has a single draft document, identified by their UID.
+ * @param {object} db - The Firestore database instance.
+ * @param {string} userId - The UID of the current user.
+ * @param {object} data - The form data object to save.
  */
-export function saveEcrFormToLocalStorage(formContainer, storageKey) {
-    if (!formContainer) return;
-    const formData = new FormData(formContainer);
-    const data = Object.fromEntries(formData.entries());
-    // This is the fixed implementation.
-    formContainer.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => {
-        data[cb.name] = cb.checked;
-    });
-    localStorage.setItem(storageKey, JSON.stringify(data));
+export async function saveEcrDraftToFirestore(db, userId, data) {
+    if (!db || !userId || !data) {
+        console.error("Missing required parameters for saving ECR draft.");
+        return;
+    }
+    try {
+        const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, userId);
+        await setDoc(draftRef, { ...data, lastSaved: new Date() });
+    } catch (error) {
+        console.error("Error saving ECR draft to Firestore:", error);
+    }
 }
 
 /**
- * Loads ECR form data from local storage and populates the form.
- * @param {HTMLElement} formContainer - The form element.
- * @param {string} storageKey - The key for local storage.
+ * Loads a user's ECR draft from Firestore and populates the form.
+ * @param {object} db - The Firestore database instance.
+ * @param {string} userId - The UID of the current user.
+ * @param {HTMLElement} formContainer - The form element to populate.
  * @param {Function} populateFormFn - The function to populate the form with data.
  */
-export function loadEcrFormFromLocalStorage(formContainer, storageKey, populateFormFn) {
-    const savedData = localStorage.getItem(storageKey);
-    if (!savedData) return;
-    const data = JSON.parse(savedData);
-    populateFormFn(formContainer, data);
+export async function loadEcrDraftFromFirestore(db, userId, formContainer, populateFormFn) {
+    if (!db || !userId) return;
+
+    try {
+        const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, userId);
+        const docSnap = await getDoc(draftRef);
+
+        if (docSnap.exists()) {
+            console.log("ECR draft found, populating form.");
+            const data = docSnap.data();
+            populateFormFn(formContainer, data);
+        } else {
+            console.log("No ECR draft found for this user.");
+        }
+    } catch (error) {
+        console.error("Error loading ECR draft from Firestore:", error);
+    }
+}
+
+/**
+ * Deletes a user's ECR draft from Firestore.
+ * @param {object} db - The Firestore database instance.
+ * @param {string} userId - The UID of the current user.
+ */
+export async function deleteEcrDraftFromFirestore(db, userId) {
+    if (!db || !userId) return;
+
+    try {
+        const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, userId);
+        await deleteDoc(draftRef);
+        console.log("ECR draft deleted successfully.");
+    } catch (error) {
+        console.error("Could not delete ECR draft:", error);
+    }
 }
 
 /**
