@@ -6,7 +6,7 @@ const { HttpsError } = require('firebase-functions/v1/https');
 // Mock the @google/genai library
 const mockGenerateContent = jest.fn();
 jest.mock('@google/genai', () => ({
-  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
+  GoogleGenAI: jest.fn().mockImplementation(() => ({
     getGenerativeModel: jest.fn().mockReturnValue({
       generateContent: mockGenerateContent,
     }),
