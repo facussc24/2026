@@ -255,34 +255,23 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
-const { GoogleGenAI } = require("@google/genai");
-
 exports.organizeTaskWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
-    // 1. Authentication
     if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "The function must be called while authenticated."
-      );
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
-    // 2. Input validation
     const text = data.text;
     if (!text || typeof text !== "string" || text.trim().length === 0) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "The function must be called with a non-empty 'text' argument."
-      );
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
     }
 
     try {
-      // 3. Initialize Gemini AI
-      const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = "gemini-pro";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-      // 4. Construct the prompt
       const prompt = `
         Analiza el siguiente texto que describe una tarea. Extrae un título conciso y claro (máximo 10 palabras) para la tarea y una lista de subtareas accionables.
         El texto es: "${text}"
@@ -299,25 +288,30 @@ exports.organizeTaskWithAI = functions
         }
       `;
 
-      // 5. Call the Gemini API
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const responseText = response.text();
+      const requestBody = {
+        contents: [{
+          parts: [{
+            text: prompt,
+          }],
+        }],
+      };
 
-      // 6. Parse the JSON response from the model
-      // The model sometimes returns the JSON wrapped in ```json ... ```, so we clean it.
+      const apiResponse = await axios.post(url, requestBody);
+
+      // Extract the text content which should be a JSON string
+      const responseText = apiResponse.data.candidates[0].content.parts[0].text;
+
       const cleanedJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsedData = JSON.parse(cleanedJson);
 
-      // 7. Validate the parsed data structure
       if (!parsedData.title || !Array.isArray(parsedData.subtasks)) {
-          throw new Error("La respuesta de la IA no tiene el formato esperado.");
+        throw new Error("La respuesta de la IA no tiene el formato esperado.");
       }
 
       return parsedData;
 
     } catch (error) {
-      console.error("Error calling Gemini API:", error);
+      console.error("Error calling Gemini API via REST:", error.response ? error.response.data : error.message);
       throw new functions.https.HttpsError(
         "internal",
         "Ocurrió un error al procesar la solicitud con la IA.",
