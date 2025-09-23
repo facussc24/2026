@@ -148,6 +148,10 @@ service cloud.firestore {
       }
     }
 
+    match /ecr_drafts/{userId} {
+      allow read, write, delete: if request.auth.uid == userId;
+    }
+
     match /reuniones_ecr/{reunionId} {
       allow read: if request.auth != null;
       allow create, update: if canCreateUpdate();

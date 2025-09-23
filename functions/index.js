@@ -19,7 +19,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
+const getNextEcrNumber = functions.https.onCall(async (data, context) => {
   // Ensure the user is authenticated.
   if (!context.auth) {
     throw new functions.https.HttpsError(
@@ -67,7 +67,7 @@ exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
   }
 });
 
-exports.saveFormWithValidation = functions
+const saveFormWithValidation = functions
   .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
   .https.onRequest((req, res) => {
   cors(req, res, async () => {
@@ -217,7 +217,7 @@ exports.saveFormWithValidation = functions
   });
 });
 
-exports.sendTaskAssignmentEmail = functions
+const sendTaskAssignmentEmail = functions
   .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
   .firestore.document('tareas/{taskId}')
   .onCreate(async (snap, context) => {
@@ -257,7 +257,7 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
-exports.organizeTaskWithAI = functions
+const organizeTaskWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -337,7 +337,7 @@ exports.organizeTaskWithAI = functions
     }
   });
 
-exports.generateEcrDraftWithAI = functions
+const generateEcrDraftWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -425,7 +425,7 @@ exports.generateEcrDraftWithAI = functions
     }
   });
 
-exports.getTaskSummaryWithAI = functions
+const getTaskSummaryWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -507,7 +507,7 @@ exports.getTaskSummaryWithAI = functions
     }
   });
 
-exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }).pubsub.schedule("every day 09:00")
+const enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }).pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires")
   .onRun(async (context) => {
     console.log("Ejecutando la revisión de recordatorios de vencimiento de tareas.");
@@ -583,7 +583,7 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
     }
   });
 
-exports.sendTaskNotification = functions
+const sendTaskNotification = functions
   .runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .firestore.document('tareas/{taskId}')
   .onWrite(async (change, context) => {
@@ -667,7 +667,7 @@ exports.sendTaskNotification = functions
     }
   });
 
-exports.sendTestTelegramMessage = functions
+const sendTestTelegramMessage = functions
   .runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -717,7 +717,7 @@ exports.sendTestTelegramMessage = functions
     }
   });
 
-exports.updateCollectionCounts = functions.firestore
+const updateCollectionCounts = functions.firestore
   .document('{collectionId}/{docId}')
   .onWrite(async (change, context) => {
     const collectionId = context.params.collectionId;
@@ -741,7 +741,7 @@ exports.updateCollectionCounts = functions.firestore
     }, { merge: true });
 });
 
-exports.listModels = functions.https.onCall(async (data, context) => {
+const listModels = functions.https.onCall(async (data, context) => {
   const bucket = admin.storage().bucket();
   const directory = '/'; // List from the root directory
 
@@ -773,7 +773,7 @@ exports.listModels = functions.https.onCall(async (data, context) => {
   }
 });
 
-exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
+const enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires") // Ajusta a tu zona horaria
   .onRun(async (context) => {
     console.log("Ejecutando la revisión de recordatorios diarios.");
@@ -828,3 +828,18 @@ exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00"
       return null;
     }
   });
+
+module.exports = {
+    getNextEcrNumber,
+    saveFormWithValidation,
+    sendTaskAssignmentEmail,
+    organizeTaskWithAI,
+    generateEcrDraftWithAI,
+    getTaskSummaryWithAI,
+    enviarRecordatoriosDeVencimiento,
+    sendTaskNotification,
+    sendTestTelegramMessage,
+    updateCollectionCounts,
+    listModels,
+    enviarRecordatoriosDiarios
+};
