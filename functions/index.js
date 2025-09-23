@@ -281,28 +281,26 @@ exports.organizeTaskWithAI = functions
         2.  **Extrae un título conciso** y claro (máximo 10 palabras) para la tarea.
         3.  **Genera una descripción corta** (2-3 frases) que resuma el objetivo principal de la tarea.
         4.  **Crea una lista de subtareas** cortas y accionables.
-        5.  **Determina la prioridad**: si el texto sugiere urgencia (ej. 'urgente', 'hoy mismo', 'ASAP'), la prioridad debe ser 'high'. Si sugiere una importancia normal, 'medium'. Si es algo sin prisa, 'low'.
-        6.  **Extrae la fecha límite (dueDate)**: si el texto menciona una fecha o plazo (ej. 'para el viernes', 'el 15 de julio', 'en 3 días'), formatea esa fecha como 'YYYY-MM-DD'. Si no se menciona, deja el valor como null.
-        7.  **Sugiere a quién asignar la tarea (assignee)**: si el texto menciona el nombre de una persona, extrae ese nombre. Si no, deja el valor como null.
-        8.  **Determina si la tarea es pública (isPublic)**: si el texto habla de proyectos, planos, ingeniería o temas de equipo, debe ser 'true'. Si es una tarea personal (ej. 'llamar al dentista'), debe ser 'false'.
-        9.  **Identifica el proyecto (project)**: si se menciona un nombre de proyecto específico (ej. 'Proyecto Titán'), extrae el nombre. Si no, deja el valor como null.
+        5.  **Determina la prioridad**: si el texto sugiere urgencia (ej. 'urgente', 'hoy mismo', 'ASAP', 'principal tarea'), la prioridad debe ser 'high'. Si sugiere una importancia normal, 'medium'. Si es algo sin prisa, 'low'.
+        6.  **Extrae la fecha de inicio (startDate)**: si el texto menciona una fecha de inicio (ej. 'empezar esta semana', 'a partir del lunes'), formatea esa fecha como 'YYYY-MM-DD'. Si no se menciona, deja el valor como null.
+        7.  **Extrae la fecha límite (dueDate)**: si el texto menciona una fecha o plazo (ej. 'para el viernes', 'el 15 de julio', 'en 3 días'), formatea esa fecha como 'YYYY-MM-DD'. Si no se menciona, deja el valor como null.
+        8.  **Sugiere a quién asignar la tarea (assignee)**: si el texto menciona el nombre de una persona (ej. 'marcelo nieve'), extrae ese nombre. Si no, deja el valor como null.
+        9.  **Determina si la tarea es pública (isPublic)**: si el texto habla de proyectos, planos, ingeniería, producción, seguridad o temas de equipo, debe ser 'true'. Si es una tarea personal (ej. 'llamar al dentista'), debe ser 'false'.
+        10. **Identifica el proyecto (project)**: si se menciona un nombre de proyecto específico (ej. 'Proyecto Titán'), extrae el nombre. Si no, deja el valor como null.
 
 
-        Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string), "description" (string), "subtasks" (array de strings), "priority" (string: 'low', 'medium', o 'high'), "dueDate" (string: 'YYYY-MM-DD' o null), "assignee" (string o null), "isPublic" (boolean), y "project" (string o null). No incluyas ninguna otra explicación ni formato.
-        Ejemplo de salida:
+        Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string), "description" (string), "subtasks" (array de strings), "priority" (string: 'low', 'medium', o 'high'), "startDate" (string: 'YYYY-MM-DD' o null), "dueDate" (string: 'YYYY-MM-DD' o null), "assignee" (string o null), "isPublic" (boolean), y "project" (string o null). No incluyas ninguna otra explicación ni formato.
+        Ejemplo de salida para un texto como 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes':
         {
-          "title": "Preparar presentación para cliente",
-          "description": "Elaborar y coordinar la presentación de ventas para el nuevo cliente, asegurando que todos los datos de rendimiento estén incluidos y que el equipo esté alineado.",
-          "subtasks": [
-            "Investigar datos del cliente",
-            "Armar PowerPoint con gráficos de rendimiento",
-            "Coordinar reunión de prueba con el equipo de ventas para el viernes"
-          ],
-          "priority": "high",
-          "dueDate": "2024-10-25",
-          "assignee": "María García",
+          "title": "Organizar reunión para AMFE",
+          "description": "Organizar una reunión con Marcelo Nieve para discutir el Análisis de Modos y Efectos de Falla (AMFE).",
+          "subtasks": ["Agendar reunión con Marcelo Nieve", "Preparar agenda para la reunión de AMFE"],
+          "priority": "medium",
+          "startDate": null,
+          "dueDate": "2025-09-30",
+          "assignee": "Marcelo Nieve",
           "isPublic": true,
-          "project": "Proyecto Titán"
+          "project": null
         }
       `;
 
