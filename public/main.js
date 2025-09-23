@@ -5,6 +5,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { getAuth, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrFormToLocalStorage, loadEcrFormFromLocalStorage, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
 import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
 import {
@@ -47,6 +48,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const functions = getFunctions(app);
+const storage = getStorage(app);
 
 // =================================================================================
 // --- CONSTANTES Y CONFIGURACIÓN ---
@@ -1097,6 +1099,19 @@ async function seedDatabase() {
                     node.children.push(childNode);
                 }
             }
+        }
+
+        // --- Populate Image Previews ---
+        const situacionExistenteImg = document.getElementById('situacion-existente-image-preview');
+        const situacionPropuestaImg = document.getElementById('situacion-propuesta-image-preview');
+
+        if (data.situacion_existente_image_url && situacionExistenteImg) {
+            situacionExistenteImg.src = data.situacion_existente_image_url;
+            situacionExistenteImg.classList.remove('hidden');
+        }
+        if (data.situacion_propuesta_image_url && situacionPropuestaImg) {
+            situacionPropuestaImg.src = data.situacion_propuesta_image_url;
+            situacionPropuestaImg.classList.remove('hidden');
         }
 
         buildTree(rootNode, 1);
@@ -4537,6 +4552,30 @@ async function ensureCollectionsAreLoaded(collectionNames) {
 }
 
 
+    const createSituacionSectionHTML = (type, title) => {
+        const uploadId = `situacion-${type}-image-upload`;
+        const previewId = `situacion-${type}-image-preview`;
+        const containerId = `situacion-${type}-image-container`;
+
+        return `
+            <div class="border border-gray-300 rounded-lg shadow-sm flex flex-col" data-ai-id="situacion_${type}_section">
+                <h3 class="font-bold text-center bg-gray-200 p-2 border-b border-gray-300 rounded-t-lg">${title}</h3>
+                <div class="p-2 flex-grow">
+                    <textarea name="situacion_${type}" data-ai-id="situacion_${type}_text" class="w-full h-64 border-gray-200 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Describa la situación..."></textarea>
+                </div>
+                <div id="${containerId}" data-ai-id="situacion_${type}_image_container" class="p-2 border-t border-gray-200 bg-gray-50">
+                    <img id="${previewId}" src="" alt="Previsualización de la imagen" class="hidden max-w-full h-auto rounded-md mb-2 max-h-48 object-contain mx-auto"/>
+                    <label for="${uploadId}" class="cursor-pointer text-sm text-blue-600 hover:text-blue-800 font-semibold">
+                        <i data-lucide="upload-cloud" class="inline-block w-4 h-4 mr-1"></i>
+                        Cargar Imagen
+                    </label>
+                    <input type="file" id="${uploadId}" name="situacion_${type}_image" class="hidden" accept="image/*">
+                    <input type="hidden" name="situacion_${type}_image_url">
+                </div>
+            </div>
+        `;
+    };
+
 async function runEcrFormLogic(params = null) {
     const ecrId = params ? params.ecrId : null;
     const scrollToSection = params ? params.scrollToSection : null;
@@ -4624,12 +4663,12 @@ async function runEcrFormLogic(params = null) {
     }, { threshold: 0.5 }); // 50% of the page must be visible
 
     // --- Helper Functions ---
-    const createCheckbox = (label, name, value = '') => `<div class="flex items-center gap-2"><input type="checkbox" name="${name}" id="${name}" value="${value}" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><label for="${name}" class="text-sm select-none">${label}</label></div>`;
-    const createTextField = (label, name, placeholder = '', isFullWidth = false) => `<div class="form-field ${isFullWidth ? 'col-span-full' : ''}"><label for="${name}" class="text-sm font-bold mb-1">${label}</label><input type="text" name="${name}" id="${name}" placeholder="${placeholder}" class="w-full"></div>`;
-    const createDateField = (label, name) => `<div class="form-field"><label for="${name}" class="text-sm font-bold mb-1">${label}</label><input type="date" name="${name}" id="${name}" class="w-full"></div>`;
+    const createCheckbox = (label, name, value = '', aiId = null) => `<div class="flex items-center gap-2"><input type="checkbox" name="${name}" id="${name}" value="${value}" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" ${aiId ? `data-ai-id="${aiId}"` : ''}><label for="${name}" class="text-sm select-none">${label}</label></div>`;
+    const createTextField = (label, name, placeholder = '', isFullWidth = false, aiId = null) => `<div class="form-field ${isFullWidth ? 'col-span-full' : ''}"><label for="${name}" class="text-sm font-bold mb-1">${label}</label><input type="text" name="${name}" id="${name}" placeholder="${placeholder}" class="w-full" ${aiId ? `data-ai-id="${aiId}"` : ''}></div>`;
+    const createDateField = (label, name, aiId = null) => `<div class="form-field"><label for="${name}" class="text-sm font-bold mb-1">${label}</label><input type="date" name="${name}" id="${name}" class="w-full" ${aiId ? `data-ai-id="${aiId}"` : ''}></div>`;
     const createTextarea = (name, placeholder = '') => `<textarea name="${name}" placeholder="${placeholder}" class="w-full h-full border-none resize-none p-1 bg-transparent focus:outline-none"></textarea>`;
 
-    const createSelectFieldFromCollection = (label, name, collectionKey, placeholder = 'Seleccionar...') => {
+    const createSelectFieldFromCollection = (label, name, collectionKey, placeholder = 'Seleccionar...', aiId = null) => {
         const items = appState.collections[collectionKey] || [];
         // Sort items alphabetically by description or name for better UX
         items.sort((a, b) => (a.descripcion || a.nombre).localeCompare(b.descripcion || b.nombre));
@@ -4641,7 +4680,7 @@ async function runEcrFormLogic(params = null) {
         return `
             <div class="form-field">
                 <label for="${name}" class="text-sm font-bold mb-1">${label}</label>
-                <select name="${name}" id="${name}" class="w-full">${optionsHTML}</select>
+                <select name="${name}" id="${name}" class="w-full" ${aiId ? `data-ai-id="${aiId}"` : ''}>${optionsHTML}</select>
             </div>
         `;
     };
@@ -4698,6 +4737,32 @@ async function runEcrFormLogic(params = null) {
     };
 
     // --- Form HTML structure ---
+    const handleImageUpload = async (file, type) => {
+        if (!file) return;
+        const toastId = showToast('Subiendo imagen...', 'loading', { duration: 0 });
+        try {
+            const storageRef = ref(storage, `ecr_images/${Date.now()}_${file.name}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+
+            const preview = document.getElementById(`situacion-${type}-image-preview`);
+            const urlInput = document.querySelector(`input[name="situacion_${type}_image_url"]`);
+
+            if (preview) {
+                preview.src = downloadURL;
+                preview.classList.remove('hidden');
+            }
+            if (urlInput) {
+                urlInput.value = downloadURL;
+            }
+
+            showToast('Imagen subida con éxito.', 'success', { toastId });
+        } catch (error) {
+            console.error('Error al subir la imagen:', error);
+            showToast('Error al subir la imagen.', 'error', { toastId });
+        }
+    };
+
     const page1HTML = `
         <div class="ecr-page relative" id="page1">
             <header class="flex justify-between items-start border-b-2 border-black pb-2">
@@ -4711,7 +4776,7 @@ async function runEcrFormLogic(params = null) {
                 </div>
                 <div class="border-2 border-black p-2">
                     <span class="font-bold">ECR N°:</span>
-                    <input type="text" name="ecr_no" readonly class="bg-gray-100 cursor-not-allowed" placeholder="Generando...">
+                    <input type="text" name="ecr_no" readonly class="bg-gray-100 cursor-not-allowed" placeholder="Generando..." data-ai-id="ecr_no">
                 </div>
             </header>
             <div class="bg-gray-300 text-center py-1 font-bold my-3">CHECK LIST ECR - ENGINEERING CHANGE REQUEST</div>
@@ -4720,50 +4785,50 @@ async function runEcrFormLogic(params = null) {
                 <div class="flex-grow-[2]">
                     <label class="text-sm font-bold mb-1 block">ORIGEN DEL PEDIDO:</label>
                     <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
-                        ${createCheckbox('Cliente', 'origen_cliente')}
-                        ${createCheckbox('Proveedor', 'origen_proveedor')}
-                        ${createCheckbox('Interno', 'origen_interno')}
-                        ${createCheckbox('Reglamentación', 'origen_reglamentacion')}
+                        ${createCheckbox('Cliente', 'origen_cliente', '', 'origen_cliente')}
+                        ${createCheckbox('Proveedor', 'origen_proveedor', '', 'origen_proveedor')}
+                        ${createCheckbox('Interno', 'origen_interno', '', 'origen_interno')}
+                        ${createCheckbox('Reglamentación', 'origen_reglamentacion', '', 'origen_reglamentacion')}
                     </div>
                 </div>
-                ${createSelectFieldFromCollection('Proyecto:', 'proyecto', COLLECTIONS.PROYECTOS)}
-                ${createSelectFieldFromCollection('Cliente:', 'cliente', COLLECTIONS.CLIENTES)}
+                ${createSelectFieldFromCollection('Proyecto:', 'proyecto', COLLECTIONS.PROYECTOS, 'Seleccionar...', 'proyecto')}
+                ${createSelectFieldFromCollection('Cliente:', 'cliente', COLLECTIONS.CLIENTES, 'Seleccionar...', 'cliente')}
             </section>
 
             <section class="flex items-end gap-6 mb-5">
                 <div class="flex-grow-[2]">
                     <label class="text-sm font-bold mb-1 block">FASE DE PROYECTO:</label>
                     <div class="border p-2 rounded-lg flex flex-wrap gap-x-6 gap-y-2 mt-1">
-                        ${createCheckbox('Programa', 'fase_programa')}
-                        ${createCheckbox('Serie', 'fase_serie')}
+                        ${createCheckbox('Programa', 'fase_programa', '', 'fase_programa')}
+                        ${createCheckbox('Serie', 'fase_serie', '', 'fase_serie')}
                     </div>
                 </div>
-                ${createDateField('Fecha de Emisión:', 'fecha_emision')}
-                ${createDateField('Fecha de Cierre:', 'fecha_cierre')}
+                ${createDateField('Fecha de Emisión:', 'fecha_emision', 'fecha_emision')}
+                ${createDateField('Fecha de Cierre:', 'fecha_cierre', 'fecha_cierre')}
             </section>
 
             <section class="flex items-end gap-6 mb-5">
                 <div class="flex-1">
                     <label for="codigo_barack_search" class="text-sm font-bold mb-1 block">Producto Barack</label>
                     <div class="flex items-center gap-2">
-                        <input type="text" id="codigo_barack_display" class="w-full bg-gray-100" readonly placeholder="Seleccione un producto...">
-                        <input type="hidden" name="codigo_barack" id="codigo_barack">
+                        <input type="text" id="codigo_barack_display" class="w-full bg-gray-100" readonly placeholder="Seleccione un producto..." data-ai-id="codigo_barack_display">
+                        <input type="hidden" name="codigo_barack" id="codigo_barack" data-ai-id="codigo_barack">
                         <button type="button" data-action="open-ecr-product-search" class="bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600"><i data-lucide="search" class="h-5 w-5 pointer-events-none"></i></button>
                     </div>
                 </div>
-                ${createTextField('Código(s) Cliente:', 'codigo_cliente', '...', false)}
+                ${createTextField('Código(s) Cliente:', 'codigo_cliente', '...', false, 'codigo_cliente')}
             </section>
             <section class="mb-5">
                  <div class="w-full">
                     <label for="denominacion_producto" class="text-sm font-bold mb-1 block">Denominación del Producto</label>
-                    <input type="text" name="denominacion_producto" id="denominacion_producto" placeholder="..." class="w-full bg-gray-100" readonly>
+                    <input type="text" name="denominacion_producto" id="denominacion_producto" placeholder="..." class="w-full bg-gray-100" readonly data-ai-id="denominacion_producto">
                 </div>
             </section>
 
             <section class="mb-5">
                 <div class="flex-1">
                     <label for="componentes_obsoletos" class="text-sm font-bold mb-1 block">Componentes Obsoletos (Cantidad):</label>
-                    <input type="number" name="componentes_obsoletos" id="componentes_obsoletos" placeholder="0" class="w-full" min="0">
+                    <input type="number" name="componentes_obsoletos" id="componentes_obsoletos" placeholder="0" class="w-full" min="0" data-ai-id="componentes_obsoletos">
                 </div>
             </section>
 
@@ -4787,7 +4852,7 @@ async function runEcrFormLogic(params = null) {
                     </div>
                     <div class="flex-1 flex flex-col gap-2">
                         ${['Fuente de suministro', 'Embalaje'].map(l => createCheckbox(l, `tipo_${l.toLowerCase().replace(/ /g, '_')}`)).join('')}
-                        <div class="flex items-center gap-2 mt-1"><input type="checkbox" id="tipo_otro" name="tipo_otro"><label for="tipo_otro" class="text-sm">Otro:</label><input name="tipo_otro_text" type="text" class="border-b-2 bg-transparent flex-grow"></div>
+                        <div class="flex items-center gap-2 mt-1"><input type="checkbox" id="tipo_otro" name="tipo_otro"><label for="tipo_otro" class="text-sm">Otro:</label><input name="tipo_otro_text" type="text" class="border-b-2 bg-transparent flex-grow" data-ai-id="tipo_otro_text"></div>
                     </div>
                 </div>
             </section>
@@ -4796,12 +4861,12 @@ async function runEcrFormLogic(params = null) {
                 <div class="bg-gray-200 font-bold p-2 text-center border-b border-black">VALIDACIÓN DEL CLIENTE</div>
                 <div class="p-3 flex gap-4">
                     <div class="flex-1 flex flex-col gap-2">
-                        ${createCheckbox('Requiere Aprobación del Cliente', 'cliente_requiere_aprobacion')}
-                        ${createCheckbox('Requiere PPAP', 'cliente_requiere_ppap')}
+                        ${createCheckbox('Requiere Aprobación del Cliente', 'cliente_requiere_aprobacion', '', 'cliente_requiere_aprobacion')}
+                        ${createCheckbox('Requiere PPAP', 'cliente_requiere_ppap', '', 'cliente_requiere_ppap')}
                     </div>
                     <div class="flex-1 flex flex-col gap-2">
-                        <div class="flex-1"><label for="cliente_aprobacion_estado" class="text-sm font-bold block">Estado:</label><select name="cliente_aprobacion_estado" id="cliente_aprobacion_estado" class="w-full text-sm"><option value="na">No Aplica</option><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select></div>
-                        <div class="flex-1"><label for="cliente_aprobacion_fecha" class="text-sm font-bold block">Fecha de Decisión:</label><input type="date" name="cliente_aprobacion_fecha" id="cliente_aprobacion_fecha" class="w-full text-sm"></div>
+                        <div class="flex-1"><label for="cliente_aprobacion_estado" class="text-sm font-bold block">Estado:</label><select name="cliente_aprobacion_estado" id="cliente_aprobacion_estado" class="w-full text-sm" data-ai-id="cliente_aprobacion_estado"><option value="na">No Aplica</option><option value="pendiente">Pendiente</option><option value="aprobado">Aprobado</option><option value="rechazado">Rechazado</option></select></div>
+                        <div class="flex-1"><label for="cliente_aprobacion_fecha" class="text-sm font-bold block">Fecha de Decisión:</label><input type="date" name="cliente_aprobacion_fecha" id="cliente_aprobacion_fecha" class="w-full text-sm" data-ai-id="cliente_aprobacion_fecha"></div>
                     </div>
                 </div>
             </section>
@@ -4815,20 +4880,20 @@ async function runEcrFormLogic(params = null) {
                 </div>
             </section>
 
-            <div class="grid grid-cols-2 gap-4 mt-4" data-tutorial-id="situacion-layout">
-                <div class="border border-gray-400"><h3 class="font-bold text-center bg-gray-200 p-1">SITUACIÓN EXISTENTE:</h3><div class="p-1">${createTextarea('situacion_existente')}</div></div>
-                <div class="border border-gray-400"><h3 class="font-bold text-center bg-gray-200 p-1">SITUACIÓN PROPUESTA:</h3><div class="p-1">${createTextarea('situacion_propuesta')}</div></div>
+            <div class="grid grid-cols-1 md:grid-cols-1 gap-6 mt-6" data-tutorial-id="situacion-layout">
+                ${createSituacionSectionHTML('existente', 'SITUACIÓN EXISTENTE:')}
+                ${createSituacionSectionHTML('propuesta', 'SITUACIÓN PROPUESTA:')}
             </div>
 
             <table class="w-full border-collapse mt-4 text-xs">
                 <thead><tr><th colspan="7" class="border border-black bg-gray-200 font-bold p-1 text-center">IMPACTO EN CASO DE FALLA</th></tr><tr class="bg-gray-200 font-bold"><th class="border border-black p-1">RESPONSABLE</th><th class="border border-black p-1">ANÁLISIS DE RIESGO</th><th class="border border-black p-1">Nivel</th><th class="border border-black p-1">Observaciones</th><th class="border border-black p-1">NOMBRE</th><th class="border border-black p-1">FECHA</th><th class="border border-black p-1">VISTO</th></tr></thead>
-                <tbody>${['RETORNO DE GARANTÍA', 'RECLAMACIÓN ZERO KM', 'HSE', 'SATISFACCIÓN DEL CLIENTE', 'S/R (Seguridad y/o Regulamentación)'].map((r, i) => `<tr><td class="border border-black p-1">Gerente de Calidad</td><td class="border border-black p-1">${r}</td><td class="border border-black p-1"><input name="impacto_nivel_${i}"></td><td class="border border-black p-1"><input name="impacto_obs_${i}"></td><td class="border border-black p-1"><input name="impacto_nombre_${i}"></td><td class="border border-black p-1"><input type="date" name="impacto_fecha_${i}"></td><td class="border border-black p-1"><input name="impacto_visto_${i}"></td></tr>`).join('')}</tbody>
+                <tbody>${['RETORNO DE GARANTÍA', 'RECLAMACIÓN ZERO KM', 'HSE', 'SATISFACCIÓN DEL CLIENTE', 'S/R (Seguridad y/o Regulamentación)'].map((r, i) => `<tr><td class="border border-black p-1">Gerente de Calidad</td><td class="border border-black p-1">${r}</td><td class="border border-black p-1"><input name="impacto_nivel_${i}" data-ai-id="impacto_nivel_${i}"></td><td class="border border-black p-1"><input name="impacto_obs_${i}" data-ai-id="impacto_obs_${i}"></td><td class="border border-black p-1"><input name="impacto_nombre_${i}" data-ai-id="impacto_nombre_${i}"></td><td class="border border-black p-1"><input type="date" name="impacto_fecha_${i}" data-ai-id="impacto_fecha_${i}"></td><td class="border border-black p-1"><input name="impacto_visto_${i}" data-ai-id="impacto_visto_${i}"></td></tr>`).join('')}</tbody>
             </table>
 
             <table class="w-full border-collapse mt-4 text-xs">
                 <thead><tr><th colspan="7" class="border border-black bg-gray-200 font-bold p-1 text-center">APROBACIÓN DE DIRECTORIO (CODIR)</th></tr><tr class="bg-gray-200 font-bold"><th class="border border-black p-1">Miembro de Directorio</th><th class="border border-black p-1">Aprobado</th><th class="border border-black p-1">Rechazado</th><th class="border border-black p-1">Observaciones</th><th class="border border-black p-1">NOMBRE</th><th class="border border-black p-1">FECHA</th><th class="border border-black p-1">VISTO</th></tr></thead>
-                <tbody>${['Director Comercial', 'Director Industrial'].map((r, i) => `<tr><td class="border border-black p-1">${r}</td><td class="border border-black p-1">${createCheckbox('', `codir_aprobado_${i}`)}</td><td class="border border-black p-1">${createCheckbox('', `codir_rechazado_${i}`)}</td><td class="border border-black p-1"><input name="codir_obs_${i}"></td><td class="border border-black p-1"><input name="codir_nombre_${i}"></td><td class="border border-black p-1"><input type="date" name="codir_fecha_${i}"></td><td class="border border-black p-1"><input name="codir_visto_${i}"></td></tr>`).join('')}
-                    <tr><td class="border border-black p-1">Otro: <input name="codir_otro_rol_2" class="border-b-2 bg-transparent w-full"></td><td class="border border-black p-1">${createCheckbox('', 'codir_aprobado_2')}</td><td class="border border-black p-1">${createCheckbox('', 'codir_rechazado_2')}</td><td class="border border-black p-1"><input name="codir_obs_2"></td><td class="border border-black p-1"><input name="codir_nombre_2"></td><td class="border border-black p-1"><input type="date" name="codir_fecha_2"></td><td class="border border-black p-1"><input name="codir_visto_2"></td></tr>
+                <tbody>${['Director Comercial', 'Director Industrial'].map((r, i) => `<tr><td class="border border-black p-1">${r}</td><td class="border border-black p-1">${createCheckbox('', `codir_aprobado_${i}`, '', `codir_aprobado_${i}`)}</td><td class="border border-black p-1">${createCheckbox('', `codir_rechazado_${i}`, '', `codir_rechazado_${i}`)}</td><td class="border border-black p-1"><input name="codir_obs_${i}" data-ai-id="codir_obs_${i}"></td><td class="border border-black p-1"><input name="codir_nombre_${i}" data-ai-id="codir_nombre_${i}"></td><td class="border border-black p-1"><input type="date" name="codir_fecha_${i}" data-ai-id="codir_fecha_${i}"></td><td class="border border-black p-1"><input name="codir_visto_${i}" data-ai-id="codir_visto_${i}"></td></tr>`).join('')}
+                    <tr><td class="border border-black p-1">Otro: <input name="codir_otro_rol_2" class="border-b-2 bg-transparent w-full" data-ai-id="codir_otro_rol_2"></td><td class="border border-black p-1">${createCheckbox('', 'codir_aprobado_2', '', 'codir_aprobado_2')}</td><td class="border border-black p-1">${createCheckbox('', 'codir_rechazado_2', '', 'codir_rechazado_2')}</td><td class="border border-black p-1"><input name="codir_obs_2" data-ai-id="codir_obs_2"></td><td class="border border-black p-1"><input name="codir_nombre_2" data-ai-id="codir_nombre_2"></td><td class="border border-black p-1"><input type="date" name="codir_fecha_2" data-ai-id="codir_fecha_2"></td><td class="border border-black p-1"><input name="codir_visto_2" data-ai-id="codir_visto_2"></td></tr>
                 </tbody>
             </table>
 
@@ -4836,8 +4901,8 @@ async function runEcrFormLogic(params = null) {
                  <thead><tr><th colspan="2" class="border border-black bg-gray-200 font-bold p-1 text-center">EQUIPO DE TRABAJO</th></tr></thead>
                  <tbody>
                     ${[['PILOTO ECR:', 'COMERCIAL:'], ['PILOTO:', 'PC&L/LOGÍSTICA:'], ['ING. PRODUCTO:', 'PRODUCCIÓN:'], ['ING. MANUFACTURA:', 'COSTOS:'], ['CALIDAD:', 'HSE:'], ['COMPRAS:', 'MANTENIMIENTO:'], ['SQA:', '']].map((row, i) => {
-                        const col1 = `<div class="flex items-center"><label class="w-1/3 font-semibold">${row[0]}</label><input name="equipo_c1_${i}" class="flex-grow ml-2 border-b-2 bg-transparent"></div>`;
-                        const col2 = row[1] ? `<div class="flex items-center"><label class="w-1/3 font-semibold">${row[1]}</label><input name="equipo_c2_${i}" class="flex-grow ml-2 border-b-2 bg-transparent"></div>` : '';
+                        const col1 = `<div class="flex items-center"><label class="w-1/3 font-semibold">${row[0]}</label><input name="equipo_c1_${i}" class="flex-grow ml-2 border-b-2 bg-transparent" data-ai-id="equipo_c1_${i}"></div>`;
+                        const col2 = row[1] ? `<div class="flex items-center"><label class="w-1/3 font-semibold">${row[1]}</label><input name="equipo_c2_${i}" class="flex-grow ml-2 border-b-2 bg-transparent" data-ai-id="equipo_c2_${i}"></div>` : '';
                         return `<tr><td class="border border-black p-1">${col1}</td><td class="border border-black p-1">${col2}</td></tr>`;
                     }).join('')}
                  </tbody>
@@ -5052,6 +5117,20 @@ async function runEcrFormLogic(params = null) {
     } else {
         loadEcrFormFromLocalStorage(formContainer, ECR_FORM_STORAGE_KEY, populateEcrForm);
     }
+
+    // --- Image Upload Listeners ---
+    const situacionExistenteUpload = document.getElementById('situacion-existente-image-upload');
+    const situacionPropuestaUpload = document.getElementById('situacion-propuesta-image-upload');
+
+    situacionExistenteUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        handleImageUpload(file, 'existente');
+    });
+
+    situacionPropuestaUpload.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        handleImageUpload(file, 'propuesta');
+    });
 
     formContainer.addEventListener('input', () => saveEcrFormToLocalStorage(formContainer, ECR_FORM_STORAGE_KEY));
 
