@@ -287,9 +287,10 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
             const organizeTaskWithAI = httpsCallable(functions, 'organizeTaskWithAI');
             const result = await organizeTaskWithAI({ text: brainDumpText });
 
-            const { title, subtasks } = result.data;
+            const { title, description, subtasks } = result.data;
 
             modalElement.querySelector('#task-title').value = title;
+            modalElement.querySelector('#task-description').value = description;
             subtaskManager.setSubtasks(subtasks);
             showToast('¡Tarea organizada con IA!', 'success');
 
