@@ -1,7 +1,7 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 
 // Import the function to be tested directly from its new, isolated location.
-import { registerEcrApproval } from '../../public/data_logic.js';
+import { registerEcrApproval } from '../../public/modules/ecr/ecr-logic.js';
 // We still need the real COLLECTIONS object.
 import { COLLECTIONS } from '../../public/utils.js';
 

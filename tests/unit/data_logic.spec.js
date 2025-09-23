@@ -1,5 +1,5 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
-import { deleteProductAndOrphanedSubProducts } from '../../public/data_logic.js';
+import { deleteProductAndOrphanedSubProducts } from '../../public/modules/products/product-logic.js';
 import { COLLECTIONS } from '../../public/utils.js';
 
 // Mock de UI Callbacks

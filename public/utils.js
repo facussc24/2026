@@ -52,6 +52,42 @@ export function createHelpTooltip(message) {
 }
 
 /**
+ * Ensures that all specified collections are loaded into the appState.
+ * Fetches any collections that are not already present.
+ * @param {object} db - The Firestore database instance.
+ * @param {object} firestore - Firestore functions { getDocs, collection }.
+ * @param {object} appState - The global application state.
+ * @param {Array<string>} collectionNames - An array of collection names to ensure are loaded.
+ * @returns {Promise<void>} A promise that resolves when all collections are loaded.
+ */
+export async function ensureCollectionsAreLoaded(db, firestore, appState, collectionNames) {
+    const { getDocs, collection } = firestore;
+    const collectionsToFetch = collectionNames.filter(name => {
+        return !appState.collections[name] || appState.collections[name].length === 0;
+    });
+
+    if (collectionsToFetch.length === 0) {
+        return;
+    }
+
+    try {
+        const fetchPromises = collectionsToFetch.map(async (name) => {
+            const querySnapshot = await getDocs(collection(db, name));
+            const data = querySnapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
+            appState.collections[name] = data;
+            if (data.length > 0 && data[0].id) {
+                appState.collectionsById[name] = new Map(data.map(item => [item.id, item]));
+            }
+        });
+
+        await Promise.all(fetchPromises);
+    } catch (error) {
+        console.error("Error ensuring collections are loaded:", error);
+        throw new Error('Error al cargar datos necesarios para el formulario.');
+    }
+}
+
+/**
  * Determines if the PPAP confirmation checkbox should be required and validated for an ECO.
  * The condition is that PPAP is required by the client AND the client has formally approved it.
  * @param {object} ecrData - The data object from the associated ECR document.
