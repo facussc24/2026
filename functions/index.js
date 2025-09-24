@@ -829,6 +829,119 @@ const enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
     }
   });
 
+const generateEcrProposal = functions
+  .runWith({ secrets: ["GEMINI_API_KEY"] })
+  .https.onCall(async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const text = data.text;
+    if (!text || typeof text !== "string" || text.trim().length < 10) {
+      throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument of at least 10 characters.");
+    }
+
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      const model = "gemini-1.5-pro-latest";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+      const prompt = `
+        Analiza el siguiente texto que describe la "situación actual" de una Solicitud de Cambio de Ingeniería (ECR). Tu tarea es generar una descripción para la "situación propuesta".
+        La descripción propuesta debe ser una solución técnica, clara y concisa al problema descrito. No excedas las 3 frases.
+        No incluyas saludos, solo la descripción de la propuesta.
+
+        Texto de la situación actual:
+        "${text}"
+
+        Ejemplo de salida para un texto como 'El soporte actual de plástico se rompe bajo presión.':
+        'Se propone reemplazar el soporte de plástico por uno de acero mecanizado para aumentar la resistencia y durabilidad. Se ajustará el diseño para mantener el mismo punto de montaje.'
+      `;
+
+      const requestBody = {
+        contents: [{
+          parts: [{ text: prompt }],
+        }],
+      };
+
+      const apiResponse = await axios.post(url, requestBody);
+      const responseText = apiResponse.data.candidates[0].content.parts[0].text;
+
+      return { proposal: responseText.trim() };
+
+    } catch (error) {
+      console.error("Error calling Gemini API for ECR Proposal Generation:", error.response ? error.response.data : error.message);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Ocurrió un error al generar la propuesta con la IA.",
+        error.message
+      );
+    }
+  });
+
+const analyzeEcrImpacts = functions
+    .runWith({ secrets: ["GEMINI_API_KEY"] })
+    .https.onCall(async (data, context) => {
+        if (!context.auth) {
+            throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+        }
+
+        const { situacionActual, situacionPropuesta } = data;
+        if (!situacionActual || !situacionPropuesta) {
+            throw new functions.https.HttpsError("invalid-argument", "The function requires 'situacionActual' and 'situacionPropuesta'.");
+        }
+
+        try {
+            const apiKey = process.env.GEMINI_API_KEY;
+            const model = "gemini-1.5-pro-latest";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+            const prompt = `
+                Analiza la "situación actual" y la "situación propuesta" de una Solicitud de Cambio de Ingeniería (ECR).
+                Tu objetivo es determinar las áreas de impacto basándote en las palabras clave en los textos.
+                Responde únicamente con un objeto JSON con las siguientes claves booleanas: "afecta_calidad", "afecta_costos", "afecta_logistica", "afecta_ambiental", "afecta_proceso".
+
+                Situación Actual: "${situacionActual}"
+                Situación Propuesta: "${situacionPropuesta}"
+
+                Reglas para determinar el impacto:
+                - afecta_calidad: true si se mencionan términos como 'calidad', 'falla', 'tolerancia', 'especificación', 'durabilidad', 'resistencia', 'dimensional'.
+                - afecta_costos: true si se mencionan 'costo', 'precio', 'ahorro', 'inversión', 'material más barato', 'reducir'.
+                - afecta_logistica: true si se mencionan 'logística', 'transporte', 'embalaje', 'almacén', 'stock', 'proveedor'.
+                - afecta_ambiental: true si se mencionan 'ambiental', 'seguridad', 'HSE', 'ergonomía', 'reciclado', 'normativa ambiental'.
+                - afecta_proceso: true si se mencionan 'proceso', 'línea de producción', 'ensamblaje', 'manufactura', 'herramental', 'máquina', 'operación'.
+
+                Ejemplo de Salida:
+                {
+                  "afecta_calidad": true,
+                  "afecta_costos": true,
+                  "afecta_logistica": false,
+                  "afecta_ambiental": false,
+                  "afecta_proceso": true
+                }
+            `;
+
+            const requestBody = {
+                contents: [{ parts: [{ text: prompt }] }],
+            };
+
+            const apiResponse = await axios.post(url, requestBody);
+            const responseText = apiResponse.data.candidates[0].content.parts[0].text;
+            const cleanedJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
+            const parsedData = JSON.parse(cleanedJson);
+
+            return parsedData;
+
+        } catch (error) {
+            console.error("Error calling Gemini API for ECR Impact Analysis:", error.response ? error.response.data : error.message);
+            throw new functions.https.HttpsError(
+                "internal",
+                "Ocurrió un error al analizar los impactos con la IA.",
+                error.message
+            );
+        }
+    });
+
 module.exports = {
     getNextEcrNumber,
     saveFormWithValidation,
@@ -841,5 +954,7 @@ module.exports = {
     sendTestTelegramMessage,
     updateCollectionCounts,
     listModels,
-    enviarRecordatoriosDiarios
+    enviarRecordatoriosDiarios,
+    generateEcrProposal,
+    analyzeEcrImpacts
 };

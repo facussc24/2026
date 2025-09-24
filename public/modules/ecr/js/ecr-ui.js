@@ -10,9 +10,11 @@ import {
     uploadFile,
     saveEcrDraftToFirestore,
     loadEcrDraftFromFirestore,
-    deleteEcrDraftFromFirestore
+    deleteEcrDraftFromFirestore,
+    callGenerateEcrProposal,
+    callAnalyzeEcrImpacts
 } from './ecr-data.js';
-import { createHelpTooltip } from "../../utils.js";
+import { createHelpTooltip } from "../../../utils.js";
 
 let debouncedSave = null;
 
@@ -193,47 +195,6 @@ function openEcrProductSearchModal(deps) {
     searchHandler();
 }
 
-const createSituacionSectionHTML = (type, title) => {
-    const uploadId = `situacion-${type}-image-upload`;
-    const previewId = `situacion-${type}-image-preview`;
-    const containerId = `situacion-${type}-image-container`;
-    const deleteBtnId = `situacion-${type}-image-delete`;
-    const dropZoneId = `situacion-${type}-drop-zone`;
-
-    return `
-        <div class="border border-gray-300 rounded-lg shadow-sm flex flex-col bg-white" data-ai-id="situacion_${type}_section">
-            <h3 class="font-bold text-lg text-center bg-gray-100 p-3 border-b border-gray-300 rounded-t-lg">${title}</h3>
-
-            <div class="p-4 flex-grow">
-                <textarea name="situacion_${type}" data-ai-id="situacion_${type}_text" class="w-full h-48 border-gray-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Describa la situación detalladamente aquí..."></textarea>
-            </div>
-
-            <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-                <label class="font-semibold text-sm mb-2 block">Anexo Visual</label>
-                <div id="${containerId}" data-ai-id="situacion_${type}_image_container">
-                    <div id="${previewId}-wrapper" class="relative hidden mb-2">
-                        <img id="${previewId}" src="" alt="Previsualización" class="w-full h-auto max-h-60 object-contain rounded-md border-2 border-gray-300 p-1"/>
-                        <button type="button" id="${deleteBtnId}" data-action="delete-image" data-type="${type}" class="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1.5 hover:bg-red-700 shadow-lg">
-                            <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
-                        </button>
-                    </div>
-                    <div id="${dropZoneId}" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
-                        <div class="flex flex-col items-center justify-center">
-                            <i data-lucide="upload-cloud" class="w-10 h-10 text-gray-400 mb-2"></i>
-                            <p class="text-sm text-gray-600">
-                                <span class="font-semibold text-blue-600">Haga clic para cargar</span> o arrastre y suelte
-                            </p>
-                            <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF hasta 10MB</p>
-                        </div>
-                    </div>
-                    <input type="file" id="${uploadId}" name="situacion_${type}_image" class="hidden" accept="image/*">
-                    <input type="hidden" name="situacion_${type}_image_url">
-                </div>
-            </div>
-        </div>
-    `;
-};
-
 export async function runEcrCreationHubLogic(deps) {
     const { dom, lucide, switchView, functions, showToast } = deps;
     dom.headerActions.style.display = 'none';
@@ -292,59 +253,154 @@ export async function runEcrFormLogic(params = {}, deps) {
     }
 
     const isEditing = !!ecrId;
+    // Main layout for the form view
     dom.viewContent.innerHTML = `
-        <div class="max-w-7xl mx-auto my-8">
-            <div id="ecr-progress-bar" class="sticky top-0 bg-white/80 backdrop-blur-sm z-10 p-4 shadow-sm mb-4 rounded-lg border"></div>
+        <div class="max-w-7xl mx-auto my-8 animate-fade-in-up">
             <form id="ecr-form" class="bg-white p-8 rounded-lg shadow-lg border"></form>
             <div id="action-buttons-container" class="mt-8 flex items-center gap-4">
-                <button type="button" id="ecr-back-button" class="bg-slate-200 text-slate-800 px-6 py-2 rounded-md">Volver</button>
+                <button type="button" id="ecr-back-button" class="bg-slate-200 text-slate-800 px-6 py-2 rounded-md hover:bg-slate-300 transition-colors">Volver</button>
                 <div class="flex-grow"></div>
-                <button type="button" id="ecr-save-button" class="bg-slate-500 text-white px-6 py-2 rounded-md">Guardar Progreso</button>
-                <button type="button" id="ecr-approve-button" class="bg-green-600 text-white px-6 py-2 rounded-md">Aprobar y Guardar</button>
+                <button type="button" id="ecr-save-draft-button" class="bg-slate-500 text-white px-6 py-2 rounded-md hover:bg-slate-600 transition-colors">Guardar Borrador</button>
+                <button type="button" id="ecr-submit-button" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors font-semibold">Enviar para Aprobación</button>
             </div>
         </div>
     `;
     const formContainer = document.getElementById('ecr-form');
 
-    const renderForm = () => {
-        formContainer.innerHTML = `
-            <h2 class="text-2xl font-bold mb-6">${isEditing ? `Editando ECR #${ecrId}` : 'Nuevo ECR'}</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label for="codigo_barack" class="block text-sm font-medium text-gray-700">Producto</label>
-                    <input type="text" id="codigo_barack_display" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" readonly>
-                    <input type="hidden" id="codigo_barack" name="codigo_barack">
-                    <button type="button" id="search-product-btn" class="text-sm text-blue-600 hover:underline mt-1">Buscar Producto</button>
+    // Fetch and render the external HTML form template
+    try {
+        const response = await fetch('modules/ecr/views/ecr-form.html');
+        if (!response.ok) throw new Error('No se pudo cargar el template del formulario ECR.');
+        let html = await response.text();
+
+        // Populate dynamic dropdowns
+        const clientOptions = appState.collections[COLLECTIONS.CLIENTES].map(c => `<option value="${c.id}">${c.descripcion}</option>`).join('');
+        const projectOptions = appState.collections[COLLECTIONS.PROYECTOS].map(p => `<option value="${p.id}">${p.id}</option>`).join('');
+        html = html.replace('<!-- OPTIONS_CLIENTES -->', `<option value="">Seleccione Cliente</option>${clientOptions}`);
+        html = html.replace('<!-- OPTIONS_PROYECTOS -->', `<option value="">Seleccione Proyecto</option>${projectOptions}`);
+
+        formContainer.innerHTML = html;
+        lucide.createIcons();
+
+        // Update title after rendering
+        const formTitle = document.getElementById('ecr-form-title');
+        if (formTitle) {
+            formTitle.textContent = isEditing ? `Editando ECR #${ecrId}` : 'Nuevo ECR';
+        }
+
+    } catch (error) {
+        console.error(error);
+        formContainer.innerHTML = `<p class="text-red-500 p-4">Error cargando el formulario: ${error.message}</p>`;
+        return;
+    }
+
+    // --- After render, add event listeners and logic ---
+
+    const createImageUploader = (type) => {
+        const uploadId = `situacion-${type}-image-upload`;
+        const previewId = `situacion-${type}-image-preview`;
+        const containerId = `situacion-${type}-image-container`;
+        const deleteBtnId = `situacion-${type}-image-delete`;
+        const dropZoneId = `situacion-${type}-drop-zone`;
+
+        const uploaderHTML = `
+            <div id="${containerId}" data-ai-id="situacion_${type}_image_container">
+                <div id="${previewId}-wrapper" class="relative hidden mb-2">
+                    <img id="${previewId}" src="" alt="Previsualización" class="w-full h-auto max-h-60 object-contain rounded-md border-2 border-gray-300 p-1"/>
+                    <button type="button" id="${deleteBtnId}" data-action="delete-image" data-type="${type}" class="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1.5 hover:bg-red-700 shadow-lg">
+                        <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
+                    </button>
                 </div>
-                <div>
-                    <label for="denominacion_producto" class="block text-sm font-medium text-gray-700">Denominación</label>
-                    <input type="text" name="denominacion_producto" id="denominacion_producto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                <div id="${dropZoneId}" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                    <div class="flex flex-col items-center justify-center">
+                        <i data-lucide="upload-cloud" class="w-10 h-10 text-gray-400 mb-2"></i>
+                        <p class="text-sm text-gray-600">
+                            <span class="font-semibold text-blue-600">Haga clic para cargar</span> o arrastre y suelte
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF hasta 10MB</p>
+                    </div>
                 </div>
-                <div>
-                    <label for="cliente" class="block text-sm font-medium text-gray-700">Cliente</label>
-                    <select name="cliente" id="cliente" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                        <option value="">Seleccione Cliente</option>
-                        ${appState.collections[COLLECTIONS.CLIENTES].map(c => `<option value="${c.id}">${c.descripcion}</option>`).join('')}
-                    </select>
-                </div>
-                 <div>
-                    <label for="proyecto" class="block text-sm font-medium text-gray-700">Proyecto</label>
-                    <select name="proyecto" id="proyecto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                        <option value="">Seleccione Proyecto</option>
-                        ${appState.collections[COLLECTIONS.PROYECTOS].map(p => `<option value="${p.id}">${p.id}</option>`).join('')}
-                    </select>
-                </div>
-            </div>
-            <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-                ${createSituacionSectionHTML('actual', 'Situación Actual')}
-                ${createSituacionSectionHTML('propuesta', 'Situación Propuesta')}
+                <input type="file" id="${uploadId}" name="situacion_${type}_image" class="hidden" accept="image/*">
+                <input type="hidden" name="situacion_${type}_image_url">
             </div>
         `;
-        lucide.createIcons();
-        document.getElementById('search-product-btn').addEventListener('click', () => openEcrProductSearchModal(deps));
+        return uploaderHTML;
     };
 
-    renderForm();
+    document.getElementById('image-upload-container-actual').innerHTML = createImageUploader('actual');
+    document.getElementById('image-upload-container-propuesta').innerHTML = createImageUploader('propuesta');
+    lucide.createIcons();
+
+
+    document.getElementById('search-product-btn').addEventListener('click', () => openEcrProductSearchModal(deps));
+
+    const setAIButtonLoadingState = (button, isLoading) => {
+        const icon = button.querySelector('i');
+        const originalIcon = button.dataset.originalIcon;
+
+        if (isLoading) {
+            if (!originalIcon) {
+                button.dataset.originalIcon = icon.dataset.lucide;
+            }
+            button.disabled = true;
+            icon.setAttribute('data-lucide', 'loader');
+            icon.classList.add('animate-spin');
+        } else {
+            button.disabled = false;
+            if (originalIcon) {
+                icon.setAttribute('data-lucide', originalIcon);
+                icon.classList.remove('animate-spin');
+            }
+        }
+        lucide.createIcons();
+    };
+
+    document.getElementById('ai-suggest-proposal').addEventListener('click', async (e) => {
+        const button = e.currentTarget;
+        const situacionActualText = document.getElementById('situacion_actual_text').value;
+        if (situacionActualText.trim().length < 20) {
+            showToast('Por favor, describa la situación actual con más detalle antes de usar la IA.', 'error');
+            return;
+        }
+
+        setAIButtonLoadingState(button, true);
+        try {
+            const result = await callGenerateEcrProposal(functions, situacionActualText);
+            document.getElementById('situacion_propuesta_text').value = result.proposal;
+            showToast('Propuesta generada por IA.', 'success');
+        } catch (error) {
+            showToast(`Error de la IA: ${error.message}`, 'error');
+        } finally {
+            setAIButtonLoadingState(button, false);
+        }
+    });
+
+    document.getElementById('ai-analyze-impacts').addEventListener('click', async (e) => {
+        const button = e.currentTarget;
+        const situacionActualText = document.getElementById('situacion_actual_text').value;
+        const situacionPropuestaText = document.getElementById('situacion_propuesta_text').value;
+
+        if (situacionActualText.trim().length < 20 || situacionPropuestaText.trim().length < 20) {
+            showToast('Por favor, complete ambas situaciones con detalle antes de analizar el impacto.', 'error');
+            return;
+        }
+
+        setAIButtonLoadingState(button, true);
+        try {
+            const impacts = await callAnalyzeEcrImpacts(functions, situacionActualText, situacionPropuestaText);
+            for (const key in impacts) {
+                const checkbox = formContainer.elements[key];
+                if (checkbox) {
+                    checkbox.checked = impacts[key];
+                }
+            }
+            showToast('Análisis de impacto completado por IA.', 'success');
+        } catch (error) {
+            showToast(`Error de la IA: ${error.message}`, 'error');
+        } finally {
+            setAIButtonLoadingState(button, false);
+        }
+    });
 
     const populateForm = (data) => {
         for (const key in data) {
@@ -352,22 +408,15 @@ export async function runEcrFormLogic(params = {}, deps) {
             if (element) {
                 if (element.type === 'checkbox') {
                     element.checked = data[key];
-                } else if (element.type === 'file') {
-                    const url = data[key + '_url'];
-                    if (url) {
-                        const type = key.includes('actual') ? 'actual' : 'propuesta';
-                        const previewId = `situacion-${type}-image-preview`;
-                        const previewWrapper = document.getElementById(`${previewId}-wrapper`);
-                        const dropZone = document.getElementById(`situacion-${type}-drop-zone`);
-                        document.getElementById(previewId).src = url;
-                        previewWrapper.classList.remove('hidden');
-                        dropZone.classList.add('hidden');
-                    }
-                }
-                else {
+                } else {
                     element.value = data[key];
                 }
             }
+        }
+        // Handle display field for product search
+        if (data.codigo_barack && data.denominacion_producto) {
+            const display = document.getElementById('codigo_barack_display');
+            if(display) display.value = `${data.denominacion_producto} (${data.codigo_barack})`;
         }
     };
 
@@ -414,35 +463,41 @@ export async function runEcrFormLogic(params = {}, deps) {
 
     const saveProgress = async () => {
         const data = getEcrFormData(formContainer);
-        await saveEcrDraftToFirestore(db, appState.currentUser.uid, ecrId || 'new_ecr', data);
+        const draftId = ecrId || 'new_ecr';
+        await saveEcrDraftToFirestore(db, appState.currentUser.uid, draftId, data);
         showToast('Borrador guardado.', 'success');
     };
 
     debouncedSave = setTimeout(saveProgress, 30000);
 
-    document.getElementById('ecr-save-button').addEventListener('click', saveProgress);
+    document.getElementById('ecr-save-draft-button').addEventListener('click', saveProgress);
 
-    document.getElementById('ecr-approve-button').addEventListener('click', async () => {
+    document.getElementById('ecr-submit-button').addEventListener('click', async (e) => {
+        e.target.disabled = true;
+        e.target.innerHTML = 'Enviando...';
+
         const dataToSave = getEcrFormData(formContainer);
         dataToSave.lastModified = new Date();
         dataToSave.modifiedBy = appState.currentUser.email;
         dataToSave.creatorUid = appState.currentUser.uid;
-        dataToSave.status = 'pending-approval';
+        dataToSave.status = 'pending-approval'; // Status for submission
 
         try {
             let finalEcrId = ecrId;
             if (isEditing) {
                 await saveEcrDocument(db, ecrId, dataToSave);
-                showToast(`ECR #${ecrId} actualizado.`, 'success');
+                showToast(`ECR #${ecrId} actualizado y enviado para aprobación.`, 'success');
             } else {
                 const newId = await createNewEcr(db, dataToSave);
                 finalEcrId = newId;
-                showToast(`ECR #${newId} creado con éxito.`, 'success');
+                showToast(`ECR #${newId} creado y enviado para aprobación.`, 'success');
                 await deleteEcrDraftFromFirestore(db, appState.currentUser.uid, 'new_ecr');
             }
             switchView('ecr');
         } catch (error) {
-            showToast(`Error al guardar ECR: ${error.message}`, 'error');
+            showToast(`Error al enviar ECR: ${error.message}`, 'error');
+            e.target.disabled = false;
+            e.target.innerHTML = 'Enviar para Aprobación';
         }
     });
 

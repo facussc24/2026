@@ -1,0 +1,88 @@
+<!-- Encabezado del Formulario -->
+<div class="flex justify-between items-center mb-6 pb-4 border-b">
+    <div>
+        <h2 id="ecr-form-title" class="text-3xl font-bold text-slate-800">Nuevo ECR</h2>
+        <p class="text-sm text-slate-500">Complete los campos para crear una Solicitud de Cambio de Ingeniería.</p>
+    </div>
+</div>
+
+<!-- Sección de Datos Principales -->
+<div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
+    <h3 class="text-lg font-semibold text-slate-700 mb-4">Datos Principales</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+        <div>
+            <label for="codigo_barack_display" class="block text-sm font-medium text-gray-700">Producto Afectado</label>
+            <div class="flex items-center gap-2 mt-1">
+                <input type="text" id="codigo_barack_display" class="block w-full border-gray-300 rounded-md shadow-sm bg-gray-100" readonly placeholder="Ningún producto seleccionado">
+                <input type="hidden" id="codigo_barack" name="codigo_barack">
+                <button type="button" id="search-product-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex-shrink-0">Buscar</button>
+            </div>
+        </div>
+        <div>
+            <label for="denominacion_producto" class="block text-sm font-medium text-gray-700">Denominación del Producto</label>
+            <input type="text" name="denominacion_producto" id="denominacion_producto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+        </div>
+        <div>
+            <label for="cliente" class="block text-sm font-medium text-gray-700">Cliente</label>
+            <select name="cliente" id="cliente" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                <!-- OPTIONS_CLIENTES -->
+            </select>
+        </div>
+         <div>
+            <label for="proyecto" class="block text-sm font-medium text-gray-700">Proyecto</label>
+            <select name="proyecto" id="proyecto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                <!-- OPTIONS_PROYECTOS -->
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Sección de Situaciones (Actual y Propuesta) -->
+<div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- Situación Actual -->
+    <div class="border border-gray-200 rounded-lg shadow-sm flex flex-col bg-white">
+        <h3 class="font-bold text-lg text-center bg-gray-100 p-3 border-b border-gray-200 rounded-t-lg">Situación Actual</h3>
+        <div class="p-4 flex-grow">
+            <textarea name="situacion_actual" id="situacion_actual_text" class="w-full h-48 border-gray-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Describa el problema, el estado actual del componente, el motivo del cambio, etc."></textarea>
+        </div>
+        <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+            <label class="font-semibold text-sm mb-2 block">Anexo Visual (Actual)</label>
+            <div id="image-upload-container-actual"></div>
+        </div>
+    </div>
+
+    <!-- Situación Propuesta -->
+    <div class="border border-gray-200 rounded-lg shadow-sm flex flex-col bg-white">
+        <div class="font-bold text-lg text-center bg-gray-100 p-3 border-b border-gray-200 rounded-t-lg flex justify-between items-center">
+            <span class="flex-grow text-center">Situación Propuesta</span>
+            <button type="button" id="ai-suggest-proposal" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 flex items-center gap-2" title="La IA leerá la 'Situación Actual' y sugerirá una propuesta.">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>Sugerir con IA
+            </button>
+        </div>
+        <div class="p-4 flex-grow">
+            <textarea name="situacion_propuesta" id="situacion_propuesta_text" class="w-full h-48 border-gray-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Describa la solución, el cambio a realizar, el estado futuro del componente, etc."></textarea>
+        </div>
+        <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+            <label class="font-semibold text-sm mb-2 block">Anexo Visual (Propuesto)</label>
+            <div id="image-upload-container-propuesta"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Sección de Análisis de Impacto -->
+<div class="mt-8 bg-slate-50 p-6 rounded-lg border border-slate-200">
+    <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold text-slate-700">Análisis de Impacto</h3>
+        <button type="button" id="ai-analyze-impacts" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 flex items-center gap-2" title="La IA leerá ambas situaciones y marcará los impactos que detecte.">
+            <i data-lucide="brain-circuit" class="w-4 h-4"></i>Analizar Impactos con IA
+        </button>
+    </div>
+    <div id="impact-analysis-checkboxes" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <!-- Checkboxes de impacto -->
+        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_calidad" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Calidad</span></label>
+        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_costos" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Costos</span></label>
+        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_logistica" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Logística</span></label>
+        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_ambiental" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Seguridad/Amb.</span></label>
+        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_proceso" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Proceso</span></label>
+    </div>
+</div>
