@@ -1,4 +1,5 @@
-import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
+import { showConfirmationModal, showToast } from '../shared/ui.js';
+import { checkUserPermission } from '../../permissions.js';
 import { getState } from './task.state.js';
 import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';

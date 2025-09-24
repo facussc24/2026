@@ -51,6 +51,56 @@ export function createHelpTooltip(message) {
     `;
 }
 
+export function formatTimeAgo(timestamp) {
+    const now = new Date();
+    const seconds = Math.floor((now - timestamp) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return `hace ${Math.floor(interval)} años`;
+    interval = seconds / 2592000;
+    if (interval > 1) return `hace ${Math.floor(interval)} meses`;
+    interval = seconds / 86400;
+    if (interval > 1) return `hace ${Math.floor(interval)} días`;
+    interval = seconds / 3600;
+    if (interval > 1) return `hace ${Math.floor(interval)} horas`;
+    interval = seconds / 60;
+    if (interval > 1) return `hace ${Math.floor(interval)} minutos`;
+    return `hace ${Math.floor(seconds)} segundos`;
+}
+
+export function waitForImages(element) {
+    const images = Array.from(element.getElementsByTagName('img'));
+    const promises = images.map(img => {
+        return new Promise((resolve) => {
+            if (img.complete) {
+                // If the image is already loaded (e.g., from cache), resolve immediately.
+                resolve();
+            } else {
+                // Otherwise, wait for the load or error event.
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true }); // Resolve on error too, so it doesn't hang forever.
+            }
+        });
+    });
+    return Promise.all(promises);
+}
+
+export async function getLogoBase64() {
+    try {
+        const response = await fetch('barack_logo.png');
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error("Could not fetch barack_logo.png:", error);
+        return null;
+    }
+}
+
 /**
  * Ensures that all specified collections are loaded into the appState.
  * Fetches any collections that are not already present.
