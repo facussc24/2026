@@ -1,7 +1,7 @@
 /**
  * @file Manages the Seguimiento ECR/ECO View, which shows individual follow-up sheets.
  */
-import { COLLECTIONS } from '../../../utils.js';
+import { COLLECTIONS } from '../../utils.js';
 
 /**
  * Renders the Seguimiento ECR/ECO view.

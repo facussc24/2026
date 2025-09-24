@@ -1,9 +1,8 @@
-import { getFlattenedData, initProductLogic } from '../../public/modules/products/product-logic.js';
+import { getFlattenedData } from '../../public/modules/products/product-logic.js';
 
 const appState = {
     collectionsById: {},
 };
-initProductLogic({ appState });
 
 // Mock data setup
 const mockProduct = {

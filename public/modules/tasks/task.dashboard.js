@@ -1,4 +1,5 @@
 import { subscribeToAllTasks, exportTasksToExcel } from './task.service.js';
+import { showToast } from '../../main.js';
 import { getState, setDashboardTasks, resetDashboardState, setDashboardTableFilter, setDashboardTablePage } from './task.state.js';
 import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading, openAIAssistantModal } from './task.ui.js';
 import { getDashboardLayoutHTML } from './task.templates.js';
@@ -9,7 +10,6 @@ let dom;
 let lucide;
 let taskSubscription = null;
 let chartsSubscription = null;
-let showToastFn = () => {};
 
 
 export function initDashboard(dependencies) {
@@ -17,7 +17,6 @@ export function initDashboard(dependencies) {
     appState = dependencies.appState;
     dom = dependencies.dom;
     lucide = dependencies.lucide;
-    showToastFn = dependencies.showToast || (() => {});
 }
 
 export function renderTaskDashboardView(container) {
@@ -189,7 +188,7 @@ function fetchAndRenderAll() {
         renderPriorityCard(allTasks);
     }, (error) => {
         hideTableLoading();
-        showToastFn('Error al cargar las tareas.', 'error');
+        showToast('Error al cargar las tareas.', 'error');
         console.error(error);
     });
 }
