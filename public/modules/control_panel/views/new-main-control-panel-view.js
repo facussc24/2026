@@ -1,12 +1,38 @@
 import { dom } from "../../../main.js";
 import { showToast } from "../../shared/ui.js";
 import { getFirestore, collection, getDocs, query, where, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { eventBus } from "../../../utils.js";
 
 // Variables para almacenar las instancias de los gráficos
 let ecrStatusChart = null;
 let ecoProgressChart = null;
+
+// --- FUNCIONES DE IA SIMULADAS (MOCKS) ---
+
+async function generateEcrWithAIMock(braindump) {
+    console.log("Llamando a generateEcrWithAIMock con:", braindump);
+    await new Promise(resolve => setTimeout(resolve, 1500)); // Simular latencia de red
+    return {
+        data: {
+            ecrData: {
+                situacion_propuesta: `Propuesta generada por IA: ${braindump}`,
+                denominacion_producto: "Componente de Ejemplo",
+                cliente: "Cliente de Demostración",
+            }
+        }
+    };
+}
+
+async function getTaskSummaryWithAIMock(prompt, context) {
+    console.log("Llamando a getTaskSummaryWithAIMock con:", prompt, context);
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return {
+        data: {
+            summary: `Resumen de IA para: "${prompt}".\n\nContexto analizado:\n- ${context.ecrs.length} ECRs encontrados.\n- ${context.ecos.length} ECOs encontrados.\n\nEste es un resumen simulado que indica que la IA ha procesado la información. En un entorno real, aquí se presentaría un análisis detallado.`
+        }
+    };
+}
+
 
 /**
  * Renderiza el nuevo y mejorado panel de control principal con widgets.
@@ -128,28 +154,23 @@ function renderLoadingStates() {
             <div class="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
             <div class="h-10 bg-gray-300 rounded w-1/2"></div>
         </div>`;
-    kpiContainer.innerHTML = Array(4).fill(kpiPlaceholder).join('');
+    if(kpiContainer) kpiContainer.innerHTML = Array(4).fill(kpiPlaceholder).join('');
 
-    workflowFunnel.innerHTML = `<div class="text-center w-full text-gray-500">Cargando flujo de trabajo...</div>`;
+    if(workflowFunnel) workflowFunnel.innerHTML = `<div class="text-center w-full text-gray-500">Cargando flujo de trabajo...</div>`;
 }
 
 function renderKpis(ecrs, ecos) {
     const kpiContainer = document.getElementById('kpi-container');
+    if(!kpiContainer) return;
 
-    // 1. ECRs Pendientes
     const ecrPendientes = ecrs.filter(ecr => ecr.status === 'pending' || ecr.status === 'in-review').length;
-
-    // 2. ECOs en Progreso
     const ecoProgreso = ecos.filter(eco => eco.status === 'in-progress').length;
-
-    // 3. Cambios Completados (últimos 30 días)
     const thirtyDaysAgo = Timestamp.now().toMillis() - (30 * 24 * 60 * 60 * 1000);
     const cambiosCompletados = ecos.filter(eco => {
         const completedDate = eco.completedAt?.toMillis();
         return eco.status === 'completed' && completedDate > thirtyDaysAgo;
     }).length;
 
-    // 4. Tiempo promedio de aprobación de ECR
     const approvedEcrs = ecrs.filter(ecr => ecr.status === 'approved' && ecr.fecha_emision && ecr.approvalDate);
     let avgApprovalTimeDays = 'N/A';
     if (approvedEcrs.length > 0) {
@@ -187,6 +208,7 @@ function renderKpis(ecrs, ecos) {
 
 function renderWorkflowFunnel(ecrs, ecos) {
     const funnelContainer = document.getElementById('workflow-funnel');
+    if(!funnelContainer) return;
 
     const stages = {
         newEcrs: ecrs.filter(e => e.status === 'pending').length,
@@ -312,10 +334,6 @@ function renderEcoProgressChart(ecos) {
 }
 
 function setupAIHandlers(db) {
-    const functions = getFunctions();
-    const generateEcrWithAI = httpsCallable(functions, 'generateEcrWithAI');
-    const getTaskSummaryWithAI = httpsCallable(functions, 'getTaskSummaryWithAI');
-
     const generateBtn = document.getElementById('generate-ecr-btn');
     const braindumpArea = document.getElementById('ai-ecr-braindump');
     const summaryResult = document.getElementById('ai-summary-result');
@@ -331,9 +349,9 @@ function setupAIHandlers(db) {
         generateBtn.textContent = 'Generando...';
 
         try {
-            const result = await generateEcrWithAI({ braindump });
+            const result = await generateEcrWithAIMock(braindump);
             const ecrData = result.data.ecrData;
-            eventBus.emit('navigate', { view: 'ecr_form', params: { ecrData, isNew: true } });
+            eventBus.emit('navigate', { view: 'ecr_form', params: { aiDraftData: ecrData } });
         } catch (error) {
             console.error("Error al generar ECR con IA:", error);
             showToast("Error al generar el ECR con IA.", "error");
@@ -359,7 +377,7 @@ function setupAIHandlers(db) {
                 const ecrs = ecrSnapshot.docs.map(doc => doc.data());
                 const ecos = ecoSnapshot.docs.map(doc => doc.data());
 
-                const result = await getTaskSummaryWithAI({ prompt, context: { ecrs, ecos } });
+                const result = await getTaskSummaryWithAIMock(prompt, { ecrs, ecos });
                 summaryResult.textContent = result.data.summary;
 
             } catch (error) {

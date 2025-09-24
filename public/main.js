@@ -23,13 +23,13 @@ import { initLandingPageModule, runLandingPageLogic } from './modules/landing_pa
 import { checkUserPermission } from './permissions.js';
 import { registerEcrApproval, getEcrFormData, checkAndUpdateEcrStatus } from './modules/ecr/ecr-logic.js';
 import { deleteProductAndOrphanedSubProducts, cloneProduct, regenerateNodeIds, getFlattenedData, handleDropEvent, handleProductSelect } from './modules/products/product-logic.js';
-import { renderEcoListView, renderEcoFormView } from './modules/eco/eco-ui.js';
+import { renderEcoListView, renderEcoFormView } from './modules/eco/eco-controller.js';
 import * as ecoLogic from './modules/eco/eco-logic.js';
 import { initEcoEventListeners } from './modules/eco/eco-events.js';
 import { handleEcoView } from './modules/eco/eco.js';
 import { ensureCollectionsAreLoaded } from './utils.js';
 import { handleControlPanelView } from './modules/control_panel/control-panel.js';
-import { handleEcrView } from './modules/ecr/js/ecr.js';
+import { handleEcrView } from './modules/ecr/ecr.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
