@@ -3,7 +3,7 @@ import { renderTaskFilters, renderTasks, renderAdminUserList } from './task.ui.j
 import { openTaskFormModal } from './task.modal.js';
 import { getKanbanBoardHTML } from './task.templates.js';
 import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, addUnsubscriber, clearUnsubscribers } from './task.state.js';
-import { showToast } from '../../main.js';
+import { showToast } from '../shared/ui.js';
 
 let db;
 let appState;
