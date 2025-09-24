@@ -1770,36 +1770,50 @@ function openEcrProductSearchModal() {
 
 
 
-    const createSituacionSectionHTML = (type, title) => {
-        const uploadId = `situacion-${type}-image-upload`;
-        const previewId = `situacion-${type}-image-preview`;
-        const containerId = `situacion-${type}-image-container`;
-        const deleteBtnId = `situacion-${type}-image-delete`;
+const createSituacionSectionHTML = (type, title) => {
+    const uploadId = `situacion-${type}-image-upload`;
+    const previewId = `situacion-${type}-image-preview`;
+    const containerId = `situacion-${type}-image-container`;
+    const deleteBtnId = `situacion-${type}-image-delete`;
+    const dropZoneId = `situacion-${type}-drop-zone`;
 
-        return `
-            <div class="border border-gray-300 rounded-lg shadow-sm flex flex-col" data-ai-id="situacion_${type}_section">
-                <h3 class="font-bold text-center bg-gray-200 p-2 border-b border-gray-300 rounded-t-lg">${title}</h3>
-                <div class="p-2 flex-grow">
-                    <textarea name="situacion_${type}" data-ai-id="situacion_${type}_text" class="w-full h-64 border-gray-200 rounded-md p-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Describa la situación..."></textarea>
-                </div>
-                <div id="${containerId}" data-ai-id="situacion_${type}_image_container" class="p-2 border-t border-gray-200 bg-gray-50">
-                    <img id="${previewId}" src="" alt="Previsualización de la imagen" class="hidden max-w-full h-auto rounded-md mb-2 max-h-48 object-contain mx-auto"/>
-                    <div class="flex items-center gap-4">
-                        <label for="${uploadId}" class="cursor-pointer text-sm text-blue-600 hover:text-blue-800 font-semibold flex items-center">
-                            <i data-lucide="upload-cloud" class="inline-block w-4 h-4 mr-1"></i>
-                            Cargar Imagen
-                        </label>
-                        <button type="button" id="${deleteBtnId}" data-action="delete-image" data-type="${type}" class="hidden text-sm text-red-600 hover:text-red-800 font-semibold flex items-center">
-                            <i data-lucide="trash-2" class="inline-block w-4 h-4 mr-1"></i>
-                            Eliminar
+    return `
+        <div class="border border-gray-300 rounded-lg shadow-sm flex flex-col bg-white" data-ai-id="situacion_${type}_section">
+            <h3 class="font-bold text-lg text-center bg-gray-100 p-3 border-b border-gray-300 rounded-t-lg">${title}</h3>
+
+            <div class="p-4 flex-grow">
+                <textarea name="situacion_${type}" data-ai-id="situacion_${type}_text" class="w-full h-48 border-gray-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Describa la situación detalladamente aquí..."></textarea>
+            </div>
+
+            <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+                <label class="font-semibold text-sm mb-2 block">Anexo Visual</label>
+                <div id="${containerId}" data-ai-id="situacion_${type}_image_container">
+                    <!-- Image Preview -->
+                    <div id="${previewId}-wrapper" class="relative hidden mb-2">
+                        <img id="${previewId}" src="" alt="Previsualización" class="w-full h-auto max-h-60 object-contain rounded-md border-2 border-gray-300 p-1"/>
+                        <button type="button" id="${deleteBtnId}" data-action="delete-image" data-type="${type}" class="absolute top-2 right-2 bg-red-600 text-white rounded-full p-1.5 hover:bg-red-700 shadow-lg">
+                            <i data-lucide="trash-2" class="w-4 h-4 pointer-events-none"></i>
                         </button>
                     </div>
+
+                    <!-- Upload Zone -->
+                    <div id="${dropZoneId}" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                        <div class="flex flex-col items-center justify-center">
+                            <i data-lucide="upload-cloud" class="w-10 h-10 text-gray-400 mb-2"></i>
+                            <p class="text-sm text-gray-600">
+                                <span class="font-semibold text-blue-600">Haga clic para cargar</span> o arrastre y suelte
+                            </p>
+                            <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF hasta 10MB</p>
+                        </div>
+                    </div>
+
                     <input type="file" id="${uploadId}" name="situacion_${type}_image" class="hidden" accept="image/*">
                     <input type="hidden" name="situacion_${type}_image_url">
                 </div>
             </div>
-        `;
-    };
+        </div>
+    `;
+};
 
 async function runEcrCreationHubLogic() {
     dom.headerActions.style.display = 'none';
@@ -2042,20 +2056,22 @@ async function runEcrFormLogic(params = null) {
     const handleImageUpload = async (file, type) => {
         if (!file) return;
         const toastId = showToast('Subiendo imagen...', 'loading', { duration: 0 });
+
         try {
             const storageRef = ref(storage, `ecr_images/${Date.now()}_${file.name}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
 
             const preview = document.getElementById(`situacion-${type}-image-preview`);
+            const previewWrapper = document.getElementById(`situacion-${type}-image-preview-wrapper`);
             const urlInput = document.querySelector(`input[name="situacion_${type}_image_url"]`);
+            const dropZone = document.getElementById(`situacion-${type}-drop-zone`);
 
-            if (preview) {
+            if (preview && urlInput && previewWrapper && dropZone) {
                 preview.src = downloadURL;
-                preview.classList.remove('hidden');
-            }
-            if (urlInput) {
                 urlInput.value = downloadURL;
+                previewWrapper.classList.remove('hidden');
+                dropZone.classList.add('hidden');
             }
 
             showToast('Imagen subida con éxito.', 'success', { toastId });
@@ -2183,9 +2199,9 @@ async function runEcrFormLogic(params = null) {
                 </div>
             </section>
 
-            <div class="grid grid-cols-1 md:grid-cols-1 gap-6 mt-6" data-tutorial-id="situacion-layout">
-                ${createSituacionSectionHTML('existente', 'SITUACIÓN EXISTENTE:')}
-                ${createSituacionSectionHTML('propuesta', 'SITUACIÓN PROPUESTA:')}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6" data-tutorial-id="situacion-layout">
+                ${createSituacionSectionHTML('existente', 'SITUACIÓN EXISTENTE')}
+                ${createSituacionSectionHTML('propuesta', 'SITUACIÓN PROPUESTA')}
             </div>
 
             <table class="w-full border-collapse mt-4 text-xs">
@@ -2450,19 +2466,39 @@ async function runEcrFormLogic(params = null) {
         loadEcrDraftFromFirestore(db, appState.currentUser.uid, formContainer, populateEcrForm);
     }
 
-    // --- Image Upload Listeners ---
-    const situacionExistenteUpload = document.getElementById('situacion-existente-image-upload');
-    const situacionPropuestaUpload = document.getElementById('situacion-propuesta-image-upload');
+    // --- Image Upload & Drag-n-Drop Listeners ---
+    ['existente', 'propuesta'].forEach(type => {
+        const uploadInput = document.getElementById(`situacion-${type}-image-upload`);
+        const dropZone = document.getElementById(`situacion-${type}-drop-zone`);
 
-    situacionExistenteUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        handleImageUpload(file, 'existente');
+        // Handle file selection via dialog
+        uploadInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            handleImageUpload(file, type);
+        });
+
+        // Make drop zone clickable
+        dropZone.addEventListener('click', () => uploadInput.click());
+
+        // Drag and drop events
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+            const file = e.dataTransfer.files[0];
+            handleImageUpload(file, type);
+        });
     });
 
-    situacionPropuestaUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        handleImageUpload(file, 'propuesta');
-    });
 
     debouncedSave = debounce(() => {
         if (!isEditing) { // Only save drafts for new ECRs
@@ -2506,13 +2542,15 @@ async function runEcrFormLogic(params = null) {
             openEcrProductSearchModal();
         } else if (action === 'delete-image') {
             const type = button.dataset.type;
-            const preview = document.getElementById(`situacion-${type}-image-preview`);
+            const previewWrapper = document.getElementById(`situacion-${type}-image-preview-wrapper`);
             const urlInput = document.querySelector(`input[name="situacion_${type}_image_url"]`);
             const fileInput = document.getElementById(`situacion-${type}-image-upload`);
+            const dropZone = document.getElementById(`situacion-${type}-drop-zone`);
 
-            if (preview) {
-                preview.src = '';
-                preview.classList.add('hidden');
+            if (previewWrapper) {
+                previewWrapper.classList.add('hidden');
+                const img = previewWrapper.querySelector('img');
+                if (img) img.src = '';
             }
             if (urlInput) {
                 urlInput.value = '';
@@ -2520,7 +2558,9 @@ async function runEcrFormLogic(params = null) {
             if(fileInput) {
                 fileInput.value = ''; // Reset file input
             }
-            button.classList.add('hidden');
+            if (dropZone) {
+                dropZone.classList.remove('hidden');
+            }
             showToast('Imagen eliminada. Guarde el formulario para confirmar.', 'info');
         }
     });
