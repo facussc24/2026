@@ -5,7 +5,7 @@
 import { collection, doc, getDoc, onSnapshot, query, orderBy, addDoc, updateDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, ensureCollectionsAreLoaded as originalEnsureCollectionsAreLoaded, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore } from '../../utils.js';
+import { COLLECTIONS, ensureCollectionsAreLoaded as originalEnsureCollectionsAreLoaded, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore } from '../../../utils.js';
 
 export function subscribeToEcrList(db, callback) {
     const ecrFormsRef = collection(db, COLLECTIONS.ECR_FORMS);
@@ -47,6 +47,18 @@ export async function createNewEcr(db, data) {
 export async function generateEcrWithAI(functions, text) {
     const generateEcrDraftWithAI = httpsCallable(functions, 'generateEcrDraftWithAI');
     const result = await generateEcrDraftWithAI({ text });
+    return result.data;
+}
+
+export async function callGenerateEcrProposal(functions, text) {
+    const generateEcrProposal = httpsCallable(functions, 'generateEcrProposal');
+    const result = await generateEcrProposal({ text });
+    return result.data;
+}
+
+export async function callAnalyzeEcrImpacts(functions, situacionActual, situacionPropuesta) {
+    const analyzeEcrImpacts = httpsCallable(functions, 'analyzeEcrImpacts');
+    const result = await analyzeEcrImpacts({ situacionActual, situacionPropuesta });
     return result.data;
 }
 

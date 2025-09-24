@@ -29,7 +29,7 @@ import { initEcoEventListeners } from './modules/eco/eco-events.js';
 import { handleEcoView } from './modules/eco/eco.js';
 import { ensureCollectionsAreLoaded } from './utils.js';
 import { handleControlPanelView } from './modules/control_panel/control-panel.js';
-import { handleEcrView } from './modules/ecr/ecr.js';
+import { handleEcrView } from './modules/ecr/js/ecr.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
