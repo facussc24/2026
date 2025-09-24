@@ -239,7 +239,7 @@ export async function runEcrCreationHubLogic(deps) {
 
 export async function runEcrFormLogic(params = {}, deps) {
     const { db, storage, functions, appState, dom, lucide, showToast, showConfirmationModal, switchView, sendNotification } = deps;
-    const { ecrId, scrollToSection, aiDraftData } = params;
+    const { ecrId, scrollToSection, aiDraftData } = params || {};
 
     try {
         await ensureCollectionsAreLoaded(db, appState, [
