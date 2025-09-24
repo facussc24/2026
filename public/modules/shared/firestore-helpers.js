@@ -1,6 +1,6 @@
 import { doc, updateDoc, addDoc, deleteDoc, runTransaction } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { showToast } from './ui.js';
-import { getUniqueKeyForCollection, COLLECTIONS } from '../../utils.js';
+import { getUniqueKeyForCollection, COLLECTIONS } from '/utils.js';
 
 let db;
 
