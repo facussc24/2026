@@ -1,4 +1,4 @@
-import { renderEcoListView, renderEcoFormView } from './eco-ui.js';
+import { renderEcoListView, renderEcoFormView } from './eco-controller.js';
 
 export function handleEcoView(viewName, params, deps) {
     switch (viewName) {
