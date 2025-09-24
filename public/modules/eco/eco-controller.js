@@ -1,7 +1,7 @@
 /**
  * @file Contains all UI rendering and control logic for the ECO module.
  */
-import { COLLECTIONS } from '../../utils.js';
+import { COLLECTIONS } from '/utils.js';
 import {
     formSectionsData,
     getWizardLayoutHTML,

@@ -5,7 +5,7 @@
 import { collection, doc, getDoc, onSnapshot, query, orderBy, addDoc, updateDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, ensureCollectionsAreLoaded as originalEnsureCollectionsAreLoaded, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore } from '../../../utils.js';
+import { COLLECTIONS, ensureCollectionsAreLoaded as originalEnsureCollectionsAreLoaded, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore } from '/utils.js';
 
 export function subscribeToEcrList(db, callback) {
     const ecrFormsRef = collection(db, COLLECTIONS.ECR_FORMS);

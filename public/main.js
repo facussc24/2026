@@ -27,7 +27,7 @@ import { renderEcoListView, renderEcoFormView } from './modules/eco/eco-controll
 import * as ecoLogic from './modules/eco/eco-logic.js';
 import { initEcoEventListeners } from './modules/eco/eco-events.js';
 import { handleEcoView } from './modules/eco/eco.js';
-import { ensureCollectionsAreLoaded } from './utils.js';
+import { ensureCollectionsAreLoaded } from '/utils.js';
 import { handleControlPanelView } from './modules/control_panel/control-panel.js';
 import { handleEcrView } from './modules/ecr/js/ecr.js';
 import tutorial from './tutorial.js';

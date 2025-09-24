@@ -2,7 +2,7 @@
 // such as database seeding and "God Mode" for role impersonation.
 
 import { showToast } from '../shared/ui.js';
-import { COLLECTIONS } from '../../utils.js';
+import { COLLECTIONS } from '/utils.js';
 
 let db;
 let writeBatch;

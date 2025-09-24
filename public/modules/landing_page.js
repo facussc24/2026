@@ -1,5 +1,5 @@
 import { collection, getCountFromServer, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { COLLECTIONS } from '../utils.js';
+import { COLLECTIONS } from '/utils.js';
 
 // --- 1. DEPENDENCIES AND STATE ---
 let db;

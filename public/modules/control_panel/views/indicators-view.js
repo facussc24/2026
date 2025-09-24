@@ -1,7 +1,7 @@
 /**
  * @file Manages the Indicators ECM View, which shows KPIs for ECR/ECO processes.
  */
-import { COLLECTIONS } from '../../utils.js';
+import { COLLECTIONS } from '/utils.js';
 
 function createKpiCard(title, value, icon, color) {
     const colors = {
