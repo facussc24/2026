@@ -8,7 +8,7 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 import { initSharedUI, showToast, showConfirmationModal, showInfoModal, showDatePromptModal, showPromptModal, updateNavForRole, renderUserMenu, renderNotificationCenter } from './modules/shared/ui.js';
 import { initFirestoreHelpers, saveDocument, deleteDocument } from './modules/shared/firestore-helpers.js';
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML, getLogoBase64, formatTimeAgo } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML, getLogoBase64, formatTimeAgo, eventBus } from './utils.js';
 import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
 import {
     initTasksModule,
@@ -678,6 +678,11 @@ async function seedControlPanelTutorialData() {
 
 
 function initializeAppListeners() {
+    // Centralized navigation handler
+    eventBus.on('navigate', ({ view, params }) => {
+        switchView(view, params);
+    });
+
     setupGlobalEventListeners();
 }
 
@@ -693,7 +698,7 @@ function setupGlobalEventListeners() {
     const startTutorial = () => {
         appState.isTutorialActive = true;
         const app = {
-            switchView,
+            switchView: (view, params) => eventBus.emit('navigate', { view, params }),
             showToast,
             openFormModal,
             appState,
@@ -729,7 +734,7 @@ function setupGlobalEventListeners() {
     });
     
     const ecoEventDeps = {
-        switchView,
+        switchView: (view, params) => eventBus.emit('navigate', { view, params }),
         showConfirmationModal,
         showToast,
         db,
@@ -829,22 +834,22 @@ async function switchView(viewName, params = null) {
     else if (viewName === 'tareas') await runTasksLogicFromModule('kanban');
     else if (viewName === 'task-dashboard') await runTasksLogicFromModule('dashboard');
     else if (viewName === 'eco' || viewName === 'eco_form') {
-        const deps = { db, firestore: { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch, updateDoc }, dom, lucide, appState, showToast, switchView, shouldRequirePpapConfirmation, sendNotification, showConfirmationModal, ensureCollectionsAreLoaded };
+        const deps = { db, firestore: { collection, query, orderBy, onSnapshot, doc, getDoc, writeBatch, updateDoc }, dom, lucide, appState, showToast, switchView: (view, params) => eventBus.emit('navigate', { view, params }), shouldRequirePpapConfirmation, sendNotification, showConfirmationModal, ensureCollectionsAreLoaded };
         const unsubscribe = await handleEcoView(viewName, params, deps);
         if (unsubscribe) {
             appState.currentViewCleanup = unsubscribe;
         }
     }
     else if (viewName === 'ecr' || viewName === 'ecr_creation_hub' || viewName === 'ecr_form') {
-        const deps = { db, storage, functions, appState, dom, lucide, showToast, showConfirmationModal, switchView, sendNotification };
+        const deps = { db, storage, functions, appState, dom, lucide, showToast, showConfirmationModal, switchView: (view, params) => eventBus.emit('navigate', { view, params }), sendNotification };
         await handleEcrView(viewName, params, deps);
     }
     else if (['control_ecrs', 'seguimiento_ecr_eco', 'ecr_seguimiento', 'ecr_table_view', 'indicadores_ecm_view'].includes(viewName)) {
-        const deps = { db, firestore: { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, writeBatch, limit, orderBy }, dom, lucide, appState, showToast, switchView, showConfirmationModal, checkUserPermission, showInfoModal, seedControlPanelTutorialData, newControlPanelTutorial, showDatePromptModal };
+        const deps = { db, firestore: { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, writeBatch, limit, orderBy }, dom, lucide, appState, showToast, switchView: (view, params) => eventBus.emit('navigate', { view, params }), showConfirmationModal, checkUserPermission, showInfoModal, seedControlPanelTutorialData, newControlPanelTutorial, showDatePromptModal };
         handleControlPanelView(viewName, params, deps);
     }
     else if (viewName === 'eco_form') {
-        const deps = { db, firestore: { doc, getDoc, collection, writeBatch, updateDoc }, dom, lucide, appState, showToast, switchView, shouldRequirePpapConfirmation, sendNotification, showConfirmationModal, ensureCollectionsAreLoaded };
+        const deps = { db, firestore: { doc, getDoc, collection, writeBatch, updateDoc }, dom, lucide, appState, showToast, switchView: (view, params) => eventBus.emit('navigate', { view, params }), shouldRequirePpapConfirmation, sendNotification, showConfirmationModal, ensureCollectionsAreLoaded };
         await renderEcoFormView(params, deps);
     }
     else if (viewName === 'eco_form_mock_for_tutorial') {
@@ -894,7 +899,7 @@ function handleViewContentActions(e) {
     const userId = button.dataset.userId;
 
     const actions = {
-        'admin-back-to-board': () => switchView('tareas'),
+        'admin-back-to-board': () => eventBus.emit('navigate', { view: 'tareas' }),
         'generate-eco-from-ecr': async () => {
             const ecrId = button.dataset.id;
             if (!ecrId) {
@@ -905,7 +910,7 @@ function handleViewContentActions(e) {
                 const ecrDocRef = doc(db, COLLECTIONS.ECR_FORMS, ecrId);
                 const ecrDocSnap = await getDoc(ecrDocRef);
                 if (ecrDocSnap.exists()) {
-                    switchView('eco_form', { ecrData: ecrDocSnap.data() });
+                    eventBus.emit('navigate', { view: 'eco_form', params: { ecrData: ecrDocSnap.data() } });
                 } else {
                     showToast(`No se encontraron datos para el ECR: ${ecrId}`, 'error');
                 }
@@ -914,7 +919,7 @@ function handleViewContentActions(e) {
                 showToast('Error al cargar los datos completos del ECR.', 'error');
             }
         },
-        'view-ecr': () => switchView('ecr_form', { ecrId: button.dataset.id }),
+        'view-ecr': () => eventBus.emit('navigate', { view: 'ecr_form', params: { ecrId: button.dataset.id } }),
         'export-ecr-pdf': () => exportEcrToPdf(button.dataset.id),
         'details': () => openDetailsModal(appState.currentData.find(d => d.id == id)),
         'edit': () => openFormModal(appState.currentData.find(d => d.id == id)),
@@ -1348,13 +1353,13 @@ async function exportEcrToPdf(ecrId) {
 
     // Switch to the form view temporarily to render the content
     const originalView = appState.currentView;
-    await switchView('ecr_form', { ecrId });
+    await eventBus.emit('navigate', { view: 'ecr_form', params: { ecrId } });
 
     const formElement = document.getElementById('ecr-form');
     if (!formElement) {
         showToast('Error: No se pudo encontrar el formulario ECR para exportar.', 'error');
         dom.loadingOverlay.style.display = 'none';
-        switchView(originalView); // Switch back to original view
+        eventBus.emit('navigate', { view: originalView }); // Switch back to original view
         return;
     }
 
@@ -1417,7 +1422,7 @@ async function exportEcrToPdf(ecrId) {
             styleElement.remove();
         }
         dom.loadingOverlay.style.display = 'none';
-        switchView(originalView);
+        eventBus.emit('navigate', { view: originalView });
     }
 }
 
@@ -1434,7 +1439,7 @@ function handleGlobalClick(e) {
         e.preventDefault();
         const viewName = viewLink.dataset.view;
         const params = viewLink.dataset.params ? JSON.parse(viewLink.dataset.params) : null;
-        switchView(viewName, params);
+        eventBus.emit('navigate', { view: viewName, params });
 
         // Close any open dropdowns after a view switch
         const openDropdown = viewLink.closest('.nav-dropdown.open');
@@ -1464,7 +1469,7 @@ function handleGlobalClick(e) {
 
         // Navigate
         document.getElementById('notification-dropdown')?.classList.add('hidden');
-        switchView(view, JSON.parse(params));
+        eventBus.emit('navigate', { view, params: JSON.parse(params) });
         return;
     }
 
@@ -3057,11 +3062,11 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers };
+            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView: (view, params) => eventBus.emit('navigate', { view, params }), checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers };
             initSharedUI(appDependencies);
             initTasksModule(appDependencies);
             initLandingPageModule(appDependencies);
-            initAdminModule({ db, firestore: { writeBatch, doc, getDocs, collection, setDoc, getDoc, query, where, limit, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, runTransaction, startAfter, or, getCountFromServer }, showToast, appState, updateNavForRole, renderUserMenu, switchView, lucide });
+            initAdminModule({ db, firestore: { writeBatch, doc, getDocs, collection, setDoc, getDoc, query, where, limit, orderBy, onSnapshot, addDoc, updateDoc, deleteDoc, runTransaction, startAfter, or, getCountFromServer }, showToast, appState, updateNavForRole, renderUserMenu, switchView: (view, params) => eventBus.emit('navigate', { view, params }), lucide });
             initFirestoreHelpers({ db });
 
 
@@ -3082,8 +3087,8 @@ onAuthStateChanged(auth, async (user) => {
 
             console.log("About to switch view to landing-page...");
             // This is the critical sequence: render the content, THEN hide the loading screen.
-            await switchView('landing-page');
-            console.log("switchView('landing-page') completed.");
+            await eventBus.emit('navigate', { view: 'landing-page' });
+            console.log("navigate to 'landing-page' event emitted.");
 
             // FIX: Per AGENTS.md, defer UI updates to prevent race conditions with E2E tests.
             // A longer delay is used for E2E tests to ensure rendering completes before screenshotting.
@@ -3098,7 +3103,7 @@ onAuthStateChanged(auth, async (user) => {
 
                 // Path-based routing for /visor3d
                 if (window.location.pathname === '/visor3d') {
-                    switchView('visor3d');
+                    eventBus.emit('navigate', { view: 'visor3d' });
                 }
 
             }, delay);

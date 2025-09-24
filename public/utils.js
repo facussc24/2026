@@ -51,6 +51,54 @@ export function createHelpTooltip(message) {
     `;
 }
 
+/**
+ * A simple event bus for application-wide communication.
+ * This helps decouple modules from each other.
+ */
+class EventBus {
+    constructor() {
+        this.events = {};
+    }
+
+    /**
+     * Subscribes to an event.
+     * @param {string} event - The name of the event.
+     * @param {Function} callback - The function to call when the event is emitted.
+     * @returns {Function} - A function to unsubscribe from the event.
+     */
+    on(event, callback) {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+        this.events[event].push(callback);
+
+        // Return an unsubscribe function
+        return () => {
+            this.events[event] = this.events[event].filter(cb => cb !== callback);
+        };
+    }
+
+    /**
+     * Emits an event, calling all subscribed callbacks.
+     * @param {string} event - The name of the event to emit.
+     * @param {*} data - The data to pass to the callbacks.
+     */
+    emit(event, data) {
+        if (this.events[event]) {
+            this.events[event].forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Error in event bus callback for event "${event}":`, error);
+                }
+            });
+        }
+    }
+}
+
+// Export a single instance to be used throughout the application.
+export const eventBus = new EventBus();
+
 export function formatTimeAgo(timestamp) {
     const now = new Date();
     const seconds = Math.floor((now - timestamp) / 1000);

@@ -15,7 +15,7 @@ import { COLLECTIONS } from '../../utils.js';
  * @param {function} deps.switchView - Function to switch views.
  * @param {function} deps.showDatePromptModal - Function to show a date prompt modal.
  */
-export function renderEcrSeguimientoView(deps) {
+export function renderCpSeguimientoView(deps) {
     const { db, firestore, dom, lucide, appState, showToast, switchView, showDatePromptModal } = deps;
     const { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } = firestore;
 
