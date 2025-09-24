@@ -5434,49 +5434,6 @@ function exportSinopticoPdf(activeFilters) {
 // Global counter to ensure uniqueness across rapid function calls.
 let regenerateNodeIdsCounter = 0;
 
-function showPromptModal(title, message) {
-    return new Promise(resolve => {
-        const modalId = `prompt-modal-${Date.now()}`;
-        const modalHTML = `<div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in">
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-md m-4 modal-content">
-                <div class="p-6">
-                    <h3 class="text-xl font-bold mb-2">${title}</h3>
-                    <p class="text-gray-600 mb-4">${message}</p>
-                    <input type="text" id="prompt-input" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">
-                </div>
-                <div class="flex justify-end items-center p-4 border-t bg-gray-50 space-x-4">
-                    <button data-action="cancel" class="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button>
-                    <button data-action="confirm" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Aceptar</button>
-                </div>
-            </div>
-        </div>`;
-        dom.modalContainer.innerHTML = modalHTML;
-        const modalElement = document.getElementById(modalId);
-        const input = modalElement.querySelector('#prompt-input');
-        input.focus();
-
-        const close = (value) => {
-            modalElement.remove();
-            resolve(value);
-        };
-
-        modalElement.addEventListener('click', e => {
-            const action = e.target.closest('button')?.dataset.action;
-            if (action === 'confirm') {
-                close(input.value.trim());
-            } else if (action === 'cancel') {
-                close(null);
-            }
-        });
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                close(input.value.trim());
-            } else if (e.key === 'Escape') {
-                close(null);
-            }
-        });
-    });
-}
 
 // =================================================================================
 // --- LÓGICA DE PERFIL DE USUARIO ---
