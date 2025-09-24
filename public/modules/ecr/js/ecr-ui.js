@@ -1,5 +1,4 @@
-import { registerEcrApproval } from './ecr.js';
-import { checkAndUpdateEcrStatus, getEcrFormData } from './ecr-logic.js';
+import { checkAndUpdateEcrStatus, getEcrFormData, registerEcrApproval } from './ecr-logic.js';
 import {
     subscribeToEcrList,
     generateEcrWithAI,
