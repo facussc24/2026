@@ -1,8 +1,18 @@
-import { collection, doc, getDoc, onSnapshot, query, orderBy, writeBatch, runTransaction, addDoc, updateDoc, deleteDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
-import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { COLLECTIONS, createHelpTooltip, ensureCollectionsAreLoaded, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore } from '../../utils.js';
 import { getEcrFormData, checkAndUpdateEcrStatus, registerEcrApproval } from './ecr-logic.js';
+import {
+    subscribeToEcrList,
+    generateEcrWithAI,
+    ensureCollectionsAreLoaded,
+    COLLECTIONS,
+    getEcrDocument,
+    saveEcrDocument,
+    createNewEcr,
+    uploadFile,
+    saveEcrDraftToFirestore,
+    loadEcrDraftFromFirestore,
+    deleteEcrDraftFromFirestore
+} from './ecr-data.js';
+import { createHelpTooltip } from "../../utils.js";
 
 let debouncedSave = null;
 
@@ -59,20 +69,19 @@ export async function runEcrLogic(deps) {
             switchView('ecr_creation_hub');
         });
 
-        const ecrFormsRef = collection(db, COLLECTIONS.ECR_FORMS);
-        const q = query(ecrFormsRef, orderBy('lastModified', 'desc'));
-
         let isFirstRender = true;
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const unsubscribe = subscribeToEcrList(db, (ecrList, error) => {
             const ecrTableBody = document.getElementById('ecr-table-body');
             if (!ecrTableBody) return;
 
-            if (querySnapshot.empty) {
+            if (error) {
+                ecrTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-16 text-red-500"><i data-lucide="alert-triangle" class="mx-auto h-16 w-16"></i><h3 class="mt-4 text-lg font-semibold">Error al cargar ECR</h3><p class="text-sm">${error.message}</p></div></td></tr>`;
+                lucide.createIcons();
+            } else if (!ecrList || ecrList.length === 0) {
                 ecrTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-16 text-gray-500"><i data-lucide="search-x" class="mx-auto h-16 w-16 text-gray-300"></i><h3 class="mt-4 text-lg font-semibold">No se encontraron ECRs</h3><p class="text-sm">Puede crear uno nuevo con el botón de arriba.</p></div></td></tr>`;
             } else {
                 let tableRowsHTML = '';
-                querySnapshot.forEach(doc => {
-                    const ecr = doc.data();
+                ecrList.forEach(ecr => {
                     const lastModified = ecr.lastModified?.toDate ? ecr.lastModified.toDate().toLocaleString('es-AR') : 'N/A';
                     const statusColors = { 'in-progress': 'bg-yellow-100 text-yellow-800', 'approved': 'bg-green-100 text-green-800', 'rejected': 'bg-red-100 text-red-800' };
                     const statusText = { 'in-progress': 'En Progreso', 'approved': 'Aprobado', 'rejected': 'Rechazado' };
@@ -96,21 +105,10 @@ export async function runEcrLogic(deps) {
                 isFirstRender = false;
                 resolve();
             }
-        }, (error) => {
-            console.error("Error fetching ECRs: ", error);
-            const ecrTableBody = document.getElementById('ecr-table-body');
-            if (ecrTableBody) {
-                ecrTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-16 text-red-500"><i data-lucide="alert-triangle" class="mx-auto h-16 w-16"></i><h3 class="mt-4 text-lg font-semibold">Error al cargar ECR</h3><p class="text-sm">${error.message}</p></div></td></tr>`;
-                lucide.createIcons();
-            }
-            if (isFirstRender) {
-                isFirstRender = false;
-                resolve(); // Resolve even on error
-            }
         });
 
         appState.currentViewCleanup = () => {
-            unsubscribe();
+            if (unsubscribe) unsubscribe();
         };
     });
 }
@@ -268,9 +266,8 @@ export async function runEcrCreationHubLogic(deps) {
         button.disabled = true;
         button.innerHTML = 'Analizando...';
         try {
-            const generateEcrDraftWithAI = httpsCallable(functions, 'generateEcrDraftWithAI');
-            const result = await generateEcrDraftWithAI({ text });
-            switchView('ecr_form', { aiDraftData: result.data });
+            const aiDraftData = await generateEcrWithAI(functions, text);
+            switchView('ecr_form', { aiDraftData });
         } catch (error) {
             showToast(`Error de la IA: ${error.message}`, 'error');
             button.disabled = false;
@@ -284,7 +281,7 @@ export async function runEcrFormLogic(params = {}, deps) {
     const { ecrId, scrollToSection, aiDraftData } = params;
 
     try {
-        await ensureCollectionsAreLoaded(db, { getDocs: getDocs, collection: collection }, appState, [
+        await ensureCollectionsAreLoaded(db, appState, [
             COLLECTIONS.PROYECTOS,
             COLLECTIONS.CLIENTES,
             COLLECTIONS.PRODUCTOS
@@ -309,6 +306,149 @@ export async function runEcrFormLogic(params = {}, deps) {
     `;
     const formContainer = document.getElementById('ecr-form');
 
-    // The rest of the huge function...
-    // ...
+    const renderForm = () => {
+        formContainer.innerHTML = `
+            <h2 class="text-2xl font-bold mb-6">${isEditing ? `Editando ECR #${ecrId}` : 'Nuevo ECR'}</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="codigo_barack" class="block text-sm font-medium text-gray-700">Producto</label>
+                    <input type="text" id="codigo_barack_display" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" readonly>
+                    <input type="hidden" id="codigo_barack" name="codigo_barack">
+                    <button type="button" id="search-product-btn" class="text-sm text-blue-600 hover:underline mt-1">Buscar Producto</button>
+                </div>
+                <div>
+                    <label for="denominacion_producto" class="block text-sm font-medium text-gray-700">Denominación</label>
+                    <input type="text" name="denominacion_producto" id="denominacion_producto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                </div>
+                <div>
+                    <label for="cliente" class="block text-sm font-medium text-gray-700">Cliente</label>
+                    <select name="cliente" id="cliente" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        <option value="">Seleccione Cliente</option>
+                        ${appState.collections[COLLECTIONS.CLIENTES].map(c => `<option value="${c.id}">${c.descripcion}</option>`).join('')}
+                    </select>
+                </div>
+                 <div>
+                    <label for="proyecto" class="block text-sm font-medium text-gray-700">Proyecto</label>
+                    <select name="proyecto" id="proyecto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+                        <option value="">Seleccione Proyecto</option>
+                        ${appState.collections[COLLECTIONS.PROYECTOS].map(p => `<option value="${p.id}">${p.id}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+                ${createSituacionSectionHTML('actual', 'Situación Actual')}
+                ${createSituacionSectionHTML('propuesta', 'Situación Propuesta')}
+            </div>
+        `;
+        lucide.createIcons();
+        document.getElementById('search-product-btn').addEventListener('click', () => openEcrProductSearchModal(deps));
+    };
+
+    renderForm();
+
+    const populateForm = (data) => {
+        for (const key in data) {
+            const element = formContainer.elements[key];
+            if (element) {
+                if (element.type === 'checkbox') {
+                    element.checked = data[key];
+                } else if (element.type === 'file') {
+                    const url = data[key + '_url'];
+                    if (url) {
+                        const type = key.includes('actual') ? 'actual' : 'propuesta';
+                        const previewId = `situacion-${type}-image-preview`;
+                        const previewWrapper = document.getElementById(`${previewId}-wrapper`);
+                        const dropZone = document.getElementById(`situacion-${type}-drop-zone`);
+                        document.getElementById(previewId).src = url;
+                        previewWrapper.classList.remove('hidden');
+                        dropZone.classList.add('hidden');
+                    }
+                }
+                else {
+                    element.value = data[key];
+                }
+            }
+        }
+    };
+
+    if (isEditing) {
+        getEcrDocument(db, ecrId).then(ecrData => {
+            populateForm(ecrData);
+        }).catch(error => {
+            showToast(`Error al cargar el ECR: ${error.message}`, 'error');
+        });
+    } else if (aiDraftData) {
+        populateForm(aiDraftData);
+    }
+
+    const handleImageUpload = async (file, type) => {
+        const urlInput = formContainer.elements[`situacion_${type}_image_url`];
+        const previewId = `situacion-${type}-image-preview`;
+        const previewWrapper = document.getElementById(`${previewId}-wrapper`);
+        const dropZone = document.getElementById(`situacion-${type}-drop-zone`);
+
+        try {
+            const path = `ecr_images/${ecrId || `draft_${Date.now()}`}/${type}-${file.name}`;
+            const url = await uploadFile(storage, path, file);
+
+            urlInput.value = url;
+            document.getElementById(previewId).src = url;
+            previewWrapper.classList.remove('hidden');
+            dropZone.classList.add('hidden');
+        } catch (error) {
+            showToast(`Error al subir imagen: ${error.message}`, 'error');
+        }
+    };
+
+    ['actual', 'propuesta'].forEach(type => {
+        const uploadInput = document.getElementById(`situacion-${type}-image-upload`);
+        const dropZone = document.getElementById(`situacion-${type}-drop-zone`);
+
+        dropZone.addEventListener('click', () => uploadInput.click());
+        uploadInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                handleImageUpload(e.target.files[0], type);
+            }
+        });
+    });
+
+    const saveProgress = async () => {
+        const data = getEcrFormData(formContainer);
+        await saveEcrDraftToFirestore(db, appState.currentUser.uid, ecrId || 'new_ecr', data);
+        showToast('Borrador guardado.', 'success');
+    };
+
+    debouncedSave = setTimeout(saveProgress, 30000);
+
+    document.getElementById('ecr-save-button').addEventListener('click', saveProgress);
+
+    document.getElementById('ecr-approve-button').addEventListener('click', async () => {
+        const dataToSave = getEcrFormData(formContainer);
+        dataToSave.lastModified = new Date();
+        dataToSave.modifiedBy = appState.currentUser.email;
+        dataToSave.creatorUid = appState.currentUser.uid;
+        dataToSave.status = 'pending-approval';
+
+        try {
+            let finalEcrId = ecrId;
+            if (isEditing) {
+                await saveEcrDocument(db, ecrId, dataToSave);
+                showToast(`ECR #${ecrId} actualizado.`, 'success');
+            } else {
+                const newId = await createNewEcr(db, dataToSave);
+                finalEcrId = newId;
+                showToast(`ECR #${newId} creado con éxito.`, 'success');
+                await deleteEcrDraftFromFirestore(db, appState.currentUser.uid, 'new_ecr');
+            }
+            switchView('ecr');
+        } catch (error) {
+            showToast(`Error al guardar ECR: ${error.message}`, 'error');
+        }
+    });
+
+    document.getElementById('ecr-back-button').addEventListener('click', () => switchView('ecr'));
+
+    appState.currentViewCleanup = () => {
+        clearTimeout(debouncedSave);
+    };
 }
