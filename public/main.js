@@ -21,8 +21,7 @@ import {
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { checkUserPermission } from './permissions.js';
-import { registerEcrApproval } from './modules/ecr/js/ecr.js';
-import { checkAndUpdateEcrStatus, getEcrFormData } from './modules/ecr/js/ecr-logic.js';
+import { registerEcrApproval, checkAndUpdateEcrStatus, getEcrFormData } from './modules/ecr/js/ecr-logic.js';
 import { deleteProductAndOrphanedSubProducts, cloneProduct, regenerateNodeIds, getFlattenedData, handleDropEvent, handleProductSelect } from './modules/products/product-logic.js';
 import { renderEcoListView, renderEcoFormView } from './modules/eco/eco-controller.js';
 import * as ecoLogic from './modules/eco/eco-logic.js';
