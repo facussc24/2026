@@ -1,5 +1,5 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { runSinopticoTabularLogic } from '../../public/modules/products/product-logic.js';
+import { runSinopticoTabularLogic, initProductLogic } from '../../public/modules/products/product-logic.js';
 
 const appState = {
     collectionsById: {},
@@ -52,6 +52,20 @@ describe('Sinoptico Tabular Level Display Bug', () => {
         // Reset appState for test isolation
         appState.collectionsById = {};
         appState.sinopticoTabularState = null;
+
+        initProductLogic({
+            appState,
+            dom,
+            lucide: global.lucide,
+            showToast: jest.fn(),
+            renderArbol: jest.fn(),
+            renderArbolDetalle: jest.fn(),
+            renderArbolesInitialView: jest.fn(),
+            ensureCollectionsAreLoaded: jest.fn(),
+            openSinopticoEditModal: jest.fn(),
+            handleCaratulaClick: jest.fn(),
+            checkUserPermission: jest.fn(() => true),
+        });
     });
 
     afterEach(() => {
