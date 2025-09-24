@@ -13,8 +13,8 @@ import {
     deleteEcrDraftFromFirestore,
     callGenerateEcrProposal,
     callAnalyzeEcrImpacts
-} from '../ecr-data.js';
-import { createHelpTooltip } from "../../../utils.js";
+} from '/modules/ecr/ecr-data.js';
+import { createHelpTooltip } from '/utils.js';
 
 let debouncedSave = null;
 
