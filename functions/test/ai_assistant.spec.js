@@ -48,7 +48,68 @@ const { HttpsError } = require('firebase-functions/v1/https');
 jest.mock('axios');
 
 // Import the function to be tested AFTER mocking
-const { getTaskSummaryWithAI } = require('../index');
+const { getTaskSummaryWithAI, organizeTaskWithAI } = require('../index');
+
+describe('organizeTaskWithAI', () => {
+    beforeEach(() => {
+        axios.post.mockClear();
+        process.env.GEMINI_API_KEY = 'test-api-key';
+    });
+
+    const context = { auth: { uid: 'test-uid' } };
+
+    test('should throw unauthenticated error if user is not logged in', async () => {
+        await expect(organizeTaskWithAI({ text: 'Some task' }, {})).rejects.toThrow(
+            new HttpsError('unauthenticated', 'The function must be called while authenticated.')
+        );
+    });
+
+    test('should throw invalid-argument error for missing text', async () => {
+        await expect(organizeTaskWithAI({ text: '' }, context)).rejects.toThrow(
+            new HttpsError('invalid-argument', "The function must be called with a non-empty 'text' argument.")
+        );
+    });
+
+    test('should return parsed JSON on successful API call', async () => {
+        const mockResponse = {
+            title: "Test Task",
+            description: "A task for testing",
+            subtasks: ["do stuff"],
+            priority: "medium",
+            dueDate: "2025-01-01"
+        };
+        const responseText = `\`\`\`json\n${JSON.stringify(mockResponse, null, 2)}\n\`\`\``;
+
+        axios.post.mockResolvedValue({
+            data: { candidates: [{ content: { parts: [{ text: responseText }] } }] }
+        });
+
+        const result = await organizeTaskWithAI({ text: 'A valid task description' }, context);
+
+        expect(result).toEqual(mockResponse);
+        expect(axios.post).toHaveBeenCalledTimes(1);
+        const prompt = axios.post.mock.calls[0][1].contents[0].parts[0].text;
+        expect(prompt).toContain('A valid task description');
+    });
+
+    test('should throw internal error if Gemini API request fails', async () => {
+        axios.post.mockRejectedValue({ response: { data: 'API Error' } });
+        await expect(organizeTaskWithAI({ text: 'This will fail' }, context)).rejects.toThrow(
+            new HttpsError('internal', 'Ocurrió un error al procesar la solicitud con la IA.')
+        );
+    });
+
+     test('should throw error if AI response is not valid JSON', async () => {
+        const invalidResponseText = 'This is not JSON';
+        axios.post.mockResolvedValue({
+            data: { candidates: [{ content: { parts: [{ text: invalidResponseText }] } }] }
+        });
+
+        await expect(organizeTaskWithAI({ text: 'A valid task description' }, context)).rejects.toThrow(
+            new HttpsError('internal', 'Ocurrió un error al procesar la solicitud con la IA.')
+        );
+    });
+});
 
 describe('getTaskSummaryWithAI', () => {
     beforeEach(() => {

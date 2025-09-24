@@ -292,14 +292,14 @@ const organizeTaskWithAI = functions
 
 
         Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string), "description" (string), "subtasks" (array de strings), "priority" (string: 'low', 'medium', o 'high'), "startDate" (string: 'YYYY-MM-DD' o null), "dueDate" (string: 'YYYY-MM-DD' o null), "assignee" (string o null), "isPublic" (boolean), y "project" (string o null). No incluyas ninguna otra explicación ni formato.
-        Ejemplo de salida para un texto como 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes':
+        Ejemplo de salida para un texto como 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes'. La fecha de hoy es 24 de Septiembre de 2025, y el próximo lunes es 29 de Septiembre de 2025.
         {
           "title": "Organizar reunión para AMFE",
           "description": "Organizar una reunión con Marcelo Nieve para discutir el Análisis de Modos y Efectos de Falla (AMFE).",
           "subtasks": ["Agendar reunión con Marcelo Nieve", "Preparar agenda para la reunión de AMFE"],
           "priority": "medium",
           "startDate": null,
-          "dueDate": "2025-09-30",
+          "dueDate": "2025-09-29",
           "assignee": "Marcelo Nieve",
           "isPublic": true,
           "project": null
