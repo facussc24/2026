@@ -4,6 +4,7 @@
 import { getAuth, sendPasswordResetEmail, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { COLLECTIONS } from './utils.js';
+import { showToast } from './modules/shared/ui.js';
 
 // These will be initialized by main.js
 let auth;
@@ -73,7 +74,7 @@ async function handleResendVerificationEmail() {
 
     try {
         await sendEmailVerification(auth.currentUser);
-        window.showToast('Se ha enviado un nuevo correo de verificación.', 'success');
+        showToast('Se ha enviado un nuevo correo de verificación.', 'success');
 
         // Cooldown timer
         let seconds = 60;
@@ -95,7 +96,7 @@ async function handleResendVerificationEmail() {
         if (error.code === 'auth/too-many-requests') {
             friendlyMessage = 'Demasiados intentos. Por favor, espera un momento antes de volver a intentarlo.';
         }
-        window.showToast(friendlyMessage, 'error');
+        showToast(friendlyMessage, 'error');
         dom.resendTimer.textContent = 'Hubo un error. Inténtalo de nuevo más tarde.';
         setTimeout(() => {
             if (dom.resendTimer.textContent.includes('error')) {
@@ -130,13 +131,13 @@ async function handleRegister(form, email, password) {
     });
 
     await sendEmailVerification(userCredential.user);
-    window.showToast('¡Registro exitoso! Revisa tu correo para verificar tu cuenta.', 'success');
+    showToast('¡Registro exitoso! Revisa tu correo para verificar tu cuenta.', 'success');
     showAuthScreen('verify-email');
 }
 
 async function handlePasswordReset(form, email) {
     await sendPasswordResetEmail(auth, email);
-    window.showToast(`Si la cuenta ${email} existe, se ha enviado un enlace para restablecer la contraseña.`, 'info');
+    showToast(`Si la cuenta ${email} existe, se ha enviado un enlace para restablecer la contraseña.`, 'info');
     showAuthScreen('login');
 }
 
@@ -194,7 +195,7 @@ export async function handleAuthForms(e) {
             default:
                 friendlyMessage = 'Error de autenticación. Intente de nuevo más tarde.';
         }
-        window.showToast(friendlyMessage, 'error');
+        showToast(friendlyMessage, 'error');
 
         submitButton.disabled = false;
         submitButton.innerHTML = originalButtonHTML;
@@ -206,7 +207,7 @@ export async function logOutUser() {
         await signOut(auth);
     } catch (error) {
         console.error("Error signing out:", error);
-        window.showToast("Error al cerrar sesión.", "error");
+        showToast("Error al cerrar sesión.", "error");
     }
 }
 

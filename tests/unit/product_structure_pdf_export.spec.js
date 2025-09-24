@@ -1,7 +1,11 @@
 import { describe, test, expect, beforeEach } from '@jest/globals';
-import { prepareDataForPdfAutoTable } from '../../public/utils.js';
-import { appState } from '../../public/main.js';
-import { COLLECTIONS } from '../../public/utils.js';
+import { prepareDataForPdfAutoTable, COLLECTIONS } from '../../public/utils.js';
+
+// Mock the global appState object that the function under test will reference.
+const appState = {
+    collectionsById: {},
+    sinopticoTabularState: {},
+};
 
 describe('prepareDataForPdfAutoTable', () => {
     let mockCollectionsById;

@@ -1,5 +1,14 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { runSinopticoTabularLogic, appState, dom } from '../../public/main.js';
+import { runSinopticoTabularLogic } from '../../public/modules/products/product-logic.js';
+
+const appState = {
+    collectionsById: {},
+    sinopticoTabularState: null,
+};
+
+const dom = {
+    viewContent: null,
+};
 import { COLLECTIONS } from '../../public/utils.js';
 
 // Store original objects to restore them later
