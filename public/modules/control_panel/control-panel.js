@@ -1,4 +1,4 @@
-import { renderMainControlPanelView } from './views/main-control-panel-view.js';
+import { renderNewMainControlPanelView } from './views/new-main-control-panel-view.js';
 import { renderIndicatorsView } from './views/indicators-view.js';
 import { renderSeguimientoFichasView } from './views/seguimiento-fichas-view.js';
 import { renderCpSeguimientoView } from './views/cp-seguimiento-view.js';
@@ -7,7 +7,8 @@ import { renderCpEcrTableView } from './views/cp-ecr-table-view.js';
 export function handleControlPanelView(viewName, params, deps) {
     switch (viewName) {
         case 'control_ecrs':
-            return renderMainControlPanelView(deps);
+            // Redirigido al nuevo panel de control rediseñado
+            return renderNewMainControlPanelView(deps);
         case 'indicadores_ecm_view':
             return renderIndicatorsView(deps);
         case 'seguimiento_ecr_eco':
@@ -18,6 +19,7 @@ export function handleControlPanelView(viewName, params, deps) {
             return renderCpEcrTableView(deps);
         default:
             console.error(`Unknown Control Panel view: ${viewName}`);
-            return Promise.resolve();
+            // Por seguridad, renderiza el nuevo panel como vista por defecto
+            return renderNewMainControlPanelView(deps);
     }
 }
