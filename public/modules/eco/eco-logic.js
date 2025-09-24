@@ -3,7 +3,7 @@
  * This includes saving, approving, exporting, and viewing the history of ECOs.
  */
 
-import { getLogoBase64 } from '../../utils.js';
+import { getLogoBase64, COLLECTIONS } from '../../utils.js';
 
 /**
  * Displays a modal with the change history for a specific ECO.
@@ -152,4 +152,218 @@ export async function exportEcoToPdf(ecoId, deps) {
     } finally {
         dom.loadingOverlay.style.display = 'none';
     }
+}
+
+
+export function getFormData(formElement, actionPlan, formSectionsData) {
+    const data = {
+        checklists: {},
+        comments: {},
+        signatures: {},
+        action_plan: actionPlan,
+    };
+
+    for (const element of formElement.elements) {
+        if (element.disabled || !element.name || element.tagName === 'BUTTON') {
+            continue;
+        }
+
+        const key = element.name;
+
+        if (key.startsWith('check_')) {
+            const [, section, index, type] = key.split('_');
+            if (!data.checklists[section]) data.checklists[section] = [];
+            if (!data.checklists[section][index]) data.checklists[section][index] = { si: false, na: false };
+            data.checklists[section][index][type] = element.checked;
+        } else if (key.startsWith('comments_')) {
+            const [, section] = key.split('_');
+            data.comments[section] = element.value;
+        } else if (key.startsWith('date_review_') || key.startsWith('status_') || key.startsWith('name_') || key.startsWith('visto_')) {
+            let fieldType, sectionId;
+            const knownSectionIds = formSectionsData.map(s => s.id);
+            for (const id of knownSectionIds) {
+                if (key.endsWith(`_${id}`)) {
+                    sectionId = id;
+                    fieldType = key.substring(0, key.length - id.length - 1);
+                    break;
+                }
+            }
+            if (sectionId && fieldType) {
+                if (!data.signatures[sectionId]) data.signatures[sectionId] = {};
+                if (element.type === 'radio') {
+                    if (element.checked) {
+                        data.signatures[sectionId][fieldType] = element.value;
+                    }
+                } else {
+                    data.signatures[sectionId][fieldType] = element.value;
+                }
+            }
+        } else {
+            data[key] = element.value;
+        }
+    }
+
+    return data;
+};
+
+export async function saveEcoForm(status = 'in-progress', deps, formData) {
+    const { db, firestore, appState, showToast, switchView, ECO_FORM_STORAGE_KEY } = deps;
+    const { doc, writeBatch, collection } = firestore;
+
+    formData.status = status;
+    const ecrInput = document.getElementById('ecr_no');
+    formData.id = ecrInput.value.trim();
+
+    showToast('Validando formulario ECO...', 'info');
+
+    if (!formData.id || formData.id.trim() === '') {
+        showToast('El campo "ECR N°" no puede estar vacío. Por favor, seleccione un ECR asociado.', 'error');
+        return;
+    }
+    const hasComments = formData.comments && Object.values(formData.comments).some(comment => comment && comment.trim() !== '');
+    const hasChecklists = formData.checklists && Object.values(formData.checklists).some(section =>
+        section && section.some(item => item && (item.si || item.na))
+    );
+
+    if (!hasComments && !hasChecklists) {
+        showToast('El formulario ECO está vacío. Agregue al menos un comentario o marque una opción en el checklist.', 'error');
+        return;
+    }
+
+    const toastId = showToast('Guardando formulario ECO...', 'loading', { duration: 0 });
+
+    try {
+        const docId = formData.id;
+        const docRef = doc(db, COLLECTIONS.ECO_FORMS, docId);
+        const historyCollectionRef = collection(docRef, 'history');
+
+        const dataToSave = {
+            ...formData,
+            lastModified: new Date(),
+            modifiedBy: appState.currentUser.email,
+        };
+
+        const batch = writeBatch(db);
+        batch.set(docRef, dataToSave, { merge: true });
+        const historyDocRef = doc(historyCollectionRef);
+        batch.set(historyDocRef, dataToSave);
+
+        await batch.commit();
+
+        showToast('ECO guardado con éxito.', 'success', { toastId });
+        localStorage.removeItem(ECO_FORM_STORAGE_KEY);
+        switchView('eco');
+
+    } catch (error) {
+        console.error("Error saving ECO form to Firestore:", error);
+        showToast(`Error al guardar: ${error.message}`, 'error', { toastId });
+    }
+};
+
+export async function validateAndApproveEco(deps, formElement, formSectionsData, actionPlan) {
+    const { db, firestore, showToast, showConfirmationModal, shouldRequirePpapConfirmation } = deps;
+    const { doc, getDoc } = firestore;
+
+    formElement.querySelectorAll('.validation-error').forEach(el => el.classList.remove('validation-error'));
+    let errorMessages = [];
+    const ERROR_CLASS = 'validation-error';
+
+    let hasNok = false;
+    formSectionsData.forEach(section => {
+        if (section.checklist) {
+            const nokRadio = formElement.querySelector(`input[name="status_${section.id}"][value="nok"]`);
+            if (nokRadio && nokRadio.checked) {
+                hasNok = true;
+                nokRadio.closest('.department-footer').classList.add(ERROR_CLASS);
+            }
+        }
+    });
+    if (hasNok) {
+        errorMessages.push('No se puede aprobar: una o más secciones están marcadas como "NOK".');
+    }
+
+    const ecrNo = formElement.querySelector('[name="ecr_no"]').value;
+    if (ecrNo) {
+        const ecrDocRef = doc(db, COLLECTIONS.ECR_FORMS, ecrNo);
+        const ecrDocSnap = await getDoc(ecrDocRef);
+        if (ecrDocSnap.exists() && shouldRequirePpapConfirmation(ecrDocSnap.data())) {
+            const ppapContainer = document.getElementById('ppap-confirmation-container');
+            const ppapCheckbox = formElement.querySelector('[name="ppap_completed_confirmation"]');
+            if (!ppapCheckbox.checked) {
+                errorMessages.push('Se requiere confirmación de PPAP antes de aprobar este ECO.');
+                ppapContainer.classList.add(ERROR_CLASS);
+            }
+        }
+    }
+
+    formSectionsData.forEach(section => {
+         if (section.checklist) {
+            const statusRadio = formElement.querySelector(`input[name="status_${section.id}"]:checked`);
+            if (!statusRadio) {
+                errorMessages.push(`La sección "${section.title}" debe tener un estado (OK/NOK).`);
+                const statusOptionsContainer = formElement.querySelector(`input[name="status_${section.id}"]`).closest('.status-options');
+                if (statusOptionsContainer) statusOptionsContainer.classList.add(ERROR_CLASS);
+            }
+         }
+    });
+
+    if (errorMessages.length > 0) {
+        showToast(errorMessages.join(' '), 'error', 5000);
+        return;
+    }
+
+    showConfirmationModal('Aprobar ECO', '¿Está seguro de que desea aprobar y guardar este ECO? Esta acción registrará la versión actual como aprobada.', () => {
+        const formData = getFormData(formElement, actionPlan, formSectionsData);
+        saveEcoForm('approved', deps, formData);
+    });
+};
+
+export function callAI(prompt) {
+    console.log("Calling AI with prompt:", prompt);
+    // In a real scenario, this would make an API call to a generative AI model.
+    if (prompt.includes("plan de acción")) {
+        // Return a parseable string for the action plan
+        return Promise.resolve(
+            "Actualizar plano de producto | Juan Perez | 2024-10-15;" +
+            "Realizar estudio de capacidad | Maria Gonzalez | 2024-10-20;" +
+            "Notificar al cliente sobre el cambio | Ana Lopez | 2024-10-25"
+        );
+    }
+    // For now, it returns a placeholder text for other prompts.
+    return Promise.resolve(`Respuesta generada por IA para: "${prompt}". Este es un texto de ejemplo que simula una respuesta detallada y contextual de la inteligencia artificial, abordando los puntos clave mencionados.`);
+}
+
+export function fillAllWithAI(prompt) {
+    console.log("Calling AI to fill all fields with prompt:", prompt);
+    // In a real scenario, this would make an API call to a generative AI model
+    // and get a structured JSON response. For now, we simulate this.
+    const simulatedResponse = {
+        checklists: {
+            eng_producto: [ {si: true, na: false}, {si: true, na: false}, {si: false, na: true}, {si: false, na: true} ],
+            calidad: [ {si: true, na: false}, {si: false, na: true}, {si: false, na: true}, {si: true, na: false} ],
+        },
+        comments: {
+            eng_producto: "Se requiere cambio en el plano y la especificación para ajustar la tolerancia de la pieza X, según lo discutido en la reunión de ingeniería.",
+            calidad: "Se necesita un nuevo plan de control para verificar la nueva tolerancia y actualizar el layout de la estación de inspección.",
+        },
+        signatures: {
+            eng_producto: {
+                date_review_eng_producto: "2024-10-01",
+                status_eng_producto: "ok",
+                name_eng_producto: "IA: Ing. de Producto",
+                visto_eng_producto: "AI-PROD"
+            },
+            calidad: {
+                date_review_calidad: "2024-10-02",
+                status_calidad: "ok",
+                name_calidad: "IA: Ing. de Calidad",
+                visto_calidad: "AI-CAL"
+            }
+        },
+        action_plan: [
+            { description: "Diseñar nuevo plano v2.1", assignee: "Juan Perez", dueDate: "2024-10-15", status: 'pending' },
+            { description: "Actualizar plan de control QP-04", assignee: "Maria Gonzalez", dueDate: "2024-10-20", status: 'pending' }
+        ]
+    };
+    return Promise.resolve(simulatedResponse);
 }
