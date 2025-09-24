@@ -1,4 +1,4 @@
-import { formatTimeAgo } from '../../utils.js';
+import { formatTimeAgo } from '/utils.js';
 
 let dom;
 let appState;

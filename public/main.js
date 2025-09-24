@@ -8,7 +8,7 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 import { initSharedUI, showToast, showConfirmationModal, showInfoModal, showDatePromptModal, showPromptModal, updateNavForRole, renderUserMenu, renderNotificationCenter } from './modules/shared/ui.js';
 import { initFirestoreHelpers, saveDocument, deleteDocument } from './modules/shared/firestore-helpers.js';
-import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML, getLogoBase64, formatTimeAgo, eventBus } from './utils.js';
+import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, shouldRequirePpapConfirmation, validateField, saveEcrDraftToFirestore, loadEcrDraftFromFirestore, deleteEcrDraftFromFirestore, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML, getLogoBase64, formatTimeAgo, eventBus } from '/utils.js';
 import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
 import {
     initTasksModule,
