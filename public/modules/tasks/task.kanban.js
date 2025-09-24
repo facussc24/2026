@@ -46,7 +46,7 @@ export function initTasksSortable(container) {
     });
 }
 
-import { COLLECTIONS } from '../../utils.js';
+import { COLLECTIONS } from '/utils.js';
 
 function fetchAndRenderTasks(container) {
     clearUnsubscribers();

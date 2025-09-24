@@ -3,7 +3,7 @@
 // Firebase imports needed for auth
 import { getAuth, sendPasswordResetEmail, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { COLLECTIONS } from './utils.js';
+import { COLLECTIONS } from '/utils.js';
 import { showToast } from './modules/shared/ui.js';
 
 // These will be initialized by main.js

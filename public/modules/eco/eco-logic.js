@@ -3,7 +3,7 @@
  * This includes saving, approving, exporting, and viewing the history of ECOs.
  */
 
-import { getLogoBase64, COLLECTIONS } from '../../utils.js';
+import { getLogoBase64, COLLECTIONS } from '/utils.js';
 
 /**
  * Displays a modal with the change history for a specific ECO.

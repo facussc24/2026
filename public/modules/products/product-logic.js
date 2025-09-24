@@ -1,5 +1,5 @@
 import { showToast, showPromptModal } from '../shared/ui.js';
-import { COLLECTIONS, flattenEstructura } from '../../utils.js';
+import { COLLECTIONS, flattenEstructura } from '/utils.js';
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 /**
