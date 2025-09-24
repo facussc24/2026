@@ -3,7 +3,7 @@ import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 jest.mock('https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js');
 
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
-import { handleDropEvent, handleProductSelect } from '../../public/modules/products/product-logic.js';
+import { handleDropEvent, handleProductSelect, initProductLogic } from '../../public/modules/products/product-logic.js';
 const appState = {
     currentData: [],
     collections: {},
@@ -52,6 +52,32 @@ describe('Product structure module stability', () => {
                 element.sortable = { destroy: jest.fn() };
             }
         };
+
+        const findNodeHelper = (id, nodes) => {
+            if (!Array.isArray(nodes)) return null;
+            for (const node of nodes) {
+                if (node.id === id) return node;
+                const found = findNodeHelper(id, node.children || []);
+                if (found) return found;
+            }
+            return null;
+        };
+
+        ui.initSharedUI({ dom, appState, lucide: { createIcons: jest.fn() } });
+        initProductLogic({
+            appState,
+            dom,
+            lucide: { createIcons: jest.fn() },
+            renderArbol: jest.fn(),
+            renderArbolDetalle: jest.fn(),
+            renderArbolesInitialView: jest.fn(),
+            ensureCollectionsAreLoaded: jest.fn(),
+            openSinopticoEditModal: jest.fn(),
+            handleCaratulaClick: jest.fn(),
+            findNode: (id, nodes) => findNodeHelper(id, nodes),
+            crearComponente: (tipo, datos) => ({ id: `${tipo}-${Date.now()}`, refId: datos.id, tipo, icon: 'box', children: [] }),
+            checkUserPermission: jest.fn(() => true),
+        });
     });
 
     test('handleProductSelect accepts Firestore document ids', async () => {
