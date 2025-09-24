@@ -1,7 +1,7 @@
 /**
  * @file Manages the ECR Table View, which is the master table for all ECRs.
  */
-import { COLLECTIONS } from '../../../utils.js';
+import { COLLECTIONS } from '../../utils.js';
 
 /**
  * Renders the ECR table view with filtering and searching capabilities.
