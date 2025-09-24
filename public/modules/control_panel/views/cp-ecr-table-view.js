@@ -13,7 +13,7 @@ import { COLLECTIONS } from '../../utils.js';
  * @param {object} deps.appState - The global application state.
  * @param {function} deps.showToast - Function to show a toast notification.
  */
-export function renderEcrTableView(deps) {
+export function renderCpEcrTableView(deps) {
     const { db, firestore, dom, lucide, appState, showToast } = deps;
     const { collection, onSnapshot, getDoc, doc } = firestore;
 
