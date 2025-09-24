@@ -1,7 +1,7 @@
 /**
  * @file Manages the ECR Seguimiento View, which shows meeting attendance and follow-ups.
  */
-import { COLLECTIONS } from '../../utils.js';
+import { COLLECTIONS } from '../../../utils.js';
 
 /**
  * Renders the ECR Seguimiento view.
