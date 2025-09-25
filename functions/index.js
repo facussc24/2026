@@ -260,26 +260,18 @@ exports.sendTaskAssignmentEmail = functions
 exports.organizeTaskWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
-    // Guardian 1: Log de entrada
-    console.log("--- organizeTaskWithAI: Inicio de ejecución (con logs) ---");
-    console.log("Timestamp:", new Date().toISOString());
-    console.log("Contexto de autenticación (UID):", context.auth ? context.auth.uid : "No autenticado");
-    console.log("Datos de entrada (data.text):", JSON.stringify(data.text));
-
     if (!context.auth) {
-      console.error("Error: Intento de llamada no autenticado.");
       throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
     const text = data.text;
     if (!text || typeof text !== "string" || text.trim().length === 0) {
-      console.error("Error: El argumento 'text' está ausente o es inválido.", { text });
       throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
     }
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-pro";
+      const model = "gemini-1.0-pro";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       const prompt = `
@@ -302,7 +294,7 @@ exports.organizeTaskWithAI = functions
         3.  **Corrección de Texto**: En los títulos y descripciones, corrige errores ortográficos y gramaticales obvios para mayor claridad. Mantén acrónimos o jerga técnica (ej. 'AMFE') si no estás seguro.
 
         **Formato de Salida OBLIGATORIO**:
-        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado. NO incluyas el JSON dentro de un bloque de código markdown.
+        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado.
 
         **Ejemplo 1 (Una sola tarea con subtareas)**:
         Texto: 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes'
@@ -362,56 +354,27 @@ exports.organizeTaskWithAI = functions
         }],
       };
 
-      // Guardian 2: Log de lo que se envía a la IA
-      console.log("--- organizeTaskWithAI: Enviando a Gemini API ---");
-      console.log("URL:", url);
-      console.log("Prompt (primeros 200 caracteres):", prompt.substring(0, 200) + "...");
-
       const apiResponse = await axios.post(url, requestBody);
 
-      // Guardian 3: Log de la respuesta cruda de la IA
-      console.log("--- organizeTaskWithAI: Respuesta recibida de Gemini API ---");
-      console.log("Status:", apiResponse.status);
-      console.log("Response Data:", JSON.stringify(apiResponse.data, null, 2));
-
-      if (!apiResponse.data || !apiResponse.data.candidates || !apiResponse.data.candidates[0] || !apiResponse.data.candidates[0].content || !apiResponse.data.candidates[0].content.parts || !apiResponse.data.candidates[0].content.parts[0]) {
-          console.error("Error: La respuesta de la IA no tiene la estructura esperada.", apiResponse.data);
-          throw new Error("La respuesta de la IA tiene un formato inesperado o está vacía.");
-      }
-
       const responseText = apiResponse.data.candidates[0].content.parts[0].text;
-      console.log("Texto extraído de la respuesta:", responseText);
 
-      let parsedData;
-      try {
-          // Guardian 4: Intento de parseo
-          const jsonMatch = responseText.match(/{[\s\S]*}/);
-          if (!jsonMatch) {
-              console.error("No se encontró un bloque JSON válido en la respuesta de la IA. Respuesta cruda:", responseText);
-              throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
-          }
-
-          const jsonString = jsonMatch[0];
-          console.log("JSON String a parsear:", jsonString);
-
-          parsedData = JSON.parse(jsonString);
-          console.log("--- organizeTaskWithAI: JSON parseado con éxito ---", JSON.stringify(parsedData, null, 2));
-
-      } catch (jsonError) {
-          console.error("--- organizeTaskWithAI: Fallo al parsear JSON ---");
-          console.error("Error de parseo:", jsonError.message);
-          console.error("Texto que falló el parseo:", responseText);
-          throw new Error(`La respuesta de la IA no es un JSON válido. ${jsonError.message}`);
+      // Use a regex to extract the JSON block, ignoring any surrounding text.
+      const jsonMatch = responseText.match(/{[\s\S]*}/);
+      if (!jsonMatch) {
+        console.error("No valid JSON block found in AI response. Raw response:", responseText);
+        throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
       }
 
-      // Guardian 5: Validación de la estructura del JSON
+      const parsedData = JSON.parse(jsonMatch[0]);
+
+      // The AI should now return an object with a "tasks" array.
+      // It's valid for the AI to return an empty array if no tasks are found.
       if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks)) {
-          console.error("--- organizeTaskWithAI: Error de validación de estructura ---");
-          console.error("El JSON parseado no tiene la clave 'tasks' o no es un array.", parsedData);
-          throw new Error("La respuesta de la IA no contiene un array de tareas ('tasks').");
+          throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
       }
 
-      console.log("--- organizeTaskWithAI: Ejecución exitosa ---");
+      // The function now returns the entire object, which includes the "tasks" array.
+      // The client will handle whether it's one or many tasks.
       return parsedData;
 
     } catch (error) {
@@ -419,36 +382,22 @@ exports.organizeTaskWithAI = functions
       console.error("Timestamp:", new Date().toISOString());
       console.error("Input Text:", text.substring(0, 100) + "...");
 
-      let detailedErrorMessage = "Ocurrió un error desconocido al procesar la solicitud con la IA.";
-
       if (error.response) {
-        // Axios error with a response from the server (e.g., 4xx, 5xx)
         console.error("Gemini API Response Error Status:", error.response.status);
         console.error("Gemini API Response Data:", JSON.stringify(error.response.data, null, 2));
-        // Try to get the specific message from the API response body
-        if (error.response.data && error.response.data.error && error.response.data.error.message) {
-          detailedErrorMessage = `Error de la API de IA (${error.response.status}): ${error.response.data.error.message}`;
-        } else {
-          detailedErrorMessage = `La API de IA respondió con un error ${error.response.status}, pero sin un mensaje detallado.`;
-        }
       } else if (error.request) {
-        // Axios error where the request was made but no response was received
         console.error("Gemini API No Response Received:", error.request);
-        detailedErrorMessage = "No se recibió respuesta del servidor de la API de IA. Verifique la conexión o la URL.";
       } else {
-        // Other errors (e.g., setup, JSON parsing, validation)
         console.error("Error message:", error.message);
-        detailedErrorMessage = error.message; // Use the message from the error itself (e.g., from JSON.parse)
       }
 
       console.error("Full Error Object:", JSON.stringify(error, null, 2));
       console.error("--- End of Detailed Error ---");
 
-      // Throw a new HttpsError with the detailed message, which will be sent to the client.
       throw new functions.https.HttpsError(
         "internal",
-        detailedErrorMessage, // This detailed message will be visible on the client
-        { originalError: error.message }
+        "Ocurrió un error al procesar la solicitud con la IA.",
+        "Check the function logs for more details."
       );
     }
   });
@@ -480,7 +429,7 @@ exports.getTaskSummaryWithAI = functions
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-pro";
+      const model = "gemini-1.0-pro";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       // We are sending a subset of task data to avoid sending too much information
