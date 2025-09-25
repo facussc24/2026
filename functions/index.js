@@ -371,11 +371,31 @@ exports.organizeTaskWithAI = functions
       return parsedData;
 
     } catch (error) {
-      console.error("Error calling Gemini API via REST:", error.response ? error.response.data : error.message);
+      // Enhanced error logging
+      console.error("--- Detailed Error in organizeTaskWithAI ---");
+      console.error("Timestamp:", new Date().toISOString());
+      console.error("Input Text:", text.substring(0, 100) + "..."); // Log a snippet of the input
+
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error("Gemini API Response Error Status:", error.response.status);
+        console.error("Gemini API Response Headers:", JSON.stringify(error.response.headers, null, 2));
+        console.error("Gemini API Response Data:", JSON.stringify(error.response.data, null, 2));
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error("Gemini API No Response Received:", error.request);
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error("Error setting up Gemini API request:", error.message);
+      }
+      console.error("Full Error Object:", JSON.stringify(error, null, 2));
+      console.error("--- End of Detailed Error ---");
+
       throw new functions.https.HttpsError(
         "internal",
         "Ocurrió un error al procesar la solicitud con la IA.",
-        error.message
+        "Check the function logs for more details." // More informative details for the client-side log
       );
     }
   });
