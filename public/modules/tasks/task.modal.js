@@ -336,6 +336,11 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
                 if (form) form.style.display = 'none';
                 if (footer) footer.style.display = 'none';
 
+                const modalContentContainer = modalElement.querySelector('.modal-content');
+                if (modalContentContainer) {
+                    modalContentContainer.classList.remove('max-h-[90vh]');
+                }
+
                 const confirmationHTML = getMultiTaskConfirmationHTML(suggestedTasks);
                 // Insert the confirmation view right after the (now hidden) form
                 form.insertAdjacentHTML('afterend', confirmationHTML);
