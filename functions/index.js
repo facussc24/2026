@@ -277,8 +277,7 @@ exports.organizeTaskWithAI = functions
       const prompt = `
         Analiza el siguiente texto de un usuario. Tu objetivo principal es identificar si el texto describe una única tarea o múltiples tareas distintas que deberían gestionarse por separado.
 
-        El texto del usuario viene como un string en formato JSON. Analízalo para extraer su contenido.
-        Texto del usuario: ${JSON.stringify(text)}
+        Texto del usuario: "${text}"
 
         Sigue estas instrucciones:
         1.  **Análisis de Tareas Múltiples**: Si el texto contiene varias acciones claramente separables (por ejemplo, "Revisar los planos del chasis y luego llamar al proveedor para confirmar la entrega del material"), debes crear un objeto de tarea separado para cada acción. Si el texto describe una sola acción con varios pasos, trátalo como una única tarea con subtareas.
