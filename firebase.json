@@ -55,7 +55,7 @@
         "headers": [
           {
             "key": "Content-Security-Policy",
-            "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net/npm/ https://cdn.jsdelivr.net/gh/ https://cdnjs.cloudflare.com/ https://api.dicebear.com https://cdn.tailwindcss.com https://unpkg.com; object-src 'none'; base-uri 'self'; img-src 'self' data: https://api.dicebear.com https://images.pexels.com https://firebasestorage.googleapis.com;"
+            "value": "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com/ https://apis.google.com/ https://cdn.jsdelivr.net/npm/ https://cdn.jsdelivr.net/gh/ https://cdnjs.cloudflare.com/ https://api.dicebear.com https://cdn.tailwindcss.com https://unpkg.com; object-src 'none'; base-uri 'self'; img-src 'self' data: https://api.dicebear.com https://images.pexels.com;"
           }
         ]
       }
@@ -63,25 +63,17 @@
   },
   "emulators": {
     "auth": {
-      "host": "127.0.0.1",
-      "port": 9095
+      "port": 9099
     },
     "functions": {
-      "host": "127.0.0.1",
-      "port": 9010
+      "port": 5001
     },
     "firestore": {
-      "host": "127.0.0.1",
-      "port": 9085
-    },
-    "hosting": {
-      "host": "127.0.0.1",
-      "port": 9005
+      "port": 9080
     },
     "ui": {
       "enabled": true,
-      "host": "127.0.0.1",
-      "port": 9000
+      "port": 4000
     }
   }
 }

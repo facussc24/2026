@@ -1,5 +1,6 @@
-import { getFlattenedData } from '../../public/modules/products/product-logic.js';
-import { appState } from '../../public/state.js';
+import { getFlattenedData } from '../../public/main.js';
+// Import the real appState so we can modify it for our tests
+import { appState } from '../../public/main.js';
 
 // Mock data setup
 const mockProduct = {

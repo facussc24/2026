@@ -1,6 +1,8 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 // The function to test
-import { cloneProduct } from '../../public/modules/products/product-logic.js';
+import { cloneProduct } from '../../public/main.js';
+// Mock dependencies from the original test file
+import { appState } from '../../public/main.js';
 
 describe('cloneProduct Part Code (codigo_pieza) Bug', () => {
 

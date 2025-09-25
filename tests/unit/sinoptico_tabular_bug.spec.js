@@ -1,7 +1,5 @@
 import { jest, describe, test, expect, afterEach } from '@jest/globals';
-import { getFlattenedData } from '../../public/modules/products/product-logic.js';
-import { renderNodo } from '../../public/main.js';
-import { appState } from '../../public/state.js';
+import { renderNodo, getFlattenedData, appState } from '../../public/main.js';
 import { COLLECTIONS } from '../../public/utils.js';
 
 describe('renderNodo HTML Structure', () => {

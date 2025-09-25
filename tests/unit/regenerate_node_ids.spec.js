@@ -1,5 +1,5 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { regenerateNodeIds } from '../../public/modules/products/product-logic.js';
+import { regenerateNodeIds } from '../../public/main.js';
 
 describe('regenerateNodeIds race condition', () => {
     const getIds = (nodes) => {

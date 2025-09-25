@@ -19,8 +19,205 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
+  // Ensure the user is authenticated.
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        "unauthenticated",
+        "The function must be called while authenticated.",
+    );
+  }
 
-const sendTaskAssignmentEmail = functions
+  const db = admin.firestore();
+  const counterRef = db.collection("counters").doc("ecr_counter");
+
+  try {
+    const newEcrNumber = await db.runTransaction(async (transaction) => {
+      const counterSnap = await transaction.get(counterRef);
+      const currentYear = new Date().getFullYear();
+      let nextNumber = 1;
+
+      if (counterSnap.exists) {
+        const counterData = counterSnap.data();
+        // If the counter is for the current year, increment it.
+        // Otherwise, reset it for the new year.
+        if (counterData.year === currentYear) {
+          nextNumber = (counterData.count || 0) + 1;
+        }
+      }
+
+      // Update the counter in the transaction.
+      transaction.set(
+          counterRef,
+          {count: nextNumber, year: currentYear},
+          {merge: true},
+      );
+
+      // Return the formatted ECR number.
+      return `ECR-${currentYear}-${String(nextNumber).padStart(3, "0")}`;
+    });
+
+    return {ecrNumber: newEcrNumber};
+  } catch (error) {
+    console.error("Error generating ECR number:", error);
+    throw new functions.https.HttpsError(
+        "internal",
+        "An error occurred while generating the ECR number.",
+    );
+  }
+});
+
+exports.saveFormWithValidation = functions
+  .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
+  .https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    try {
+      // 1. Manual Authentication
+      const idToken = req.headers.authorization?.split('Bearer ')[1];
+      if (!idToken) {
+        return res.status(401).json({
+          error: { status: 'UNAUTHENTICATED', message: 'The function must be called while authenticated.' }
+        });
+      }
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      const userEmail = decodedToken.email || 'Unknown';
+
+      // 2. Data Parsing (from req.body.data for callable compatibility)
+      const { formType, formData } = req.body.data;
+      if (!formType || !formData) {
+        return res.status(400).json({
+          error: { status: 'INVALID_ARGUMENT', message: 'The function must be called with "formType" and "formData" arguments.' }
+        });
+      }
+
+      // --- ECR Validation ---
+      if (formType === 'ecr') {
+        const requiredFields = [
+            { key: 'denominacion_producto', label: 'Denominación del Producto' },
+            { key: 'situacion_existente', label: 'Situación Existente' },
+            { key: 'situacion_propuesta', label: 'Situación Propuesta' }
+        ];
+
+        for (const field of requiredFields) {
+            if (!formData[field.key] || formData[field.key].trim() === '') {
+              return res.status(400).json({
+                error: { status: 'INVALID_ARGUMENT', message: `El campo "${field.label}" no puede estar vacío.` }
+              });
+            }
+        }
+      }
+
+      // --- ECO Validation ---
+      else if (formType === 'eco') {
+        if (!formData['ecr_no'] || formData['ecr_no'].trim() === '') {
+          return res.status(400).json({
+            error: { status: 'INVALID_ARGUMENT', message: 'El campo "ECR N°" no puede estar vacío.' }
+          });
+        }
+        // Add safety checks for comments and checklists
+        const hasComments = formData.comments && Object.values(formData.comments).some(comment => comment && comment.trim() !== '');
+        const hasChecklists = formData.checklists && Object.values(formData.checklists).some(section =>
+            section && section.some(item => item && (item.si || item.na))
+        );
+
+        if (!hasComments && !hasChecklists) {
+          return res.status(400).json({
+            error: { status: 'INVALID_ARGUMENT', message: 'El formulario ECO está vacío. Agregue al menos un comentario o marque una opción en el checklist.' }
+          });
+        }
+      } else {
+        return res.status(400).json({
+          error: { status: 'INVALID_ARGUMENT', message: 'El "formType" debe ser "ecr" o "eco".' }
+        });
+      }
+
+      // --- Firestore Write Logic ---
+      const db = admin.firestore();
+      const collectionName = formType === 'ecr' ? 'ecr_forms' : 'eco_forms';
+
+      // ECR number is now generated client-side.
+      // The function now assumes the 'id' field is always present.
+      const docId = formData.id;
+      if (!docId) {
+        return res.status(400).json({
+          error: { status: 'INVALID_ARGUMENT', message: 'The document ID is missing from the form data.' }
+        });
+      }
+
+      const docRef = db.collection(collectionName).doc(docId);
+      const historyRef = docRef.collection('history');
+
+      const dataToSave = {
+          ...formData,
+          lastModified: new Date(),
+          modifiedBy: userEmail,
+          serverValidated: true
+      };
+
+      const docSnap = await docRef.get();
+      const oldData = docSnap.exists ? docSnap.data() : null;
+
+      const batch = db.batch();
+      batch.set(docRef, dataToSave, { merge: true });
+
+      const historyDocRef = historyRef.doc();
+      batch.set(historyDocRef, dataToSave);
+
+      await batch.commit();
+
+      // --- Email Notification Logic ---
+      const newStatus = dataToSave.status;
+      const oldStatus = oldData ? oldData.status : null;
+
+      if (newStatus && newStatus !== oldStatus) {
+        const creatorUid = dataToSave.creatorUid;
+        if (creatorUid) {
+          try {
+            const userRecord = await admin.auth().getUser(creatorUid);
+            const email = userRecord.email;
+            if (email) {
+              const mailOptions = {
+                from: `"Gestión PRO" <${process.env.EMAIL_USER}>`,
+                to: email,
+                subject: `Actualización de Estado: ${formType.toUpperCase()} ${docId}`,
+                html: `
+                  <p>Hola,</p>
+                  <p>El estado de tu <strong>${formType.toUpperCase()} ${docId}</strong> ha cambiado de <strong>${oldStatus || 'N/A'}</strong> a <strong>${newStatus}</strong>.</p>
+                  <p>Puedes ver los detalles en la aplicación.</p>
+                  <p>Saludos,<br>El equipo de Gestión PRO</p>
+                `
+              };
+              await transporter.sendMail(mailOptions);
+              console.log(`Email sent to ${email} for ${formType.toUpperCase()} ${docId} status change.`);
+            }
+          } catch (error) {
+            console.error(`Failed to send email for ${formType.toUpperCase()} ${docId}:`, error);
+          }
+        }
+      }
+
+      // 3. Manual Response Formatting
+      return res.status(200).json({
+        data: { success: true, message: `${formType.toUpperCase()} guardado con éxito.` }
+      });
+
+    } catch (error) {
+      console.error(`Error in saveFormWithValidation for ${req.body?.data?.formType}:`, error);
+      // Handle auth errors specifically
+      if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
+        return res.status(401).json({
+          error: { status: 'UNAUTHENTICATED', message: 'Authentication token is invalid or expired.' }
+        });
+      }
+      // Generic internal error for all other cases
+      return res.status(500).json({
+        error: { status: 'INTERNAL', message: `An internal error occurred while saving the form.` }
+      });
+    }
+  });
+});
+
+exports.sendTaskAssignmentEmail = functions
   .runWith({ secrets: ["EMAIL_USER", "EMAIL_PASS", "EMAIL_HOST", "EMAIL_PORT"] })
   .firestore.document('tareas/{taskId}')
   .onCreate(async (snap, context) => {
@@ -60,7 +257,7 @@ const sendTaskAssignmentEmail = functions
     }
   });
 
-const organizeTaskWithAI = functions
+exports.organizeTaskWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -95,14 +292,14 @@ const organizeTaskWithAI = functions
 
 
         Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string), "description" (string), "subtasks" (array de strings), "priority" (string: 'low', 'medium', o 'high'), "startDate" (string: 'YYYY-MM-DD' o null), "dueDate" (string: 'YYYY-MM-DD' o null), "assignee" (string o null), "isPublic" (boolean), y "project" (string o null). No incluyas ninguna otra explicación ni formato.
-        Ejemplo de salida para un texto como 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes'. La fecha de hoy es 24 de Septiembre de 2025, y el próximo lunes es 29 de Septiembre de 2025.
+        Ejemplo de salida para un texto como 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes':
         {
           "title": "Organizar reunión para AMFE",
           "description": "Organizar una reunión con Marcelo Nieve para discutir el Análisis de Modos y Efectos de Falla (AMFE).",
           "subtasks": ["Agendar reunión con Marcelo Nieve", "Preparar agenda para la reunión de AMFE"],
           "priority": "medium",
           "startDate": null,
-          "dueDate": "2025-09-29",
+          "dueDate": "2025-09-30",
           "assignee": "Marcelo Nieve",
           "isPublic": true,
           "project": null
@@ -140,8 +337,7 @@ const organizeTaskWithAI = functions
     }
   });
 
-
-const getTaskSummaryWithAI = functions
+exports.getTaskSummaryWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -223,7 +419,7 @@ const getTaskSummaryWithAI = functions
     }
   });
 
-const enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }).pubsub.schedule("every day 09:00")
+exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }).pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires")
   .onRun(async (context) => {
     console.log("Ejecutando la revisión de recordatorios de vencimiento de tareas.");
@@ -299,7 +495,7 @@ const enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM
     }
   });
 
-const sendTaskNotification = functions
+exports.sendTaskNotification = functions
   .runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .firestore.document('tareas/{taskId}')
   .onWrite(async (change, context) => {
@@ -383,7 +579,7 @@ const sendTaskNotification = functions
     }
   });
 
-const sendTestTelegramMessage = functions
+exports.sendTestTelegramMessage = functions
   .runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .https.onCall(async (data, context) => {
     if (!context.auth) {
@@ -433,7 +629,7 @@ const sendTestTelegramMessage = functions
     }
   });
 
-const updateCollectionCounts = functions.firestore
+exports.updateCollectionCounts = functions.firestore
   .document('{collectionId}/{docId}')
   .onWrite(async (change, context) => {
     const collectionId = context.params.collectionId;
@@ -457,7 +653,7 @@ const updateCollectionCounts = functions.firestore
     }, { merge: true });
 });
 
-const listModels = functions.https.onCall(async (data, context) => {
+exports.listModels = functions.https.onCall(async (data, context) => {
   const bucket = admin.storage().bucket();
   const directory = '/'; // List from the root directory
 
@@ -489,7 +685,7 @@ const listModels = functions.https.onCall(async (data, context) => {
   }
 });
 
-const enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
+exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires") // Ajusta a tu zona horaria
   .onRun(async (context) => {
     console.log("Ejecutando la revisión de recordatorios diarios.");
@@ -544,15 +740,3 @@ const enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00")
       return null;
     }
   });
-
-module.exports = {
-    sendTaskAssignmentEmail,
-    organizeTaskWithAI,
-    getTaskSummaryWithAI,
-    enviarRecordatoriosDeVencimiento,
-    sendTaskNotification,
-    sendTestTelegramMessage,
-    updateCollectionCounts,
-    listModels,
-    enviarRecordatoriosDiarios,
-};

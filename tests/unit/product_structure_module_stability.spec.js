@@ -3,11 +3,15 @@ import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 jest.mock('https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js');
 
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
-import { handleDropEvent, handleProductSelect } from '../../public/modules/products/product-logic.js';
-import { dom } from '../../public/main.js';
-import * as ui from '../../public/modules/shared/ui.js';
-import { appState } from '../../public/state.js';
+import * as mainModule from '../../public/main.js';
 import { COLLECTIONS } from '../../public/utils.js';
+
+const {
+    handleProductSelect,
+    handleDropEvent,
+    appState,
+    dom,
+} = mainModule;
 
 describe('Product structure module stability', () => {
     beforeEach(() => {
@@ -74,7 +78,7 @@ describe('Product structure module stability', () => {
             data: () => productData,
         });
 
-        const showToastSpy = jest.spyOn(ui, 'showToast');
+        const showToastSpy = jest.spyOn(mainModule, 'showToast');
 
         await handleProductSelect(productDocId);
 

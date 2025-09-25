@@ -4,8 +4,7 @@
 
 import { collection, onSnapshot, query, orderBy, addDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { showConfirmationModal, showToast } from '../shared/ui.js';
-import { checkUserPermission } from '../../permissions.js';
+import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
 import { handleTaskFormSubmit, deleteTask } from './task.service.js';
 import { getTaskFormModalHTML, getSubtaskHTML } from './task.templates.js';

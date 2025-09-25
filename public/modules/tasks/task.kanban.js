@@ -3,7 +3,7 @@ import { renderTaskFilters, renderTasks, renderAdminUserList } from './task.ui.j
 import { openTaskFormModal } from './task.modal.js';
 import { getKanbanBoardHTML } from './task.templates.js';
 import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, addUnsubscriber, clearUnsubscribers } from './task.state.js';
-import { showToast } from '../shared/ui.js';
+import { showToast } from '../../main.js';
 
 let db;
 let appState;
@@ -46,7 +46,7 @@ export function initTasksSortable(container) {
     });
 }
 
-import { COLLECTIONS } from '/utils.js';
+import { COLLECTIONS } from '../../utils.js';
 
 function fetchAndRenderTasks(container) {
     clearUnsubscribers();

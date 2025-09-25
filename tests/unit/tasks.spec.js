@@ -15,9 +15,6 @@ jest.mock('../../public/modules/tasks/task.ui.js');
 jest.mock('../../public/modules/tasks/task.kanban.js');
 jest.mock('../../public/modules/tasks/task.dashboard.js');
 jest.mock('../../public/modules/tasks/task.calendar.js');
-jest.mock('../../public/permissions.js', () => ({
-    checkUserPermission: jest.fn(() => true),
-}));
 
 // Import the module to be tested AFTER mocking
 import { initTasksModule, runTasksLogic } from '../../public/modules/tasks/tasks.js';

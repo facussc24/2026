@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from '@jest/globals';
-import { prepareDataForPdfAutoTable, COLLECTIONS } from '../../public/utils.js';
-
-import { appState } from '../../public/state.js';
+import { prepareDataForPdfAutoTable } from '../../public/utils.js';
+import { appState } from '../../public/main.js';
+import { COLLECTIONS } from '../../public/utils.js';
 
 describe('prepareDataForPdfAutoTable', () => {
     let mockCollectionsById;

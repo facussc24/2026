@@ -1,5 +1,3 @@
-import { doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-
 export const COLLECTIONS = {
     PRODUCTOS: 'productos',
     SEMITERMINADOS: 'semiterminados',
@@ -15,7 +13,6 @@ export const COLLECTIONS = {
     ROLES: 'roles',
     ECO_FORMS: 'eco_forms',
     ECR_FORMS: 'ecr_forms',
-    ECR_DRAFTS: 'ecr_drafts',
     COVER_MASTER: 'cover_master',
     REUNIONES_ECR: 'reuniones_ecr',
     NOTIFICATIONS: 'notifications'
@@ -49,161 +46,6 @@ export function createHelpTooltip(message) {
             </div>
         </div>
     `;
-}
-
-/**
- * A simple event bus for application-wide communication.
- * This helps decouple modules from each other.
- */
-class EventBus {
-    constructor() {
-        this.events = {};
-    }
-
-    /**
-     * Subscribes to an event.
-     * @param {string} event - The name of the event.
-     * @param {Function} callback - The function to call when the event is emitted.
-     * @returns {Function} - A function to unsubscribe from the event.
-     */
-    on(event, callback) {
-        if (!this.events[event]) {
-            this.events[event] = [];
-        }
-        this.events[event].push(callback);
-
-        // Return an unsubscribe function
-        return () => {
-            this.events[event] = this.events[event].filter(cb => cb !== callback);
-        };
-    }
-
-    /**
-     * Emits an event, calling all subscribed callbacks.
-     * @param {string} event - The name of the event to emit.
-     * @param {*} data - The data to pass to the callbacks.
-     */
-    emit(event, data) {
-        if (this.events[event]) {
-            this.events[event].forEach(callback => {
-                try {
-                    callback(data);
-                } catch (error) {
-                    console.error(`Error in event bus callback for event "${event}":`, error);
-                }
-            });
-        }
-    }
-}
-
-// Export a single instance to be used throughout the application.
-export const eventBus = new EventBus();
-
-/**
- * Sets a value on a nested object using a dot-notation path.
- * Creates nested objects if they don't exist.
- * @param {object} obj - The object to modify.
- * @param {string} path - The dot-notation path (e.g., 'a.b.c').
- * @param {*} value - The value to set at the specified path.
- */
-export function setPath(obj, path, value) {
-    const keys = path.split('.');
-    let current = obj;
-    for (let i = 0; i < keys.length - 1; i++) {
-        const key = keys[i];
-        if (!current[key] || typeof current[key] !== 'object') {
-            current[key] = {};
-        }
-        current = current[key];
-    }
-    current[keys[keys.length - 1]] = value;
-}
-
-
-export function formatTimeAgo(timestamp) {
-    const now = new Date();
-    const seconds = Math.floor((now - timestamp) / 1000);
-    let interval = seconds / 31536000;
-    if (interval > 1) return `hace ${Math.floor(interval)} años`;
-    interval = seconds / 2592000;
-    if (interval > 1) return `hace ${Math.floor(interval)} meses`;
-    interval = seconds / 86400;
-    if (interval > 1) return `hace ${Math.floor(interval)} días`;
-    interval = seconds / 3600;
-    if (interval > 1) return `hace ${Math.floor(interval)} horas`;
-    interval = seconds / 60;
-    if (interval > 1) return `hace ${Math.floor(interval)} minutos`;
-    return `hace ${Math.floor(seconds)} segundos`;
-}
-
-export function waitForImages(element) {
-    const images = Array.from(element.getElementsByTagName('img'));
-    const promises = images.map(img => {
-        return new Promise((resolve) => {
-            if (img.complete) {
-                // If the image is already loaded (e.g., from cache), resolve immediately.
-                resolve();
-            } else {
-                // Otherwise, wait for the load or error event.
-                img.addEventListener('load', resolve, { once: true });
-                img.addEventListener('error', resolve, { once: true }); // Resolve on error too, so it doesn't hang forever.
-            }
-        });
-    });
-    return Promise.all(promises);
-}
-
-export async function getLogoBase64() {
-    try {
-        const response = await fetch('barack_logo.png');
-        if (!response.ok) return null;
-        const blob = await response.blob();
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-    } catch (error) {
-        console.error("Could not fetch barack_logo.png:", error);
-        return null;
-    }
-}
-
-/**
- * Ensures that all specified collections are loaded into the appState.
- * Fetches any collections that are not already present.
- * @param {object} db - The Firestore database instance.
- * @param {object} firestore - Firestore functions { getDocs, collection }.
- * @param {object} appState - The global application state.
- * @param {Array<string>} collectionNames - An array of collection names to ensure are loaded.
- * @returns {Promise<void>} A promise that resolves when all collections are loaded.
- */
-export async function ensureCollectionsAreLoaded(db, firestore, appState, collectionNames) {
-    const { getDocs, collection } = firestore;
-    const collectionsToFetch = collectionNames.filter(name => {
-        return !appState.collections[name] || appState.collections[name].length === 0;
-    });
-
-    if (collectionsToFetch.length === 0) {
-        return;
-    }
-
-    try {
-        const fetchPromises = collectionsToFetch.map(async (name) => {
-            const querySnapshot = await getDocs(collection(db, name));
-            const data = querySnapshot.docs.map(d => ({ ...d.data(), docId: d.id }));
-            appState.collections[name] = data;
-            if (data.length > 0 && data[0].id) {
-                appState.collectionsById[name] = new Map(data.map(item => [item.id, item]));
-            }
-        });
-
-        await Promise.all(fetchPromises);
-    } catch (error) {
-        console.error("Error ensuring collections are loaded:", error);
-        throw new Error('Error al cargar datos necesarios para el formulario.');
-    }
 }
 
 /**
@@ -254,66 +96,32 @@ export function validateField(fieldConfig, inputElement) {
 }
 
 /**
- * Saves the current ECR form data as a draft in Firestore.
- * Each user has a single draft document, identified by their UID.
- * @param {object} db - The Firestore database instance.
- * @param {string} userId - The UID of the current user.
- * @param {object} data - The form data object to save.
+ * Saves ECR form data to local storage.
+ * @param {HTMLElement} formContainer - The form element.
+ * @param {string} storageKey - The key for local storage.
  */
-export async function saveEcrDraftToFirestore(db, userId, data) {
-    if (!db || !userId || !data) {
-        console.error("Missing required parameters for saving ECR draft.");
-        return;
-    }
-    try {
-        const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, userId);
-        await setDoc(draftRef, { ...data, lastSaved: new Date() });
-    } catch (error) {
-        console.error("Error saving ECR draft to Firestore:", error);
-    }
+export function saveEcrFormToLocalStorage(formContainer, storageKey) {
+    if (!formContainer) return;
+    const formData = new FormData(formContainer);
+    const data = Object.fromEntries(formData.entries());
+    // This is the fixed implementation.
+    formContainer.querySelectorAll('input[type="checkbox"]:not(:disabled)').forEach(cb => {
+        data[cb.name] = cb.checked;
+    });
+    localStorage.setItem(storageKey, JSON.stringify(data));
 }
 
 /**
- * Loads a user's ECR draft from Firestore and populates the form.
- * @param {object} db - The Firestore database instance.
- * @param {string} userId - The UID of the current user.
- * @param {HTMLElement} formContainer - The form element to populate.
+ * Loads ECR form data from local storage and populates the form.
+ * @param {HTMLElement} formContainer - The form element.
+ * @param {string} storageKey - The key for local storage.
  * @param {Function} populateFormFn - The function to populate the form with data.
  */
-export async function loadEcrDraftFromFirestore(db, userId, formContainer, populateFormFn) {
-    if (!db || !userId) return;
-
-    try {
-        const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, userId);
-        const docSnap = await getDoc(draftRef);
-
-        if (docSnap.exists()) {
-            console.log("ECR draft found, populating form.");
-            const data = docSnap.data();
-            populateFormFn(formContainer, data);
-        } else {
-            console.log("No ECR draft found for this user.");
-        }
-    } catch (error) {
-        console.error("Error loading ECR draft from Firestore:", error);
-    }
-}
-
-/**
- * Deletes a user's ECR draft from Firestore.
- * @param {object} db - The Firestore database instance.
- * @param {string} userId - The UID of the current user.
- */
-export async function deleteEcrDraftFromFirestore(db, userId) {
-    if (!db || !userId) return;
-
-    try {
-        const draftRef = doc(db, COLLECTIONS.ECR_DRAFTS, userId);
-        await deleteDoc(draftRef);
-        console.log("ECR draft deleted successfully.");
-    } catch (error) {
-        console.error("Could not delete ECR draft:", error);
-    }
+export function loadEcrFormFromLocalStorage(formContainer, storageKey, populateFormFn) {
+    const savedData = localStorage.getItem(storageKey);
+    if (!savedData) return;
+    const data = JSON.parse(savedData);
+    populateFormFn(formContainer, data);
 }
 
 /**

@@ -1,5 +1,5 @@
 import { subscribeToAllTasks, exportTasksToExcel } from './task.service.js';
-import { showToast } from '../shared/ui.js';
+import { showToast } from '../../main.js';
 import { getState, setDashboardTasks, resetDashboardState, setDashboardTableFilter, setDashboardTablePage } from './task.state.js';
 import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading, openAIAssistantModal } from './task.ui.js';
 import { getDashboardLayoutHTML } from './task.templates.js';
