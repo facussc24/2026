@@ -686,13 +686,7 @@ function initializeAppListeners() {
 
 function setupGlobalEventListeners() {
     dom.searchInput.addEventListener('input', handleSearch);
-    dom.addNewButton.addEventListener('click', () => {
-        if (appState.currentView === 'ecr') {
-            switchView('ecr_form');
-        } else {
-            openFormModal();
-        }
-    });
+    dom.addNewButton.addEventListener('click', () => openFormModal());
 
     const onTutorialEnd = () => {
         appState.isTutorialActive = false;
@@ -820,18 +814,16 @@ async function switchView(viewName, params = null) {
         }
     }
     else if (viewName === 'ecr' || viewName === 'ecr_creation_hub') {
-        // This view should show the table, which has the "Add New" button.
-        // The generic table logic will handle this.
         dom.headerActions.style.display = 'flex';
-        dom.searchInput.style.display = 'block';
+        dom.searchInput.style.display = 'none'; // No search on this view
         if (checkUserPermission('create')) {
             dom.addNewButton.style.display = 'flex';
-            dom.addButtonText.textContent = `Agregar ${config.singular}`;
-            dom.addNewButton.dataset.tutorialId = 'create-new-button';
+            dom.addButtonText.textContent = `Agregar ECR`;
         } else {
             dom.addNewButton.style.display = 'none';
         }
-        await runTableLogic();
+        // This view will now be handled by the new logic, let's just switch to the form.
+        await switchView('ecr_form');
     }
     else if (viewName === 'ecr_form') {
         // Load CSS dynamically for this view
