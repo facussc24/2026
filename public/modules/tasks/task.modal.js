@@ -336,7 +336,8 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
                 if (form) form.style.display = 'none';
                 if (footer) footer.style.display = 'none';
 
-                const modalContentContainer = modalElement.querySelector('.modal-content');
+                // This is the fix: find the modal's content container and remove the max-height class
+                const modalContentContainer = modalElement.querySelector('.bg-slate-50');
                 if (modalContentContainer) {
                     modalContentContainer.classList.remove('max-h-[90vh]');
                 }
