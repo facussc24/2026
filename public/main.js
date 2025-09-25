@@ -85,7 +85,18 @@ const viewConfig = {
     sinoptico_tabular: { title: 'Lista de Materiales (Tabular)', singular: 'Lista de Materiales (Tabular)' },
     eco_form: { title: 'ECO de Producto / Proceso', singular: 'Formulario ECO' },
     eco: { title: 'Gestión de ECO', singular: 'ECO' },
-    ecr: { title: 'Gestión de ECR', singular: 'ECR' },
+    ecr: {
+        title: 'Gestión de ECR',
+        singular: 'ECR',
+        dataKey: COLLECTIONS.ECR_FORMS,
+        columns: [
+            { key: 'ecr_no', label: 'ECR No.' },
+            { key: 'status', label: 'Estado' },
+            { key: 'denominacion_producto', label: 'Producto' },
+            { key: 'cliente', label: 'Cliente' },
+            { key: 'lastModified', label: 'Última Modificación', format: (ts) => ts?.toDate ? ts.toDate().toLocaleDateString('es-AR') : 'N/A' }
+        ]
+    },
     ecr_creation_hub: { title: 'Crear Nuevo ECR', singular: 'ECR' },
     ecr_form: {
         title: 'ECR de Producto / Proceso',
@@ -652,7 +663,15 @@ function initializeAppListeners() {
 
 function setupGlobalEventListeners() {
     dom.searchInput.addEventListener('input', handleSearch);
-    dom.addNewButton.addEventListener('click', () => openFormModal());
+    dom.addNewButton.addEventListener('click', () => {
+        // Special case for ECR, which has a dedicated full-page form
+        // instead of a generic modal.
+        if (appState.currentView === 'ecr') {
+            eventBus.emit('navigate', { view: 'ecr_form' });
+        } else {
+            openFormModal();
+        }
+    });
 
     const onTutorialEnd = () => {
         appState.isTutorialActive = false;
@@ -779,16 +798,9 @@ async function switchView(viewName, params = null) {
             appState.currentViewCleanup = unsubscribe;
         }
     }
-    else if (viewName === 'ecr' || viewName === 'ecr_creation_hub') {
-        dom.headerActions.style.display = 'flex';
-        dom.searchInput.style.display = 'none'; // No search on this view
-        if (checkUserPermission('create')) {
-            dom.addNewButton.style.display = 'flex';
-            dom.addButtonText.textContent = `Agregar ECR`;
-        } else {
-            dom.addNewButton.style.display = 'none';
-        }
-        // This view will now be handled by the new logic, let's just switch to the form.
+    else if (viewName === 'ecr_creation_hub') {
+        // This view is now deprecated and replaced by the 'ecr_form' view directly.
+        // For backward compatibility, we redirect to the new form.
         await switchView('ecr_form');
     }
     else if (viewName === 'ecr_form') {
