@@ -419,22 +419,36 @@ exports.organizeTaskWithAI = functions
       console.error("Timestamp:", new Date().toISOString());
       console.error("Input Text:", text.substring(0, 100) + "...");
 
+      let detailedErrorMessage = "Ocurrió un error desconocido al procesar la solicitud con la IA.";
+
       if (error.response) {
+        // Axios error with a response from the server (e.g., 4xx, 5xx)
         console.error("Gemini API Response Error Status:", error.response.status);
         console.error("Gemini API Response Data:", JSON.stringify(error.response.data, null, 2));
+        // Try to get the specific message from the API response body
+        if (error.response.data && error.response.data.error && error.response.data.error.message) {
+          detailedErrorMessage = `Error de la API de IA (${error.response.status}): ${error.response.data.error.message}`;
+        } else {
+          detailedErrorMessage = `La API de IA respondió con un error ${error.response.status}, pero sin un mensaje detallado.`;
+        }
       } else if (error.request) {
+        // Axios error where the request was made but no response was received
         console.error("Gemini API No Response Received:", error.request);
+        detailedErrorMessage = "No se recibió respuesta del servidor de la API de IA. Verifique la conexión o la URL.";
       } else {
+        // Other errors (e.g., setup, JSON parsing, validation)
         console.error("Error message:", error.message);
+        detailedErrorMessage = error.message; // Use the message from the error itself (e.g., from JSON.parse)
       }
 
       console.error("Full Error Object:", JSON.stringify(error, null, 2));
       console.error("--- End of Detailed Error ---");
 
+      // Throw a new HttpsError with the detailed message, which will be sent to the client.
       throw new functions.https.HttpsError(
         "internal",
-        error.message || "Ocurrió un error al procesar la solicitud con la IA.",
-        "Check the function logs for more details."
+        detailedErrorMessage, // This detailed message will be visible on the client
+        { originalError: error.message }
       );
     }
   });
