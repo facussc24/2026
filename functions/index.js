@@ -368,7 +368,8 @@ exports.organizeTaskWithAI = functions
       const parsedData = JSON.parse(jsonMatch[0]);
 
       // The AI should now return an object with a "tasks" array.
-      if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks) || parsedData.tasks.length === 0) {
+      // It's valid for the AI to return an empty array if no tasks are found.
+      if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks)) {
           throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
       }
 
