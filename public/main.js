@@ -840,9 +840,19 @@ async function switchView(viewName, params = null) {
             appState.currentViewCleanup = unsubscribe;
         }
     }
-    else if (viewName === 'ecr' || viewName === 'ecr_creation_hub' || viewName === 'ecr_form') {
+    else if (viewName === 'ecr' || viewName === 'ecr_creation_hub') {
         const deps = { db, storage, functions, appState, dom, lucide, showToast, showConfirmationModal, switchView: (view, params) => eventBus.emit('navigate', { view, params }), sendNotification };
         await handleEcrView(viewName, params, deps);
+    }
+    else if (viewName === 'ecr_form') {
+        const response = await fetch('modules/ecr/views/ecr-form.html');
+        if (!response.ok) {
+            dom.viewContent.innerHTML = `<p class="text-red-500 p-8">Error: No se pudo cargar el formulario ECR.</p>`;
+            return;
+        }
+        const html = await response.text();
+        dom.viewContent.innerHTML = html;
+        // The script inside the HTML is a module and will handle its own initialization.
     }
     else if (['control_ecrs', 'seguimiento_ecr_eco', 'ecr_seguimiento', 'ecr_table_view', 'indicadores_ecm_view'].includes(viewName)) {
         const deps = { db, firestore: { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, writeBatch, limit, orderBy }, dom, lucide, appState, showToast, switchView: (view, params) => eventBus.emit('navigate', { view, params }), showConfirmationModal, checkUserPermission, showInfoModal, seedControlPanelTutorialData, newControlPanelTutorial, showDatePromptModal };
