@@ -2,21 +2,8 @@
  * @jest-environment jsdom
  */
 
-// Mock para appState y sus colecciones
-const appState = {
-    collectionsById: {
-        productos: new Map([
-            ['PROD-01', { id: 'PROD-01', descripcion: 'Producto Principal' }]
-        ]),
-        semiterminados: new Map([
-            ['SEMI-01', { id: 'SEMI-01', descripcion: 'Componente Semi-terminado' }]
-        ]),
-        insumos: new Map([
-            ['INS-01', { id: 'INS-01', descripcion: 'Insumo A' }],
-            ['INS-02', { id: 'INS-02', descripcion: 'Insumo B' }]
-        ])
-    }
-};
+
+import { appState } from '../../public/state.js';
 
 // Copia de la función a probar desde main.js
 const generateMermaidDefinition = (nodes) => {

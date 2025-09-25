@@ -4,18 +4,9 @@ jest.mock('https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js');
 
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
 import { handleDropEvent, handleProductSelect } from '../../public/modules/products/product-logic.js';
-const appState = {
-    currentData: [],
-    collections: {},
-    collectionsById: {},
-    arbolActivo: null,
-};
-const dom = {
-    viewContent: null,
-    toastContainer: null,
-    modalContainer: null,
-};
+import { dom } from '../../public/main.js';
 import * as ui from '../../public/modules/shared/ui.js';
+import { appState } from '../../public/state.js';
 import { COLLECTIONS } from '../../public/utils.js';
 
 describe('Product structure module stability', () => {

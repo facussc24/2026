@@ -76,17 +76,9 @@ describe('registerEcrApproval State Machine', () => {
         // Set the current user to be the one from the 'compras' department for this test run.
         mockAppState.currentUser.sector = 'compras';
 
-        const deps = {
-            db: 'mockDb',
-            firestore: mockFirestore,
-            COLLECTIONS,
-            appState: mockAppState,
-            uiCallbacks: mockUiCallbacks,
-        };
-
         // --- 2. ACT ---
         // The user from 'compras' submits the final required approval.
-        await registerEcrApproval(ecrId, 'compras', 'approved', 'Final approval.', deps);
+        await registerEcrApproval(ecrId, 'compras', 'approved', 'Final approval.', { firestore: mockFirestore, appState: mockAppState, uiCallbacks: mockUiCallbacks });
 
         // --- 3. ASSERT ---
         expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
@@ -112,10 +104,8 @@ describe('registerEcrApproval State Machine', () => {
         };
         mockGetDoc.mockResolvedValue({ exists: () => true, data: () => JSON.parse(JSON.stringify(initialEcrData)) });
         mockAppState.currentUser.sector = 'compras';
-        const deps = { db: 'mockDb', firestore: mockFirestore, COLLECTIONS, appState: mockAppState, uiCallbacks: mockUiCallbacks };
-
         // --- ACT ---
-        await registerEcrApproval(ecrId, 'compras', 'rejected', 'Not viable.', deps);
+        await registerEcrApproval(ecrId, 'compras', 'rejected', 'Not viable.', { firestore: mockFirestore, appState: mockAppState, uiCallbacks: mockUiCallbacks });
 
         // --- ASSERT ---
         expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
@@ -136,10 +126,8 @@ describe('registerEcrApproval State Machine', () => {
         };
         mockGetDoc.mockResolvedValue({ exists: () => true, data: () => JSON.parse(JSON.stringify(initialEcrData)) });
         mockAppState.currentUser.sector = 'calidad';
-        const deps = { db: 'mockDb', firestore: mockFirestore, COLLECTIONS, appState: mockAppState, uiCallbacks: mockUiCallbacks };
-
         // --- ACT ---
-        await registerEcrApproval(ecrId, 'calidad', 'approved', 'First approval.', deps);
+        await registerEcrApproval(ecrId, 'calidad', 'approved', 'First approval.', { firestore: mockFirestore, appState: mockAppState, uiCallbacks: mockUiCallbacks });
 
         // --- ASSERT ---
         expect(mockUpdateDoc).toHaveBeenCalledTimes(1);

@@ -1,4 +1,4 @@
-import { appState } from './main.js';
+import { appState } from './state.js';
 
 /**
  * Verifica los permisos de un usuario para realizar una acción específica.

@@ -36,6 +36,9 @@ module.exports = {
 
   // A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module
   moduleNameMapper: {
+    // Handle module aliases (this maps an import like '/utils.js' to '<rootDir>/public/utils.js')
+    '^/(.*)$': '<rootDir>/public/$1',
+
      // Force module uuid to resolve with the CJS entry point, because Jest does not support package.json.exports. See https://github.com/uuidjs/uuid/issues/451
     "uuid": "uuid",
     "\\.(css|less)$": "<rootDir>/__mocks__/styleMock.js",
@@ -50,6 +53,7 @@ module.exports = {
     "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js": "<rootDir>/__mocks__/firebase-storage.js",
     "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js": "<rootDir>/__mocks__/firebase-firestore.js",
     "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js": "<rootDir>/__mocks__/firebase-functions.js",
+    "^/firebase.config.js$": "<rootDir>/__mocks__/firebase-config.js",
 
     // Mock Three.js and its addons
     "^three/examples/jsm/controls/OrbitControls.js$": "<rootDir>/__mocks__/three.js",
