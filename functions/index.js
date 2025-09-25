@@ -1,5 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const {VertexAI} = require("@google-cloud/vertexai");
 const cors = require('cors')({origin: true});
 const axios = require("axios");
 const nodemailer = require('nodemailer');
@@ -257,24 +258,29 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
-exports.organizeTaskWithAI = functions
-  .runWith({ secrets: ["GEMINI_API_KEY"] })
-  .https.onCall(async (data, context) => {
+exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
     const text = data.text;
     if (!text || typeof text !== "string" || text.trim().length === 0) {
-      throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
     }
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-1.0-pro";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        // Inicializa Vertex AI con la configuración del proyecto y la ubicación.
+        const vertexAI = new VertexAI({
+            project: process.env.GCLOUD_PROJECT,
+            location: "us-central1",
+        });
 
-      const prompt = `
+        // Selecciona el modelo generativo.
+        const generativeModel = vertexAI.getGenerativeModel({
+            model: "gemini-1.0-pro",
+        });
+
+        const prompt = `
         Analiza el siguiente texto de un usuario. Tu objetivo principal es identificar si el texto describe una única tarea o múltiples tareas distintas que deberían gestionarse por separado.
 
         Texto del usuario: "${text}"
@@ -294,154 +300,84 @@ exports.organizeTaskWithAI = functions
         3.  **Corrección de Texto**: En los títulos y descripciones, corrige errores ortográficos y gramaticales obvios para mayor claridad. Mantén acrónimos o jerga técnica (ej. 'AMFE') si no estás seguro.
 
         **Formato de Salida OBLIGATORIO**:
-        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado.
-
-        **Ejemplo 1 (Una sola tarea con subtareas)**:
-        Texto: 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes'
-        Salida:
-        {
-          "tasks": [
-            {
-              "title": "Organizar reunión para AMFE",
-              "description": "Organizar una reunión con Marcelo Nieve para discutir el Análisis de Modos y Efectos de Falla (AMFE).",
-              "subtasks": ["Agendar reunión con Marcelo Nieve", "Preparar agenda para la reunión de AMFE"],
-              "priority": "medium",
-              "startDate": null,
-              "dueDate": "2025-09-30",
-              "assignee": "Marcelo Nieve",
-              "isPublic": true,
-              "project": null
-            }
-          ]
-        }
-
-        **Ejemplo 2 (Múltiples tareas separadas)**:
-        Texto: 'Revisar los planos del chasis esta tarde y mañana llamar al proveedor ACME para confirmar la entrega del material.'
-        Salida:
-        {
-          "tasks": [
-            {
-              "title": "Revisar planos del chasis",
-              "description": "Revisar los planos técnicos del componente del chasis para verificar las últimas modificaciones.",
-              "subtasks": [],
-              "priority": "medium",
-              "startDate": null,
-              "dueDate": "2025-09-25",
-              "assignee": null,
-              "isPublic": true,
-              "project": null
-            },
-            {
-              "title": "Confirmar entrega con proveedor ACME",
-              "description": "Llamar al proveedor ACME para confirmar la fecha y hora de entrega del material solicitado.",
-              "subtasks": ["Obtener número de orden de compra", "Llamar a ACME"],
-              "priority": "medium",
-              "startDate": "2025-09-26",
-              "dueDate": "2025-09-26",
-              "assignee": null,
-              "isPublic": true,
-              "project": null
-            }
-          ]
-        }
+        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado. NO incluyas el JSON dentro de un bloque de código markdown.
       `;
 
-      const requestBody = {
-        contents: [{
-          parts: [{
-            text: prompt,
-          }],
-        }],
-      };
+        // Genera el contenido usando el SDK de Vertex AI.
+        const result = await generativeModel.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
 
-      const apiResponse = await axios.post(url, requestBody);
+        // Extrae el texto de la respuesta.
+        const responseText = result.response.candidates[0].content.parts[0].text;
 
-      const responseText = apiResponse.data.candidates[0].content.parts[0].text;
+        // Extrae el bloque JSON de la respuesta.
+        const jsonMatch = responseText.match(/{[\s\S]*}/);
+        if (!jsonMatch) {
+            console.error("No valid JSON block found in AI response. Raw response:", responseText);
+            throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
+        }
 
-      // Use a regex to extract the JSON block, ignoring any surrounding text.
-      const jsonMatch = responseText.match(/{[\s\S]*}/);
-      if (!jsonMatch) {
-        console.error("No valid JSON block found in AI response. Raw response:", responseText);
-        throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
-      }
+        const parsedData = JSON.parse(jsonMatch[0]);
 
-      const parsedData = JSON.parse(jsonMatch[0]);
+        // Valida la estructura de la respuesta.
+        if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks)) {
+            throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
+        }
 
-      // The AI should now return an object with a "tasks" array.
-      // It's valid for the AI to return an empty array if no tasks are found.
-      if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks)) {
-          throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
-      }
-
-      // The function now returns the entire object, which includes the "tasks" array.
-      // The client will handle whether it's one or many tasks.
-      return parsedData;
+        return parsedData;
 
     } catch (error) {
-      console.error("--- Detailed Error in organizeTaskWithAI ---");
-      console.error("Timestamp:", new Date().toISOString());
-      console.error("Input Text:", text.substring(0, 100) + "...");
-
-      if (error.response) {
-        console.error("Gemini API Response Error Status:", error.response.status);
-        console.error("Gemini API Response Data:", JSON.stringify(error.response.data, null, 2));
-      } else if (error.request) {
-        console.error("Gemini API No Response Received:", error.request);
-      } else {
-        console.error("Error message:", error.message);
-      }
-
-      console.error("Full Error Object:", JSON.stringify(error, null, 2));
-      console.error("--- End of Detailed Error ---");
-
-      throw new functions.https.HttpsError(
-        "internal",
-        "Ocurrió un error al procesar la solicitud con la IA.",
-        "Check the function logs for more details."
-      );
+        console.error("Error en organizeTaskWithAI con Vertex AI:", error);
+        throw new functions.https.HttpsError(
+            "internal",
+            "Ocurrió un error al procesar la solicitud con Vertex AI.",
+            error.message
+        );
     }
-  });
+});
 
-exports.getTaskSummaryWithAI = functions
-  .runWith({ secrets: ["GEMINI_API_KEY"] })
-  .https.onCall(async (data, context) => {
+exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
     const { tasks, question } = data;
     if (!tasks || !Array.isArray(tasks) || !question) {
-      throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'tasks' (array) and 'question' (string) arguments.");
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with 'tasks' (array) and 'question' (string) arguments.");
     }
 
-    // To make the prompt more robust, we map the simple question key to a full, descriptive question.
     const questionMap = {
-      summary: "Genera un resumen conciso del estado general de las tareas. Indica cuántas hay en cada estado (Por Hacer, En Progreso, Completadas) y cualquier observación general.",
-      urgent: "Identifica las 3 tareas más urgentes. Basa tu criterio en la combinación de su fecha de vencimiento (dueDate) y su prioridad (priority). Menciona por qué cada una es urgente.",
-      at_risk: "Analiza las tareas y detecta cuáles están en riesgo de no completarse a tiempo. Considera tareas con alta prioridad y fechas de vencimiento cercanas que no estén 'En Progreso', o tareas que lleven mucho tiempo sin actualizarse.",
-      blocked: "Revisa los títulos, descripciones y comentarios de las tareas para identificar si alguna está bloqueada. Busca frases como 'bloqueado por', 'esperando a', 'no puedo continuar hasta', etc. Si no encuentras ninguna, indícalo explícitamente."
+        summary: "Genera un resumen conciso del estado general de las tareas. Indica cuántas hay en cada estado (Por Hacer, En Progreso, Completadas) y cualquier observación general.",
+        urgent: "Identifica las 3 tareas más urgentes. Basa tu criterio en la combinación de su fecha de vencimiento (dueDate) y su prioridad (priority). Menciona por qué cada una es urgente.",
+        at_risk: "Analiza las tareas y detecta cuáles están en riesgo de no completarse a tiempo. Considera tareas con alta prioridad y fechas de vencimiento cercanas que no estén 'En Progreso', o tareas que lleven mucho tiempo sin actualizarse.",
+        blocked: "Revisa los títulos, descripciones y comentarios de las tareas para identificar si alguna está bloqueada. Busca frases como 'bloqueado por', 'esperando a', 'no puedo continuar hasta', etc. Si no encuentras ninguna, indícalo explícitamente."
     };
 
     const fullQuestion = questionMap[question];
     if (!fullQuestion) {
-      throw new functions.https.HttpsError("invalid-argument", "The 'question' provided is not a valid one.");
+        throw new functions.https.HttpsError("invalid-argument", "The 'question' provided is not a valid one.");
     }
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-1.0-pro";
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const vertexAI = new VertexAI({
+            project: process.env.GCLOUD_PROJECT,
+            location: "us-central1",
+        });
 
-      // We are sending a subset of task data to avoid sending too much information
-      const tasksForPrompt = tasks.map(t => ({
-          title: t.title,
-          status: t.status,
-          priority: t.priority,
-          dueDate: t.dueDate,
-          description: t.description ? t.description.substring(0, 100) : undefined // Limit description length
-      }));
+        const generativeModel = vertexAI.getGenerativeModel({
+            model: "gemini-1.0-pro",
+        });
 
-      const prompt = `
+        const tasksForPrompt = tasks.map(t => ({
+            title: t.title,
+            status: t.status,
+            priority: t.priority,
+            dueDate: t.dueDate,
+            description: t.description ? t.description.substring(0, 100) : undefined
+        }));
+
+        const prompt = `
         Eres un asistente de gestión de proyectos experto y muy conciso. Tu tarea es analizar una lista de tareas en formato JSON y responder a una pregunta específica sobre ellas.
 
         **Contexto:**
@@ -462,27 +398,23 @@ exports.getTaskSummaryWithAI = functions
         - Tu respuesta debe ser solo el texto del análisis, sin saludos ni despedidas. No envuelvas tu respuesta en JSON o markdown.
       `;
 
-      const requestBody = {
-        contents: [{
-          parts: [{ text: prompt }],
-        }],
-      };
+        const result = await generativeModel.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
 
-      const apiResponse = await axios.post(url, requestBody);
+        const responseText = result.response.candidates[0].content.parts[0].text;
 
-      const responseText = apiResponse.data.candidates[0].content.parts[0].text;
-
-      return { summary: responseText };
+        return { summary: responseText };
 
     } catch (error) {
-      console.error("Error calling Gemini API for task summary:", error.response ? error.response.data : error.message);
-      throw new functions.https.HttpsError(
-        "internal",
-        "Ocurrió un error al generar el resumen con la IA.",
-        error.message
-      );
+        console.error("Error en getTaskSummaryWithAI con Vertex AI:", error);
+        throw new functions.https.HttpsError(
+            "internal",
+            "Ocurrió un error al generar el resumen con la IA.",
+            error.message
+        );
     }
-  });
+});
 
 exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }).pubsub.schedule("every day 09:00")
   .timeZone("America/Argentina/Buenos_Aires")
