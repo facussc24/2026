@@ -30,7 +30,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const switchView = (view, data) => {
     activeView = view;
     activeData = data;
-    viewContent.innerHTML = "";
+    if (viewContent) {
+      viewContent.innerHTML = "";
+    }
     switch (view) {
       case "login":
         pageTitle.innerHTML = "Login";
