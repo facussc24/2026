@@ -271,7 +271,7 @@ exports.organizeTaskWithAI = functions
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-pro";
+      const model = "gemini-1.0-pro";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       const prompt = `
@@ -430,7 +430,7 @@ exports.getTaskSummaryWithAI = functions
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-pro";
+      const model = "gemini-1.0-pro";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       // We are sending a subset of task data to avoid sending too much information
