@@ -100,69 +100,6 @@ service cloud.firestore {
       allow create, update, delete: if canCreateUpdate();
     }
 
-    match /eco_forms/{ecoId} {
-      allow read: if request.auth != null;
-      allow create, update: if canCreateUpdate();
-      allow delete: if isUserAdmin();
-
-      // History is part of the ECO, should be readable by the same people.
-      // It should only be created, not updated or deleted directly.
-      match /history/{historyId} {
-        allow read: if request.auth != null;
-        allow create: if canCreateUpdate();
-        allow update, delete: if false; // Immutable history
-      }
-    }
-
-    function getUserData() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
-    }
-
-    function isUserInSector(sector) {
-        return exists(/databases/$(database)/documents/usuarios/$(request.auth.uid)) &&
-               getUserData().sector == sector;
-    }
-
-    match /ecr_forms/{ecrId} {
-      allow read: if request.auth != null;
-      allow create: if canCreateUpdate();
-      allow delete: if isUserAdmin();
-
-      allow update: if isUserAdmin() || (
-        // Allow general edits by the creator if it's a draft or rejected
-        (request.resource.data.diff(resource.data).affectedKeys()
-            .removeAll(['approvals', 'status']).size() == 0) &&
-        (resource.data.status == 'draft' || resource.data.status == 'rejected') &&
-        getUserData().email == resource.data.modifiedBy
-      ) || (
-        // Allow sector-specific approval updates
-        request.resource.data.approvals.diff(resource.data.approvals)
-            .affectedKeys().hasOnly([getUserData().sector]) &&
-        isUserInSector(getUserData().sector)
-      );
-
-      match /history/{historyId} {
-        allow read: if request.auth != null;
-        allow create: if canCreateUpdate();
-        allow update, delete: if false;
-      }
-    }
-
-    match /ecr_drafts/{userId} {
-      allow read, write, delete: if request.auth.uid == userId;
-    }
-
-    match /reuniones_ecr/{reunionId} {
-      allow read: if request.auth != null;
-      allow create, update: if canCreateUpdate();
-      allow delete: if isUserAdmin();
-    }
-
-    match /seguimiento_ecr_eco/{fichaId} {
-      allow read: if request.auth != null;
-      allow create, update: if canCreateUpdate();
-      allow delete: if isUserAdmin();
-    }
 
     // --- CARÁTULA MAESTRA ---
     match /cover_master/{docId} {
@@ -245,8 +182,6 @@ service cloud.firestore {
       allow read: if request.auth != null;
 
       // Allow admins to write to any counter document for seeding/maintenance.
-      // For transaction-based counters like 'ecr_counter', the write operation
-      // must be initiated by a user with appropriate permissions (i.e., admin).
       allow write: if isUserAdmin();
     }
 
