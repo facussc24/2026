@@ -835,7 +835,11 @@ async function switchView(viewName, params = null) {
         // Dynamically import and initialize the controller for the form
         try {
             const { initEcrForm } = await import('./modules/ecr/js/ecr-form-controller.js');
-            initEcrForm();
+            const dependencies = {
+                db,
+                sendNotification
+            };
+            initEcrForm(dependencies);
         } catch (error) {
             console.error("Error loading ECR form controller:", error);
             dom.viewContent.innerHTML += `<p class="text-red-500 p-8">Error: No se pudo inicializar la lógica del formulario.</p>`;
