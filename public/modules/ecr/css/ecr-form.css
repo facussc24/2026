@@ -1,0 +1,75 @@
+:root{
+    --brand:#44546A; /* pedido del usuario */
+    --brand-dark:#303A4A;
+    --brand-accent:#5B7AA6;
+    --ink:#111827;
+    --muted:#6B7280;
+    --bg:#F5F7FA;
+    --card:#FFFFFF;
+    --border:#E5E7EB;
+    --ok:#15803d; --warn:#f59e0b; --err:#dc2626;
+}
+.container{max-width:1280px;margin:24px auto;padding:0 16px}
+.brandbar{display:flex;align-items:center;justify-content:space-between;background:var(--brand);color:#fff;border-radius:16px;padding:16px 20px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+.brandbar .title{font-weight:800;letter-spacing:.2px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid var(--border);background:#fff;color:var(--brand-dark);padding:8px 12px;border-radius:10px;cursor:pointer}
+.btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+.btn.ghost{background:transparent;color:#fff;border-color:#6e7b90}
+.tabs{display:flex;gap:8px;margin:14px 0}
+.tab{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer}
+.tab.active{background:var(--brand);color:#fff;border-color:transparent}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:12px;box-shadow:0 4px 14px rgba(0,0,0,.04)}
+.grid{display:grid;gap:10px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+input[type=text],input[type=date],textarea,select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:#fff}
+textarea{min-height:96px;resize:vertical}
+.checkrow{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);padding:6px 8px;border-radius:999px;background:#fff}
+.section-title{background:var(--brand-dark);color:#fff;padding:8px 12px;border-radius:12px;margin:-6px 0 8px}
+.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:900px){.twocol{grid-template-columns:1fr}}
+.images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.images img{width:100%;height:140px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
+table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff}
+th,td{border-bottom:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+thead th{background:#eef2f7;color:#334155}
+tbody tr:nth-child(even){background:#fafbfc}
+.mini{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.switch{display:inline-flex;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.switch button{padding:6px 10px;border:0;background:#fff;cursor:pointer}
+.switch button.active{background:var(--brand);color:#fff}
+.accordion{border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.acc-item + .acc-item{border-top:1px solid var(--border)}
+.acc-head{background:#f2f5f9;padding:10px 12px;cursor:pointer;font-weight:600;color:#243143;position:relative}
+.acc-head::after{content:"▸";position:absolute;right:12px;top:50%;transform:translateY(-50%);opacity:.8}
+.acc-item.open .acc-head::after{content:"▾"}
+.acc-head:focus{outline:2px solid var(--brand-accent);outline-offset:2px}
+.acc-body{padding:12px;background:#fff}
+.acc-body textarea{margin-bottom:14px}
+.acc-body .section-title{margin-top:16px}
+.acc-body .checkrow{margin-top:12px;gap:12px}
+.chip{margin-bottom:6px}
+.chip input[type=text].chip-inline{min-width:220px}
+.chip input[type=text][disabled]{opacity:.6}
+.chip input[type=text]{border:none;border-bottom:1px solid var(--border);border-radius:0;padding:4px 6px;min-width:160px;outline:none;background:transparent}
+.flex{display:flex;gap:10px;flex-wrap:wrap}
+.w-100{width:100%}
+.right{margin-left:auto}
+/* Equipo de trabajo layout */
+.eq-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}
+.eq-row{display:grid;grid-template-columns:160px 1fr;align-items:center;border-bottom:1px dashed var(--border);padding:4px 0}
+.eq-label{font-weight:700;text-transform:uppercase;letter-spacing:.2px;color:#1f2937}
+@media(max-width:900px){.eq-grid{grid-template-columns:1fr}.eq-row{grid-template-columns:140px 1fr}}
+/* Print */
+@media print{
+  body{background:#fff}
+  .brandbar,.tabs,.toolbar{display:none !important}
+  .card{box-shadow:none;border-color:#cfd6e0}
+  .page{page-break-after:always}
+  .page:last-child{page-break-after:auto}
+}

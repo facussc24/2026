@@ -21,7 +21,6 @@ import {
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { checkUserPermission } from './permissions.js';
-import { registerEcrApproval, checkAndUpdateEcrStatus, getEcrFormData } from './modules/ecr/js/ecr-logic.js';
 import { deleteProductAndOrphanedSubProducts, cloneProduct, regenerateNodeIds, getFlattenedData, handleDropEvent, handleProductSelect } from './modules/products/product-logic.js';
 import { renderEcoListView, renderEcoFormView } from './modules/eco/eco-controller.js';
 import * as ecoLogic from './modules/eco/eco-logic.js';
@@ -29,7 +28,6 @@ import { initEcoEventListeners } from './modules/eco/eco-events.js';
 import { handleEcoView } from './modules/eco/eco.js';
 import { ensureCollectionsAreLoaded } from '/utils.js';
 import { handleControlPanelView } from './modules/control_panel/control-panel.js';
-import { handleEcrView } from './modules/ecr/js/ecr.js';
 import tutorial from './tutorial.js';
 import newControlPanelTutorial from './new-control-panel-tutorial.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
@@ -688,7 +686,13 @@ function initializeAppListeners() {
 
 function setupGlobalEventListeners() {
     dom.searchInput.addEventListener('input', handleSearch);
-    dom.addNewButton.addEventListener('click', () => openFormModal());
+    dom.addNewButton.addEventListener('click', () => {
+        if (appState.currentView === 'ecr') {
+            switchView('ecr_form');
+        } else {
+            openFormModal();
+        }
+    });
 
     const onTutorialEnd = () => {
         appState.isTutorialActive = false;
@@ -755,33 +759,8 @@ function setupGlobalEventListeners() {
 
     document.addEventListener('click', handleGlobalClick);
 
-    // --- New Help Modal Logic ---
-    function setupHelpButtonListener() {
-        const helpBtn = document.getElementById('help-tutorial-btn');
-        const helpModal = document.getElementById('help-modal');
-
-        if (helpBtn && helpModal) {
-            const closeHelpButtons = helpModal.querySelectorAll('[data-action="close-help-modal"]');
-
-            helpBtn.addEventListener('click', () => {
-                helpModal.classList.remove('hidden');
-            });
-
-            closeHelpButtons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    helpModal.classList.add('hidden');
-                });
-            });
-
-            // Close modal by clicking on the backdrop
-            helpModal.addEventListener('click', (e) => {
-                if (e.target === helpModal) {
-                    helpModal.classList.add('hidden');
-                }
-            });
-        }
-    }
-    window.setupHelpButtonListener = setupHelpButtonListener;
+    // The setupHelpButtonListener function has been removed as the modal it controlled was deleted.
+    window.setupHelpButtonListener = () => {}; // Maintain the function for now to avoid breaking calls, but make it do nothing.
 }
 
 async function switchView(viewName, params = null) {
@@ -841,18 +820,56 @@ async function switchView(viewName, params = null) {
         }
     }
     else if (viewName === 'ecr' || viewName === 'ecr_creation_hub') {
-        const deps = { db, storage, functions, appState, dom, lucide, showToast, showConfirmationModal, switchView: (view, params) => eventBus.emit('navigate', { view, params }), sendNotification };
-        await handleEcrView(viewName, params, deps);
+        // This view should show the table, which has the "Add New" button.
+        // The generic table logic will handle this.
+        dom.headerActions.style.display = 'flex';
+        dom.searchInput.style.display = 'block';
+        if (checkUserPermission('create')) {
+            dom.addNewButton.style.display = 'flex';
+            dom.addButtonText.textContent = `Agregar ${config.singular}`;
+            dom.addNewButton.dataset.tutorialId = 'create-new-button';
+        } else {
+            dom.addNewButton.style.display = 'none';
+        }
+        await runTableLogic();
     }
     else if (viewName === 'ecr_form') {
-        const response = await fetch('modules/ecr/views/ecr-form.html');
+        // Load CSS dynamically for this view
+        const cssPath = 'modules/ecr/css/ecr-form.css';
+        const cssId = 'ecr-form-styles';
+        if (!document.getElementById(cssId)) {
+            const link = document.createElement('link');
+            link.id = cssId;
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = cssPath;
+            document.head.appendChild(link);
+        }
+
+        // Set up a cleanup function to remove the stylesheet when the view changes
+        appState.currentViewCleanup = () => {
+            const styleElement = document.getElementById(cssId);
+            if (styleElement) {
+                styleElement.remove();
+            }
+        };
+
+        const response = await fetch('modules/ecr/views/ecr-form-content.html');
         if (!response.ok) {
-            dom.viewContent.innerHTML = `<p class="text-red-500 p-8">Error: No se pudo cargar el formulario ECR.</p>`;
+            dom.viewContent.innerHTML = `<p class="text-red-500 p-8">Error: No se pudo cargar el contenido del formulario ECR.</p>`;
             return;
         }
         const html = await response.text();
         dom.viewContent.innerHTML = html;
-        // The script inside the HTML is a module and will handle its own initialization.
+
+        // Dynamically import and initialize the controller for the form
+        try {
+            const { initEcrForm } = await import('./modules/ecr/js/ecr-form-controller.js');
+            initEcrForm();
+        } catch (error) {
+            console.error("Error loading ECR form controller:", error);
+            dom.viewContent.innerHTML += `<p class="text-red-500 p-8">Error: No se pudo inicializar la lógica del formulario.</p>`;
+        }
     }
     else if (['control_ecrs', 'seguimiento_ecr_eco', 'ecr_seguimiento', 'ecr_table_view', 'indicadores_ecm_view'].includes(viewName)) {
         const deps = { db, firestore: { collection, onSnapshot, query, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, writeBatch, limit, orderBy }, dom, lucide, appState, showToast, switchView: (view, params) => eventBus.emit('navigate', { view, params }), showConfirmationModal, checkUserPermission, showInfoModal, seedControlPanelTutorialData, newControlPanelTutorial, showDatePromptModal };
