@@ -12,6 +12,9 @@ import { setupResetForm } from "./resetForm.js";
 import { setupUsersController } from "./modules/users/js/users-controller.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+  const loadingOverlay = document.querySelector("#loading-overlay");
+  const authContainer = document.querySelector("#auth-container");
+  const appView = document.querySelector("#app-view");
   const loggedOutLinks = document.querySelectorAll(".logged-out");
   const loggedInLinks = document.querySelectorAll(".logged-in");
   const userName = document.querySelector("#user-name");
@@ -180,6 +183,8 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         switchView(activeView, activeData);
       }
+      appView.classList.remove("hidden");
+      authContainer.classList.add("hidden");
     } else {
       activeUser = null;
       if (userProfile) {
@@ -188,7 +193,10 @@ document.addEventListener("DOMContentLoaded", () => {
       loggedInLinks.forEach((item) => (item.style.display = "none"));
       loggedOutLinks.forEach((item) => (item.style.display = "block"));
       switchView("login");
+      authContainer.classList.remove("hidden");
+      appView.classList.add("hidden");
     }
+    loadingOverlay.classList.add("hidden");
   });
 
   const logout = document.querySelector("#logout");
