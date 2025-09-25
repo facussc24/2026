@@ -17,7 +17,6 @@ const userName = document.querySelector("#user-name");
 const userProfile = document.querySelector("#user-profile");
 const mainContent = document.querySelector("#main-content");
 const pageTitle = document.querySelector("#page-title");
-const breadcrumb = document.querySelector("#breadcrumb");
 
 let activeView = null;
 let activeData = null;
@@ -31,7 +30,6 @@ const switchView = (view, data) => {
   switch (view) {
     case "login":
       pageTitle.innerHTML = "Login";
-      breadcrumb.innerHTML = `<li class="breadcrumb-item active" aria-current="page">Login</li>`;
       mainContent.innerHTML = `
         <div class="row">
           <div class="col-md-6 offset-md-3">
@@ -70,7 +68,6 @@ const switchView = (view, data) => {
       break;
     case "signup":
       pageTitle.innerHTML = "Signup";
-      breadcrumb.innerHTML = `<li class="breadcrumb-item active" aria-current="page">Signup</li>`;
       mainContent.innerHTML = `
         <div class="row">
           <div class="col-md-6 offset-md-3">
@@ -99,7 +96,6 @@ const switchView = (view, data) => {
       break;
     case "reset":
       pageTitle.innerHTML = "Reset Password";
-      breadcrumb.innerHTML = `<li class="breadcrumb-item active" aria-current="page">Reset Password</li>`;
       mainContent.innerHTML = `
         <div class="row">
           <div class="col-md-6 offset-md-3">
@@ -124,7 +120,6 @@ const switchView = (view, data) => {
       break;
     case "users":
       pageTitle.innerHTML = "Users";
-      breadcrumb.innerHTML = `<li class="breadcrumb-item active" aria-current="page">Users</li>`;
       mainContent.innerHTML = `
         <div class="card">
           <div class="card-body">
@@ -150,7 +145,6 @@ const switchView = (view, data) => {
       break;
     default:
       pageTitle.innerHTML = "Dashboard";
-      breadcrumb.innerHTML = `<li class="breadcrumb-item active" aria-current="page">Dashboard</li>`;
       mainContent.innerHTML = `
         <div class="row">
           <div class="col-md-12">
