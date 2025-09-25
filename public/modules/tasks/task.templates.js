@@ -67,6 +67,52 @@ export function getKanbanBoardHTML(state, selectedUser) {
     `;
 }
 
+export function getMultiTaskConfirmationHTML(suggestedTasks) {
+    const tasksListHTML = suggestedTasks.map((task, index) => {
+        const priorityMap = { high: 'Alta', medium: 'Media', low: 'Baja' };
+        const priorityText = priorityMap[task.priority] || 'N/A';
+        const dueDateText = task.dueDate || 'N/A';
+
+        return `
+            <label class="block p-4 bg-white rounded-lg border hover:border-blue-500 hover:shadow-sm cursor-pointer transition-all duration-150 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-400">
+                <div class="flex items-start gap-4">
+                    <input type="checkbox" class="suggested-task-checkbox mt-1 h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300" data-task-index="${index}" checked>
+                    <div class="flex-grow">
+                        <p class="font-bold text-slate-800">${task.title}</p>
+                        <p class="text-sm text-slate-600 mt-1">${task.description}</p>
+                        <div class="text-xs text-slate-500 mt-3 flex items-center gap-x-6 gap-y-1 flex-wrap">
+                            <span class="flex items-center gap-1.5"><i data-lucide="flag" class="w-3.5 h-3.5"></i><strong>Prioridad:</strong> ${priorityText}</span>
+                            <span class="flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5"></i><strong>Fecha Límite:</strong> ${dueDateText}</span>
+                        </div>
+                    </div>
+                </div>
+            </label>
+        `;
+    }).join('');
+
+    return `
+        <div id="multi-task-confirmation-view" class="p-6 animate-fade-in">
+            <div class="text-center mb-4">
+                <i data-lucide="git-fork" class="w-12 h-12 mx-auto text-blue-500"></i>
+                <h3 class="text-xl font-bold text-gray-800 mt-2">La IA ha sugerido dividir la entrada en ${suggestedTasks.length} tareas.</h3>
+                <p class="text-sm text-gray-600 mt-1">Revisa las tareas sugeridas a continuación. Desmarca las que no quieras crear.</p>
+            </div>
+
+            <div id="suggested-tasks-list" class="space-y-3 max-h-80 overflow-y-auto border p-4 rounded-lg bg-slate-100 custom-scrollbar">
+                ${tasksListHTML}
+            </div>
+
+            <div class="flex justify-end items-center gap-3 mt-6 pt-4 border-t">
+                <button id="cancel-multi-task-btn" type="button" class="btn btn-secondary">Cancelar</button>
+                <button id="create-selected-tasks-btn" type="button" class="btn btn-primary">
+                    <i data-lucide="check-check" class="w-4 h-4 mr-2"></i>
+                    Crear Tareas Seleccionadas
+                </button>
+            </div>
+        </div>
+    `;
+}
+
 export function getTelegramConfigHTML() {
     return `
     <div id="telegram-config-collapsible" class="bg-white rounded-xl shadow-lg mb-6 border border-blue-200 overflow-hidden">
