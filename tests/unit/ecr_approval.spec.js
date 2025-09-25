@@ -1,139 +1,128 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 
-// Import the function to be tested directly from its new, isolated location.
-import { registerEcrApproval } from '../../public/modules/ecr/ecr-logic.js';
-// We still need the real COLLECTIONS object.
-import { COLLECTIONS } from '../../public/utils.js';
+// 1. Import the function to test AND the functions to mock
+import { registerEcrApproval } from '../../public/modules/ecr/js/ecr-form-controller.js';
+import { runTransaction, doc } from 'https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js';
+import { db, sendNotification } from '../../public/main.js';
 
-// --- Mocks Setup ---
-// We only need to mock the dependencies that are passed into the function.
+// 2. Mock the modules by path. Jest will replace the imported functions with mocks.
+jest.mock('https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js', () => ({
+  runTransaction: jest.fn(),
+  doc: jest.fn(),
+}));
+jest.mock('../../public/main.js', () => ({
+  db: {}, // Mock db object
+  sendNotification: jest.fn(),
+}));
 
-const mockShowToast = jest.fn();
-const mockSendNotification = jest.fn();
-const mockGetDoc = jest.fn();
-const mockUpdateDoc = jest.fn();
-const mockRunTransaction = jest.fn();
 
-// This object simulates the `firestore` dependency that will be passed in.
-const mockFirestore = {
-    doc: jest.fn((db, collection, id) => ({ db, collection, id, path: `${collection}/${id}` })),
-    getDoc: mockGetDoc,
-    runTransaction: mockRunTransaction,
-};
-
-// This object simulates the `uiCallbacks` dependency.
-const mockUiCallbacks = {
-    showToast: mockShowToast,
-    sendNotification: mockSendNotification,
-};
-
-// A mock for the global appState.
-const mockAppState = {
-    currentUser: {
-        name: 'Test User',
-        email: 'test@barack.com',
-        sector: 'calidad',
-        role: 'admin',
-    },
-};
-
-// --- Test Suite ---
-
+// 3. Begin the test suite
 describe('registerEcrApproval State Machine', () => {
-    beforeEach(() => {
-        // Clear all mock function call histories before each test
-        jest.clearAllMocks();
+    let mockAppState;
+    const mockGetDoc = jest.fn();
+    const mockUpdateDoc = jest.fn();
 
-        // Provide a fresh implementation for the transaction mock for each test
-        mockRunTransaction.mockImplementation(async (db, updateFunction) => {
-            // This object simulates the `transaction` object that Firestore provides.
+    beforeEach(() => {
+        // Clear all mock history before each test
+        runTransaction.mockClear();
+        doc.mockClear();
+        sendNotification.mockClear();
+        mockGetDoc.mockClear();
+        mockUpdateDoc.mockClear();
+
+        // Configure the mock implementation for runTransaction for each test
+        runTransaction.mockImplementation(async (database, updateFunction) => {
             const transaction = {
-                get: mockGetDoc, // It has a `get` method
-                update: mockUpdateDoc, // and an `update` method
+                get: mockGetDoc,
+                update: mockUpdateDoc,
             };
-            // The `updateFunction` is the code we are testing. We call it with our mock transaction.
+            // Execute the function that was passed to the transaction
             await updateFunction(transaction);
         });
+
+        // Set up a default mock for appState
+        mockAppState = {
+            currentUser: {
+                name: 'Test User',
+                email: 'test@barack.com',
+            },
+        };
     });
 
     test('should transition ECR status to "approved" when the last required department approves', async () => {
-        // --- 1. ARRANGE ---
-        const ecrId = 'ECR-BUG-001';
+        // ARRANGE
+        const ecrId = 'ECR-APPROVE-001';
         const initialEcrData = {
-            id: ecrId,
+            ecr_no: ecrId,
+            creatorUid: 'user123',
             status: 'pending-approval',
             afecta_calidad: true,
             afecta_compras: true,
-            afecta_logistica: false,
             approvals: {
-                calidad: { status: 'approved', user: 'Calidad User', date: '2023-01-01', comment: 'OK' }
+                calidad: { status: 'approved', user: 'Calidad User' }
             }
         };
+        mockGetDoc.mockResolvedValue({ exists: () => true, data: () => initialEcrData });
 
-        // Configure the mock for `transaction.get()` to return our test data.
-        mockGetDoc.mockResolvedValue({ exists: () => true, data: () => JSON.parse(JSON.stringify(initialEcrData)) });
+        // ACT
+        await registerEcrApproval(ecrId, 'compras', 'approved', 'Final approval.', { appState: mockAppState });
 
-        // Set the current user to be the one from the 'compras' department for this test run.
-        mockAppState.currentUser.sector = 'compras';
-
-        // --- 2. ACT ---
-        // The user from 'compras' submits the final required approval.
-        await registerEcrApproval(ecrId, 'compras', 'approved', 'Final approval.', { firestore: mockFirestore, appState: mockAppState, uiCallbacks: mockUiCallbacks });
-
-        // --- 3. ASSERT ---
+        // ASSERT
+        expect(runTransaction).toHaveBeenCalledTimes(1);
         expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
-        const updateCallArgs = mockUpdateDoc.mock.calls[0][1];
-
-        expect(updateCallArgs['approvals.compras'].status).toBe('approved');
-
-        // The overall status should now be 'approved' as all required departments have approved.
-        expect(updateCallArgs.status).toBe('approved');
+        const updatePayload = mockUpdateDoc.mock.calls[0][1];
+        expect(updatePayload['approvals.compras'].status).toBe('approved');
+        expect(updatePayload.status).toBe('approved');
+        expect(sendNotification).toHaveBeenCalledTimes(1);
     });
 
     test('should transition ECR status to "rejected" when any required department rejects', async () => {
-        // --- ARRANGE ---
+        // ARRANGE
         const ecrId = 'ECR-REJECT-001';
         const initialEcrData = {
-            id: ecrId,
+            ecr_no: ecrId,
+            creatorUid: 'user123',
             status: 'pending-approval',
             afecta_calidad: true,
             afecta_compras: true,
             approvals: {
-                 calidad: { status: 'approved', user: 'Calidad User', date: '2023-01-01', comment: 'OK' }
+                 calidad: { status: 'approved', user: 'Calidad User' }
             }
         };
-        mockGetDoc.mockResolvedValue({ exists: () => true, data: () => JSON.parse(JSON.stringify(initialEcrData)) });
-        mockAppState.currentUser.sector = 'compras';
-        // --- ACT ---
-        await registerEcrApproval(ecrId, 'compras', 'rejected', 'Not viable.', { firestore: mockFirestore, appState: mockAppState, uiCallbacks: mockUiCallbacks });
+        mockGetDoc.mockResolvedValue({ exists: () => true, data: () => initialEcrData });
 
-        // --- ASSERT ---
+        // ACT
+        await registerEcrApproval(ecrId, 'compras', 'rejected', 'Not viable.', { appState: mockAppState });
+
+        // ASSERT
         expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
-        const updateCallArgs = mockUpdateDoc.mock.calls[0][1];
-        expect(updateCallArgs['approvals.compras'].status).toBe('rejected');
-        expect(updateCallArgs.status).toBe('rejected');
+        const updatePayload = mockUpdateDoc.mock.calls[0][1];
+        expect(updatePayload['approvals.compras'].status).toBe('rejected');
+        expect(updatePayload.status).toBe('rejected');
+        expect(sendNotification).toHaveBeenCalledTimes(1);
     });
 
     test('should remain "pending-approval" when a required department approves but others are still pending', async () => {
-        // --- ARRANGE ---
+        // ARRANGE
         const ecrId = 'ECR-PENDING-001';
         const initialEcrData = {
-            id: ecrId,
+            ecr_no: ecrId,
+            creatorUid: 'user123',
             status: 'pending-approval',
             afecta_calidad: true,
             afecta_compras: true,
-            approvals: {} // No approvals yet
+            approvals: {}
         };
-        mockGetDoc.mockResolvedValue({ exists: () => true, data: () => JSON.parse(JSON.stringify(initialEcrData)) });
-        mockAppState.currentUser.sector = 'calidad';
-        // --- ACT ---
-        await registerEcrApproval(ecrId, 'calidad', 'approved', 'First approval.', { firestore: mockFirestore, appState: mockAppState, uiCallbacks: mockUiCallbacks });
+        mockGetDoc.mockResolvedValue({ exists: () => true, data: () => initialEcrData });
 
-        // --- ASSERT ---
+        // ACT
+        await registerEcrApproval(ecrId, 'calidad', 'approved', 'First approval.', { appState: mockAppState });
+
+        // ASSERT
         expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
-        const updateCallArgs = mockUpdateDoc.mock.calls[0][1];
-        expect(updateCallArgs['approvals.calidad'].status).toBe('approved');
-        // The overall status should NOT be in the update call, meaning it remains unchanged.
-        expect(updateCallArgs.status).toBeUndefined();
+        const updatePayload = mockUpdateDoc.mock.calls[0][1];
+        expect(updatePayload['approvals.calidad'].status).toBe('approved');
+        expect(updatePayload.status).toBeUndefined(); // Status should not be in the payload
+        expect(sendNotification).not.toHaveBeenCalled(); // No notification for pending changes
     });
 });

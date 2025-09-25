@@ -99,6 +99,27 @@ class EventBus {
 // Export a single instance to be used throughout the application.
 export const eventBus = new EventBus();
 
+/**
+ * Sets a value on a nested object using a dot-notation path.
+ * Creates nested objects if they don't exist.
+ * @param {object} obj - The object to modify.
+ * @param {string} path - The dot-notation path (e.g., 'a.b.c').
+ * @param {*} value - The value to set at the specified path.
+ */
+export function setPath(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+    for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        if (!current[key] || typeof current[key] !== 'object') {
+            current[key] = {};
+        }
+        current = current[key];
+    }
+    current[keys[keys.length - 1]] = value;
+}
+
+
 export function formatTimeAgo(timestamp) {
     const now = new Date();
     const seconds = Math.floor((now - timestamp) / 1000);

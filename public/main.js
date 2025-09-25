@@ -822,7 +822,7 @@ async function switchView(viewName, params = null) {
 
         // Dynamically import and initialize the controller for the form
         try {
-            const { initEcrForm } = await import('./modules/ecr/ecr-logic.js');
+            const { initEcrForm } = await import('./modules/ecr/js/ecr-form-controller.js');
             initEcrForm();
         } catch (error) {
             console.error("Error loading ECR form controller:", error);
