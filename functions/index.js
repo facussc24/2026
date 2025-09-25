@@ -271,16 +271,14 @@ exports.organizeTaskWithAI = functions
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-1.0-pro";
+      const model = "gemini-1.5-pro-latest";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       const prompt = `
         Analiza el siguiente texto de un usuario. Tu objetivo principal es identificar si el texto describe una única tarea o múltiples tareas distintas que deberían gestionarse por separado.
 
-        Texto del usuario:
-        ---
-        ${text}
-        ---
+        El texto del usuario viene como un string en formato JSON. Analízalo para extraer su contenido.
+        Texto del usuario: ${JSON.stringify(text)}
 
         Sigue estas instrucciones:
         1.  **Análisis de Tareas Múltiples**: Si el texto contiene varias acciones claramente separables (por ejemplo, "Revisar los planos del chasis y luego llamar al proveedor para confirmar la entrega del material"), debes crear un objeto de tarea separado para cada acción. Si el texto describe una sola acción con varios pasos, trátalo como una única tarea con subtareas.
@@ -430,7 +428,7 @@ exports.getTaskSummaryWithAI = functions
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      const model = "gemini-1.0-pro";
+      const model = "gemini-1.5-pro-latest";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       // We are sending a subset of task data to avoid sending too much information
