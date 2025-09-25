@@ -20,6 +20,7 @@ import {
     renderTaskDashboardView
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
+import { appState } from './state.js';
 import { checkUserPermission } from './permissions.js';
 import { deleteProductAndOrphanedSubProducts, cloneProduct, regenerateNodeIds, getFlattenedData, handleDropEvent, handleProductSelect } from './modules/products/product-logic.js';
 import { renderEcoListView, renderEcoFormView } from './modules/eco/eco-controller.js';
@@ -255,42 +256,7 @@ const viewConfig = {
     }
 };
 
-// --- Estado Global de la Aplicación ---
-export let appState = {
-    currentView: 'landing-page',
-    currentData: [], 
-    arbolActivo: null,
-    currentUser: null,
-    currentViewCleanup: null,
-    isAppInitialized: false,
-    isTutorialActive: false,
-    collections: {
-        // Most collections are now loaded on demand.
-        // Only keep collections that are small, essential, and used globally.
-        [COLLECTIONS.ROLES]: [],
-        [COLLECTIONS.SECTORES]: [],
-        [COLLECTIONS.NOTIFICATIONS]: [],
-        [COLLECTIONS.TAREAS]: [], // For dashboard view
-        [COLLECTIONS.USUARIOS]: [] // Still needed for some seeding functions
-    },
-    collectionsById: {
-        // This will be populated on-demand or for the small collections above.
-        [COLLECTIONS.ROLES]: new Map(),
-        [COLLECTIONS.SECTORES]: new Map(),
-        [COLLECTIONS.USUARIOS]: new Map(),
-    },
-    collectionCounts: {}, // New property to store KPI counts
-    unsubscribeListeners: [],
-    sinopticoState: null,
-    sinopticoTabularState: null,
-    pagination: {
-        pageCursors: { 1: null }, // Store the startAfter cursor for each page
-        currentPage: 1,
-        totalItems: 0,
-    },
-    godModeState: null
-};
-
+// El estado global de la aplicación ahora se importa desde './state.js'
 export let dom = {
     appView: document.getElementById('app-view'),
     authContainer: document.getElementById('auth-container'),
@@ -800,7 +766,7 @@ async function switchView(viewName, params = null) {
     if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic(app);
     else if (viewName === 'landing-page') await runLandingPageLogic();
     else if (viewName === 'sinoptico') await runSinopticoLogic();
-    else if (viewName === 'sinoptico_tabular') await runSinopticoTabularLogic();
+    else if (viewName === 'sinoptico_tabular') await window.runSinopticoTabularLogic();
     else if (viewName === 'flujograma') await runFlujogramaLogic();
     else if (viewName === 'arboles') await renderArbolesInitialView();
     else if (viewName === 'profile') await runProfileLogic();
@@ -856,7 +822,7 @@ async function switchView(viewName, params = null) {
 
         // Dynamically import and initialize the controller for the form
         try {
-            const { initEcrForm } = await import('./modules/ecr/js/ecr-form-controller.js');
+            const { initEcrForm } = await import('./modules/ecr/ecr-logic.js');
             initEcrForm();
         } catch (error) {
             console.error("Error loading ECR form controller:", error);
@@ -3274,6 +3240,10 @@ function renderArbol(highlightNodeId = null) {
     lucide.createIcons();
 }
 
+export function runSinopticoTabularLogic() {
+    // ... (el contenido de la función está aquí)
+}
+
 export function renderNodo(nodo, checkPermissionFunc = checkUserPermission) {
     const collectionName = nodo.tipo + 's';
     const item = appState.collectionsById[collectionName]?.get(nodo.refId);
@@ -4074,347 +4044,6 @@ function renderTabularTable(data) {
     return tableHTML;
 }
 
-export function runSinopticoTabularLogic() {
-    // Initialize state for the view
-    if (!appState.sinopticoTabularState) {
-        appState.sinopticoTabularState = {
-            selectedProduct: null,
-            activeFilters: {
-                niveles: null, // Initialize to null to indicate no filter is active yet
-                material: ''
-            }
-        };
-    }
-
-    const state = appState.sinopticoTabularState;
-
-    // --- RENDER FUNCTIONS ---
-
-    const renderReportView = () => {
-        const product = state.selectedProduct;
-        if (!product) {
-            renderInitialView();
-            return;
-        }
-
-        // The user wants a header section. Let's build it here.
-        const headerHTML = `
-            <div class="report-header bg-white p-4 mb-4 rounded-lg shadow-md border flex justify-between items-center">
-                <div class="flex items-center gap-4">
-                    <img src="/barack_logo.png" alt="Logo" class="h-12">
-                    <div>
-                        <h2 class="text-xl font-bold text-slate-800">PART COMPOSITION - BOM</h2>
-                        <p class="text-sm text-slate-500">${product.descripcion || ''}</p>
-                    </div>
-                </div>
-                <div class="text-sm text-slate-600 grid grid-cols-2 gap-x-4 gap-y-1">
-                    <strong class="text-right">Issue Date:</strong>
-                    <input type="date" value="${new Date().toISOString().split('T')[0]}" class="p-1 border rounded-md bg-white">
-
-                    <strong class="text-right">Prepared by:</strong>
-                    <span>${appState.currentUser?.name || 'N/A'}</span>
-
-                    <strong class="text-right">Version:</strong>
-                    <span>${product.version || '1.0'}</span>
-                </div>
-            </div>
-        `;
-
-
-        const getOriginalMaxDepth = (nodes, level = 0) => {
-            if (!nodes || nodes.length === 0) return level > 0 ? level - 1 : 0;
-            let max = level;
-            for (const node of nodes) {
-                const depth = getOriginalMaxDepth(node.children, level + 1);
-                if (depth > max) max = depth;
-            }
-            return max;
-        };
-
-        const flattenedData = getFlattenedData(product, state.activeFilters);
-        const tableHTML = renderTabularTable(flattenedData);
-
-        const maxLevel = getOriginalMaxDepth(product.estructura);
-        let levelFilterOptionsHTML = '';
-        for (let i = 0; i <= maxLevel; i++) {
-            const isChecked = !state.activeFilters.niveles.size || state.activeFilters.niveles.has(i.toString());
-            levelFilterOptionsHTML += `
-                <label class="flex items-center gap-3 p-2 hover:bg-slate-100 rounded-md cursor-pointer">
-                    <input type="checkbox" data-level="${i}" class="level-filter-cb h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isChecked ? 'checked' : ''}>
-                    <span class="text-sm">Nivel ${i}</span>
-                </label>
-            `;
-        }
-
-        dom.viewContent.innerHTML = `<div class="animate-fade-in-up">
-            ${headerHTML}
-            <div class="bg-white p-6 rounded-xl shadow-lg">
-                <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
-                    <div><h3 class="text-xl font-bold text-slate-800">Detalle de: ${product.descripcion}</h3><p class="text-sm text-slate-500">${product.id}</p></div>
-                    <div class="flex items-center gap-2">
-                        <div class="relative">
-                            <button id="level-filter-btn" class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-md text-sm font-semibold hover:bg-slate-50 flex items-center gap-2">
-                                <i data-lucide="filter" class="h-4 w-4"></i>Filtrar por Nivel<i data-lucide="chevron-down" class="h-4 w-4 ml-1"></i>
-                            </button>
-                            <div id="level-filter-dropdown" class="absolute z-10 right-0 mt-2 w-48 bg-white border rounded-lg shadow-xl hidden p-2 dropdown-menu">
-                                ${levelFilterOptionsHTML}
-                                <div class="border-t my-2"></div>
-                                <button data-action="apply-tabular-filters" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm hover:bg-blue-700">Aplicar</button>
-                            </div>
-                        </div>
-                        <div class="border-l pl-2 flex items-center gap-2">
-                             <input type="text" id="material-filter-input" placeholder="Buscar por material..." class="border-slate-300 rounded-md shadow-sm text-sm p-2">
-                             <button data-action="apply-tabular-filters" class="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-blue-700">Buscar</button>
-                        </div>
-                        <button data-action="select-another-product-tabular" class="bg-gray-500 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-gray-600 flex items-center">
-                            <i data-lucide="search" class="mr-2 h-4 w-4"></i>Seleccionar Otro
-                        </button>
-                        <button data-action="export-sinoptico-tabular-pdf" class="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-red-700 flex items-center">
-                            <i data-lucide="file-text" class="mr-2 h-4 w-4"></i>Exportar a PDF
-                        </button>
-                    </div>
-                </div>
-                <div id="sinoptico-tabular-container" class="mt-6 overflow-x-auto">${tableHTML}</div>
-            </div>
-        </div>`;
-
-        lucide.createIcons();
-    };
-
-    // --- Event Handlers ---
-    const handleViewClick = async (e) => {
-        const button = e.target.closest('button[data-action]');
-
-        // Handle dropdown toggle separately to prevent it from closing immediately
-        if (e.target.closest('#level-filter-btn')) {
-            const dropdown = document.getElementById('level-filter-dropdown');
-            if (dropdown) dropdown.classList.toggle('hidden');
-            return;
-        }
-
-        if (!button) return;
-
-        const action = button.dataset.action;
-
-        switch (action) {
-            case 'open-product-search-modal-tabular':
-                await openProductSearchModal();
-                break;
-            case 'select-another-product-tabular':
-                state.selectedProduct = null;
-                state.activeFilters.niveles.clear();
-                renderInitialView();
-                break;
-            case 'edit-tabular-node':
-                openSinopticoEditModal(button.dataset.nodeId);
-                break;
-            case 'apply-tabular-filters':
-                const levelDropdown = document.getElementById('level-filter-dropdown');
-                const selectedLevels = new Set();
-                if (levelDropdown) {
-                    levelDropdown.querySelectorAll('.level-filter-cb:checked').forEach(cb => {
-                        selectedLevels.add(cb.dataset.level);
-                    });
-                    const allLevelsCount = levelDropdown.querySelectorAll('.level-filter-cb').length;
-                    if (allLevelsCount > 0 && selectedLevels.size === allLevelsCount) {
-                        state.activeFilters.niveles.clear();
-                    } else {
-                        state.activeFilters.niveles = selectedLevels;
-                    }
-                    levelDropdown.classList.add('hidden');
-                }
-
-                const materialInput = document.getElementById('material-filter-input');
-                state.activeFilters.material = materialInput ? materialInput.value : '';
-
-                const tableContainer = document.getElementById('sinoptico-tabular-container');
-                if (tableContainer) {
-                    const savedScrollY = window.scrollY;
-                    tableContainer.innerHTML = `<div class="flex items-center justify-center p-16 text-slate-500"><i data-lucide="loader" class="animate-spin h-8 w-8 mr-3"></i><span>Aplicando filtros...</span></div>`;
-                    lucide.createIcons();
-
-                    const processDataPromise = new Promise(resolve => {
-                        const product = state.selectedProduct;
-                        const flattenedData = getFlattenedData(product, state.activeFilters);
-                        const newTableHTML = renderTabularTable(flattenedData);
-                        resolve(newTableHTML);
-                    });
-
-                    Promise.all([new Promise(res => setTimeout(res, 300)), processDataPromise]).then(([_, newTableHTML]) => {
-                        tableContainer.innerHTML = newTableHTML;
-                        lucide.createIcons();
-                        window.scrollTo(0, savedScrollY);
-                    });
-                }
-                break;
-            case 'export-sinoptico-tabular-pdf':
-                exportSinopticoTabularToPdf();
-                break;
-        }
-    };
-
-    // --- PRODUCT SELECTION ---
-    const openProductSearchModal = async () => {
-        try {
-            await ensureCollectionsAreLoaded([COLLECTIONS.CLIENTES, COLLECTIONS.PRODUCTOS]);
-        } catch (error) {
-            showToast('Error al cargar datos para la búsqueda. Intente de nuevo.', 'error');
-            return;
-        }
-
-        // Defensive check to ensure collections are populated before use
-        if (!appState.collections[COLLECTIONS.CLIENTES] || !appState.collections[COLLECTIONS.PRODUCTOS]) {
-            showToast('Error: No se pudieron cargar los datos necesarios. Por favor, recargue la página.', 'error');
-            return;
-        }
-
-        let clientOptions = '<option value="">Todos</option>' + appState.collections[COLLECTIONS.CLIENTES].map(c => `<option value="${c.id}">${c.descripcion}</option>`).join('');
-        const modalId = `prod-search-modal-tabular-${Date.now()}`;
-        const modalHTML = `<div id="${modalId}" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in"><div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col m-4 modal-content"><div class="flex justify-between items-center p-5 border-b"><h3 class="text-xl font-bold">Buscar Producto Principal</h3><button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button></div><div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4"><div><label for="search-prod-term" class="block text-sm font-medium">Código/Descripción</label><input type="text" id="search-prod-term" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm"></div><div><label for="search-prod-client" class="block text-sm font-medium">Cliente</label><select id="search-prod-client" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">${clientOptions}</select></div></div><div id="search-prod-results" class="p-6 border-t overflow-y-auto flex-1"></div></div></div>`;
-
-        dom.modalContainer.innerHTML = modalHTML;
-        const modalElement = document.getElementById(modalId);
-        const termInput = modalElement.querySelector('#search-prod-term');
-        const clientSelect = modalElement.querySelector('#search-prod-client');
-        const resultsContainer = modalElement.querySelector('#search-prod-results');
-
-        const searchHandler = () => {
-            const term = termInput.value.toLowerCase();
-            const clientId = clientSelect.value;
-            let results = appState.collections[COLLECTIONS.PRODUCTOS].filter(p => (term === '' || p.id.toLowerCase().includes(term) || p.descripcion.toLowerCase().includes(term)) && (!clientId || p.clienteId === clientId));
-            resultsContainer.innerHTML = results.length === 0 ? `<p class="text-center py-8">No se encontraron productos.</p>` : `<div class="space-y-1">${results.map(p => `<button data-product-id="${p.id}" class="w-full text-left p-2.5 bg-gray-50 hover:bg-blue-100 rounded-md border flex justify-between items-center"><p class="font-semibold text-blue-800">${p.descripcion} (${p.id})</p><p class="text-xs text-gray-500">${appState.collections[COLLECTIONS.CLIENTES].find(c => c.id === p.clienteId)?.descripcion || ''}</p></button>`).join('')}</div>`;
-        };
-
-        termInput.addEventListener('input', searchHandler);
-        clientSelect.addEventListener('change', searchHandler);
-        resultsContainer.addEventListener('click', e => {
-            const button = e.target.closest('button[data-product-id]');
-            if (button) {
-                handleProductSelect(button.dataset.productId);
-                modalElement.remove();
-            }
-        });
-        modalElement.querySelector('button[data-action="close"]').addEventListener('click', () => modalElement.remove());
-        searchHandler();
-    };
-
-    const handleProductSelect = async (productId) => {
-        try {
-            // Ensure all collections needed for the Bill of Materials are loaded
-            await ensureCollectionsAreLoaded([
-                COLLECTIONS.SEMITERMINADOS,
-                COLLECTIONS.INSUMOS,
-                COLLECTIONS.PROCESOS,
-                COLLECTIONS.PROVEEDORES,
-                COLLECTIONS.UNIDADES
-            ]);
-
-            // Fetch the full product document to ensure 'estructura' is present
-            const productDoc = await getDoc(doc(db, COLLECTIONS.PRODUCTOS, productId));
-
-            if (productDoc.exists()) {
-                const producto = { ...productDoc.data(), docId: productDoc.id };
-                state.selectedProduct = producto;
-
-                // Also update the local collections cache for consistency,
-                // replacing the potentially partial data with the full document.
-                const productIndex = appState.collections[COLLECTIONS.PRODUCTOS].findIndex(p => p.id === productId);
-                if (productIndex !== -1) {
-                    appState.collections[COLLECTIONS.PRODUCTOS][productIndex] = producto;
-                } else {
-                    appState.collections[COLLECTIONS.PRODUCTOS].push(producto);
-                }
-
-                renderReportView();
-            } else {
-                showToast("Error: Producto no encontrado en la base de datos.", "error");
-                renderInitialView();
-            }
-        } catch (error) {
-            console.error("Error loading data for tabular report:", error);
-            showToast('Error al cargar los datos necesarios para el reporte.', 'error');
-            renderInitialView();
-        }
-    };
-
-    const renderInitialView = () => {
-        dom.viewContent.innerHTML = `<div class="flex flex-col items-center justify-center h-full bg-white rounded-xl shadow-lg p-6 text-center animate-fade-in-up">
-            <i data-lucide="file-search-2" class="h-24 w-24 text-gray-300 mb-6"></i>
-            <h3 class="text-2xl font-bold">Reporte de Estructura de Producto (Tabular)</h3>
-            <p class="text-gray-500 mt-2 mb-8 max-w-lg">Para comenzar, busque y seleccione el producto principal que desea consultar.</p>
-            <button data-action="open-product-search-modal-tabular" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 text-lg font-semibold shadow-lg transition-transform transform hover:scale-105">
-                <i data-lucide="search" class="inline-block mr-2 -mt-1"></i>Seleccionar Producto
-            </button>
-        </div>`;
-        lucide.createIcons();
-    };
-
-    // --- MAIN LOGIC & CLEANUP ---
-    if (state.selectedProduct) {
-        renderReportView();
-    } else {
-        renderInitialView();
-    }
-
-    const caratulaFieldsHandler = (e) => {
-        const fieldContainer = e.target.closest('.editable-field');
-        if (fieldContainer && !fieldContainer.classList.contains('is-editing')) {
-            fieldContainer.classList.add('is-editing');
-            const valueDisplay = fieldContainer.querySelector('.value-display');
-            const editControls = fieldContainer.querySelector('.edit-controls');
-            const input = editControls.querySelector('input');
-
-            valueDisplay.classList.add('hidden');
-            editControls.classList.remove('hidden');
-            input.focus();
-            input.select();
-
-            const saveField = async () => {
-                const newValue = input.value;
-                const fieldName = fieldContainer.dataset.field;
-
-                if (newValue !== fieldContainer.dataset.value) {
-                    const productRef = doc(db, COLLECTIONS.PRODUCTOS, state.selectedProduct.docId);
-                    try {
-                        await updateDoc(productRef, { [fieldName]: newValue });
-                        showToast('Campo actualizado.', 'success');
-                        state.selectedProduct[fieldName] = newValue;
-                        renderReportView();
-                    } catch (error) {
-                        showToast('Error al guardar.', 'error');
-                        fieldContainer.classList.remove('is-editing');
-                        valueDisplay.classList.remove('hidden');
-                        editControls.classList.add('hidden');
-                    }
-                } else {
-                    fieldContainer.classList.remove('is-editing');
-                    valueDisplay.classList.remove('hidden');
-                    editControls.classList.add('hidden');
-                }
-            };
-
-            input.addEventListener('blur', saveField, { once: true });
-            input.addEventListener('keydown', e => {
-                if (e.key === 'Enter') input.blur();
-                if (e.key === 'Escape') {
-                    input.removeEventListener('blur', saveField);
-                    fieldContainer.classList.remove('is-editing');
-                    valueDisplay.classList.remove('hidden');
-                    editControls.classList.add('hidden');
-                }
-            });
-        }
-    };
-
-    dom.viewContent.addEventListener('click', handleViewClick);
-    dom.viewContent.addEventListener('click', handleCaratulaClick);
-
-    appState.currentViewCleanup = () => {
-        dom.viewContent.removeEventListener('click', handleViewClick);
-        dom.viewContent.removeEventListener('click', handleCaratulaClick);
-        appState.sinopticoTabularState = null;
-    };
-}
 
 export async function exportSinopticoTabularToPdf() {
     const state = appState.sinopticoTabularState;

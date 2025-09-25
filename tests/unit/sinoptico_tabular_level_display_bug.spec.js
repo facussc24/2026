@@ -1,5 +1,5 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
-import { runSinopticoTabularLogic } from '../../public/modules/products/product-logic.js';
+import { runSinopticoTabularLogic } from '../../public/main.js';
 
 const appState = {
     collectionsById: {},

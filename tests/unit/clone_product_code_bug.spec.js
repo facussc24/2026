@@ -2,12 +2,6 @@ import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 // The function to test
 import { cloneProduct } from '../../public/modules/products/product-logic.js';
 
-const appState = {
-    sinopticoTabularState: {
-        selectedProduct: null,
-    },
-};
-
 describe('cloneProduct Part Code (codigo_pieza) Bug', () => {
 
     let mockFirestore;

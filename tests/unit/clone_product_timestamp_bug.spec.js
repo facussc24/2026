@@ -1,10 +1,5 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import { cloneProduct } from '../../public/modules/products/product-logic.js';
-const appState = {
-    sinopticoTabularState: {
-        selectedProduct: null,
-    },
-};
 
 describe('cloneProduct Timestamp and Metadata Handling', () => {
 
