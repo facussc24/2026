@@ -275,34 +275,74 @@ exports.organizeTaskWithAI = functions
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
       const prompt = `
-        Analiza el siguiente texto que describe una tarea. Tu objetivo es estructurarlo en un formato JSON.
-        El texto es: "${text}"
+        Analiza el siguiente texto de un usuario. Tu objetivo principal es identificar si el texto describe una única tarea o múltiples tareas distintas que deberían gestionarse por separado.
 
-        Realiza las siguientes acciones:
-        1.  **Corrige errores ortográficos y gramaticales obvios** en el texto para mejorar la claridad. Si no estás seguro de una palabra o nombre (ej. un acrónimo como 'AMFE'), déjalo como está.
-        2.  **Extrae un título conciso** y claro (máximo 10 palabras) para la tarea.
-        3.  **Genera una descripción corta** (2-3 frases) que resuma el objetivo principal de la tarea.
-        4.  **Crea una lista de subtareas** cortas y accionables.
-        5.  **Determina la prioridad**: si el texto sugiere urgencia (ej. 'urgente', 'hoy mismo', 'ASAP', 'principal tarea'), la prioridad debe ser 'high'. Si sugiere una importancia normal, 'medium'. Si es algo sin prisa, 'low'.
-        6.  **Extrae la fecha de inicio (startDate)**: si el texto menciona una fecha de inicio (ej. 'empezar esta semana', 'a partir del lunes'), formatea esa fecha como 'YYYY-MM-DD'. Si no se menciona, deja el valor como null.
-        7.  **Extrae la fecha límite (dueDate)**: si el texto menciona una fecha o plazo (ej. 'para el viernes', 'el 15 de julio', 'en 3 días'), formatea esa fecha como 'YYYY-MM-DD'. Si no se menciona, deja el valor como null.
-        8.  **Sugiere a quién asignar la tarea (assignee)**: si el texto menciona el nombre de una persona (ej. 'marcelo nieve'), extrae ese nombre. Si no, deja el valor como null.
-        9.  **Determina si la tarea es pública (isPublic)**: si el texto habla de proyectos, planos, ingeniería, producción, seguridad o temas de equipo, debe ser 'true'. Si es una tarea personal (ej. 'llamar al dentista'), debe ser 'false'.
-        10. **Identifica el proyecto (project)**: si se menciona un nombre de proyecto específico (ej. 'Proyecto Titán'), extrae el nombre. Si no, deja el valor como null.
+        Texto del usuario: "${text}"
 
+        Sigue estas instrucciones:
+        1.  **Análisis de Tareas Múltiples**: Si el texto contiene varias acciones claramente separables (por ejemplo, "Revisar los planos del chasis y luego llamar al proveedor para confirmar la entrega del material"), debes crear un objeto de tarea separado para cada acción. Si el texto describe una sola acción con varios pasos, trátalo como una única tarea con subtareas.
+        2.  **Estructuración de Cada Tarea**: Para cada tarea identificada (sea una o varias), crea un objeto JSON con la siguiente estructura:
+            *   **title**: Un título conciso y claro (máximo 10 palabras).
+            *   **description**: Un resumen corto (2-3 frases) del objetivo de la tarea.
+            *   **subtasks**: Una lista de subtareas cortas y accionables (si aplica).
+            *   **priority**: 'high' (urgente), 'medium' (normal), o 'low' (sin prisa).
+            *   **startDate**: Fecha de inicio en formato 'YYYY-MM-DD' si se menciona, si no, null.
+            *   **dueDate**: Fecha límite en formato 'YYYY-MM-DD' si se menciona, si no, null.
+            *   **assignee**: Nombre de la persona a asignar si se menciona, si no, null.
+            *   **isPublic**: 'true' si es una tarea de equipo/ingeniería/proyecto, 'false' si es personal.
+            *   **project**: Nombre del proyecto si se menciona, si no, null.
+        3.  **Corrección de Texto**: En los títulos y descripciones, corrige errores ortográficos y gramaticales obvios para mayor claridad. Mantén acrónimos o jerga técnica (ej. 'AMFE') si no estás seguro.
 
-        Formatea la salida exclusivamente como un objeto JSON con las claves "title" (string), "description" (string), "subtasks" (array de strings), "priority" (string: 'low', 'medium', o 'high'), "startDate" (string: 'YYYY-MM-DD' o null), "dueDate" (string: 'YYYY-MM-DD' o null), "assignee" (string o null), "isPublic" (boolean), y "project" (string o null). No incluyas ninguna otra explicación ni formato.
-        Ejemplo de salida para un texto como 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes':
+        **Formato de Salida OBLIGATORIO**:
+        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado.
+
+        **Ejemplo 1 (Una sola tarea con subtareas)**:
+        Texto: 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes'
+        Salida:
         {
-          "title": "Organizar reunión para AMFE",
-          "description": "Organizar una reunión con Marcelo Nieve para discutir el Análisis de Modos y Efectos de Falla (AMFE).",
-          "subtasks": ["Agendar reunión con Marcelo Nieve", "Preparar agenda para la reunión de AMFE"],
-          "priority": "medium",
-          "startDate": null,
-          "dueDate": "2025-09-30",
-          "assignee": "Marcelo Nieve",
-          "isPublic": true,
-          "project": null
+          "tasks": [
+            {
+              "title": "Organizar reunión para AMFE",
+              "description": "Organizar una reunión con Marcelo Nieve para discutir el Análisis de Modos y Efectos de Falla (AMFE).",
+              "subtasks": ["Agendar reunión con Marcelo Nieve", "Preparar agenda para la reunión de AMFE"],
+              "priority": "medium",
+              "startDate": null,
+              "dueDate": "2025-09-30",
+              "assignee": "Marcelo Nieve",
+              "isPublic": true,
+              "project": null
+            }
+          ]
+        }
+
+        **Ejemplo 2 (Múltiples tareas separadas)**:
+        Texto: 'Revisar los planos del chasis esta tarde y mañana llamar al proveedor ACME para confirmar la entrega del material.'
+        Salida:
+        {
+          "tasks": [
+            {
+              "title": "Revisar planos del chasis",
+              "description": "Revisar los planos técnicos del componente del chasis para verificar las últimas modificaciones.",
+              "subtasks": [],
+              "priority": "medium",
+              "startDate": null,
+              "dueDate": "2025-09-25",
+              "assignee": null,
+              "isPublic": true,
+              "project": null
+            },
+            {
+              "title": "Confirmar entrega con proveedor ACME",
+              "description": "Llamar al proveedor ACME para confirmar la fecha y hora de entrega del material solicitado.",
+              "subtasks": ["Obtener número de orden de compra", "Llamar a ACME"],
+              "priority": "medium",
+              "startDate": "2025-09-26",
+              "dueDate": "2025-09-26",
+              "assignee": null,
+              "isPublic": true,
+              "project": null
+            }
+          ]
         }
       `;
 
@@ -321,10 +361,13 @@ exports.organizeTaskWithAI = functions
       const cleanedJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
       const parsedData = JSON.parse(cleanedJson);
 
-      if (!parsedData || typeof parsedData !== 'object' || !parsedData.title) {
-          throw new Error("La respuesta de la IA no es un JSON válido o no contiene un título.");
+      // The AI should now return an object with a "tasks" array.
+      if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks) || parsedData.tasks.length === 0) {
+          throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
       }
 
+      // The function now returns the entire object, which includes the "tasks" array.
+      // The client will handle whether it's one or many tasks.
       return parsedData;
 
     } catch (error) {

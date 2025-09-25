@@ -163,6 +163,25 @@ export async function handleTaskFormSubmit(e) {
     }
 }
 
+export async function createTask(taskData) {
+    const data = {
+        ...taskData,
+        creatorUid: appState.currentUser.uid,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        status: 'todo' // Default status for new tasks
+    };
+
+    try {
+        await addDoc(collection(db, COLLECTIONS.TAREAS), data);
+        return true; // Indicate success
+    } catch (error) {
+        console.error('Error creating task:', error);
+        showToast('Error al crear una de las tareas.', 'error');
+        return false; // Indicate failure
+    }
+}
+
 export function deleteTask(taskId) {
     return deleteDoc(doc(db, COLLECTIONS.TAREAS, taskId));
 }

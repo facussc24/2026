@@ -6,8 +6,8 @@ import { collection, onSnapshot, query, orderBy, addDoc } from "https://www.gsta
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
-import { handleTaskFormSubmit, deleteTask } from './task.service.js';
-import { getTaskFormModalHTML, getSubtaskHTML } from './task.templates.js';
+import { handleTaskFormSubmit, deleteTask, createTask } from './task.service.js';
+import { getTaskFormModalHTML, getSubtaskHTML, getMultiTaskConfirmationHTML } from './task.templates.js';
 
 let appState;
 let dom;
@@ -286,47 +286,102 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
             const functions = getFunctions();
             const organizeTaskWithAI = httpsCallable(functions, 'organizeTaskWithAI');
             const result = await organizeTaskWithAI({ text: brainDumpText });
+            const suggestedTasks = result.data.tasks;
 
-            const { title, description, subtasks, priority, dueDate, startDate, assignee, isPublic } = result.data;
+            if (suggestedTasks && suggestedTasks.length === 1) {
+                const taskData = suggestedTasks[0];
+                const { title, description, subtasks, priority, dueDate, startDate, assignee, isPublic } = taskData;
 
-            modalElement.querySelector('#task-title').value = title || '';
-            modalElement.querySelector('#task-description').value = description || '';
-            subtaskManager.setSubtasks(subtasks || []);
+                modalElement.querySelector('#task-title').value = title || '';
+                modalElement.querySelector('#task-description').value = description || '';
+                subtaskManager.setSubtasks(subtasks || []);
 
-            if (priority) {
-                modalElement.querySelector('#task-priority').value = priority;
-            }
-
-            if (startDate) {
-                modalElement.querySelector('#task-startdate').value = startDate;
-            } else {
-                const today = new Date().toISOString().split('T')[0];
-                modalElement.querySelector('#task-startdate').value = today;
-            }
-
-            if (dueDate) {
-                modalElement.querySelector('#task-duedate').value = dueDate;
-            }
-
-            if (isPublic !== undefined) {
-                const isPublicCheckbox = modalElement.querySelector('#task-is-public');
-                if (isPublicCheckbox) {
-                    isPublicCheckbox.checked = isPublic;
+                if (priority) {
+                    modalElement.querySelector('#task-priority').value = priority;
                 }
-            }
 
-            // Handle assignee suggestion
-            if (assignee) {
-                const assigneeSelect = modalElement.querySelector('#task-assignee');
-                const users = appState.collections.usuarios || [];
-                const foundUser = users.find(u => u.name.toLowerCase().includes(assignee.toLowerCase()));
-                if (foundUser) {
-                    assigneeSelect.value = foundUser.docId;
+                if (startDate) {
+                    modalElement.querySelector('#task-startdate').value = startDate;
                 } else {
-                    showToast(`Sugerencia: No se pudo encontrar un usuario llamado "${assignee}".`, 'info');
+                    const today = new Date().toISOString().split('T')[0];
+                    modalElement.querySelector('#task-startdate').value = today;
                 }
+
+                if (dueDate) {
+                    modalElement.querySelector('#task-duedate').value = dueDate;
+                }
+
+                if (isPublic !== undefined) {
+                    const isPublicCheckbox = modalElement.querySelector('#task-is-public');
+                    if (isPublicCheckbox) {
+                        isPublicCheckbox.checked = isPublic;
+                    }
+                }
+
+                if (assignee) {
+                    const assigneeSelect = modalElement.querySelector('#task-assignee');
+                    const users = appState.collections.usuarios || [];
+                    const foundUser = users.find(u => u.name.toLowerCase().includes(assignee.toLowerCase()));
+                    if (foundUser) {
+                        assigneeSelect.value = foundUser.docId;
+                    } else {
+                        showToast(`Sugerencia: No se pudo encontrar un usuario llamado "${assignee}".`, 'info');
+                    }
+                }
+                showToast('¡Tarea organizada con IA!', 'success');
+
+            } else if (suggestedTasks && suggestedTasks.length > 1) {
+                const form = modalElement.querySelector('#task-form');
+                const footer = modalElement.querySelector('.flex.justify-end'); // More robust selector
+                if (form) form.style.display = 'none';
+                if (footer) footer.style.display = 'none';
+
+                const confirmationHTML = getMultiTaskConfirmationHTML(suggestedTasks);
+                // Insert the confirmation view right after the (now hidden) form
+                form.insertAdjacentHTML('afterend', confirmationHTML);
+                lucide.createIcons();
+
+                const confirmationView = modalElement.querySelector('#multi-task-confirmation-view');
+
+                confirmationView.querySelector('#cancel-multi-task-btn').addEventListener('click', () => {
+                    modalElement.remove();
+                });
+
+                confirmationView.querySelector('#create-selected-tasks-btn').addEventListener('click', async (e) => {
+                    const createBtn = e.currentTarget;
+                    createBtn.disabled = true;
+                    createBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Creando...';
+                    lucide.createIcons({ nodes: [createBtn.querySelector('i')] });
+
+                    const selectedTasks = [];
+                    const checkboxes = confirmationView.querySelectorAll('.suggested-task-checkbox:checked');
+                    checkboxes.forEach(cb => {
+                        const taskIndex = parseInt(cb.dataset.taskIndex, 10);
+                        selectedTasks.push(suggestedTasks[taskIndex]);
+                    });
+
+                    if (selectedTasks.length === 0) {
+                        showToast('No se ha seleccionado ninguna tarea para crear.', 'warning');
+                        createBtn.disabled = false;
+                        createBtn.innerHTML = 'Crear Tareas Seleccionadas';
+                        return;
+                    }
+
+                    let successCount = 0;
+                    for (const task of selectedTasks) {
+                        const success = await createTask(task);
+                        if (success) {
+                            successCount++;
+                        }
+                    }
+
+                    showToast(`${successCount} de ${selectedTasks.length} tareas creadas con éxito.`, 'success');
+                    modalElement.remove();
+                });
+
+            } else {
+                throw new Error("La respuesta de la IA no contenía un array de tareas válido.");
             }
-            showToast('¡Tarea organizada con IA!', 'success');
 
         } catch (error) {
             console.error("Error calling organizeTaskWithAI function:", error);
