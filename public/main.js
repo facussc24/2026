@@ -210,5 +210,3 @@ document.addEventListener("click", (e) => {
     switchView(view);
   }
 });
-
-export { switchView, activeUser };
