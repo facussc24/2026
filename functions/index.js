@@ -260,12 +260,20 @@ exports.sendTaskAssignmentEmail = functions
 exports.organizeTaskWithAI = functions
   .runWith({ secrets: ["GEMINI_API_KEY"] })
   .https.onCall(async (data, context) => {
+    // Guardian 1: Log de entrada
+    console.log("--- organizeTaskWithAI: Inicio de ejecución (con logs) ---");
+    console.log("Timestamp:", new Date().toISOString());
+    console.log("Contexto de autenticación (UID):", context.auth ? context.auth.uid : "No autenticado");
+    console.log("Datos de entrada (data.text):", JSON.stringify(data.text));
+
     if (!context.auth) {
+      console.error("Error: Intento de llamada no autenticado.");
       throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
     const text = data.text;
     if (!text || typeof text !== "string" || text.trim().length === 0) {
+      console.error("Error: El argumento 'text' está ausente o es inválido.", { text });
       throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
     }
 
@@ -294,7 +302,7 @@ exports.organizeTaskWithAI = functions
         3.  **Corrección de Texto**: En los títulos y descripciones, corrige errores ortográficos y gramaticales obvios para mayor claridad. Mantén acrónimos o jerga técnica (ej. 'AMFE') si no estás seguro.
 
         **Formato de Salida OBLIGATORIO**:
-        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado.
+        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado. NO incluyas el JSON dentro de un bloque de código markdown.
 
         **Ejemplo 1 (Una sola tarea con subtareas)**:
         Texto: 'necesito organizar reunion con Marcelo Nieve para el AMFE para el proximo lunes'
@@ -354,55 +362,79 @@ exports.organizeTaskWithAI = functions
         }],
       };
 
+      // Guardian 2: Log de lo que se envía a la IA
+      console.log("--- organizeTaskWithAI: Enviando a Gemini API ---");
+      console.log("URL:", url);
+      console.log("Prompt (primeros 200 caracteres):", prompt.substring(0, 200) + "...");
+
       const apiResponse = await axios.post(url, requestBody);
 
+      // Guardian 3: Log de la respuesta cruda de la IA
+      console.log("--- organizeTaskWithAI: Respuesta recibida de Gemini API ---");
+      console.log("Status:", apiResponse.status);
+      console.log("Response Data:", JSON.stringify(apiResponse.data, null, 2));
+
+      if (!apiResponse.data || !apiResponse.data.candidates || !apiResponse.data.candidates[0] || !apiResponse.data.candidates[0].content || !apiResponse.data.candidates[0].content.parts || !apiResponse.data.candidates[0].content.parts[0]) {
+          console.error("Error: La respuesta de la IA no tiene la estructura esperada.", apiResponse.data);
+          throw new Error("La respuesta de la IA tiene un formato inesperado o está vacía.");
+      }
+
       const responseText = apiResponse.data.candidates[0].content.parts[0].text;
+      console.log("Texto extraído de la respuesta:", responseText);
 
-      // Use a regex to extract the JSON block, ignoring any surrounding text.
-      const jsonMatch = responseText.match(/{[\s\S]*}/);
-      if (!jsonMatch) {
-        console.error("No valid JSON block found in AI response. Raw response:", responseText);
-        throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
+      let parsedData;
+      try {
+          // Guardian 4: Intento de parseo
+          const jsonMatch = responseText.match(/{[\s\S]*}/);
+          if (!jsonMatch) {
+              console.error("No se encontró un bloque JSON válido en la respuesta de la IA. Respuesta cruda:", responseText);
+              throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
+          }
+
+          const jsonString = jsonMatch[0];
+          console.log("JSON String a parsear:", jsonString);
+
+          parsedData = JSON.parse(jsonString);
+          console.log("--- organizeTaskWithAI: JSON parseado con éxito ---", JSON.stringify(parsedData, null, 2));
+
+      } catch (jsonError) {
+          console.error("--- organizeTaskWithAI: Fallo al parsear JSON ---");
+          console.error("Error de parseo:", jsonError.message);
+          console.error("Texto que falló el parseo:", responseText);
+          throw new Error(`La respuesta de la IA no es un JSON válido. ${jsonError.message}`);
       }
 
-      const parsedData = JSON.parse(jsonMatch[0]);
-
-      // The AI should now return an object with a "tasks" array.
-      // It's valid for the AI to return an empty array if no tasks are found.
+      // Guardian 5: Validación de la estructura del JSON
       if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks)) {
-          throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
+          console.error("--- organizeTaskWithAI: Error de validación de estructura ---");
+          console.error("El JSON parseado no tiene la clave 'tasks' o no es un array.", parsedData);
+          throw new Error("La respuesta de la IA no contiene un array de tareas ('tasks').");
       }
 
-      // The function now returns the entire object, which includes the "tasks" array.
-      // The client will handle whether it's one or many tasks.
+      console.log("--- organizeTaskWithAI: Ejecución exitosa ---");
       return parsedData;
 
     } catch (error) {
-      // Enhanced error logging
       console.error("--- Detailed Error in organizeTaskWithAI ---");
       console.error("Timestamp:", new Date().toISOString());
-      console.error("Input Text:", text.substring(0, 100) + "..."); // Log a snippet of the input
+      console.error("Input Text:", text.substring(0, 100) + "...");
 
       if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
         console.error("Gemini API Response Error Status:", error.response.status);
-        console.error("Gemini API Response Headers:", JSON.stringify(error.response.headers, null, 2));
         console.error("Gemini API Response Data:", JSON.stringify(error.response.data, null, 2));
       } else if (error.request) {
-        // The request was made but no response was received
         console.error("Gemini API No Response Received:", error.request);
       } else {
-        // Something happened in setting up the request that triggered an Error
-        console.error("Error setting up Gemini API request:", error.message);
+        console.error("Error message:", error.message);
       }
+
       console.error("Full Error Object:", JSON.stringify(error, null, 2));
       console.error("--- End of Detailed Error ---");
 
       throw new functions.https.HttpsError(
         "internal",
-        "Ocurrió un error al procesar la solicitud con la IA.",
-        "Check the function logs for more details." // More informative details for the client-side log
+        error.message || "Ocurrió un error al procesar la solicitud con la IA.",
+        "Check the function logs for more details."
       );
     }
   });
