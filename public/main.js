@@ -61,10 +61,12 @@ const switchView = (view, data) => {
       `;
       setupLoginForm();
       const resetPasswordLink = document.querySelector("#reset-password-link");
-      resetPasswordLink.addEventListener("click", (e) => {
-        e.preventDefault();
-        switchView("reset");
-      });
+      if (resetPasswordLink) {
+        resetPasswordLink.addEventListener("click", (e) => {
+          e.preventDefault();
+          switchView("reset");
+        });
+      }
       break;
     case "signup":
       pageTitle.innerHTML = "Signup";
@@ -173,7 +175,9 @@ onAuthStateChanged(auth, async (user) => {
     } else if (userName) {
       userName.innerHTML = activeUser.email;
     }
-    if (userProfile) userProfile.style.display = "block";
+    if (userProfile) {
+      userProfile.style.display = "block";
+    }
     loggedInLinks.forEach((item) => (item.style.display = "block"));
     loggedOutLinks.forEach((item) => (item.style.display = "none"));
     if (activeView === null || activeView === "login" || activeView === "signup" || activeView === "reset") {
@@ -183,7 +187,9 @@ onAuthStateChanged(auth, async (user) => {
     }
   } else {
     activeUser = null;
-    if (userProfile) userProfile.style.display = "none";
+    if (userProfile) {
+      userProfile.style.display = "none";
+    }
     loggedInLinks.forEach((item) => (item.style.display = "none"));
     loggedOutLinks.forEach((item) => (item.style.display = "block"));
     switchView("login");
@@ -196,12 +202,13 @@ if (logout) {
     e.preventDefault();
     try {
       await signOut(auth);
-    showMessage("Logged out successfully");
-  } catch (error) {
-    console.log(error);
-    showMessage(error.message, "error");
-  }
-});
+      showMessage("Logged out successfully");
+    } catch (error) {
+      console.log(error);
+      showMessage(error.message, "error");
+    }
+  });
+}
 
 document.addEventListener("click", (e) => {
   if (e.target.matches("[data-view]")) {
