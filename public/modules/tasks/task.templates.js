@@ -91,18 +91,18 @@ export function getMultiTaskConfirmationHTML(suggestedTasks) {
     }).join('');
 
     return `
-        <div id="multi-task-confirmation-view" class="p-6 animate-fade-in">
-            <div class="text-center mb-4">
+        <div id="multi-task-confirmation-view" class="p-6 animate-fade-in flex flex-col h-full">
+            <div class="text-center mb-4 flex-shrink-0">
                 <i data-lucide="git-fork" class="w-12 h-12 mx-auto text-blue-500"></i>
                 <h3 class="text-xl font-bold text-gray-800 mt-2">La IA ha sugerido dividir la entrada en ${suggestedTasks.length} tareas.</h3>
                 <p class="text-sm text-gray-600 mt-1">Revisa las tareas sugeridas a continuación. Desmarca las que no quieras crear.</p>
             </div>
 
-            <div id="suggested-tasks-list" class="space-y-3 max-h-80 overflow-y-auto border p-4 rounded-lg bg-slate-100 custom-scrollbar">
+            <div id="suggested-tasks-list" class="space-y-3 flex-grow min-h-0 overflow-y-auto border p-4 rounded-lg bg-slate-100 custom-scrollbar">
                 ${tasksListHTML}
             </div>
 
-            <div class="flex justify-end items-center gap-3 mt-6 pt-4 border-t">
+            <div class="flex justify-end items-center gap-3 mt-6 pt-4 border-t flex-shrink-0">
                 <button id="cancel-multi-task-btn" type="button" class="btn btn-secondary">Cancelar</button>
                 <button id="create-selected-tasks-btn" type="button" class="btn btn-primary">
                     <i data-lucide="check-check" class="w-4 h-4 mr-2"></i>
