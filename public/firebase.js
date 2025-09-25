@@ -3,12 +3,12 @@ import { getAuth, connectAuthEmulator } from "https://www.gstatic.com/firebasejs
 import { getFirestore, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "demo-key",
-  authDomain: "demo-domain",
+  apiKey: "AIzaSyAUQxlBCiYoR4-tlGL-S3xR8LXrrMkx1Tk",
+  authDomain: "barackingenieria-e763c.firebaseapp.com",
   projectId: "barackingenieria-e763c",
-  storageBucket: "demo-bucket",
-  messagingSenderId: "demo-sender-id",
-  appId: "demo-app-id"
+  storageBucket: "barackingenieria-e763c.appspot.com",
+  messagingSenderId: "44704892099",
+  appId: "1:44704892099:web:738c8cbc3cea65808a8e76"
 };
 
 const app = initializeApp(firebaseConfig);
