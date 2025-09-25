@@ -57,7 +57,7 @@ const firebaseConfig = {
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+export const db = getFirestore(app);
 const functions = getFunctions(app);
 const storage = getStorage(app);
 
@@ -2712,7 +2712,7 @@ async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAss
  * @param {string} message - El mensaje de la notificación.
  * @param {string} view - La vista a la que debe navegar el usuario al hacer clic.
  */
-async function sendNotification(userId, message, view, params = {}) {
+export async function sendNotification(userId, message, view, params = {}) {
     if (!userId || !message || !view) {
         console.error('sendNotification called with invalid parameters:', { userId, message, view });
         return;
