@@ -168,12 +168,12 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     const userProfileData = await getActiveUserProfile(user);
     activeUser = { ...user, ...userProfileData };
-    if (activeUser.name) {
+    if (userName && activeUser.name) {
       userName.innerHTML = activeUser.name;
-    } else {
+    } else if (userName) {
       userName.innerHTML = activeUser.email;
     }
-    userProfile.style.display = "block";
+    if (userProfile) userProfile.style.display = "block";
     loggedInLinks.forEach((item) => (item.style.display = "block"));
     loggedOutLinks.forEach((item) => (item.style.display = "none"));
     if (activeView === null || activeView === "login" || activeView === "signup" || activeView === "reset") {
@@ -183,7 +183,7 @@ onAuthStateChanged(auth, async (user) => {
     }
   } else {
     activeUser = null;
-    userProfile.style.display = "none";
+    if (userProfile) userProfile.style.display = "none";
     loggedInLinks.forEach((item) => (item.style.display = "none"));
     loggedOutLinks.forEach((item) => (item.style.display = "block"));
     switchView("login");
@@ -191,10 +191,11 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 const logout = document.querySelector("#logout");
-logout.addEventListener("click", async (e) => {
-  e.preventDefault();
-  try {
-    await signOut(auth);
+if (logout) {
+  logout.addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      await signOut(auth);
     showMessage("Logged out successfully");
   } catch (error) {
     console.log(error);
