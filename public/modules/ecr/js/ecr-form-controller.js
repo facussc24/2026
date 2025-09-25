@@ -2,8 +2,10 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { showToast } from '../../shared/ui.js';
 import { setPath, COLLECTIONS } from "/utils.js";
 import { runTransaction, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { db, sendNotification } from "../../../main.js";
 
+// Dependencies will be injected by main.js
+let db;
+let sendNotification;
 
 export function getEcrFormData(){
       const data={meta:{},codigos:{},clasificacion:{objetivos:{},alteraciones:{}},situacion:{existente:{},propuesta:{}},equipo:{}};
@@ -39,7 +41,9 @@ export function getEcrFormData(){
       data.departamentos = gatherDeparts();
       return data;
     }
-export function initEcrForm() {
+export function initEcrForm(dependencies) {
+    db = dependencies.db;
+    sendNotification = dependencies.sendNotification;
     // ---- Utilidades JSON <-> Form ----
     function getPath(obj, path, def){
       const parts = path.split('.');
@@ -259,12 +263,12 @@ export function initEcrForm() {
       });
       if(seed){ Object.entries(seed).forEach(([k,v])=>{ for(const [path,val] of Object.entries(flatten(v,`departamentos.${k}`))){ const el=document.querySelector(`[data-name="${path}"]`); if(el){ if(el.type==='checkbox') el.checked=!!val; else el.value=val; } } }); }
       document.querySelectorAll('#dept-accordion .acc-item').forEach((it,idx)=>{ if(idx<3){ it.classList.add('open'); const b=it.querySelector('.acc-body'); if(b) b.style.display='block'; } });
-      initChipEnhancements();
+
     }
     // ... (El resto de las funciones auxiliares como designTable, signatureBlock, flatten, gatherDeparts, etc.)
     buildStaticTables();
     buildDepartments();
-    initChipEnhancements();
+
 }
 
 export async function registerEcrApproval(ecrId, departmentId, decision, comment, deps) {
