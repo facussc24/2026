@@ -1,88 +1,858 @@
-<!-- Encabezado del Formulario -->
-<div class="flex justify-between items-center mb-6 pb-4 border-b">
-    <div>
-        <h2 id="ecr-form-title" class="text-3xl font-bold text-slate-800">Nuevo ECR</h2>
-        <p class="text-sm text-slate-500">Complete los campos para crear una Solicitud de Cambio de Ingeniería.</p>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ECR – Producto / Proceso (Preview)</title>
+<style>
+  :root{
+    --brand:#44546A; /* pedido del usuario */
+    --brand-dark:#303A4A;
+    --brand-accent:#5B7AA6;
+    --ink:#111827;
+    --muted:#6B7280;
+    --bg:#F5F7FA;
+    --card:#FFFFFF;
+    --border:#E5E7EB;
+    --ok:#15803d; --warn:#f59e0b; --err:#dc2626;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif}
+  h1,h2,h3{margin:0 0 .5rem}
+  .container{max-width:1280px;margin:24px auto;padding:0 16px}
+  .brandbar{display:flex;align-items:center;justify-content:space-between;background:var(--brand);color:#fff;border-radius:16px;padding:16px 20px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  .brandbar .title{font-weight:800;letter-spacing:.2px}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{appearance:none;border:1px solid var(--border);background:#fff;color:var(--brand-dark);padding:8px 12px;border-radius:10px;cursor:pointer}
+  .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+  .btn.ghost{background:transparent;color:#fff;border-color:#6e7b90}
+  .tabs{display:flex;gap:8px;margin:14px 0}
+  .tab{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer}
+  .tab.active{background:var(--brand);color:#fff;border-color:transparent}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px 16px;margin-bottom:12px;box-shadow:0 4px 14px rgba(0,0,0,.04)}
+  .grid{display:grid;gap:10px}
+  .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  @media (max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
+  input[type=text],input[type=date],textarea,select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:#fff}
+  textarea{min-height:96px;resize:vertical}
+  .checkrow{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);padding:6px 8px;border-radius:999px;background:#fff}
+  .section-title{background:var(--brand-dark);color:#fff;padding:8px 12px;border-radius:12px;margin:-6px 0 8px}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:900px){.twocol{grid-template-columns:1fr}}
+  .images{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .images img{width:100%;height:140px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
+  table{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:#fff}
+  th,td{border-bottom:1px solid var(--border);padding:8px 10px;text-align:left;vertical-align:top}
+  thead th{background:#eef2f7;color:#334155}
+  tbody tr:nth-child(even){background:#fafbfc}
+  .mini{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+  .switch{display:inline-flex;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .switch button{padding:6px 10px;border:0;background:#fff;cursor:pointer}
+  .switch button.active{background:var(--brand);color:#fff}
+  .accordion{border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  .acc-item + .acc-item{border-top:1px solid var(--border)}
+  .acc-head{background:#f2f5f9;padding:10px 12px;cursor:pointer;font-weight:600;color:#243143;position:relative}
+  .acc-head::after{content:"▸";position:absolute;right:12px;top:50%;transform:translateY(-50%);opacity:.8}
+  .acc-item.open .acc-head::after{content:"▾"}
+  .acc-head:focus{outline:2px solid var(--brand-accent);outline-offset:2px}
+  .acc-body{padding:12px;background:#fff}
+  .acc-body textarea{margin-bottom:14px}
+  .acc-body .section-title{margin-top:16px}
+  .acc-body .checkrow{margin-top:12px;gap:12px}
+  .chip{margin-bottom:6px}
+  .chip input[type=text].chip-inline{min-width:220px}
+  .chip input[type=text][disabled]{opacity:.6}
+  .chip input[type=text]{border:none;border-bottom:1px solid var(--border);border-radius:0;padding:4px 6px;min-width:160px;outline:none;background:transparent}
+  .flex{display:flex;gap:10px;flex-wrap:wrap}
+  .w-100{width:100%}
+  .right{margin-left:auto}
+  /* Equipo de trabajo layout */
+  .eq-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px}
+  .eq-row{display:grid;grid-template-columns:160px 1fr;align-items:center;border-bottom:1px dashed var(--border);padding:4px 0}
+  .eq-label{font-weight:700;text-transform:uppercase;letter-spacing:.2px;color:#1f2937}
+  @media(max-width:900px){.eq-grid{grid-template-columns:1fr}.eq-row{grid-template-columns:140px 1fr}}
+  /* Print */
+  @media print{
+    body{background:#fff}
+    .brandbar,.tabs,.toolbar{display:none !important}
+    .card{box-shadow:none;border-color:#cfd6e0}
+    .page{page-break-after:always}
+    .page:last-child{page-break-after:auto}
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="brandbar">
+      <div>
+        <div class="title">ECR – DE PRODUCTO / PROCESO</div>
+        <div style="opacity:.85;font-size:12px">CHECK LIST ECR – ENGINEERING CHANGE REQUEST</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost" id="btn-ai-generate">✨ Generar con IA</button>
+        <button class="btn ghost" id="btn-analyze-impacts">🔍 Analizar Impactos</button>
+        <button class="btn ghost" id="btn-load">Importar JSON</button>
+        <button class="btn ghost" id="btn-save">Exportar JSON</button>
+        <button class="btn primary" onclick="window.print()">Imprimir / PDF</button>
+      </div>
     </div>
-</div>
 
-<!-- Sección de Datos Principales -->
-<div class="bg-slate-50 p-6 rounded-lg border border-slate-200">
-    <h3 class="text-lg font-semibold text-slate-700 mb-4">Datos Principales</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="p1">1) Datos del ECR</button>
+      <button class="tab" data-tab="p2">2) Impacto y Aprobaciones</button>
+      <button class="tab" data-tab="p3">3) Evaluación por Departamentos</button>
+      <button class="tab" data-tab="p4">4) Cierre</button>
+    </div>
+
+    <!-- Página 1 -->
+    <section class="page" id="p1">
+      <div class="card g3 grid">
         <div>
-            <label for="codigo_barack_display" class="block text-sm font-medium text-gray-700">Producto Afectado</label>
-            <div class="flex items-center gap-2 mt-1">
-                <input type="text" id="codigo_barack_display" class="block w-full border-gray-300 rounded-md shadow-sm bg-gray-100" readonly placeholder="Ningún producto seleccionado">
-                <input type="hidden" id="codigo_barack" name="codigo_barack">
-                <button type="button" id="search-product-btn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex-shrink-0">Buscar</button>
+          <label>ECR Nº</label>
+          <input data-name="meta.ecrNumero" type="text" value="037"/>
+        </div>
+        <div>
+          <label>Proyecto</label>
+          <input data-name="meta.proyecto" type="text" value="INSONOS"/>
+        </div>
+        <div>
+          <label>Cliente</label>
+          <input data-name="meta.cliente" type="text" value="COZZUOL"/>
+        </div>
+        <div>
+          <label>Fecha de emisión</label>
+          <input data-name="meta.fechaEmision" type="date"/>
+        </div>
+        <div>
+          <label>Fecha de cierre</label>
+          <input data-name="meta.fechaCierre" type="date"/>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Origen del pedido</div>
+        <div class="checkrow">
+          <label class="chip"><input type="checkbox" data-name="origenPedido.CLIENTE"> CLIENTE</label>
+          <label class="chip"><input type="checkbox" data-name="origenPedido.PROVEEDOR"> PROVEEDOR</label>
+          <label class="chip"><input type="checkbox" data-name="origenPedido.INTERNO"> INTERNO</label>
+          <label class="chip"><input type="checkbox" data-name="origenPedido.REGLAMENTACION"> REGLAMENTACION</label>
+        </div>
+        <div style="height:10px"></div>
+        <div class="section-title">Fase de proyecto</div>
+        <div class="checkrow">
+          <label class="chip"><input type="checkbox" data-name="faseProyecto.Programa"> Programa</label>
+          <label class="chip"><input type="checkbox" data-name="faseProyecto.Serie"> Serie</label>
+        </div>
+      </div>
+
+      <div class="card g2 grid">
+        <div>
+          <label>Código(s) BARACK</label>
+          <input type="text" data-name="codigos.barack"/>
+        </div>
+        <div>
+          <label>Código(s) Cliente</label>
+          <input type="text" data-name="codigos.cliente" value="MP7313 - MP7314 - MP7315 - MP7316 - MP7317 - MP7318 - MP7319 - MP7320 - MP7322"/>
+        </div>
+        <div class="g2 w-100" style="grid-column:1/-1;display:grid;gap:10px;grid-template-columns:1fr">
+          <div>
+            <label>Denominación del producto</label>
+            <input type="text" data-name="codigos.denominacion"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="card g2 grid">
+        <div>
+          <div class="section-title">Objetivo de ECR</div>
+          <div class="checkrow">
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Productividad"> Productividad</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Mejoría de calidad"> Mejoría de calidad</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Estrategia del Cliente"> Estrategia del Cliente</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Estrategia Barack"> Estrategia Barack</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Nacionalización"> Nacionalización</label>
+          </div>
+        </div>
+        <div>
+          <div class="section-title">Tipo de alteración</div>
+          <div class="checkrow">
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Producto"> Producto</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Proceso"> Proceso</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Fuente de suministro"> Fuente de suministro</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Embalaje"> Embalaje</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Otro"> Otro</label>
+          </div>
+        </div>
+        <div>
+          <label>¿Afecta S/R?</label>
+          <div class="switch" data-name="clasificacion.afectaSR">
+            <button type="button" data-val="SI">SI</button>
+            <button type="button" data-val="NO" class="active">NO</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="twocol">
+        <div class="card">
+          <div class="section-title">Situación existente</div>
+          <label>Descripción</label>
+          <textarea data-name="situacion.existente.descripcion">Se utiliza la cinta de Tessa pero los consumos actuales son una cinta de 3M que ya no se utiliza más y el consumo estaba en rollos por lo tanto no se puede utilizar en el nuevo rollo de Tessa.</textarea>
+          <label>Anexos (uno por línea)</label>
+          <textarea data-name="situacion.existente.anexos">Estructura de producto 03 REV. A
+FT136 REV.A
+FT137 REV.A</textarea>
+        </div>
+        <div class="card">
+          <div class="section-title">Situación propuesta</div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Descripción</label>
+            <button class="btn" id="btn-suggest-proposal" style="margin-bottom: 4px; padding: 4px 8px; font-size: 12px;">Sugerir Propuesta</button>
+          </div>
+          <textarea data-name="situacion.propuesta.descripcion">Recalcular los consumos de cinta en M2 para que programen correctamente y que en el futuro aunque cambie el rollo puedan seguir programando fácilmente.</textarea>
+          <label>Anexos (uno por línea)</label>
+          <textarea data-name="situacion.propuesta.anexos"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- Página 2: Impacto + CODIR + Equipo -->
+    <section class="page" id="p2" hidden>
+      <div class="card">
+        <div class="section-title">Impacto en caso de falla</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Responsable</th><th>Análisis de riesgo</th><th>Nivel</th><th>Observaciones</th><th>Nombre</th><th>Fecha</th><th>Visto</th>
+            </tr>
+          </thead>
+          <tbody id="impacto-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Necesario Aprobación CODIR</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Miembro</th><th>Aprobado</th><th>Rechazado</th><th>Observaciones</th><th>Nombre</th><th>Fecha</th><th>Visto</th>
+            </tr>
+          </thead>
+          <tbody id="codir-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Equipo de trabajo</div>
+        <div class="eq-grid">
+          <div class="eq-row"><span class="eq-label">PILOTO:</span><input data-name="equipo.pilotoECR" type="text" value="Paulo Centurión"/></div>
+          <div class="eq-row"><span class="eq-label">COMERCIAL:</span><input data-name="equipo.comercial" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">ENG. PRODUCTO:</span><input data-name="equipo.engProducto" type="text" value="Paulo Centurión"/></div>
+          <div class="eq-row"><span class="eq-label">PC&L/LOGÍSTICA:</span><input data-name="equipo.logistica" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">ENG. MANUFACTURA:</span><input data-name="equipo.engManufactura" type="text" value="Paulo Centurión"/></div>
+          <div class="eq-row"><span class="eq-label">PRODUCCIÓN:</span><input data-name="equipo.produccion" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">CALIDAD:</span><input data-name="equipo.calidad" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">COSTOS:</span><input data-name="equipo.costos" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">COMPRAS:</span><input data-name="equipo.compras" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">HSE:</span><input data-name="equipo.hse" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">SQA:</span><input data-name="equipo.sqa" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">MANTENIMIENTO:</span><input data-name="equipo.mantenimiento" type="text"/></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Página 3: Evaluación por Departamentos (accordion) -->
+    <section class="page" id="p3" hidden>
+      <div class="card">
+        <div class="section-title">Evaluación de propuesta por los departamentos</div>
+        <div class="flex" style="justify-content:flex-end;margin-bottom:8px"><button class="btn" id="expand-all">Expandir todo</button><button class="btn" id="collapse-all">Contraer todo</button></div>
+        <div class="accordion" id="dept-accordion"></div>
+      </div>
+    </section>
+
+    <!-- Página 4: Cierre -->
+    <section class="page" id="p4" hidden>
+      <div class="card g3 grid">
+        <div>
+          <label>Aprobación Final de ECR</label>
+          <div class="checkrow">
+            <label class="chip"><input type="radio" name="aprobFinal" value="OK" checked data-name="aprobacionFinal.ok"> OK</label>
+            <label class="chip"><input type="radio" name="aprobFinal" value="NOK" data-name="aprobacionFinal.nok"> NOK</label>
+          </div>
+        </div>
+        <div>
+          <label>Coordinador</label>
+          <input type="text" data-name="aprobacionFinal.coordinador" value="P. CENTURIÓN"/>
+        </div>
+        <div>
+          <label>Visto</label>
+          <input type="text" data-name="aprobacionFinal.visto" value="P. CENTURIÓN"/>
+        </div>
+        <div>
+          <label>Fecha</label>
+          <input type="date" data-name="aprobacionFinal.fecha"/>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Consideraciones de Coordinador</div>
+        <textarea data-name="consideracionesCoordinador" style="min-height:180px"></textarea>
+      </div>
+    </section>
+
+  </div>
+
+<script type="module">
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+import { showToast } from '../../shared/ui.js';
+
+// ---- Utilidades JSON <-> Form ----
+function getPath(obj, path, def){
+  const parts = path.split('.');
+  let cur = obj;
+  for(const p of parts){
+    if(cur==null) return def;
+    cur = cur[p];
+  }
+  return cur==null?def:cur;
+}
+function setPath(obj, path, value){
+  const parts = path.split('.');
+  let cur = obj;
+  parts.forEach((p,i)=>{
+    if(i===parts.length-1){cur[p]=value;}
+    else{cur[p]=cur[p]||{}; cur=cur[p];}
+  });
+}
+function collectData(){
+  const data={meta:{},codigos:{},clasificacion:{objetivos:{},alteraciones:{}},situacion:{existente:{},propuesta:{}},equipo:{}};
+  document.querySelectorAll('[data-name]').forEach(el=>{
+    const key=el.getAttribute('data-name');
+    if(el.type==='checkbox'){
+      if(key.includes('origenPedido.')){
+        const k=key.split('.')[1];
+        setPath(data,'origenPedido.'+k,el.checked);
+      }else if(key.includes('faseProyecto.')){
+        const k=key.split('.')[1];
+        setPath(data,'faseProyecto.'+k,el.checked);
+      }else if(key.includes('clasificacion.objetivos.')||key.includes('clasificacion.alteraciones.')){
+        setPath(data,key,el.checked);
+      }else{
+        setPath(data,key,el.checked);
+      }
+    }else if(el.closest('.switch')){
+      // handled via switch state
+    }else if(el.type==='radio'){
+      if(el.checked) setPath(data,key,true);
+    }else{
+      setPath(data,key,el.value);
+    }
+  });
+  // switch value
+  const sw=document.querySelector('.switch[data-name="clasificacion.afectaSR"]');
+  data.clasificacion.afectaSR=sw.querySelector('.active')?.dataset.val||'';
+  // tablas dinámicas
+  data.impactoFalla = tableToJSON('impacto-body');
+  data.aprobacionCODIR = tableToJSON('codir-body');
+  data.departamentos = gatherDeparts();
+  return data;
+}
+function hydrate(data){
+  document.querySelectorAll('[data-name]').forEach(el=>{
+    const key=el.getAttribute('data-name');
+    if(el.type==='checkbox'){
+      el.checked=!!getPath(data,key,false);
+    }else if(el.closest('.switch')){
+      // handled below
+    }else if(el.type==='radio'){
+      // will keep default
+    }else{
+      const v=getPath(data,key,'');
+      if(v!==undefined) el.value=v;
+    }
+  });
+  // switch
+  const sw=document.querySelector('.switch[data-name="clasificacion.afectaSR"]');
+  const val=getPath(data,'clasificacion.afectaSR','NO');
+  sw.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.val===val));
+  // tablas
+  if(data.impactoFalla) jsonToTable('impacto-body', data.impactoFalla);
+  if(data.aprobacionCODIR) jsonToTable('codir-body', data.aprobacionCODIR);
+  if(data.departamentos) buildDepartments(data.departamentos);
+}
+
+// ---- Tabs ----
+const tabs=document.querySelectorAll('.tab');
+tabs.forEach(t=>t.addEventListener('click',()=>{
+  tabs.forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.querySelectorAll('.page').forEach(p=>p.hidden=true);
+  document.getElementById(t.dataset.tab).hidden=false;
+}));
+
+// ---- Switch ----
+document.querySelectorAll('.switch').forEach(sw=>{
+  sw.addEventListener('click',e=>{
+    if(e.target.tagName==='BUTTON'){
+      sw.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+      e.target.classList.add('active');
+    }
+  });
+});
+
+// ---- Impacto & CODIR: filas predefinidas ----
+const impactoItems=[
+  ['Gerente de Calidad','RETORNO DE GARANTIA'],
+  ['Gerente de calidad','RECLAMACIÓN ZERO KM'],
+  ['Gerente de HSE','HSE'],
+  ['Gerente de calidad','SATISFACCIÓN DEL CLIENTE'],
+  ['Gerente de calidad','S/R (Seguridad y/o Reglamentación)']
+];
+const codirItems=[
+  ['Director Comercial'],
+  ['Director industrial'],
+  ['Otro']
+];
+function jsonToTable(tbodyId, rows){
+  const tb=document.getElementById(tbodyId); if(!tb) return; tb.innerHTML='';
+  const sel = (cur)=>`
+    <select>
+      <option value=""></option>
+      <option value="Bajo" ${cur==='Bajo'?'selected':''}>Bajo</option>
+      <option value="Medio" ${cur==='Medio'?'selected':''}>Medio</option>
+      <option value="Alto" ${cur==='Alto'?'selected':''}>Alto</option>
+    </select>`;
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    if(tbodyId==='impacto-body'){
+      tr.innerHTML=`
+        <td><input type="text" value="${r.responsable||''}"></td>
+        <td><input type="text" value="${r.riesgo||''}"></td>
+        <td>${sel(r.nivel||'')}</td>
+        <td><input type="text" value="${r.observaciones||''}"></td>
+        <td><input type="text" value="${r.nombre||''}"></td>
+        <td><input type="date" value="${r.fecha||''}"></td>
+        <td style="text-align:center"><input type="checkbox" ${r.visto?"checked":""}></td>`;
+    } else {
+      tr.innerHTML=`
+        <td><input type="text" value="${r.miembro||''}"></td>
+        <td style="text-align:center"><input type="checkbox" ${r.aprobado?"checked":""}></td>
+        <td style="text-align:center"><input type="checkbox" ${r.rechazado?"checked":""}></td>
+        <td><input type="text" value="${r.observaciones||''}"></td>
+        <td><input type="text" value="${r.nombre||''}"></td>
+        <td><input type="date" value="${r.fecha||''}"></td>
+        <td style="text-align:center"><input type="checkbox" ${r.visto?"checked":""}></td>`;
+    }
+    tb.appendChild(tr);
+  });
+}
+function tableToJSON(tbodyId){
+  const tb=document.getElementById(tbodyId); const out=[]; if(!tb) return out;
+  tb.querySelectorAll('tr').forEach(tr=>{
+    const tds=tr.querySelectorAll('td');
+    const obj={};
+    if(tbodyId==='impacto-body'){
+      obj.responsable=tds[0].querySelector('input').value;
+      obj.riesgo=tds[1].querySelector('input').value;
+      obj.nivel=(tds[2].querySelector('select')||tds[2].querySelector('input')).value;
+      obj.observaciones=tds[3].querySelector('input').value;
+      obj.nombre=tds[4].querySelector('input').value;
+      obj.fecha=tds[5].querySelector('input').value;
+      obj.visto=tds[6].querySelector('input').checked;
+    } else {
+      obj.miembro=tds[0].querySelector('input').value;
+      obj.aprobado=tds[1].querySelector('input').checked;
+      obj.rechazado=tds[2].querySelector('input').checked;
+      obj.observaciones=tds[3].querySelector('input').value;
+      obj.nombre=tds[4].querySelector('input').value;
+      obj.fecha=tds[5].querySelector('input').value;
+      obj.visto=tds[6].querySelector('input').checked;
+    }
+    out.push(obj);
+  });
+  return out;
+}
+function buildStaticTables(){
+  jsonToTable('impacto-body', impactoItems.map(([r,ri])=>({responsable:r,riesgo:ri})));
+  const tb=document.getElementById('codir-body'); if(!tb) return; tb.innerHTML='';
+  codirItems.forEach(([m])=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><input type=text value="${m}"></td>
+      <td style=text-align:center><input type=checkbox></td>
+      <td style=text-align:center><input type=checkbox></td>
+      <td><input type=text></td>
+      <td><input type=text></td>
+      <td><input type=date></td>
+      <td style=text-align:center><input type=checkbox></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// ---- Departamentos (accordion) ----
+const deptConfig=[
+  {key:'ingenieriaProducto', title:'INGENIERÍA PRODUCTO', checklist:{
+    noAfecta:['ESTRUCTURA DE PRODUCTO','PLANO DE VALIDACIÓN','LANZAMIENTO DE PROTÓTIPOS','EVALUADO POR EL ESPECIALISTA DE PRODUCTO','ACTUALIZAR DISEÑO 3D','ACTUALIZAR DISEÑO 2D'],
+    afecta:['ACTUALIZAR DFMEA','COPIA DE ESTA ECR PARA OTRO SITIO?','NECESITA PIEZA DE REPOSICIÓN']
+  }, extras:'DISENO', design:true},
+  {key:'ingenieriaManufactura', title:'INGENIERÍA MANUFACTURA Y PROCESO', checklist:{
+    noAfecta:['HACER RUN A RATE','ACTUALIZAR DISEÑO MANUFACTURA','LAY OUT','AFECTA EQUIPAMIENTO','ACTUALIZAR INSTRUCCIONES , FLUJOGRAMAS','ACTUALIZAR PFMEA','POKA YOKES','ACTUALIZAR TIEMPOS'],
+    afecta:['CAPACIDAD DE PERSONAL','AFECTA A S&R  / HSE']
+  }, note:'En las instrucciones se coloca la nueva cinta a utilizar con nuevas fotos.'},
+  {key:'hse', title:'HSE', checklist:{
+    noAfecta:['CHECK LIST DE LIB DE MAQUINA','COMUNICAR ORGÃO AMBIENTAL','COMUNICACIÓN MINISTERIO DE TRABAJO'],
+    afecta:[]
+  }},
+  {key:'calidad', title:'CALIDAD', checklist:{
+    noAfecta:['AFECTA DIMENSIONAL CLIENTE ?','AFECTA FUNCIONAL E MONTABILIDADE?','ACTUALIZAR PLANO DE CONTROLES/ INSTRUCCIONES','AFECTA ASPECTO/ACTUALIZAR BIBLIA DE DEFEITOS/PÇ PATRON?','AFECTA CAPABILIDADE (AFECTA CAPACIDAD)','MODIFICAR DISPOSITIVO DE CONTROLE E SEU MODO DE CONTROLE'],
+    afecta:['NUEVO ESTUDIO DE MSA / CALIBRACIÓN','NECESITA VALIDACIÓN (PLANO DEBE ESTAR EN ANEXO)','NECESARIO NUEVO PPAP/PSW CLIENTE','ANALISIS DE MATERIA PRIMA','IMPLEMENTAR MURO DE CALIDAD IMPLEMENTADO (APLICADO)','NECESITA AUDITORIA S&R','AFECTA POKA-YOKE?','AFECTA AUDITORIA DE PRODUCTO?']
+  }},
+  {key:'compras', title:'COMPRAS', special:'compras'},
+  {key:'calidadProveedores', title:'CALIDAD PROVEEDORES', checklist:{
+    noAfecta:['NECESITA NUEVO PSW PROVEEDOR - FECHA LIMITE: ___/___/___','AFECTA LAY OUT','AFECTA EMBALAJE','AFECTA DISPOSITIVO CONTROL PROVEEDOR','AFECTA SUBPROVEEDOR'],
+    afecta:['NECESITA DE ASISTENTE']
+  }},
+  {key:'te', title:'Tooling & Equipaments (T&E)', checklist:{
+    noAfecta:['AFECTA HERRAMIENTA','ANALISIS TECNICA DE ALTERACIÓN','OTROS IMPACTOS CAUSADOS POR LA ALTERACION NO HERRAMENTAL'],
+    afecta:[]
+  }},
+  {key:'logistica', title:'LOGÍSTICA Y PC&L', checklist:{
+    noAfecta:['PARAMETROS LOGISTICOS / ITEMS NUEVOS','GESTION DE STOCK (PIEZA ANTIGUA/NUEVA)','NECESITA DE STOCK DE SEGURIDAD','NUEVO PROTOCOLO LOGISTICO'],
+    afecta:['AFECTA EMBALAJE']
+  }},
+  {key:'pcl', title:'PC&L', checklist:{
+    noAfecta:['ALTERA PROGRAMA P/ PROVEEDOR (PIEZA NUEVA/ANTIGUA)','IMPACTO POST VENTA'],
+    afecta:['IMPACTO MOI/MOD']
+  }},
+  {key:'finanzas', title:'FINANCIERO / COSTING', checklist:{
+    noAfecta:['BUSINESS PLAN','BOA - BUSINESS OPORTUNITY','MoB - ANALISYS','PAYBACK / UPFRONT'],
+    afecta:[]
+  }},
+  {key:'comercial', title:'COMERCIAL', checklist:{
+    noAfecta:['NECESARIO RENEGOCIAR CON EL CLIENTE','IMPACTO POST VENTA ANALISADO','NECESARIA NUEVA ORDEN DE VENTA AL CLIENTE','NEGOCIACIÓN DE OBSOLETOS'],
+    afecta:[]
+  }},
+  {key:'mantenimiento', title:'MANTENIMIENTO', checklist:{
+    noAfecta:['PROYETO PRESENTA VIABILIDAD TÉCNICA / TÉCNLOGICA','NECESITA AQUISICION DE MATERIALES/EQUIPAMIENTOS','NECESIDAD /DISPONIBILIDAD DE ENERGIAS:ELECTRICA,','NEUMÁTICA E HIDRAULICA','CREACION/ALTERACIÓN DE MANTENIMIENTO PREVENTIVAS','NECESITA REGISTRO DE NUEVOS ITEMS EM ALMACÉN'],
+    afecta:[]
+  }},
+  {key:'produccion', title:'PRODUCCIÓN', checklist:{
+    noAfecta:['AFECTA INSTRUCCION DE TRABAJO (SW)','AFECTA LIBERACION DE PROCESO (SET UP)','IMPACTO MOD / MOI','CAPACITACION'],
+    afecta:['AFECTA ALTERACIÓN DE PLANO DE CORTE']
+  }},
+  {key:'calidadCliente', title:'CALIDAD CLIENTE', checklist:{
+    noAfecta:['NECESITA APROVACIÓN CLIENTE EXTERNO','NECESARIO APROVACIÓN CLIENTE INTERNO','ECR SOBRE DESVIO Nº: _____________________________________','OTROS: ________________________________________________'],
+    afecta:[]
+  }}
+];
+function buildDepartments(seed){
+  const wrap=document.getElementById('dept-accordion');
+  wrap.innerHTML='';
+  deptConfig.forEach(cfg=>{
+    const item=document.createElement('div');
+    item.className='acc-item';
+    const head=document.createElement('div'); head.className='acc-head'; head.textContent=cfg.title; head.setAttribute('role','button'); head.setAttribute('tabindex','0'); item.appendChild(head);
+    const body=document.createElement('div'); body.className='acc-body';
+    function toggle(){ const open=item.classList.toggle('open'); body.style.display=open?'block':'none'; }
+    head.addEventListener('click',toggle);
+    head.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
+
+    // special compras
+    if(cfg.special==='compras'){
+      body.innerHTML=`<div class=grid style="grid-template-columns:repeat(3,1fr);gap:10px">
+        <div><label>PIEZA Actual</label><div class="checkrow">
+          <label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.piezaActual.nacional"> PIEZA NACIONAL</label>
+          <label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.piezaActual.importada"> PIEZA IMPORTADA</label>
+          <label class=chip>PROVEEDOR:<input type=text data-name="departamentos.${cfg.key}.piezaActual.proveedor" style="margin-left:8px"></label>
+        </div></div>
+        <div><label>PIEZA Propuesta</label><div class="checkrow">
+          <label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.piezaProp.nacional"> PIEZA NACIONAL</label>
+          <label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.piezaProp.importada"> PIEZA IMPORTADA</label>
+          <label class=chip>PROVEEDOR:<input type=text data-name="departamentos.${cfg.key}.piezaProp.proveedor" style="margin-left:8px"></label>
+        </div></div>
+        <div><label>Modificación</label><div class="checkrow">
+          <label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.mod.reversible"> REVERSIBLE</label>
+          <label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.mod.irreversible"> IRREVERSIBLE</label>
+        </div></div>
+      </div>
+      <div class="section-title" style="margin-top:10px">Checklist</div>
+      <div class=checkrow>
+        ${['COSTOS EVALUADOS','PEDIDO COMPRA PROTOTIPOS','PEDIDO COMPRA TOOLING','AFECTA HERRAMIENTA DE PROVEEDOR','NECESARIO ENVIAR DISEÑO P/ PROVEEDOR','IMPACTO POST VENTA ANALISADO'].map(txt=>`<label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.checklist.${txt}"> ${txt}</label>`).join('')}
+      </div>
+      ${signatureBlock(cfg.key)}
+      `;
+    } else {
+      // generic block
+      const ck=(arr,prefix)=>arr.map(txt=>{
+        if(cfg.key==='calidadCliente'){
+          if(txt.includes('ECR SOBRE DESVIO')){
+            return `<label class=chip>
+              <input type=checkbox data-enhance="with-text" data-name="departamentos.${cfg.key}.checklist.${prefix}.desvio"> ECR SOBRE DESVÍO Nº:
+              <input type=text class="chip-inline" data-name="departamentos.${cfg.key}.campos.desvio" placeholder="N° de desvío" style="margin-left:6px;display:none" disabled>
+            </label>`;
+          }
+          if(txt.startsWith('OTROS')){
+            return `<label class=chip>
+              <input type=checkbox data-enhance="with-text" data-name="departamentos.${cfg.key}.checklist.${prefix}.otros"> OTROS:
+              <input type=text class="chip-inline" data-name="departamentos.${cfg.key}.campos.otros" placeholder="Especificar" style="margin-left:6px;display:none" disabled>
+            </label>`;
+          }
+        }
+        return `<label class=chip><input type=checkbox data-name="departamentos.${cfg.key}.checklist.${prefix}.${txt}"> ${txt}</label>`;
+      }).join('');
+      body.innerHTML = `
+        ${cfg.design?designTable(cfg.key):''}
+        <div class="flex">
+          <div class="w-100">
+            <label>Comentarios Generales y Justificativos:</label>
+            <textarea data-name="departamentos.${cfg.key}.comentarios">${cfg.note||''}</textarea>
+          </div>
+        </div>
+        <div class="section-title">Checklist</div>
+        <div class="checkrow">${ck(cfg.checklist.noAfecta||[], 'noAfecta')}</div>
+        <div style="height:6px"></div>
+        <div class="checkrow">${ck(cfg.checklist.afecta||[], 'afecta')}</div>
+        ${signatureBlock(cfg.key)}
+      `;
+    }
+    item.appendChild(body); wrap.appendChild(item); body.style.display='none';
+  });
+  // hydrate from seed if provided
+  if(seed){ Object.entries(seed).forEach(([k,v])=>{ for(const [path,val] of Object.entries(flatten(v,`departamentos.${k}`))){ const el=document.querySelector(`[data-name="${path}"]`); if(el){ if(el.type==='checkbox') el.checked=!!val; else el.value=val; } } }); }
+  // abrir por defecto los 3 primeros para guiar al usuario
+  document.querySelectorAll('#dept-accordion .acc-item').forEach((it,idx)=>{ if(idx<3){ it.classList.add('open'); const b=it.querySelector('.acc-body'); if(b) b.style.display='block'; } });
+  // inicializar chips con input condicional
+  initChipEnhancements();
+}
+function designTable(key){
+  return `<div class="section-title">DISEÑO</div>
+  <table><thead><tr><th>Componente</th><th>Ref. actual / IND</th><th>Ref. nueva / IND</th><th>QTD./Carro</th><th>Costo cliente</th><th>Costo Barack</th><th>Costo proveedor</th><th>Afecta al cliente</th><th>Afecta S&R</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><input type=text data-name="departamentos.${key}.diseno.componente"></td>
+      <td><input type=text data-name="departamentos.${key}.diseno.refActual"></td>
+      <td><input type=text data-name="departamentos.${key}.diseno.refNueva"></td>
+      <td><input type=text data-name="departamentos.${key}.diseno.qtd"></td>
+      <td style=text-align:center><input type=checkbox data-name="departamentos.${key}.diseno.costos.cliente"></td>
+      <td style=text-align:center><input type=checkbox data-name="departamentos.${key}.diseno.costos.barack"></td>
+      <td style=text-align:center><input type=checkbox data-name="departamentos.${key}.diseno.costos.proveedor"></td>
+      <td style=text-align:center><input type=checkbox data-name="departamentos.${key}.diseno.costos.afectaCliente"></td>
+      <td style=text-align:center><input type=checkbox data-name="departamentos.${key}.diseno.costos.afectaSR"></td>
+    </tr>
+  </tbody></table>`
+}
+function signatureBlock(key){
+  return `<div class="mini" style="margin-top:8px">
+    <div><label>OK</label><input type=checkbox data-name="departamentos.${key}.ok"></div>
+    <div><label>NOK</label><input type=checkbox data-name="departamentos.${key}.nok"></div>
+    <div><label>Fecha</label><input type=date data-name="departamentos.${key}.fecha"></div>
+    <div><label>Nombre</label><input type=text data-name="departamentos.${key}.nombre"></div>
+    <div><label>Visto</label><input type=text data-name="departamentos.${key}.visto"></div>
+  </div>`
+}
+function flatten(obj,prefix=''){ const out={}; for(const [k,v] of Object.entries(obj||{})){ const key=prefix?`${prefix}.${k}`:k; if(v && typeof v==='object' && !Array.isArray(v)) Object.assign(out, flatten(v,key)); else out[key]=v; } return out; }
+function gatherDeparts(){
+  const out={};
+  deptConfig.forEach(cfg=>{
+    const base=`departamentos.${cfg.key}`;
+    const inputs=document.querySelectorAll(`[data-name^="${base}"]`);
+    inputs.forEach(el=>{
+      const path=el.getAttribute('data-name');
+      const val=el.type==='checkbox'?el.checked:el.value;
+      setPath(out, path.replace('departamentos.'+cfg.key+'.',''), val);
+    });
+  });
+  return out;
+}
+
+// ---- Export/Import ----
+document.getElementById('btn-save').addEventListener('click',()=>{
+  const data=collectData();
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`ECR_${data.meta?.ecrNumero||'nuevo'}.json`; a.click();
+});
+document.getElementById('btn-load').addEventListener('click',()=>{
+  const i=document.createElement('input'); i.type='file'; i.accept='.json'; i.onchange=async()=>{ const f=i.files[0]; if(!f) return; const text=await f.text(); try{ const json=JSON.parse(text); hydrate(json); }catch(e){ alert('JSON inválido'); } }; i.click();
+});
+
+// Inicializar
+buildStaticTables();
+buildDepartments();
+initChipEnhancements();
+// default dates
+const today=new Date().toISOString().slice(0,10);
+document.querySelector('[data-name="meta.fechaEmision"]').value=today;
+// expand/collapse all
+const ex=document.getElementById('expand-all');
+const co=document.getElementById('collapse-all');
+if(ex&&co){
+  ex.addEventListener('click',()=>{ document.querySelectorAll('#dept-accordion .acc-item').forEach(it=>{ it.classList.add('open'); const b=it.querySelector('.acc-body'); if(b) b.style.display='block'; }); });
+  co.addEventListener('click',()=>{ document.querySelectorAll('#dept-accordion .acc-item').forEach(it=>{ it.classList.remove('open'); const b=it.querySelector('.acc-body'); if(b) b.style.display='none'; }); });
+}
+
+// chips con input dependiente de checkbox
+function initChipEnhancements(){
+  function sync(chk){
+    const txt=chk.closest('label').querySelector('input[type=text]');
+    if(!txt) return;
+    const show = chk.checked || (txt.value && txt.value.trim()!=='');
+    chk.checked = show; // si hay valor, marcamos
+    txt.disabled = !show;
+    txt.style.display = show ? 'inline-block' : 'none';
+  }
+  document.querySelectorAll('input[type=checkbox][data-enhance="with-text"]').forEach(chk=>{
+    sync(chk);
+    chk.addEventListener('change',()=>sync(chk));
+  });
+}
+
+// --- Tests básicos (en consola) ---
+(function runTests(){
+  console.assert(document.getElementById('p1') && document.getElementById('p2') && document.getElementById('p3') && document.getElementById('p4'), 'Todas las páginas deben existir');
+  console.assert(document.getElementById('impacto-body') && document.getElementById('codir-body'), 'Tablas de Impacto/CODIR presentes');
+  const sample=collectData();
+  console.assert(typeof sample==='object' && sample.meta, 'collectData devuelve objeto');
+  // Test: switch Afecta S/R default debe ser NO
+  const sw=document.querySelector('.switch[data-name="clasificacion.afectaSR"]');
+  console.assert(sw.querySelector('.active')?.dataset.val==='NO','Switch Afecta S/R debe iniciar en NO');
+  // Test: Expandir/Contraer todo
+  if(ex&&co){
+    ex.click();
+    const opened=[...document.querySelectorAll('#dept-accordion .acc-item')].filter(i=>i.classList.contains('open')).length;
+    console.assert(opened>=3,'Expandir todo debe abrir ítems');
+    co.click();
+    const closed=[...document.querySelectorAll('#dept-accordion .acc-item')].filter(i=>!i.classList.contains('open')).length;
+    console.assert(closed>=1,'Contraer todo debe cerrar ítems');
+  }
+  // Test: chips con input dependiente
+  const otrosChk=document.querySelector('input[type=checkbox][data-name="departamentos.calidadCliente.checklist.noAfecta.otros"]')
+    || document.querySelector('input[type=checkbox][data-enhance="with-text"][data-name*="calidadCliente"][data-name*="otros"]');
+  if(otrosChk){
+    otrosChk.checked=true; otrosChk.dispatchEvent(new Event('change'));
+    const txt=otrosChk.closest('label').querySelector('input[type=text]');
+    console.assert(txt && txt.style.display!=='none','El input de OTROS debe mostrarse al marcar');
+  }
+})();
+
+// ---- Lógica de IA ----
+function showAIModal(title, onConfirm) {
+    const modalId = `ai-modal-${Date.now()}`;
+    const modalHTML = `
+        <div id="${modalId}" class="fixed inset-0 z-[60] flex items-center justify-center" style="background-color: rgba(0,0,0,0.5);">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4">
+                <div class="flex justify-between items-center p-5 border-b">
+                    <h3 class="text-xl font-bold">${title}</h3>
+                    <button data-action="close" class="text-gray-500 hover:text-gray-800">&times;</button>
+                </div>
+                <div class="p-6">
+                    <textarea id="ai-input" class="w-full h-48 p-2 border rounded" placeholder="Describa la situación o el cambio requerido..."></textarea>
+                </div>
+                <div class="flex justify-end items-center p-4 border-t bg-gray-50">
+                    <button data-action="close" class="btn">Cancelar</button>
+                    <button id="ai-confirm-btn" class="btn primary ml-2">Generar</button>
+                </div>
             </div>
         </div>
-        <div>
-            <label for="denominacion_producto" class="block text-sm font-medium text-gray-700">Denominación del Producto</label>
-            <input type="text" name="denominacion_producto" id="denominacion_producto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-        </div>
-        <div>
-            <label for="cliente" class="block text-sm font-medium text-gray-700">Cliente</label>
-            <select name="cliente" id="cliente" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                <!-- OPTIONS_CLIENTES -->
-            </select>
-        </div>
-         <div>
-            <label for="proyecto" class="block text-sm font-medium text-gray-700">Proyecto</label>
-            <select name="proyecto" id="proyecto" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
-                <!-- OPTIONS_PROYECTOS -->
-            </select>
-        </div>
-    </div>
-</div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const modalElement = document.getElementById(modalId);
+    modalElement.querySelector('#ai-confirm-btn').addEventListener('click', () => {
+        const text = modalElement.querySelector('#ai-input').value;
+        onConfirm(text);
+        modalElement.remove();
+    });
+    modalElement.addEventListener('click', e => {
+        if (e.target.dataset.action === 'close' || e.target === modalElement) {
+            modalElement.remove();
+        }
+    });
+}
 
-<!-- Sección de Situaciones (Actual y Propuesta) -->
-<div class="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <!-- Situación Actual -->
-    <div class="border border-gray-200 rounded-lg shadow-sm flex flex-col bg-white">
-        <h3 class="font-bold text-lg text-center bg-gray-100 p-3 border-b border-gray-200 rounded-t-lg">Situación Actual</h3>
-        <div class="p-4 flex-grow">
-            <textarea name="situacion_actual" id="situacion_actual_text" class="w-full h-48 border-gray-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Describa el problema, el estado actual del componente, el motivo del cambio, etc."></textarea>
-        </div>
-        <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-            <label class="font-semibold text-sm mb-2 block">Anexo Visual (Actual)</label>
-            <div id="image-upload-container-actual"></div>
-        </div>
-    </div>
+async function callAIFunction(functionName, data) {
+    const functions = getFunctions();
+    const callableFunction = httpsCallable(functions, functionName);
+    try {
+        const result = await callableFunction(data);
+        return result.data;
+    } catch (error) {
+        console.error(`Error calling ${functionName}:`, error);
+        showToast(`Error al contactar la IA para ${functionName}.`, 'error');
+        return null;
+    }
+}
 
-    <!-- Situación Propuesta -->
-    <div class="border border-gray-200 rounded-lg shadow-sm flex flex-col bg-white">
-        <div class="font-bold text-lg text-center bg-gray-100 p-3 border-b border-gray-200 rounded-t-lg flex justify-between items-center">
-            <span class="flex-grow text-center">Situación Propuesta</span>
-            <button type="button" id="ai-suggest-proposal" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 flex items-center gap-2" title="La IA leerá la 'Situación Actual' y sugerirá una propuesta.">
-                <i data-lucide="sparkles" class="w-4 h-4"></i>Sugerir con IA
-            </button>
-        </div>
-        <div class="p-4 flex-grow">
-            <textarea name="situacion_propuesta" id="situacion_propuesta_text" class="w-full h-48 border-gray-300 rounded-md p-3 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Describa la solución, el cambio a realizar, el estado futuro del componente, etc."></textarea>
-        </div>
-        <div class="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-            <label class="font-semibold text-sm mb-2 block">Anexo Visual (Propuesto)</label>
-            <div id="image-upload-container-propuesta"></div>
-        </div>
-    </div>
-</div>
+document.getElementById('btn-ai-generate').addEventListener('click', () => {
+    showAIModal('Generar ECR con IA', async (text) => {
+        if (!text.trim()) {
+            showToast('El texto no puede estar vacío.', 'warning');
+            return;
+        }
+        const aiData = await callAIFunction('generateEcrDraftWithAI', { text });
+        if (aiData) {
+            const formData = {
+                meta: {
+                    proyecto: aiData.proyecto,
+                    cliente: aiData.cliente,
+                },
+                codigos: {
+                    barack: aiData.codigo_barack,
+                    denominacion: aiData.denominacion_producto
+                },
+                situacion: {
+                    existente: { descripcion: aiData.situacion_existente },
+                    propuesta: { descripcion: aiData.situacion_propuesta }
+                },
+                origenPedido: {
+                    CLIENTE: aiData.origen_cliente,
+                    INTERNO: aiData.origen_interno
+                }
+            };
+            hydrate(formData);
+            showToast('ECR rellenado por la IA.', 'success');
+        }
+    });
+});
 
-<!-- Sección de Análisis de Impacto -->
-<div class="mt-8 bg-slate-50 p-6 rounded-lg border border-slate-200">
-    <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-semibold text-slate-700">Análisis de Impacto</h3>
-        <button type="button" id="ai-analyze-impacts" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 flex items-center gap-2" title="La IA leerá ambas situaciones y marcará los impactos que detecte.">
-            <i data-lucide="brain-circuit" class="w-4 h-4"></i>Analizar Impactos con IA
-        </button>
-    </div>
-    <div id="impact-analysis-checkboxes" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <!-- Checkboxes de impacto -->
-        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_calidad" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Calidad</span></label>
-        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_costos" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Costos</span></label>
-        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_logistica" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Logística</span></label>
-        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_ambiental" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Seguridad/Amb.</span></label>
-        <label class="flex items-center space-x-3 p-2 bg-white border rounded-md hover:bg-slate-100 cursor-pointer"><input type="checkbox" name="afecta_proceso" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"><span>Proceso</span></label>
-    </div>
-</div>
+document.getElementById('btn-suggest-proposal').addEventListener('click', async () => {
+    const situacionActual = document.querySelector('[data-name="situacion.existente.descripcion"]').value;
+    if (!situacionActual.trim()) {
+        showToast('La "Situación Existente" no puede estar vacía.', 'warning');
+        return;
+    }
+    const result = await callAIFunction('generateEcrProposal', { text: situacionActual });
+    if (result && result.proposal) {
+        document.querySelector('[data-name="situacion.propuesta.descripcion"]').value = result.proposal;
+        showToast('Propuesta generada por la IA.', 'success');
+    }
+});
+
+document.getElementById('btn-analyze-impacts').addEventListener('click', async () => {
+    const situacionActual = document.querySelector('[data-name="situacion.existente.descripcion"]').value;
+    const situacionPropuesta = document.querySelector('[data-name="situacion.propuesta.descripcion"]').value;
+
+    if (!situacionActual.trim() || !situacionPropuesta.trim()) {
+        showToast('Las situaciones "Existente" y "Propuesta" deben tener contenido.', 'warning');
+        return;
+    }
+
+    const result = await callAIFunction('analyzeEcrImpacts', { situacionActual, situacionPropuesta });
+
+    if (result) {
+        const impactMapping = {
+            'afecta_calidad': "clasificacion.objetivos.Mejoría de calidad",
+            'afecta_proceso': "clasificacion.alteraciones.Proceso",
+        };
+        for (const [key, dataName] of Object.entries(impactMapping)) {
+            const element = document.querySelector(`[data-name="${dataName}"]`);
+            if (element) {
+                element.checked = !!result[key];
+            }
+        }
+        showToast('Análisis de impacto completado por la IA.', 'success');
+    }
+});
+</script>
+</body>
+</html>
