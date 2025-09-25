@@ -358,8 +358,14 @@ exports.organizeTaskWithAI = functions
 
       const responseText = apiResponse.data.candidates[0].content.parts[0].text;
 
-      const cleanedJson = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
-      const parsedData = JSON.parse(cleanedJson);
+      // Use a regex to extract the JSON block, ignoring any surrounding text.
+      const jsonMatch = responseText.match(/{[\s\S]*}/);
+      if (!jsonMatch) {
+        console.error("No valid JSON block found in AI response. Raw response:", responseText);
+        throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
+      }
+
+      const parsedData = JSON.parse(jsonMatch[0]);
 
       // The AI should now return an object with a "tasks" array.
       if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks) || parsedData.tasks.length === 0) {
