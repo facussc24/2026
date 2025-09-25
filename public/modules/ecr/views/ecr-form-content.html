@@ -1,0 +1,218 @@
+<div class="container">
+    <div class="brandbar">
+      <div>
+        <div class="title">ECR – DE PRODUCTO / PROCESO</div>
+        <div style="opacity:.85;font-size:12px">CHECK LIST ECR – ENGINEERING CHANGE REQUEST</div>
+      </div>
+      <div class="toolbar">
+        <button class="btn ghost" id="btn-ai-generate">✨ Generar con IA</button>
+        <button class="btn ghost" id="btn-analyze-impacts">🔍 Analizar Impactos</button>
+        <button class="btn ghost" id="btn-load">Importar JSON</button>
+        <button class="btn ghost" id="btn-save">Exportar JSON</button>
+        <button class="btn primary" onclick="window.print()">Imprimir / PDF</button>
+      </div>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="p1">1) Datos del ECR</button>
+      <button class="tab" data-tab="p2">2) Impacto y Aprobaciones</button>
+      <button class="tab" data-tab="p3">3) Evaluación por Departamentos</button>
+      <button class="tab" data-tab="p4">4) Cierre</button>
+    </div>
+
+    <!-- Página 1 -->
+    <section class="page" id="p1">
+      <div class="card g3 grid">
+        <div>
+          <label>ECR Nº</label>
+          <input data-name="meta.ecrNumero" type="text" value="037"/>
+        </div>
+        <div>
+          <label>Proyecto</label>
+          <input data-name="meta.proyecto" type="text" value="INSONOS"/>
+        </div>
+        <div>
+          <label>Cliente</label>
+          <input data-name="meta.cliente" type="text" value="COZZUOL"/>
+        </div>
+        <div>
+          <label>Fecha de emisión</label>
+          <input data-name="meta.fechaEmision" type="date"/>
+        </div>
+        <div>
+          <label>Fecha de cierre</label>
+          <input data-name="meta.fechaCierre" type="date"/>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Origen del pedido</div>
+        <div class="checkrow">
+          <label class="chip"><input type="checkbox" data-name="origenPedido.CLIENTE"> CLIENTE</label>
+          <label class="chip"><input type="checkbox" data-name="origenPedido.PROVEEDOR"> PROVEEDOR</label>
+          <label class="chip"><input type="checkbox" data-name="origenPedido.INTERNO"> INTERNO</label>
+          <label class="chip"><input type="checkbox" data-name="origenPedido.REGLAMENTACION"> REGLAMENTACION</label>
+        </div>
+        <div style="height:10px"></div>
+        <div class="section-title">Fase de proyecto</div>
+        <div class="checkrow">
+          <label class="chip"><input type="checkbox" data-name="faseProyecto.Programa"> Programa</label>
+          <label class="chip"><input type="checkbox" data-name="faseProyecto.Serie"> Serie</label>
+        </div>
+      </div>
+
+      <div class="card g2 grid">
+        <div>
+          <label>Código(s) BARACK</label>
+          <input type="text" data-name="codigos.barack"/>
+        </div>
+        <div>
+          <label>Código(s) Cliente</label>
+          <input type="text" data-name="codigos.cliente" value="MP7313 - MP7314 - MP7315 - MP7316 - MP7317 - MP7318 - MP7319 - MP7320 - MP7322"/>
+        </div>
+        <div class="g2 w-100" style="grid-column:1/-1;display:grid;gap:10px;grid-template-columns:1fr">
+          <div>
+            <label>Denominación del producto</label>
+            <input type="text" data-name="codigos.denominacion"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="card g2 grid">
+        <div>
+          <div class="section-title">Objetivo de ECR</div>
+          <div class="checkrow">
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Productividad"> Productividad</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Mejoría de calidad"> Mejoría de calidad</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Estrategia del Cliente"> Estrategia del Cliente</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Estrategia Barack"> Estrategia Barack</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.objetivos.Nacionalización"> Nacionalización</label>
+          </div>
+        </div>
+        <div>
+          <div class="section-title">Tipo de alteración</div>
+          <div class="checkrow">
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Producto"> Producto</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Proceso"> Proceso</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Fuente de suministro"> Fuente de suministro</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Embalaje"> Embalaje</label>
+            <label class="chip"><input type="checkbox" data-name="clasificacion.alteraciones.Otro"> Otro</label>
+          </div>
+        </div>
+        <div>
+          <label>¿Afecta S/R?</label>
+          <div class="switch" data-name="clasificacion.afectaSR">
+            <button type="button" data-val="SI">SI</button>
+            <button type="button" data-val="NO" class="active">NO</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="twocol">
+        <div class="card">
+          <div class="section-title">Situación existente</div>
+          <label>Descripción</label>
+          <textarea data-name="situacion.existente.descripcion">Se utiliza la cinta de Tessa pero los consumos actuales son una cinta de 3M que ya no se utiliza más y el consumo estaba en rollos por lo tanto no se puede utilizar en el nuevo rollo de Tessa.</textarea>
+          <label>Anexos (uno por línea)</label>
+          <textarea data-name="situacion.existente.anexos">Estructura de producto 03 REV. A
+FT136 REV.A
+FT137 REV.A</textarea>
+        </div>
+        <div class="card">
+          <div class="section-title">Situación propuesta</div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Descripción</label>
+            <button class="btn" id="btn-suggest-proposal" style="margin-bottom: 4px; padding: 4px 8px; font-size: 12px;">Sugerir Propuesta</button>
+          </div>
+          <textarea data-name="situacion.propuesta.descripcion">Recalcular los consumos de cinta en M2 para que programen correctamente y que en el futuro aunque cambie el rollo puedan seguir programando fácilmente.</textarea>
+          <label>Anexos (uno por línea)</label>
+          <textarea data-name="situacion.propuesta.anexos"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- Página 2: Impacto + CODIR + Equipo -->
+    <section class="page" id="p2" hidden>
+      <div class="card">
+        <div class="section-title">Impacto en caso de falla</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Responsable</th><th>Análisis de riesgo</th><th>Nivel</th><th>Observaciones</th><th>Nombre</th><th>Fecha</th><th>Visto</th>
+            </tr>
+          </thead>
+          <tbody id="impacto-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Necesario Aprobación CODIR</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Miembro</th><th>Aprobado</th><th>Rechazado</th><th>Observaciones</th><th>Nombre</th><th>Fecha</th><th>Visto</th>
+            </tr>
+          </thead>
+          <tbody id="codir-body"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Equipo de trabajo</div>
+        <div class="eq-grid">
+          <div class="eq-row"><span class="eq-label">PILOTO:</span><input data-name="equipo.pilotoECR" type="text" value="Paulo Centurión"/></div>
+          <div class="eq-row"><span class="eq-label">COMERCIAL:</span><input data-name="equipo.comercial" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">ENG. PRODUCTO:</span><input data-name="equipo.engProducto" type="text" value="Paulo Centurión"/></div>
+          <div class="eq-row"><span class="eq-label">PC&L/LOGÍSTICA:</span><input data-name="equipo.logistica" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">ENG. MANUFACTURA:</span><input data-name="equipo.engManufactura" type="text" value="Paulo Centurión"/></div>
+          <div class="eq-row"><span class="eq-label">PRODUCCIÓN:</span><input data-name="equipo.produccion" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">CALIDAD:</span><input data-name="equipo.calidad" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">COSTOS:</span><input data-name="equipo.costos" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">COMPRAS:</span><input data-name="equipo.compras" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">HSE:</span><input data-name="equipo.hse" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">SQA:</span><input data-name="equipo.sqa" type="text"/></div>
+          <div class="eq-row"><span class="eq-label">MANTENIMIENTO:</span><input data-name="equipo.mantenimiento" type="text"/></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Página 3: Evaluación por Departamentos (accordion) -->
+    <section class="page" id="p3" hidden>
+      <div class="card">
+        <div class="section-title">Evaluación de propuesta por los departamentos</div>
+        <div class="flex" style="justify-content:flex-end;margin-bottom:8px"><button class="btn" id="expand-all">Expandir todo</button><button class="btn" id="collapse-all">Contraer todo</button></div>
+        <div class="accordion" id="dept-accordion"></div>
+      </div>
+    </section>
+
+    <!-- Página 4: Cierre -->
+    <section class="page" id="p4" hidden>
+      <div class="card g3 grid">
+        <div>
+          <label>Aprobación Final de ECR</label>
+          <div class="checkrow">
+            <label class="chip"><input type="radio" name="aprobFinal" value="OK" checked data-name="aprobacionFinal.ok"> OK</label>
+            <label class="chip"><input type="radio" name="aprobFinal" value="NOK" data-name="aprobacionFinal.nok"> NOK</label>
+          </div>
+        </div>
+        <div>
+          <label>Coordinador</label>
+          <input type="text" data-name="aprobacionFinal.coordinador" value="P. CENTURIÓN"/>
+        </div>
+        <div>
+          <label>Visto</label>
+          <input type="text" data-name="aprobacionFinal.visto" value="P. CENTURIÓN"/>
+        </div>
+        <div>
+          <label>Fecha</label>
+          <input type="date" data-name="aprobacionFinal.fecha"/>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Consideraciones de Coordinador</div>
+        <textarea data-name="consideracionesCoordinador" style="min-height:180px"></textarea>
+      </div>
+    </section>
+
+  </div>
