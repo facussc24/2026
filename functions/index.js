@@ -10,21 +10,15 @@ if (admin.apps.length === 0) {
 }
 
 // Nodemailer transporter setup
-let transporter;
-const getTransporter = () => {
-    if (!transporter) {
-        transporter = nodemailer.createTransport({
-            host: process.env.EMAIL_HOST,
-            port: process.env.EMAIL_PORT,
-            secure: true, // true for 465, false for other ports
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-            },
-        });
-    }
-    return transporter;
-};
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: true, // true for 465, false for other ports
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 exports.getNextEcrNumber = functions.https.onCall(async (data, context) => {
   // Ensure the user is authenticated.
@@ -194,7 +188,7 @@ exports.saveFormWithValidation = functions
                   <p>Saludos,<br>El equipo de Gestión PRO</p>
                 `
               };
-              await getTransporter().sendMail(mailOptions);
+              await transporter.sendMail(mailOptions);
               console.log(`Email sent to ${email} for ${formType.toUpperCase()} ${docId} status change.`);
             }
           } catch (error) {
@@ -254,7 +248,7 @@ exports.sendTaskAssignmentEmail = functions
             <p>Saludos,<br>El equipo de Gestión PRO</p>
           `
         };
-        await getTransporter().sendMail(mailOptions);
+        await transporter.sendMail(mailOptions);
         console.log(`Assignment email sent to ${email} for task ${context.params.taskId}.`);
       }
       return null;
