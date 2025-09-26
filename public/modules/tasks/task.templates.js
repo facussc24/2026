@@ -526,7 +526,11 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     if (task.tags && task.tags.length > 0) {
         tagsHTML = `
             <div class="my-3 flex flex-wrap gap-2">
-                ${task.tags.map(tag => `<span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">${tag}</span>`).join('')}
+                ${task.tags.map(tag => `
+                    <button data-action="search-by-tag" data-tag="${tag}" class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full hover:bg-blue-200 hover:text-blue-900 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        ${tag}
+                    </button>
+                `).join('')}
             </div>
         `;
     }
