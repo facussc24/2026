@@ -261,19 +261,26 @@ export function subscribeToTasks(callback, handleError) {
 
     let filterConditions = [];
 
-    if (state.kanban.activeFilter === 'personal') {
-        filterConditions.push(
-            or(
-                where('assigneeUid', '==', user.uid),
-                where('creatorUid', '==', user.uid)
-            )
-        );
-    } else if (state.kanban.selectedUserId) {
-        filterConditions.push(where('assigneeUid', '==', state.kanban.selectedUserId));
-    } else if (state.kanban.activeFilter === 'engineering') {
-        filterConditions.push(where('isPublic', '==', true));
-    } else if (state.kanban.activeFilter === 'all' && user.role !== 'admin') {
-        filterConditions.push(where('isPublic', '==', true));
+    // --- NEW LOGIC ---
+    // If user is not an admin, they can ONLY see their own tasks within this module.
+    if (user.role !== 'admin') {
+        filterConditions.push(where('assigneeUid', '==', user.uid));
+    }
+    // Admin can filter by user, or see public/all tasks
+    else {
+        if (state.kanban.activeFilter === 'personal') {
+            filterConditions.push(
+                or(
+                    where('assigneeUid', '==', user.uid),
+                    where('creatorUid', '==', user.uid)
+                )
+            );
+        } else if (state.kanban.selectedUserId) {
+            filterConditions.push(where('assigneeUid', '==', state.kanban.selectedUserId));
+        } else if (state.kanban.activeFilter === 'engineering') {
+            filterConditions.push(where('isPublic', '==', true));
+        }
+        // No special condition for 'all' for admin, it will just fetch all tasks.
     }
 
     if (state.kanban.priorityFilter !== 'all') {

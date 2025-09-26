@@ -65,19 +65,11 @@ function renderLandingPageHTML() {
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                <div class="lg:col-span-2 bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-text-light dark:text-text-dark">Rendimiento de Tareas (Últimos 12 Meses)</h3>
-                    </div>
-                    <div class="h-96">
-                        <canvas id="performanceChart"></canvas>
-                    </div>
-                </div>
-                <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm flex flex-col">
-                    <h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark">Tareas con Vencimiento Próximo</h3>
-                    <div id="upcoming-tasks-container" class="space-y-4 overflow-y-auto flex-1">
-                        <p class="text-secondary-light text-center py-4">Cargando tareas...</p>
+            <div class="grid grid-cols-1 gap-6 mb-8">
+                <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
+                    <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200 mb-6">Tareas Semanales de Ingeniería</h3>
+                    <div id="weekly-tasks-container" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 min-h-[400px]">
+                        <!-- Day columns will be injected here -->
                     </div>
                 </div>
             </div>
@@ -104,118 +96,86 @@ function renderLandingPageHTML() {
     console.log("Landing Page HTML rendered.");
 }
 
-/**
- * Renders the performance chart with the given data.
- * @param {object} chartData - Data for the chart.
- */
-function renderPerformanceChart(chartData) {
-    const ctx = document.getElementById('performanceChart');
-    if (!ctx) return;
+function getWeekDateRange() {
+    const today = new Date();
+    const day = today.getDay(); // Sunday - 0, Monday - 1, ...
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const monday = new Date(today.setDate(today.getDate() + diffToMonday));
+    monday.setHours(0, 0, 0, 0);
 
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    const textColor = isDarkMode ? '#f9fafb' : '#1f2937';
-    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    friday.setHours(23, 59, 59, 999);
 
-    new Chart(ctx.getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: chartData.labels,
-            datasets: [{
-                label: 'Tareas Completadas',
-                data: chartData.data,
-                backgroundColor: 'rgba(0, 82, 204, 0.8)', // App's primary blue
-                borderColor: 'rgba(0, 82, 204, 1)',
-                borderWidth: 2,
-                borderRadius: 6,
-                hoverBackgroundColor: 'rgba(0, 82, 204, 1)'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: isDarkMode ? '#2d3748' : '#ffffff', // card-dark, card-light
-                    titleColor: textColor,
-                    bodyColor: textColor,
-                    borderColor: isDarkMode ? '#4a5568' : '#dfe1e6', // border-dark, border-light
-                    borderWidth: 1,
-                }
-            },
-            scales: {
-                x: { ticks: { color: textColor }, grid: { color: gridColor } },
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: textColor, precision: 0 },
-                    grid: { color: gridColor },
-                    title: {
-                        display: true,
-                        text: 'Cantidad de Tareas Completadas',
-                        color: textColor,
-                        font: { size: 14, weight: 'bold' }
-                    }
-                }
+    const format = (date) => date.toISOString().split('T')[0];
+    return { start: format(monday), end: format(friday) };
+}
+
+function renderWeeklyTasks(tasks) {
+    const container = document.getElementById('weekly-tasks-container');
+    if (!container) return;
+
+    const users = appState.collectionsById.usuarios || new Map();
+    const priorityStyles = {
+        high: { icon: 'chevrons-up', color: 'text-red-500' },
+        medium: { icon: 'equal', color: 'text-yellow-500' },
+        low: { icon: 'chevrons-down', color: 'text-green-500' }
+    };
+    const statusColors = {
+        todo: 'bg-gray-400',
+        inprogress: 'bg-blue-500',
+        done: 'bg-green-500'
+    };
+
+    // Group tasks by day (0=Mon, 1=Tue, ...)
+    const tasksByDay = Array(5).fill(null).map(() => []);
+    tasks.forEach(task => {
+        if (task.dueDate) {
+            // Firestore dueDate is 'YYYY-MM-DD', which is parsed as UTC midnight.
+            // new Date('YYYY-MM-DD') creates a date at midnight in the local timezone.
+            // We use UTC functions to avoid timezone issues.
+            const date = new Date(task.dueDate + 'T00:00:00Z');
+            const dayIndex = date.getUTCDay() - 1; // getUTCDay: Sun=0, Mon=1...
+            if (dayIndex >= 0 && dayIndex < 5) {
+                tasksByDay[dayIndex].push(task);
             }
         }
     });
-}
 
-/**
- * Renders the list of upcoming tasks.
- * @param {Array<object>} tasks - The tasks to render.
- */
-function renderUpcomingTasks(tasks) {
-    const container = document.getElementById('upcoming-tasks-container');
-    if (!container) return;
-
-    if (tasks.length === 0) {
-        container.innerHTML = '<p class="text-secondary-light text-center py-4">No hay tareas con vencimiento próximo.</p>';
-        return;
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const getTaskHTML = (task) => {
-        const dueDate = new Date(task.dueDate + 'T00:00:00');
-        const diffDays = Math.round((dueDate - today) / (1000 * 60 * 60 * 24));
-
-        let dateText, dateClass, icon, borderColor;
-        if (diffDays < 0) {
-            dateText = `Vencida hace ${-diffDays} días`;
-            dateClass = 'text-red-600 dark:text-red-400';
-            icon = 'event_busy';
-            borderColor = 'border-red-500';
-        } else if (diffDays === 0) {
-            dateText = 'Vence: Hoy';
-            dateClass = 'text-red-600 dark:text-red-400';
-            icon = 'event_busy';
-            borderColor = 'border-red-500';
-        } else if (diffDays === 1) {
-            dateText = 'Vence: Mañana';
-            dateClass = 'text-amber-600 dark:text-amber-400';
-            icon = 'event_upcoming';
-            borderColor = 'border-amber-500';
-        } else {
-            dateText = `Vence: En ${diffDays} días`;
-            dateClass = 'text-secondary-light dark:text-secondary-dark';
-            icon = 'event';
-            borderColor = 'border-blue-500';
-        }
+    const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    container.innerHTML = dayNames.map((dayName, index) => {
+        const tasks = tasksByDay[index];
+        const taskCards = tasks.length > 0 ? tasks.map(task => {
+            const assignee = users.get(task.assigneeUid);
+            const priority = task.priority || 'medium';
+            const style = priorityStyles[priority];
+            return `
+                <div class="border bg-white/50 dark:bg-slate-700/50 rounded-lg p-3 mb-3 shadow-sm hover:shadow-md transition-shadow duration-200">
+                    <div class="flex justify-between items-start">
+                        <p class="font-semibold text-sm text-slate-700 dark:text-slate-200 leading-tight">${task.title}</p>
+                        <span class="flex-shrink-0 ml-2 w-5 h-5 rounded-full ${statusColors[task.status] || 'bg-gray-300'}" title="Estado: ${task.status}"></span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs mt-2 text-slate-500 dark:text-slate-400">
+                        <span class="flex items-center">
+                            <i data-lucide="${style.icon}" class="w-3.5 h-3.5 mr-1 ${style.color}"></i>
+                            Prioridad: ${priority.charAt(0).toUpperCase() + priority.slice(1)}
+                        </span>
+                        <span>${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
+                    </div>
+                </div>
+            `;
+        }).join('') : '<p class="text-sm text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>';
 
         return `
-            <div class="flex items-start gap-3 p-3 rounded-lg bg-background-light dark:bg-card-dark border-l-4 ${borderColor}">
-                <i data-lucide="${icon === 'event_busy' ? 'calendar-x' : (icon === 'event_upcoming' ? 'calendar-clock' : 'calendar')}" class="${dateClass} mt-1 h-5 w-5"></i>
-                <div>
-                    <p class="font-medium text-text-light dark:text-text-dark">${task.title}</p>
-                    <p class="text-sm font-semibold ${dateClass}">${dateText}</p>
+            <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
+                <h4 class="text-lg font-bold text-center text-slate-600 dark:text-slate-300 mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">${dayName}</h4>
+                <div class="task-list space-y-2 h-96 overflow-y-auto custom-scrollbar pr-1">
+                    ${taskCards}
                 </div>
             </div>
         `;
-    };
+    }).join('');
 
-    container.innerHTML = tasks.map(getTaskHTML).join('');
     lucide.createIcons();
 }
 
@@ -240,54 +200,32 @@ async function fetchKpiData() {
     return kpiData;
 }
 
-/**
- * Fetches and processes task data for the performance chart.
- */
-async function getPerformanceChartData() {
+async function fetchWeeklyTasks() {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
-    const q = query(tasksRef, where('status', '==', 'done'));
-    const querySnapshot = await getDocs(q);
-    const tasks = querySnapshot.docs.map(doc => doc.data());
+    const { start, end } = getWeekDateRange();
 
-    const monthlyCounts = Array(12).fill(0);
-    const now = new Date();
-    const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
-
-    tasks.forEach(task => {
-        const completedDate = task.updatedAt?.toDate ? task.updatedAt.toDate() : null;
-        if (completedDate && completedDate >= oneYearAgo) {
-            const month = completedDate.getMonth();
-            monthlyCounts[month]++;
-        }
-    });
-
-    const monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    // Rotate array to have the current month last
-    const currentMonth = now.getMonth();
-    const rotatedLabels = [...monthLabels.slice(currentMonth + 1), ...monthLabels.slice(0, currentMonth + 1)];
-    const rotatedData = [...monthlyCounts.slice(currentMonth + 1), ...monthlyCounts.slice(0, currentMonth + 1)];
-
-    return { labels: rotatedLabels, data: rotatedData };
-}
-
-/**
- * Fetches the most urgent tasks for the current user.
- */
-async function fetchUpcomingTasks() {
-    const tasksRef = collection(db, COLLECTIONS.TAREAS);
-    const today = new Date().toISOString().split('T')[0];
     const q = query(
         tasksRef,
-        where('assigneeUid', '==', appState.currentUser.uid),
-        where('dueDate', '>=', today),
-        orderBy('dueDate', 'asc'),
-        limit(10) // Fetch more to filter on the client
+        where('isPublic', '==', true),
+        where('dueDate', '>=', start),
+        where('dueDate', '<=', end),
+        orderBy('dueDate', 'asc')
     );
-    const querySnapshot = await getDocs(q);
-    const tasks = querySnapshot.docs.map(doc => ({...doc.data(), docId: doc.id }));
 
-    // Filter out completed tasks on the client and get the top 5
-    return tasks.filter(t => t.status !== 'done').slice(0, 5);
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+    } catch (error) {
+        console.error("Error fetching weekly tasks:", error);
+        // Check if it's an index error
+        if (error.code === 'failed-precondition') {
+            showToast('Se necesita un índice de base de datos para las tareas semanales. Revise la consola.', 'error');
+            console.error("Firestore index missing. Please create it. The error message should contain a link to create it automatically.");
+        } else {
+            showToast('Error al cargar las tareas de la semana.', 'error');
+        }
+        return []; // Return empty array on error
+    }
 }
 
 
@@ -335,13 +273,11 @@ export async function runLandingPageLogic() {
         // Use Promise.allSettled to allow parts of the page to load even if one promise fails
         const results = await Promise.allSettled([
             fetchKpiData(),
-            getPerformanceChartData(),
-            fetchUpcomingTasks()
+            fetchWeeklyTasks()
         ]);
 
         const kpiDataResult = results[0];
-        const chartDataResult = results[1];
-        const upcomingTasksResult = results[2];
+        const weeklyTasksResult = results[1];
 
         if (kpiDataResult.status === 'fulfilled') {
             updateKpiCards(kpiDataResult.value);
@@ -349,17 +285,14 @@ export async function runLandingPageLogic() {
             console.error("Failed to fetch KPI data:", kpiDataResult.reason);
         }
 
-        if (chartDataResult.status === 'fulfilled') {
-            renderPerformanceChart(chartDataResult.value);
+        if (weeklyTasksResult.status === 'fulfilled') {
+            renderWeeklyTasks(weeklyTasksResult.value);
         } else {
-            console.error("Failed to fetch chart data:", chartDataResult.reason);
-        }
-
-        if (upcomingTasksResult.status === 'fulfilled') {
-            renderUpcomingTasks(upcomingTasksResult.value);
-        } else {
-            console.error("Failed to fetch upcoming tasks:", upcomingTasksResult.reason);
-            document.getElementById('upcoming-tasks-container').innerHTML = '<p class="text-red-500 text-center text-sm">Error al cargar tareas: Se requiere un índice de Firestore.</p>';
+            console.error("Failed to fetch weekly tasks:", weeklyTasksResult.reason);
+            const container = document.getElementById('weekly-tasks-container');
+            if (container) {
+                container.innerHTML = '<p class="text-red-500 text-center col-span-5">Error al cargar las tareas de la semana.</p>';
+            }
         }
 
     } catch (error) {

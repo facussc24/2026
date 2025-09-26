@@ -248,6 +248,7 @@ function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
 
 export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
     const isEditing = task !== null;
+    const isAdmin = appState.currentUser.role === 'admin';
 
     let selectedUid = defaultAssigneeUid || '';
     if (!selectedUid) {
@@ -258,7 +259,11 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
         }
     }
 
-    const isAdmin = appState.currentUser.role === 'admin';
+    // If user is not an admin, they can only create/edit tasks for themselves.
+    if (!isAdmin) {
+        selectedUid = appState.currentUser.uid;
+    }
+
     const modalHTML = getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDate, isAdmin);
     dom.modalContainer.innerHTML = modalHTML;
     lucide.createIcons();
@@ -266,6 +271,15 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
     const modalElement = document.getElementById('task-form-modal');
 
     populateTaskAssigneeDropdown();
+
+    // Also disable the dropdown just in case the template doesn't.
+    if (!isAdmin) {
+        const assigneeSelect = modalElement.querySelector('#task-assignee');
+        if (assigneeSelect) {
+            assigneeSelect.disabled = true;
+        }
+    }
+
     const subtaskManager = initSubtasks(modalElement, task);
     const commentsUnsubscribe = initComments(modalElement, task);
     initModalEventListeners(modalElement, task, commentsUnsubscribe);
