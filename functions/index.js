@@ -269,8 +269,11 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        // Inicializa Vertex AI. The SDK will automatically detect project and location.
-        const vertexAI = new VertexAI();
+        // Inicializa Vertex AI con la configuración del proyecto y la ubicación.
+        const vertexAI = new VertexAI({
+            project: process.env.GCLOUD_PROJECT,
+            location: "us-central1",
+        });
 
         // Selecciona el modelo generativo.
         const generativeModel = vertexAI.getGenerativeModel({
@@ -326,10 +329,10 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error en organizeTaskWithAI con Vertex AI:", error);
-        // Temporarily exposing the full error object for debugging
         throw new functions.https.HttpsError(
             "internal",
-            `Vertex AI Full Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
+            "Ocurrió un error al procesar la solicitud con Vertex AI.",
+            error.message
         );
     }
 });
@@ -357,8 +360,10 @@ exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        // Initialize Vertex AI. The SDK will automatically detect project and location.
-        const vertexAI = new VertexAI();
+        const vertexAI = new VertexAI({
+            project: process.env.GCLOUD_PROJECT,
+            location: "us-central1",
+        });
 
         const generativeModel = vertexAI.getGenerativeModel({
             model: "gemini-1.5-flash-preview-0514",
@@ -403,10 +408,10 @@ exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error en getTaskSummaryWithAI con Vertex AI:", error);
-        // Temporarily exposing the full error object for debugging
         throw new functions.https.HttpsError(
             "internal",
-            `Vertex AI Full Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
+            "Ocurrió un error al generar el resumen con la IA.",
+            error.message
         );
     }
 });
