@@ -295,13 +295,15 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
             *   \\\`title\\\`: Título conciso (máx 10 palabras).
             *   \\\`description\\\`: Resumen corto del objetivo.
             *   \\\`subtasks\\\`: Array de strings con subtareas accionables. Si no hay, \\\`[]\\\`.
+            *   \\\`tags\\\`: Array de strings con palabras clave relevantes (1-3 palabras por tag). Si no hay, \\\`[]\\\`.
             *   \\\`priority\\\`: 'high', 'medium', o 'low'.
             *   \\\`startDate\\\`: 'YYYY-MM-DD' o \\\`null\\\`.
             *   \\\`dueDate\\\`: 'YYYY-MM-DD' o \\\`null\\\`.
             *   \\\`assignee\\\`: Nombre de la persona o \\\`null\\\`.
             *   \\\`isPublic\\\`: \\\`true\\\` (equipo/proyecto) o \\\`false\\\` (personal).
             *   \\\`project\\\`: Nombre del proyecto o \\\`null\\\`.
-        3.  **Corrección de Texto:** Corrige la gramática y ortografía en \\\`title\\\` y \\\`description\\\` para mayor claridad.
+        3.  **Generación de Tags:** Analiza el texto para extraer conceptos, tecnologías, nombres de proyectos o temas clave. Conviértelos en tags cortos, en minúsculas y sin caracteres especiales. Por ejemplo, "Arreglar bug en login de app Android" podría generar tags como ["bugfix", "login", "android"].
+        4.  **Corrección de Texto:** Corrige la gramática y ortografía en \\\`title\\\` y \\\`description\\\` para mayor claridad.
 
         **Formato de Salida - REGLA CRÍTICA:**
         Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON. Este objeto debe contener una clave "tasks", cuyo valor es un array de los objetos de tarea que creaste.
@@ -309,7 +311,7 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
         La respuesta debe empezar con \\\`{\\\` y terminar con \\\`}\\\`.
 
         **Ejemplo de respuesta VÁLIDA:**
-        {"tasks":[{"title":"Revisar planos","description":"Revisar los planos del nuevo chasis.","subtasks":[],"priority":"high","startDate":null,"dueDate":null,"assignee":null,"isPublic":true,"project":"Chasis-2024"},{"title":"Llamar a proveedor","description":"Llamar al proveedor para confirmar entrega.","subtasks":[],"priority":"medium","startDate":null,"dueDate":null,"assignee":"Marcos","isPublic":true,"project":"Chasis-2024"}]}
+        {"tasks":[{"title":"Revisar planos del chasis","description":"Revisar los planos detallados del nuevo chasis para el modelo 2024.","subtasks":[],"tags":["diseño","chasis","planos","2024"],"priority":"high","startDate":null,"dueDate":null,"assignee":null,"isPublic":true,"project":"Chasis-2024"},{"title":"Llamar a proveedor de acero","description":"Llamar al proveedor para confirmar la fecha de entrega del acero.","subtasks":[],"tags":["proveedores","acero","logística"],"priority":"medium","startDate":null,"dueDate":null,"assignee":"Marcos","isPublic":true,"project":"Chasis-2024"}]}
 
         **Ejemplo de respuesta INVÁLIDA:**
         \\\`\\\`\\\`json
@@ -338,6 +340,13 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
         if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks)) {
             throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
         }
+
+        // Asegura que cada tarea tenga un array de 'tags' válido.
+        parsedData.tasks.forEach(task => {
+            if (!Array.isArray(task.tags)) {
+                task.tags = [];
+            }
+        });
 
         return parsedData;
 
