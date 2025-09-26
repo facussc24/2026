@@ -77,6 +77,10 @@ export function setKanbanSelectedUser(userId) {
     tasksModuleState.kanban.selectedUserId = userId;
 }
 
+export function setShowArchived(show) {
+    tasksModuleState.kanban.showArchived = show;
+}
+
 export function setDashboardTasks(tasks) {
     tasksModuleState.dashboard.allTasks = tasks;
 }

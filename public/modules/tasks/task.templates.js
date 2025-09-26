@@ -41,6 +41,12 @@ export function getKanbanBoardHTML(state, selectedUser) {
                 </button>
             </div>
         </div>
+        <div class="flex justify-end mb-4">
+            <button id="toggle-archived-btn" class="text-sm font-semibold text-slate-600 hover:text-slate-800 flex items-center gap-2">
+                <i data-lucide="archive" class="w-4 h-4"></i>
+                <span id="toggle-archived-text">Mostrar Archivadas</span>
+            </button>
+        </div>
         <div id="task-board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div class="task-column bg-slate-100/80 rounded-xl" data-status="todo">
                 <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
@@ -56,9 +62,9 @@ export function getKanbanBoardHTML(state, selectedUser) {
                 </h3>
                 <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
             </div>
-            <div class="task-column bg-slate-100/80 rounded-xl" data-status="done">
+            <div class="task-column bg-slate-100/80 rounded-xl hidden" data-status="done">
                 <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
-                    <span class="flex items-center gap-3"><i data-lucide="check-circle" class="w-5 h-5 text-green-600"></i>Completadas</span>
+                    <span class="flex items-center gap-3"><i data-lucide="archive" class="w-5 h-5 text-green-600"></i>Archivadas</span>
                     <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
                 </h3>
                 <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
@@ -568,7 +574,12 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
                         ${assignee ? `<img src="${assignee.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(assignee.name || assignee.email)}`}" title="Asignada a: ${assignee.name || assignee.email}" class="w-6 h-6 rounded-full">` : '<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="No asignada"><i data-lucide="user-x" class="w-4 h-4 text-gray-500"></i></div>'}
                         <span class="text-sm text-slate-500">${assignee ? (assignee.name || assignee.email.split('@')[0]) : 'No asignada'}</span>
                     </div>
-                    <div class="task-actions">
+                    <div class="task-actions flex items-center gap-2">
+                    ${task.status !== 'done' ? `
+                        <button data-action="complete-task" data-doc-id="${task.docId}" class="text-green-600 hover:text-white hover:bg-green-500 border border-green-500 text-xs font-bold px-2 py-1 rounded-full transition-colors duration-200 flex items-center gap-1">
+                            <i data-lucide="check" class="w-4 h-4"></i> Completar
+                        </button>
+                    ` : ''}
                     ${checkUserPermission('delete', task) ? `
                         <button data-action="delete-task" data-doc-id="${task.docId}" class="text-gray-400 hover:text-red-600 p-1 rounded-full" title="Eliminar tarea">
                             <i data-lucide="trash-2" class="h-4 w-4 pointer-events-none"></i>

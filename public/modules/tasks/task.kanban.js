@@ -2,7 +2,7 @@ import { updateTaskStatus, subscribeToTasks, saveTelegramConfig, sendTestTelegra
 import { renderTaskFilters, renderTasks, renderAdminUserList } from './task.ui.js';
 import { openTaskFormModal } from './task.modal.js';
 import { getKanbanBoardHTML } from './task.templates.js';
-import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, addUnsubscriber, clearUnsubscribers } from './task.state.js';
+import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, setShowArchived, addUnsubscriber, clearUnsubscribers } from './task.state.js';
 import { showToast } from '../../main.js';
 
 let db;
@@ -124,6 +124,31 @@ export function runKanbanBoardLogic(container) {
         const addTaskBtn = container.querySelector('#add-new-task-btn');
         if (addTaskBtn) {
             addTaskBtn.addEventListener('click', () => openTaskFormModal());
+        }
+
+        const toggleArchivedBtn = container.querySelector('#toggle-archived-btn');
+        if (toggleArchivedBtn) {
+            toggleArchivedBtn.addEventListener('click', () => {
+                const state = getState();
+                const newShowArchived = !state.kanban.showArchived;
+                setShowArchived(newShowArchived);
+
+                const archivedColumn = container.querySelector('.task-column[data-status="done"]');
+                const taskBoard = container.querySelector('#task-board');
+                const toggleText = container.querySelector('#toggle-archived-text');
+
+                if (newShowArchived) {
+                    archivedColumn.classList.remove('hidden');
+                    taskBoard.classList.remove('md:grid-cols-2');
+                    taskBoard.classList.add('md:grid-cols-3');
+                    toggleText.textContent = 'Ocultar Archivadas';
+                } else {
+                    archivedColumn.classList.add('hidden');
+                    taskBoard.classList.remove('md:grid-cols-3');
+                    taskBoard.classList.add('md:grid-cols-2');
+                    toggleText.textContent = 'Mostrar Archivadas';
+                }
+            });
         }
 
         const taskBoard = container.querySelector('#task-board');

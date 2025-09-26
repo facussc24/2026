@@ -127,26 +127,36 @@ export function runTasksLogic(initialView = 'kanban') {
     const taskMainContainer = dom.viewContent.querySelector('#task-main-container');
     if (taskMainContainer) {
         taskMainContainer.addEventListener('click', (e) => {
-            const button = e.target.closest('button[data-action="delete-task"]');
+            const button = e.target.closest('button[data-action]');
             if (!button) return;
 
             const taskId = button.dataset.docId;
-            if (!taskId) return;
+            const action = button.dataset.action;
 
-            dependencies.showConfirmationModal(
-                'Eliminar Tarea',
-                '¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.',
-                async () => {
-                    try {
-                        await deleteTask(taskId);
-                        dependencies.showToast('Tarea eliminada con éxito.', 'success');
-                        // The UI should update automatically via the onSnapshot listener
-                    } catch (error) {
-                        console.error('Error deleting task:', error);
-                        dependencies.showToast('Error al eliminar la tarea.', 'error');
+            if (action === 'delete-task') {
+                if (!taskId) return;
+                dependencies.showConfirmationModal(
+                    'Eliminar Tarea',
+                    '¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.',
+                    async () => {
+                        try {
+                            await deleteTask(taskId);
+                            dependencies.showToast('Tarea eliminada con éxito.', 'success');
+                        } catch (error) {
+                            console.error('Error deleting task:', error);
+                            dependencies.showToast('Error al eliminar la tarea.', 'error');
+                        }
                     }
-                }
-            );
+                );
+            } else if (action === 'complete-task') {
+                if (!taskId) return;
+                completeAndArchiveTask(taskId).then(() => {
+                    dependencies.showToast('Tarea completada y archivada.', 'success');
+                }).catch(error => {
+                    console.error('Error completing task:', error);
+                    dependencies.showToast('Error al completar la tarea.', 'error');
+                });
+            }
         });
     }
 }
