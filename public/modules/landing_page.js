@@ -19,6 +19,24 @@ let clearOtherUsers;
 /**
  * Renders the main HTML structure of the new landing page.
  */
+function getWeekInfo(offset = 0) {
+    const date = new Date();
+    date.setDate(date.getDate() + offset * 7);
+
+    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+    const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
+    const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+
+    const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const monthName = monthNames[date.getMonth()];
+
+    return {
+        weekNumber,
+        monthName,
+        year: date.getFullYear()
+    };
+}
+
 function renderLandingPageHTML() {
     console.log("Attempting to render Landing Page HTML into dom.viewContent");
     if (!dom || !dom.viewContent) {
@@ -68,21 +86,28 @@ function renderLandingPageHTML() {
 
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
-                    <div class="flex justify-between items-center mb-6">
+                    <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-4">
-                            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Tareas Semanales de Ingeniería</h3>
-                            <div class="flex items-center gap-2">
-                                <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">
-                                    <i data-lucide="chevron-left" class="w-5 h-5"></i>
-                                </button>
-                                <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">
-                                    <i data-lucide="chevron-right" class="w-5 h-5"></i>
-                                </button>
-                            </div>
+                             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Tareas de Ingeniería</h3>
+                             <div id="week-display" class="font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"></div>
                         </div>
-                        <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
-                            <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
-                        </button>
+                        <div class="flex items-center gap-2">
+                             <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior">
+                                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                            </button>
+                            <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana">
+                                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                            </button>
+                            <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                                <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
+                            </button>
+                        </div>
+                    </div>
+                     <div id="status-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
+                        <span class="font-bold">Leyenda:</span>
+                        <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full bg-gray-400"></span>Por Hacer</div>
+                        <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full bg-blue-500"></span>En Progreso</div>
+                        <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full bg-green-500"></span>Hecho</div>
                     </div>
                     <div id="weekly-tasks-container" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-6 min-h-[400px]">
                         <!-- Day columns will be injected here -->
@@ -147,17 +172,13 @@ function renderWeeklyTasks(tasks) {
 
     const users = appState.collectionsById.usuarios || new Map();
     const priorityStyles = {
-        high: { label: 'Alta', icon: 'chevrons-up', color: 'text-red-500' },
-        medium: { label: 'Media', icon: 'equal', color: 'text-yellow-500' },
-        low: { label: 'Baja', icon: 'chevrons-down', color: 'text-green-500' }
-    };
-    const statusColors = {
-        todo: 'bg-gray-400',
-        inprogress: 'bg-blue-500',
-        done: 'bg-green-500'
+        high: { label: 'Alta', color: 'bg-red-500' },
+        medium: { label: 'Media', color: 'bg-yellow-500' },
+        low: { label: 'Baja', color: 'bg-green-500' }
     };
 
     const weekDates = getWeekDateRange(true);
+
     const tasksByDay = Array(5).fill(null).map(() => []);
     tasks.forEach(task => {
         if (task.dueDate) {
@@ -182,28 +203,24 @@ function renderWeeklyTasks(tasks) {
             const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
 
             return `
-                <div class="task-card border bg-white/50 dark:bg-slate-700/50 rounded-lg p-3 mb-3 shadow-sm hover:shadow-md transition-shadow duration-200 ${dragClass}"
+                <div class="task-card-compact border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}"
                      data-task-id="${task.docId}"
                      data-assignee-uid="${task.assigneeUid}">
-                    <div class="flex justify-between items-start">
-                        <p class="font-semibold text-sm text-slate-700 dark:text-slate-200 leading-tight">${task.title}</p>
-                        <span class="flex-shrink-0 ml-2 w-5 h-5 rounded-full ${statusColors[task.status] || 'bg-gray-300'}" title="Estado: ${task.status}"></span>
+                    <div class="flex items-start justify-between">
+                        <p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p>
+                        <span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style.color}" title="Prioridad: ${style.label}"></span>
                     </div>
-                    <div class="flex items-center justify-between text-xs mt-2 text-slate-500 dark:text-slate-400">
-                        <span class="flex items-center">
-                            <i data-lucide="${style.icon}" class="w-3.5 h-3.5 mr-1 ${style.color}"></i>
-                            Prioridad: ${style.label}
-                        </span>
+                    <div class="text-right text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                         <span>${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
                     </div>
                 </div>
             `;
-        }).join('') : '<p class="text-sm text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>';
+        }).join('') : '<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>';
 
         return `
-            <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
-                <h4 class="text-lg font-bold text-center text-slate-600 dark:text-slate-300 mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">${dayName}</h4>
-                <div class="task-list space-y-2 h-96 overflow-y-auto custom-scrollbar pr-1" data-date="${dateForColumn}">
+            <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
+                <h4 class="text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">${dayName}</h4>
+                <div class="task-list space-y-1 h-96 overflow-y-auto custom-scrollbar" data-date="${dateForColumn}">
                     ${taskCards}
                 </div>
             </div>
@@ -211,12 +228,12 @@ function renderWeeklyTasks(tasks) {
     }).join('');
 
     const futureColumnsHTML = `
-        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-4 border-2 border-dashed">
-            <h4 class="text-lg font-bold text-center text-slate-500 dark:text-slate-400 mb-4">Semana +1</h4>
+        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-3 border-2 border-dashed">
+            <h4 class="text-base font-bold text-center text-slate-500 dark:text-slate-400 mb-3">Semana +1</h4>
             <div class="task-list h-96 overflow-y-auto custom-scrollbar" data-week-offset="1"></div>
         </div>
-        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-4 border-2 border-dashed">
-            <h4 class="text-lg font-bold text-center text-slate-500 dark:text-slate-400 mb-4">Semana +2</h4>
+        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-3 border-2 border-dashed">
+            <h4 class="text-base font-bold text-center text-slate-500 dark:text-slate-400 mb-3">Semana +2</h4>
             <div class="task-list h-96 overflow-y-auto custom-scrollbar" data-week-offset="2"></div>
         </div>
     `;
@@ -393,6 +410,12 @@ function setupActionButtons() {
 // --- 4. MAIN AND INITIALIZATION ---
 
 async function refreshWeeklyTasksView() {
+    const weekInfo = getWeekInfo(appState.weekOffset);
+    const weekDisplay = document.getElementById('week-display');
+    if (weekDisplay) {
+        weekDisplay.textContent = `Semana ${weekInfo.weekNumber} - ${weekInfo.monthName} ${weekInfo.year}`;
+    }
+
     try {
         const tasks = await fetchWeeklyTasks();
         renderWeeklyTasks(tasks);
