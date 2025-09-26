@@ -522,6 +522,15 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
         ? `<span title="Tarea de Ingeniería (Pública)"><i data-lucide="briefcase" class="w-4 h-4 text-slate-400"></i></span>`
         : `<span title="Tarea Privada"><i data-lucide="lock" class="w-4 h-4 text-slate-400"></i></span>`;
 
+    let tagsHTML = '';
+    if (task.tags && task.tags.length > 0) {
+        tagsHTML = `
+            <div class="my-3 flex flex-wrap gap-2">
+                ${task.tags.map(tag => `<span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">${tag}</span>`).join('')}
+            </div>
+        `;
+    }
+
     let subtaskProgressHTML = '';
     if (task.subtasks && task.subtasks.length > 0) {
         const totalSubtasks = task.subtasks.length;
@@ -553,6 +562,8 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
             </div>
 
             <p class="text-sm text-slate-600 break-words flex-grow mb-3">${task.description || ''}</p>
+
+            ${tagsHTML}
 
             ${subtaskProgressHTML}
 
@@ -609,6 +620,25 @@ export function getSubtaskHTML(subtask) {
 
 export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDate, isAdmin) {
     const isEditing = task !== null;
+
+    let tagsSectionHTML = '';
+    if (isEditing && task.tags && task.tags.length > 0) {
+        tagsSectionHTML = `
+            <!-- Tags Section -->
+            <div class="task-form-section">
+                 <div class="form-section-header">
+                    <i data-lucide="tags" class="w-5 h-5"></i>
+                    <h4>Etiquetas (generadas por IA)</h4>
+                </div>
+                <div class="p-4">
+                    <div class="flex flex-wrap gap-2">
+                        ${task.tags.map(tag => `<span class="bg-gray-200 text-gray-800 text-sm font-medium px-3 py-1 rounded-full">${tag}</span>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     return `
     <div id="task-form-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
         <div id="task-modal-content-container" class="bg-slate-50 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
@@ -655,6 +685,8 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                         </div>
                     </div>
                 </div>
+
+                ${tagsSectionHTML}
 
                 <!-- Planning Section -->
                 <div class="task-form-section">
