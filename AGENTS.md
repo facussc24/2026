@@ -2,6 +2,15 @@
 
 # Agent Guidelines
 
+## Project Directives
+
+### 1. AI Model Selection
+
+*   **Directive:** The official and required AI model for all generative tasks in this project is **`gemini-2.0-flash`**, accessed via the Google Cloud Vertex AI SDK.
+*   **Reasoning:** This decision has been made to ensure consistency, predictable performance, and to avoid errors that could arise from switching between different models.
+*   **Action:** Do not change this model or implement logic that uses other models (e.g., GPT, Claude, other Gemini versions) without explicit, multi-step confirmation from the user. This is a fixed technical requirement.
+
+
 This file contains guidelines and lessons learned for AI agents working on this codebase.
 
 ## Lessons Learned
