@@ -246,6 +246,7 @@ const viewConfig = {
 // --- Estado Global de la Aplicación ---
 export let appState = {
     currentView: 'landing-page',
+    weekOffset: 0,
     currentData: [], 
     arbolActivo: null,
     currentUser: null,

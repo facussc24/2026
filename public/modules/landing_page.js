@@ -1,4 +1,4 @@
-import { collection, getCountFromServer, getDocs, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { COLLECTIONS } from '../utils.js';
 
 // --- 1. DEPENDENCIES AND STATE ---
@@ -69,12 +69,22 @@ function renderLandingPageHTML() {
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
                     <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Tareas Semanales de Ingeniería</h3>
+                        <div class="flex items-center gap-4">
+                            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Tareas Semanales de Ingeniería</h3>
+                            <div class="flex items-center gap-2">
+                                <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">
+                                    <i data-lucide="chevron-left" class="w-5 h-5"></i>
+                                </button>
+                                <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600">
+                                    <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                                </button>
+                            </div>
+                        </div>
                         <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
                             <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
                         </button>
                     </div>
-                    <div id="weekly-tasks-container" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 min-h-[400px]">
+                    <div id="weekly-tasks-container" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-6 min-h-[400px]">
                         <!-- Day columns will be injected here -->
                     </div>
                 </div>
@@ -102,12 +112,26 @@ function renderLandingPageHTML() {
     console.log("Landing Page HTML rendered.");
 }
 
-function getWeekDateRange() {
+function getWeekDateRange(returnFullWeek = false) {
     const today = new Date();
-    const day = today.getDay(); // Sunday - 0, Monday - 1, ...
+    // Adjust for week offset
+    today.setDate(today.getDate() + (appState.weekOffset * 7));
+
+    const day = today.getDay();
     const diffToMonday = day === 0 ? -6 : 1 - day;
-    const monday = new Date(today.setDate(today.getDate() + diffToMonday));
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diffToMonday);
     monday.setHours(0, 0, 0, 0);
+
+    if (returnFullWeek) {
+        const week = [];
+        for (let i = 0; i < 5; i++) {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + i);
+            week.push(date.toISOString().split('T')[0]);
+        }
+        return week;
+    }
 
     const friday = new Date(monday);
     friday.setDate(monday.getDate() + 4);
@@ -134,7 +158,6 @@ function renderWeeklyTasks(tasks) {
     };
 
     const weekDates = getWeekDateRange(true);
-
     const tasksByDay = Array(5).fill(null).map(() => []);
     tasks.forEach(task => {
         if (task.dueDate) {
@@ -147,7 +170,7 @@ function renderWeeklyTasks(tasks) {
     });
 
     const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-    container.innerHTML = dayNames.map((dayName, index) => {
+    let dayColumnsHTML = dayNames.map((dayName, index) => {
         const tasks = tasksByDay[index];
         const dateForColumn = weekDates[index];
 
@@ -187,6 +210,19 @@ function renderWeeklyTasks(tasks) {
         `;
     }).join('');
 
+    const futureColumnsHTML = `
+        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-4 border-2 border-dashed">
+            <h4 class="text-lg font-bold text-center text-slate-500 dark:text-slate-400 mb-4">Semana +1</h4>
+            <div class="task-list h-96 overflow-y-auto custom-scrollbar" data-week-offset="1"></div>
+        </div>
+        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-4 border-2 border-dashed">
+            <h4 class="text-lg font-bold text-center text-slate-500 dark:text-slate-400 mb-4">Semana +2</h4>
+            <div class="task-list h-96 overflow-y-auto custom-scrollbar" data-week-offset="2"></div>
+        </div>
+    `;
+
+    container.innerHTML = dayColumnsHTML + futureColumnsHTML;
+
     lucide.createIcons();
     initWeeklyTasksSortable();
 }
@@ -203,10 +239,35 @@ function initWeeklyTasksSortable() {
             onEnd: async (evt) => {
                 const itemEl = evt.item;
                 const taskId = itemEl.dataset.taskId;
-                const newDate = evt.to.dataset.date;
+                const newColumn = evt.to;
+
+                let newDate;
+
+                if (newColumn.dataset.date) {
+                    // Dropped on a specific day column
+                    newDate = newColumn.dataset.date;
+                } else if (newColumn.dataset.weekOffset) {
+                    // Dropped on a future week column
+                    const offset = parseInt(newColumn.dataset.weekOffset, 10);
+
+                    const today = new Date();
+                    // First, get to the correct week, considering the current view's offset and the column's offset
+                    today.setDate(today.getDate() + (appState.weekOffset * 7) + (offset * 7));
+
+                    // Then, find Monday of that week
+                    const day = today.getDay(); // Sunday - 0, Monday - 1, ...
+                    const diffToMonday = day === 0 ? -6 : 1 - day;
+                    const monday = new Date(today);
+                    monday.setDate(today.getDate() + diffToMonday);
+
+                    newDate = monday.toISOString().split('T')[0];
+                }
+
 
                 if (!taskId || !newDate) {
-                    console.error("Task ID or new date is missing.");
+                    console.error("Task ID or new date is missing or could not be calculated.");
+                    // Refresh to revert the visual change if the drop is invalid
+                    refreshWeeklyTasksView();
                     return;
                 }
 
@@ -215,11 +276,14 @@ function initWeeklyTasksSortable() {
                     await updateDoc(taskRef, {
                         dueDate: newDate
                     });
-                    showToast('Tarea actualizada.', 'success');
+                    showToast('Fecha de tarea actualizada.', 'success');
+                    // Refresh the view to correctly place the task
+                    refreshWeeklyTasksView();
                 } catch (error) {
                     console.error("Error updating task dueDate:", error);
                     showToast('Error al actualizar la tarea.', 'error');
-                    fetchWeeklyTasks().then(renderWeeklyTasks);
+                    // Refresh to revert the visual change on error
+                    refreshWeeklyTasksView();
                 }
             }
         });
@@ -314,15 +378,36 @@ function setupActionButtons() {
             showToast("Error: No se puede abrir el formulario de tareas.", "error");
         }
     });
+
+    document.getElementById('prev-week-btn')?.addEventListener('click', () => {
+        appState.weekOffset--;
+        refreshWeeklyTasksView();
+    });
+
+    document.getElementById('next-week-btn')?.addEventListener('click', () => {
+        appState.weekOffset++;
+        refreshWeeklyTasksView();
+    });
 }
 
 // --- 4. MAIN AND INITIALIZATION ---
+
+async function refreshWeeklyTasksView() {
+    try {
+        const tasks = await fetchWeeklyTasks();
+        renderWeeklyTasks(tasks);
+    } catch (error) {
+        console.error("Error refreshing weekly tasks view:", error);
+        showToast('Error al actualizar la vista de tareas.', 'error');
+    }
+}
 
 /**
  * Main logic runner for the landing page.
  */
 export async function runLandingPageLogic() {
     console.log("runLandingPageLogic called.");
+    appState.weekOffset = 0; // Reset on view load
     renderLandingPageHTML();
 
     try {
