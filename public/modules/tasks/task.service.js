@@ -158,7 +158,17 @@ export async function handleTaskFormSubmit(e) {
 
     // Create unified search keywords
     const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);
-    const tags = isEditing ? (getState().tasks.find(t => t.docId === taskId)?.tags || []) : [];
+    let tags = [];
+    if (isEditing) {
+        try {
+            const taskDoc = await getDoc(doc(db, COLLECTIONS.TAREAS, taskId));
+            if (taskDoc.exists()) {
+                tags = taskDoc.data().tags || [];
+            }
+        } catch (e) {
+            console.error("Could not fetch existing task to preserve tags:", e);
+        }
+    }
     data.search_keywords = [...new Set([...titleKeywords, ...tags])];
 
 
