@@ -70,43 +70,63 @@ export function getKanbanBoardHTML(state, selectedUser) {
 export function getMultiTaskConfirmationHTML(suggestedTasks) {
     const tasksListHTML = suggestedTasks.map((task, index) => {
         const priorityMap = { high: 'Alta', medium: 'Media', low: 'Baja' };
-        const priorityText = priorityMap[task.priority] || 'N/A';
-        const dueDateText = task.dueDate || 'N/A';
+        const priorityText = priorityMap[task.priority] || 'No especificada';
+        const dueDateText = task.dueDate || 'No especificada';
 
+        // Card for each suggested task, redesigned for clarity and robustness.
         return `
-            <label class="block p-4 bg-white rounded-lg border hover:border-blue-500 hover:shadow-sm cursor-pointer transition-all duration-150 has-[:checked]:bg-blue-50 has-[:checked]:border-blue-400">
-                <div class="flex items-start gap-4">
-                    <input type="checkbox" class="suggested-task-checkbox mt-1 h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300" data-task-index="${index}" checked>
-                    <div class="flex-grow">
-                        <p class="font-bold text-slate-800">${task.title}</p>
-                        <p class="text-sm text-slate-600 mt-1">${task.description}</p>
-                        <div class="text-xs text-slate-500 mt-3 flex items-center gap-x-6 gap-y-1 flex-wrap">
-                            <span class="flex items-center gap-1.5"><i data-lucide="flag" class="w-3.5 h-3.5"></i><strong>Prioridad:</strong> ${priorityText}</span>
-                            <span class="flex items-center gap-1.5"><i data-lucide="calendar" class="w-3.5 h-3.5"></i><strong>Fecha Límite:</strong> ${dueDateText}</span>
+            <div class="suggested-task-card bg-white rounded-xl shadow-sm border border-slate-200 transition-all duration-200">
+                <div class="p-4">
+                    <div class="flex items-start gap-4">
+                        <input type="checkbox" class="suggested-task-checkbox mt-1.5 h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300" data-task-index="${index}" checked>
+                        <div class="flex-grow">
+                            <p class="font-bold text-slate-800">${task.title || 'Tarea sin título'}</p>
+                            <p class="text-sm text-slate-600 mt-1">${task.description || 'Sin descripción.'}</p>
                         </div>
                     </div>
                 </div>
-            </label>
+                <div class="bg-slate-50/80 px-4 py-3 border-t border-slate-200 text-xs text-slate-500">
+                    <div class="flex items-center gap-x-6 gap-y-2 flex-wrap">
+                        <span class="flex items-center gap-1.5" title="Prioridad">
+                            <i data-lucide="flag" class="w-4 h-4"></i>
+                            <span class="font-semibold">${priorityText}</span>
+                        </span>
+                        <span class="flex items-center gap-1.5" title="Fecha Límite">
+                            <i data-lucide="calendar" class="w-4 h-4"></i>
+                            <span class="font-semibold">${dueDateText}</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
         `;
     }).join('');
 
     return `
-        <div id="multi-task-confirmation-view" class="p-6 animate-fade-in flex flex-col h-full">
-            <div class="text-center mb-4 flex-shrink-0">
-                <i data-lucide="git-fork" class="w-12 h-12 mx-auto text-blue-500"></i>
-                <h3 class="text-xl font-bold text-gray-800 mt-2">La IA ha sugerido dividir la entrada en ${suggestedTasks.length} tareas.</h3>
-                <p class="text-sm text-gray-600 mt-1">Revisa las tareas sugeridas a continuación. Desmarca las que no quieras crear.</p>
+        <div id="multi-task-confirmation-view" class="flex flex-col h-full">
+            <!-- Header section -->
+            <div class="p-6 border-b border-slate-200 flex-shrink-0">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <i data-lucide="git-fork" class="w-7 h-7 text-blue-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">La IA ha sugerido ${suggestedTasks.length} tareas</h3>
+                        <p class="text-sm text-gray-600">Revisa las tareas y desmarca las que no quieras crear.</p>
+                    </div>
+                </div>
             </div>
 
-            <div id="suggested-tasks-list" class="flex flex-col gap-3 flex-grow min-h-0 overflow-y-auto border p-4 rounded-lg bg-slate-100 custom-scrollbar">
+            <!-- Scrollable list of tasks -->
+            <div id="suggested-tasks-list" class="flex-grow p-6 bg-slate-50 overflow-y-auto custom-scrollbar space-y-4">
                 ${tasksListHTML}
             </div>
 
-            <div class="flex justify-end items-center gap-3 mt-6 pt-4 border-t flex-shrink-0">
-                <button id="cancel-multi-task-btn" type="button" class="btn btn-secondary">Cancelar</button>
-                <button id="create-selected-tasks-btn" type="button" class="btn btn-primary">
-                    <i data-lucide="check-check" class="w-4 h-4 mr-2"></i>
-                    Crear Tareas Seleccionadas
+            <!-- Footer with action buttons -->
+            <div class="p-4 bg-white border-t border-slate-200 flex justify-end items-center gap-3 flex-shrink-0">
+                <button id="cancel-multi-task-btn" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+                <button id="create-selected-tasks-btn" type="button" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold transition-colors flex items-center gap-2">
+                    <i data-lucide="check-check" class="w-5 h-5"></i>
+                    Crear Seleccionadas
                 </button>
             </div>
         </div>
@@ -580,7 +600,7 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
     const isEditing = task !== null;
     return `
     <div id="task-form-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div class="bg-slate-50 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+        <div id="task-modal-content-container" class="bg-slate-50 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
             <div class="flex justify-between items-center p-4 border-b border-slate-200 bg-white rounded-t-lg sticky top-0">
                 <h3 class="text-xl font-bold text-slate-800">${isEditing ? 'Editar' : 'Nueva'} Tarea</h3>
                 <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors"><i data-lucide="x" class="h-6 w-6"></i></button>
