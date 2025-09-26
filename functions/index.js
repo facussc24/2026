@@ -280,8 +280,12 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
             model: "gemini-2.0-flash",
         });
 
+        const currentDate = new Date().toISOString().split("T")[0];
+
         const prompt = `
         Analiza el siguiente texto de un usuario. Tu objetivo es identificar si el texto describe una o varias tareas gestionables.
+
+        **Contexto Clave:** La fecha de hoy es ${currentDate}. Todas las fechas relativas (como "mañana" o "próxima semana") deben calcularse a partir de esta fecha.
 
         Texto del usuario: "${text}"
 
