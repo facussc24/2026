@@ -14,6 +14,8 @@ let seedDatabase;
 let clearDataOnly;
 let clearOtherUsers;
 
+let weeklyTasksCache = [];
+
 // --- 2. UI RENDERING ---
 
 /**
@@ -433,6 +435,23 @@ function setupActionButtons() {
         appState.weekOffset++;
         refreshWeeklyTasksView();
     });
+
+    const weeklyTasksContainer = document.getElementById('weekly-tasks-container');
+    weeklyTasksContainer?.addEventListener('click', (e) => {
+        // To prevent the modal from opening when a drag is initiated.
+        if (e.target.closest('.sortable-drag')) {
+            return;
+        }
+
+        const taskCard = e.target.closest('.task-card-compact');
+        if (taskCard) {
+            const taskId = taskCard.dataset.taskId;
+            const task = weeklyTasksCache.find(t => t.docId === taskId);
+            if (task) {
+                openTaskFormModal(task);
+            }
+        }
+    });
 }
 
 // --- 4. MAIN AND INITIALIZATION ---
@@ -446,6 +465,7 @@ async function refreshWeeklyTasksView() {
 
     try {
         const tasks = await fetchWeeklyTasks();
+        weeklyTasksCache = tasks; // Store tasks for later use
         renderWeeklyTasks(tasks);
     } catch (error) {
         console.error("Error refreshing weekly tasks view:", error);
