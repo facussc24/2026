@@ -701,7 +701,7 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                     <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                         <div class="input-group">
                             <label for="task-assignee">Asignar a</label>
-                            <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}"><option value="">Cargando...</option></select>
+                            <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}" ${!isAdmin ? 'disabled' : ''}><option value="">Cargando...</option></select>
                         </div>
                         <div class="input-group">
                             <label for="task-priority">Prioridad</label>
