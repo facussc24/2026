@@ -288,29 +288,29 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
         **Instrucciones Estrictas:**
         1.  **Detección de Tareas:** Identifica si el texto representa una única acción o múltiples acciones distintas. Si son distintas (ej: "revisar planos y llamar a proveedor"), crea un objeto de tarea para cada una. Si es una acción con pasos, trátalo como una sola tarea con subtareas.
         2.  **Estructura de Tarea (JSON):** Para cada tarea, genera un objeto JSON con estos campos EXACTOS:
-            *   `title`: Título conciso (máx 10 palabras).
-            *   `description`: Resumen corto del objetivo.
-            *   `subtasks`: Array de strings con subtareas accionables. Si no hay, `[]`.
-            *   `priority`: 'high', 'medium', o 'low'.
-            *   `startDate`: 'YYYY-MM-DD' o `null`.
-            *   `dueDate`: 'YYYY-MM-DD' o `null`.
-            *   `assignee`: Nombre de la persona o `null`.
-            *   `isPublic`: `true` (equipo/proyecto) o `false` (personal).
-            *   `project`: Nombre del proyecto o `null`.
-        3.  **Corrección de Texto:** Corrige la gramática y ortografía en `title` y `description` para mayor claridad.
+            *   \\\`title\\\`: Título conciso (máx 10 palabras).
+            *   \\\`description\\\`: Resumen corto del objetivo.
+            *   \\\`subtasks\\\`: Array de strings con subtareas accionables. Si no hay, \\\`[]\\\`.
+            *   \\\`priority\\\`: 'high', 'medium', o 'low'.
+            *   \\\`startDate\\\`: 'YYYY-MM-DD' o \\\`null\\\`.
+            *   \\\`dueDate\\\`: 'YYYY-MM-DD' o \\\`null\\\`.
+            *   \\\`assignee\\\`: Nombre de la persona o \\\`null\\\`.
+            *   \\\`isPublic\\\`: \\\`true\\\` (equipo/proyecto) o \\\`false\\\` (personal).
+            *   \\\`project\\\`: Nombre del proyecto o \\\`null\\\`.
+        3.  **Corrección de Texto:** Corrige la gramática y ortografía en \\\`title\\\` y \\\`description\\\` para mayor claridad.
 
         **Formato de Salida - REGLA CRÍTICA:**
         Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON. Este objeto debe contener una clave "tasks", cuyo valor es un array de los objetos de tarea que creaste.
-        NO incluyas absolutamente NADA más en tu respuesta. Ni texto introductorio, ni explicaciones, ni bloques de código markdown (como \`\`\`json).
-        La respuesta debe empezar con `{` y terminar con `}`.
+        NO incluyas absolutamente NADA más en tu respuesta. Ni texto introductorio, ni explicaciones, ni bloques de código markdown (como \\\`\\\`\\\`json).
+        La respuesta debe empezar con \\\`{\\\` y terminar con \\\`}\\\`.
 
         **Ejemplo de respuesta VÁLIDA:**
         {"tasks":[{"title":"Revisar planos","description":"Revisar los planos del nuevo chasis.","subtasks":[],"priority":"high","startDate":null,"dueDate":null,"assignee":null,"isPublic":true,"project":"Chasis-2024"},{"title":"Llamar a proveedor","description":"Llamar al proveedor para confirmar entrega.","subtasks":[],"priority":"medium","startDate":null,"dueDate":null,"assignee":"Marcos","isPublic":true,"project":"Chasis-2024"}]}
 
         **Ejemplo de respuesta INVÁLIDA:**
-        \`\`\`json
+        \\\`\\\`\\\`json
         {"tasks": [...]}
-        \`\`\`
+        \\\`\\\`\\\`
       `;
 
         // Genera el contenido usando el SDK de Vertex AI.
