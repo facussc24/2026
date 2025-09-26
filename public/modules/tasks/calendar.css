@@ -1,0 +1,101 @@
+/* Styles for the main calendar view */
+#calendar-view {
+    display: flex;
+    flex-direction: column;
+    /* Adjust height to fill the screen minus header and padding */
+    height: calc(100vh - 250px);
+}
+
+.calendar-grid-container {
+    display: grid;
+    /* 7 days + 1 backlog column */
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 0.75rem;
+    flex-grow: 1;
+    overflow-x: auto;
+}
+
+.calendar-column {
+    background-color: #f8fafc; /* Light gray */
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e2e8f0;
+}
+
+.calendar-column-header {
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e2e8f0;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.calendar-column-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #334155;
+}
+
+.calendar-column-header .text-sm {
+    color: #64748b;
+}
+
+.calendar-column-header .font-bold {
+    color: #1d4ed8;
+}
+
+.task-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    /* Ensures empty columns have a minimum height for dropping */
+    min-height: 150px;
+    padding-top: 0.5rem;
+    /* Custom scrollbar styles */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.task-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.task-list::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 10px;
+}
+
+.task-list::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 10px;
+    border: 2px solid #f8fafc;
+}
+
+/* Styles for task cards (reusing existing styles) */
+.task-card {
+    margin-bottom: 0.75rem;
+    cursor: grab;
+}
+
+/* SortableJS ghost class for drag-and-drop placeholder */
+.task-card-ghost {
+    background: #e0f2fe;
+    border: 2px dashed #3b82f6;
+    opacity: 0.7;
+}
+
+.task-card.sortable-chosen {
+    cursor: grabbing;
+    transform: scale(1.05);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Special styling for the Backlog column */
+.calendar-column[data-date="backlog"] .calendar-column-header {
+    border-bottom-color: #94a3b8;
+}
+.calendar-column[data-date="backlog"] .calendar-column-header h3 {
+    color: #475569;
+}
