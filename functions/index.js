@@ -277,7 +277,7 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
         // Selecciona el modelo generativo.
         const generativeModel = vertexAI.getGenerativeModel({
-            model: "gemini-1.0-pro-001",
+            model: "gemini-2.0-flash",
         });
 
         const prompt = `
@@ -366,7 +366,7 @@ exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
         });
 
         const generativeModel = vertexAI.getGenerativeModel({
-            model: "gemini-1.0-pro-001",
+            model: "gemini-2.0-flash",
         });
 
         const tasksForPrompt = tasks.map(t => ({
