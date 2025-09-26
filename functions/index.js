@@ -329,10 +329,10 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error en organizeTaskWithAI con Vertex AI:", error);
+        // Temporarily exposing the raw error for debugging
         throw new functions.https.HttpsError(
             "internal",
-            "Ocurrió un error al procesar la solicitud con Vertex AI.",
-            error.message
+            `Vertex AI Error: ${error.message}`
         );
     }
 });
@@ -408,10 +408,10 @@ exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error en getTaskSummaryWithAI con Vertex AI:", error);
+        // Temporarily exposing the raw error for debugging
         throw new functions.https.HttpsError(
             "internal",
-            "Ocurrió un error al generar el resumen con la IA.",
-            error.message
+            `Vertex AI Error: ${error.message}`
         );
     }
 });
