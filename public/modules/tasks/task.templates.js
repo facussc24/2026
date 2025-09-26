@@ -98,7 +98,7 @@ export function getMultiTaskConfirmationHTML(suggestedTasks) {
                 <p class="text-sm text-gray-600 mt-1">Revisa las tareas sugeridas a continuación. Desmarca las que no quieras crear.</p>
             </div>
 
-            <div id="suggested-tasks-list" class="space-y-3 overflow-y-auto border p-4 rounded-lg bg-slate-100 custom-scrollbar py-1">
+            <div id="suggested-tasks-list" class="flex flex-col gap-3 flex-grow min-h-0 overflow-y-auto border p-4 rounded-lg bg-slate-100 custom-scrollbar">
                 ${tasksListHTML}
             </div>
 
