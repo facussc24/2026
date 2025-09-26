@@ -133,7 +133,15 @@ export function runTasksLogic(initialView = 'kanban') {
             const taskId = button.dataset.docId;
             const action = button.dataset.action;
 
-            if (action === 'delete-task') {
+            if (action === 'search-by-tag') {
+                const tag = button.dataset.tag;
+                const searchInput = dom.viewContent.querySelector('#task-search-input');
+                if (searchInput && tag) {
+                    searchInput.value = tag;
+                    // Dispatch an input event to trigger the search
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            } else if (action === 'delete-task') {
                 if (!taskId) return;
                 dependencies.showConfirmationModal(
                     'Eliminar Tarea',

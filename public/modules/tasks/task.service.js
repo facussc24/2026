@@ -156,6 +156,12 @@ export async function handleTaskFormSubmit(e) {
         return;
     }
 
+    // Create unified search keywords
+    const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);
+    const tags = isEditing ? (getState().tasks.find(t => t.docId === taskId)?.tags || []) : [];
+    data.search_keywords = [...new Set([...titleKeywords, ...tags])];
+
+
     const isPublicCheckbox = form.querySelector('[name="isPublic"]');
     if (isPublicCheckbox) {
         data.isPublic = isPublicCheckbox.checked;
@@ -203,6 +209,11 @@ export async function createTask(taskData) {
         updatedAt: new Date(),
         status: 'todo' // Default status for new tasks
     };
+
+    // Create unified search keywords
+    const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);
+    const tags = data.tags || [];
+    data.search_keywords = [...new Set([...titleKeywords, ...tags])];
 
     try {
         await addDoc(collection(db, COLLECTIONS.TAREAS), data);
@@ -269,6 +280,11 @@ export function subscribeToTasks(callback, handleError) {
         filterConditions.push(where('priority', '==', state.kanban.priorityFilter));
     }
 
+    const searchTerm = state.kanban.searchTerm.toLowerCase().trim();
+    if (searchTerm) {
+        filterConditions.push(where('search_keywords', 'array-contains', searchTerm));
+    }
+
     let queryConstraints = [];
     if (filterConditions.length > 1) {
         queryConstraints.push(and(...filterConditions));
@@ -310,6 +326,11 @@ export function subscribeToPaginatedTasks(filters, pagination, callback, handleE
         queryConstraints.push(where('priority', '==', priority));
     }
 
+    const lowercasedFilter = searchTerm ? searchTerm.toLowerCase().trim() : '';
+    if (lowercasedFilter) {
+        queryConstraints.push(where('search_keywords', 'array-contains', lowercasedFilter));
+    }
+
     if (lastVisible) {
         queryConstraints.push(startAfter(lastVisible));
     }
@@ -321,24 +342,8 @@ export function subscribeToPaginatedTasks(filters, pagination, callback, handleE
         const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
         const newLastVisible = snapshot.docs[snapshot.docs.length - 1];
 
-        // Client-side filtering for search term
-        let filteredTasks = tasks;
-        if (searchTerm) {
-            const lowercasedFilter = searchTerm.toLowerCase();
-            const userMap = appState.collectionsById.usuarios;
-
-            filteredTasks = tasks.filter(task => {
-                const assignee = userMap.get(task.assigneeUid);
-                const assigneeName = assignee ? assignee.name.toLowerCase() : '';
-
-                return task.title.toLowerCase().includes(lowercasedFilter) ||
-                       (task.proyecto && task.proyecto.toLowerCase().includes(lowercasedFilter)) ||
-                       (assigneeName && assigneeName.includes(lowercasedFilter));
-            });
-        }
-
         callback({
-            tasks: filteredTasks,
+            tasks: tasks,
             lastVisible: newLastVisible,
             isLastPage: snapshot.docs.length < pageSize
         });
