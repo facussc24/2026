@@ -217,6 +217,13 @@ function renderWeeklyTasks(tasks) {
 
     container.innerHTML = dayColumnsHTML + futureColumnsHTML;
 
+    // Apply staggered animation to newly rendered cards
+    const taskCards = container.querySelectorAll('.task-card-compact');
+    taskCards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 50}ms`;
+        card.classList.add('fade-in-up');
+    });
+
     lucide.createIcons();
     initWeeklyTasksSortable();
 }
@@ -281,7 +288,16 @@ function initWeeklyTasksSortable() {
             group: 'weekly-tasks',
             animation: 150,
             filter: '.no-drag',
+            onStart: function (evt) {
+                document.querySelectorAll('#weekly-tasks-container .task-list').forEach(el => {
+                    el.closest('.bg-slate-50, .bg-slate-100')?.classList.add('drop-target-highlight');
+                });
+            },
             onEnd: async (evt) => {
+                document.querySelectorAll('#weekly-tasks-container .drop-target-highlight').forEach(el => {
+                    el.classList.remove('drop-target-highlight');
+                });
+
                 const itemEl = evt.item;
                 const taskId = itemEl.dataset.taskId;
                 const newColumn = evt.to;
@@ -428,12 +444,12 @@ function setupActionButtons() {
 
     document.getElementById('prev-week-btn')?.addEventListener('click', () => {
         appState.weekOffset--;
-        refreshWeeklyTasksView();
+        refreshWeeklyTasksView('prev');
     });
 
     document.getElementById('next-week-btn')?.addEventListener('click', () => {
         appState.weekOffset++;
-        refreshWeeklyTasksView();
+        refreshWeeklyTasksView('next');
     });
 
     const weeklyTasksContainer = document.getElementById('weekly-tasks-container');
@@ -456,21 +472,52 @@ function setupActionButtons() {
 
 // --- 4. MAIN AND INITIALIZATION ---
 
-async function refreshWeeklyTasksView() {
+async function refreshWeeklyTasksView(direction = 'next') {
     const weekInfo = getWeekInfo(appState.weekOffset);
     const weekDisplay = document.getElementById('week-display');
     if (weekDisplay) {
         weekDisplay.textContent = `Semana ${weekInfo.weekNumber} - ${weekInfo.monthName} ${weekInfo.year}`;
     }
 
-    try {
-        const tasks = await fetchWeeklyTasks();
-        weeklyTasksCache = tasks; // Store tasks for later use
-        renderWeeklyTasks(tasks);
-    } catch (error) {
-        console.error("Error refreshing weekly tasks view:", error);
-        showToast('Error al actualizar la vista de tareas.', 'error');
-    }
+    const container = document.getElementById('weekly-tasks-container');
+    if (!container) return;
+
+    const slideOutClass = direction === 'next' ? 'slide-out-left' : 'slide-out-right';
+    const slideInClass = direction === 'next' ? 'slide-in-right' : 'slide-in-left';
+
+    // 1. Apply slide-out animation
+    container.classList.add(slideOutClass);
+
+    // 2. Wait for animation to end
+    container.addEventListener('animationend', async function onAnimationEnd() {
+        // Remove this listener to prevent it from firing again
+        container.removeEventListener('animationend', onAnimationEnd);
+
+        try {
+            // 3. Fetch and render new content
+            const tasks = await fetchWeeklyTasks();
+            weeklyTasksCache = tasks;
+            renderWeeklyTasks(tasks); // This will remove the old content and classes
+
+            // 4. Apply slide-in animation to the new content
+            const newContainer = document.getElementById('weekly-tasks-container');
+            if (newContainer) {
+                 // We need to remove the slide-out class before adding the slide-in one
+                newContainer.classList.remove(slideOutClass);
+                newContainer.classList.add(slideInClass);
+
+                // 5. Clean up the slide-in class after it finishes
+                newContainer.addEventListener('animationend', () => {
+                    newContainer.classList.remove(slideInClass);
+                }, { once: true });
+            }
+        } catch (error) {
+            console.error("Error refreshing weekly tasks view:", error);
+            showToast('Error al actualizar la vista de tareas.', 'error');
+            // In case of error, remove animation classes to unhide the container
+            container.classList.remove(slideOutClass, slideInClass);
+        }
+    }, { once: true });
 }
 
 /**
