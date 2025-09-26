@@ -277,7 +277,7 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
         // Selecciona el modelo generativo.
         const generativeModel = vertexAI.getGenerativeModel({
-            model: "gemini-1.0-pro",
+            model: "gemini-1.5-flash-preview-0514",
         });
 
         const prompt = `
@@ -329,10 +329,10 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error en organizeTaskWithAI con Vertex AI:", error);
-        // Temporarily exposing the raw error for debugging
         throw new functions.https.HttpsError(
             "internal",
-            `Vertex AI Error: ${error.message}`
+            "Ocurrió un error al procesar la solicitud con Vertex AI.",
+            error.message
         );
     }
 });
@@ -366,7 +366,7 @@ exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
         });
 
         const generativeModel = vertexAI.getGenerativeModel({
-            model: "gemini-1.0-pro",
+            model: "gemini-1.5-flash-preview-0514",
         });
 
         const tasksForPrompt = tasks.map(t => ({
@@ -408,10 +408,10 @@ exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error en getTaskSummaryWithAI con Vertex AI:", error);
-        // Temporarily exposing the raw error for debugging
         throw new functions.https.HttpsError(
             "internal",
-            `Vertex AI Error: ${error.message}`
+            "Ocurrió un error al generar el resumen con la IA.",
+            error.message
         );
     }
 });
