@@ -7,6 +7,7 @@ let appState;
 let dom;
 let lucide;
 let showToast;
+let openTaskFormModal;
 
 // Functions from main.js to be injected
 let seedDatabase;
@@ -67,7 +68,12 @@ function renderLandingPageHTML() {
 
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
-                    <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200 mb-6">Tareas Semanales de Ingeniería</h3>
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Tareas Semanales de Ingeniería</h3>
+                        <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                            <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
+                        </button>
+                    </div>
                     <div id="weekly-tasks-container" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 min-h-[400px]">
                         <!-- Day columns will be injected here -->
                     </div>
@@ -117,9 +123,9 @@ function renderWeeklyTasks(tasks) {
 
     const users = appState.collectionsById.usuarios || new Map();
     const priorityStyles = {
-        high: { icon: 'chevrons-up', color: 'text-red-500' },
-        medium: { icon: 'equal', color: 'text-yellow-500' },
-        low: { icon: 'chevrons-down', color: 'text-green-500' }
+        high: { label: 'Alta', icon: 'chevrons-up', color: 'text-red-500' },
+        medium: { label: 'Media', icon: 'equal', color: 'text-yellow-500' },
+        low: { label: 'Baja', icon: 'chevrons-down', color: 'text-green-500' }
     };
     const statusColors = {
         todo: 'bg-gray-400',
@@ -127,15 +133,13 @@ function renderWeeklyTasks(tasks) {
         done: 'bg-green-500'
     };
 
-    // Group tasks by day (0=Mon, 1=Tue, ...)
+    const weekDates = getWeekDateRange(true);
+
     const tasksByDay = Array(5).fill(null).map(() => []);
     tasks.forEach(task => {
         if (task.dueDate) {
-            // Firestore dueDate is 'YYYY-MM-DD', which is parsed as UTC midnight.
-            // new Date('YYYY-MM-DD') creates a date at midnight in the local timezone.
-            // We use UTC functions to avoid timezone issues.
             const date = new Date(task.dueDate + 'T00:00:00Z');
-            const dayIndex = date.getUTCDay() - 1; // getUTCDay: Sun=0, Mon=1...
+            const dayIndex = date.getUTCDay() - 1;
             if (dayIndex >= 0 && dayIndex < 5) {
                 tasksByDay[dayIndex].push(task);
             }
@@ -145,12 +149,19 @@ function renderWeeklyTasks(tasks) {
     const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
     container.innerHTML = dayNames.map((dayName, index) => {
         const tasks = tasksByDay[index];
+        const dateForColumn = weekDates[index];
+
         const taskCards = tasks.length > 0 ? tasks.map(task => {
             const assignee = users.get(task.assigneeUid);
             const priority = task.priority || 'medium';
             const style = priorityStyles[priority];
+            const canDrag = appState.currentUser.role === 'admin' || appState.currentUser.uid === task.assigneeUid;
+            const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
+
             return `
-                <div class="border bg-white/50 dark:bg-slate-700/50 rounded-lg p-3 mb-3 shadow-sm hover:shadow-md transition-shadow duration-200">
+                <div class="task-card border bg-white/50 dark:bg-slate-700/50 rounded-lg p-3 mb-3 shadow-sm hover:shadow-md transition-shadow duration-200 ${dragClass}"
+                     data-task-id="${task.docId}"
+                     data-assignee-uid="${task.assigneeUid}">
                     <div class="flex justify-between items-start">
                         <p class="font-semibold text-sm text-slate-700 dark:text-slate-200 leading-tight">${task.title}</p>
                         <span class="flex-shrink-0 ml-2 w-5 h-5 rounded-full ${statusColors[task.status] || 'bg-gray-300'}" title="Estado: ${task.status}"></span>
@@ -158,7 +169,7 @@ function renderWeeklyTasks(tasks) {
                     <div class="flex items-center justify-between text-xs mt-2 text-slate-500 dark:text-slate-400">
                         <span class="flex items-center">
                             <i data-lucide="${style.icon}" class="w-3.5 h-3.5 mr-1 ${style.color}"></i>
-                            Prioridad: ${priority.charAt(0).toUpperCase() + priority.slice(1)}
+                            Prioridad: ${style.label}
                         </span>
                         <span>${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
                     </div>
@@ -169,7 +180,7 @@ function renderWeeklyTasks(tasks) {
         return `
             <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
                 <h4 class="text-lg font-bold text-center text-slate-600 dark:text-slate-300 mb-4 pb-2 border-b border-slate-200 dark:border-slate-700">${dayName}</h4>
-                <div class="task-list space-y-2 h-96 overflow-y-auto custom-scrollbar pr-1">
+                <div class="task-list space-y-2 h-96 overflow-y-auto custom-scrollbar pr-1" data-date="${dateForColumn}">
                     ${taskCards}
                 </div>
             </div>
@@ -177,6 +188,42 @@ function renderWeeklyTasks(tasks) {
     }).join('');
 
     lucide.createIcons();
+    initWeeklyTasksSortable();
+}
+
+function initWeeklyTasksSortable() {
+    const taskLists = document.querySelectorAll('#weekly-tasks-container .task-list');
+    if (taskLists.length === 0) return;
+
+    taskLists.forEach(list => {
+        new Sortable(list, {
+            group: 'weekly-tasks',
+            animation: 150,
+            filter: '.no-drag',
+            onEnd: async (evt) => {
+                const itemEl = evt.item;
+                const taskId = itemEl.dataset.taskId;
+                const newDate = evt.to.dataset.date;
+
+                if (!taskId || !newDate) {
+                    console.error("Task ID or new date is missing.");
+                    return;
+                }
+
+                try {
+                    const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+                    await updateDoc(taskRef, {
+                        dueDate: newDate
+                    });
+                    showToast('Tarea actualizada.', 'success');
+                } catch (error) {
+                    console.error("Error updating task dueDate:", error);
+                    showToast('Error al actualizar la tarea.', 'error');
+                    fetchWeeklyTasks().then(renderWeeklyTasks);
+                }
+            }
+        });
+    });
 }
 
 // --- 3. LOGIC AND DATA FETCHING ---
@@ -258,6 +305,15 @@ function setupActionButtons() {
     } else {
         adminContainer.style.display = 'none';
     }
+
+    document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', () => {
+        if (openTaskFormModal) {
+            openTaskFormModal(null, 'todo'); // Open new task modal with default status
+        } else {
+            console.error("openTaskFormModal function is not available.");
+            showToast("Error: No se puede abrir el formulario de tareas.", "error");
+        }
+    });
 }
 
 // --- 4. MAIN AND INITIALIZATION ---
@@ -316,6 +372,7 @@ export function initLandingPageModule(dependencies) {
     dom = dependencies.dom;
     lucide = dependencies.lucide;
     showToast = dependencies.showToast;
+    openTaskFormModal = dependencies.openTaskFormModal;
 
     // Injecting functions from main.js to be called from the landing page
     seedDatabase = dependencies.seedDatabase;

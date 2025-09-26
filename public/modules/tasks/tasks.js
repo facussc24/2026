@@ -1,7 +1,7 @@
 import { initTaskState } from './task.state.js';
 import { initTaskService, deleteTask } from './task.service.js';
 import { initTaskUI, renderMyPendingTasksWidget, renderTasksByProjectChart, openTelegramConfigModal } from './task.ui.js';
-import { initTaskModal } from './task.modal.js';
+import { initTaskModal, openTaskFormModal } from './task.modal.js';
 import { initKanban, runKanbanBoardLogic } from './task.kanban.js';
 import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
 import { initCalendar, renderTaskCalendar } from './task.calendar.js';
@@ -17,7 +17,8 @@ export {
     fetchAllTasks,
     renderMyPendingTasksWidget,
     renderTasksByProjectChart,
-    renderTaskDashboardView
+    renderTaskDashboardView,
+    openTaskFormModal
 };
 
 export function initTasksModule(deps) {
