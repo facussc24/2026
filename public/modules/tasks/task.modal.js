@@ -331,23 +331,23 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
                 showToast('¡Tarea organizada con IA!', 'success');
 
             } else if (suggestedTasks && suggestedTasks.length > 1) {
-                const form = modalElement.querySelector('#task-form');
-                const footer = modalElement.querySelector('.flex.justify-end'); // More robust selector
-                if (form) form.style.display = 'none';
-                if (footer) footer.style.display = 'none';
-
-                // This is the fix: find the modal's content container and remove the max-height class
-                const modalContentContainer = modalElement.querySelector('.bg-slate-50');
-                if (modalContentContainer) {
-                    modalContentContainer.classList.remove('max-h-[90vh]');
+                const modalContentContainer = modalElement.querySelector('#task-modal-content-container');
+                if (!modalContentContainer) {
+                    showToast('Error: No se pudo encontrar el contenedor del modal.', 'error');
+                    return;
                 }
 
+                // Make the modal resizable and clean its content
+                modalContentContainer.style.maxHeight = 'none';
+                modalContentContainer.innerHTML = ''; // Clear previous content (header, form, footer)
+
+                // Render the new confirmation view
                 const confirmationHTML = getMultiTaskConfirmationHTML(suggestedTasks);
-                // Insert the confirmation view right after the (now hidden) form
-                form.insertAdjacentHTML('afterend', confirmationHTML);
+                modalContentContainer.innerHTML = confirmationHTML;
                 lucide.createIcons();
 
                 const confirmationView = modalElement.querySelector('#multi-task-confirmation-view');
+                if (!confirmationView) return;
 
                 confirmationView.querySelector('#cancel-multi-task-btn').addEventListener('click', () => {
                     modalElement.remove();
