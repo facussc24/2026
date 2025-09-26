@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, or, and, limit, startAfter } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, or, and, limit, startAfter, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../../utils.js';
 import { getState } from './task.state.js';
@@ -10,12 +10,44 @@ let appState;
 let showToast;
 let lucide;
 
+async function deleteOldArchivedTasks() {
+    console.log("Running scheduled task: Deleting old archived tasks...");
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const tasksRef = collection(db, COLLECTIONS.TAREAS);
+    const q = query(tasksRef,
+        where('isArchived', '==', true),
+        where('completedAt', '<', sixMonthsAgo)
+    );
+
+    try {
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            console.log("No old archived tasks to delete.");
+            return;
+        }
+
+        const batch = writeBatch(db);
+        querySnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+        console.log(`Successfully deleted ${querySnapshot.size} old archived tasks.`);
+        showToast(`${querySnapshot.size} tarea(s) archivada(s) antigua(s) fueron eliminadas.`, 'info');
+    } catch (error) {
+        console.error("Error deleting old archived tasks:", error);
+    }
+}
+
 export function initTaskService(dependencies) {
     db = dependencies.db;
     functions = dependencies.functions;
     appState = dependencies.appState;
     showToast = dependencies.showToast;
     lucide = dependencies.lucide;
+    deleteOldArchivedTasks();
 }
 
 export async function fetchAllTasks() {
@@ -189,6 +221,15 @@ export function deleteTask(taskId) {
 export function updateTaskStatus(taskId, newStatus) {
     const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
     return updateDoc(taskRef, { status: newStatus });
+}
+
+export async function completeAndArchiveTask(taskId) {
+    const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+    await updateDoc(taskRef, {
+        status: 'done',
+        isArchived: true,
+        completedAt: new Date()
+    });
 }
 
 export function subscribeToAllTasks(callback, handleError) {

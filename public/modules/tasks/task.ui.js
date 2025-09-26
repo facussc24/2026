@@ -1,6 +1,6 @@
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
-import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram } from './task.service.js';
+import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram, completeAndArchiveTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML } from './task.templates.js';
@@ -50,7 +50,7 @@ export function renderTaskFilters(container) {
 
 export function renderTasks(tasks, container) {
     const getEmptyColumnHTML = (status) => {
-        const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Completada' };
+        const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Archivadas' };
         return `
             <div class="p-4 text-center text-slate-500 border-2 border-dashed border-slate-200 rounded-lg h-full flex flex-col justify-center items-center no-drag animate-fade-in">
                 <i data-lucide="inbox" class="h-10 w-10 mx-auto text-slate-400"></i>
@@ -63,9 +63,19 @@ export function renderTasks(tasks, container) {
         `;
     };
 
+    const state = getState();
+    const showArchived = state.kanban.showArchived;
+
     const tasksByStatus = { todo: [], inprogress: [], done: [] };
+
     tasks.forEach(task => {
-        tasksByStatus[task.status || 'todo'].push(task);
+        if (task.isArchived) {
+            if (showArchived) {
+                tasksByStatus.done.push(task);
+            }
+        } else {
+            tasksByStatus[task.status || 'todo'].push(task);
+        }
     });
 
     container.querySelectorAll('.task-column').forEach(columnEl => {
