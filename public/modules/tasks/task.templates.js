@@ -47,7 +47,7 @@ export function getKanbanBoardHTML(state, selectedUser) {
                 <span id="toggle-archived-text">Mostrar Archivadas</span>
             </button>
         </div>
-        <div id="task-board" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div id="task-board" class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div class="task-column bg-slate-100/80 rounded-xl" data-status="todo">
                 <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
                     <span class="flex items-center gap-3"><i data-lucide="list-todo" class="w-5 h-5 text-yellow-600"></i>Por Hacer</span>

@@ -5,7 +5,7 @@ import { initTaskModal } from './task.modal.js';
 import { initKanban, runKanbanBoardLogic } from './task.kanban.js';
 import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
 import { initCalendar, renderTaskCalendar } from './task.calendar.js';
-import { calculateOverdueTasksCount, fetchAllTasks } from './task.service.js';
+import { calculateOverdueTasksCount, fetchAllTasks, completeAndArchiveTask } from './task.service.js';
 
 let dom;
 let lucide;
