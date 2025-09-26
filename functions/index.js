@@ -281,26 +281,36 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
         });
 
         const prompt = `
-        Analiza el siguiente texto de un usuario. Tu objetivo principal es identificar si el texto describe una única tarea o múltiples tareas distintas que deberían gestionarse por separado.
+        Analiza el siguiente texto de un usuario. Tu objetivo es identificar si el texto describe una o varias tareas gestionables.
 
         Texto del usuario: "${text}"
 
-        Sigue estas instrucciones:
-        1.  **Análisis de Tareas Múltiples**: Si el texto contiene varias acciones claramente separables (por ejemplo, "Revisar los planos del chasis y luego llamar al proveedor para confirmar la entrega del material"), debes crear un objeto de tarea separado para cada acción. Si el texto describe una sola acción con varios pasos, trátalo como una única tarea con subtareas.
-        2.  **Estructuración de Cada Tarea**: Para cada tarea identificada (sea una o varias), crea un objeto JSON con la siguiente estructura:
-            *   **title**: Un título conciso y claro (máximo 10 palabras).
-            *   **description**: Un resumen corto (2-3 frases) del objetivo de la tarea.
-            *   **subtasks**: Una lista de subtareas cortas y accionables (si aplica).
-            *   **priority**: 'high' (urgente), 'medium' (normal), o 'low' (sin prisa).
-            *   **startDate**: Fecha de inicio en formato 'YYYY-MM-DD' si se menciona, si no, null.
-            *   **dueDate**: Fecha límite en formato 'YYYY-MM-DD' si se menciona, si no, null.
-            *   **assignee**: Nombre de la persona a asignar si se menciona, si no, null.
-            *   **isPublic**: 'true' si es una tarea de equipo/ingeniería/proyecto, 'false' si es personal.
-            *   **project**: Nombre del proyecto si se menciona, si no, null.
-        3.  **Corrección de Texto**: En los títulos y descripciones, corrige errores ortográficos y gramaticales obvios para mayor claridad. Mantén acrónimos o jerga técnica (ej. 'AMFE') si no estás seguro.
+        **Instrucciones Estrictas:**
+        1.  **Detección de Tareas:** Identifica si el texto representa una única acción o múltiples acciones distintas. Si son distintas (ej: "revisar planos y llamar a proveedor"), crea un objeto de tarea para cada una. Si es una acción con pasos, trátalo como una sola tarea con subtareas.
+        2.  **Estructura de Tarea (JSON):** Para cada tarea, genera un objeto JSON con estos campos EXACTOS:
+            *   `title`: Título conciso (máx 10 palabras).
+            *   `description`: Resumen corto del objetivo.
+            *   `subtasks`: Array de strings con subtareas accionables. Si no hay, `[]`.
+            *   `priority`: 'high', 'medium', o 'low'.
+            *   `startDate`: 'YYYY-MM-DD' o `null`.
+            *   `dueDate`: 'YYYY-MM-DD' o `null`.
+            *   `assignee`: Nombre de la persona o `null`.
+            *   `isPublic`: `true` (equipo/proyecto) o `false` (personal).
+            *   `project`: Nombre del proyecto o `null`.
+        3.  **Corrección de Texto:** Corrige la gramática y ortografía en `title` y `description` para mayor claridad.
 
-        **Formato de Salida OBLIGATORIO**:
-        Tu respuesta DEBE ser un único objeto JSON que contenga una sola clave: "tasks". El valor de "tasks" debe ser un ARRAY de los objetos de tarea que has creado. NO incluyas el JSON dentro de un bloque de código markdown.
+        **Formato de Salida - REGLA CRÍTICA:**
+        Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON. Este objeto debe contener una clave "tasks", cuyo valor es un array de los objetos de tarea que creaste.
+        NO incluyas absolutamente NADA más en tu respuesta. Ni texto introductorio, ni explicaciones, ni bloques de código markdown (como \`\`\`json).
+        La respuesta debe empezar con `{` y terminar con `}`.
+
+        **Ejemplo de respuesta VÁLIDA:**
+        {"tasks":[{"title":"Revisar planos","description":"Revisar los planos del nuevo chasis.","subtasks":[],"priority":"high","startDate":null,"dueDate":null,"assignee":null,"isPublic":true,"project":"Chasis-2024"},{"title":"Llamar a proveedor","description":"Llamar al proveedor para confirmar entrega.","subtasks":[],"priority":"medium","startDate":null,"dueDate":null,"assignee":"Marcos","isPublic":true,"project":"Chasis-2024"}]}
+
+        **Ejemplo de respuesta INVÁLIDA:**
+        \`\`\`json
+        {"tasks": [...]}
+        \`\`\`
       `;
 
         // Genera el contenido usando el SDK de Vertex AI.
