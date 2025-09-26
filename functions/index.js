@@ -269,11 +269,8 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        // Inicializa Vertex AI con la configuración del proyecto y la ubicación.
-        const vertexAI = new VertexAI({
-            project: process.env.GCLOUD_PROJECT,
-            location: "us-central1",
-        });
+        // Inicializa Vertex AI. The SDK will automatically detect project and location.
+        const vertexAI = new VertexAI();
 
         // Selecciona el modelo generativo.
         const generativeModel = vertexAI.getGenerativeModel({
@@ -360,10 +357,8 @@ exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     }
 
     try {
-        const vertexAI = new VertexAI({
-            project: process.env.GCLOUD_PROJECT,
-            location: "us-central1",
-        });
+        // Initialize Vertex AI. The SDK will automatically detect project and location.
+        const vertexAI = new VertexAI();
 
         const generativeModel = vertexAI.getGenerativeModel({
             model: "gemini-1.5-flash-preview-0514",
