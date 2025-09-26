@@ -103,11 +103,11 @@ function renderLandingPageHTML() {
                             </button>
                         </div>
                     </div>
-                     <div id="status-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
-                        <span class="font-bold">Leyenda:</span>
-                        <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full bg-gray-400"></span>Por Hacer</div>
-                        <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full bg-blue-500"></span>En Progreso</div>
-                        <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full bg-green-500"></span>Hecho</div>
+                     <div id="priority-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
+                        <span class="font-bold">Prioridad:</span>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span>Alta</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span>Media</div>
+                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span>Baja</div>
                     </div>
                     <div id="weekly-tasks-container" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-6 min-h-[400px]">
                         <!-- Day columns will be injected here -->
@@ -159,7 +159,8 @@ function getWeekDateRange(returnFullWeek = false) {
     }
 
     const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
+    // Extend the range to cover the next two weeks for future columns
+    friday.setDate(monday.getDate() + 4 + (2 * 7));
     friday.setHours(23, 59, 59, 999);
 
     const format = (date) => date.toISOString().split('T')[0];
@@ -178,71 +179,96 @@ function renderWeeklyTasks(tasks) {
     };
 
     const weekDates = getWeekDateRange(true);
+    const mondayOfCurrentWeek = new Date(weekDates[0] + 'T00:00:00Z');
 
-    const tasksByDay = Array(5).fill(null).map(() => []);
+    const tasksByColumn = {
+        day0: [], day1: [], day2: [], day3: [], day4: [],
+        week1: [], week2: []
+    };
+
     tasks.forEach(task => {
         if (task.dueDate) {
-            const date = new Date(task.dueDate + 'T00:00:00Z');
-            const dayIndex = date.getUTCDay() - 1;
-            if (dayIndex >= 0 && dayIndex < 5) {
-                tasksByDay[dayIndex].push(task);
+            const dueDate = new Date(task.dueDate + 'T00:00:00Z');
+            const diffDays = (dueDate - mondayOfCurrentWeek) / (1000 * 60 * 60 * 24);
+
+            if (diffDays >= 0 && diffDays < 5) {
+                const dayIndex = dueDate.getUTCDay() - 1;
+                tasksByColumn[`day${dayIndex}`].push(task);
+            } else if (diffDays >= 7 && diffDays < 14) {
+                tasksByColumn.week1.push(task);
+            } else if (diffDays >= 14 && diffDays < 21) {
+                tasksByColumn.week2.push(task);
             }
         }
     });
 
     const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-    let dayColumnsHTML = dayNames.map((dayName, index) => {
-        const tasks = tasksByDay[index];
+    const dayColumnsHTML = dayNames.map((dayName, index) => {
+        const tasks = tasksByColumn[`day${index}`];
         const dateForColumn = weekDates[index];
-
-        const taskCards = tasks.length > 0 ? tasks.map(task => {
-            const assignee = users.get(task.assigneeUid);
-            const priority = task.priority || 'medium';
-            const style = priorityStyles[priority];
-            const canDrag = appState.currentUser.role === 'admin' || appState.currentUser.uid === task.assigneeUid;
-            const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
-
-            return `
-                <div class="task-card-compact border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}"
-                     data-task-id="${task.docId}"
-                     data-assignee-uid="${task.assigneeUid}">
-                    <div class="flex items-start justify-between">
-                        <p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p>
-                        <span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style.color}" title="Prioridad: ${style.label}"></span>
-                    </div>
-                    <div class="text-right text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                        <span>${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
-                    </div>
-                </div>
-            `;
-        }).join('') : '<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>';
-
-        return `
-            <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-3">
-                <h4 class="text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">${dayName}</h4>
-                <div class="task-list space-y-1 h-96 overflow-y-auto custom-scrollbar" data-date="${dateForColumn}">
-                    ${taskCards}
-                </div>
-            </div>
-        `;
+        return renderTaskColumn(dayName, tasks, { 'data-date': dateForColumn });
     }).join('');
 
-    const futureColumnsHTML = `
-        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-3 border-2 border-dashed">
-            <h4 class="text-base font-bold text-center text-slate-500 dark:text-slate-400 mb-3">Semana +1</h4>
-            <div class="task-list h-96 overflow-y-auto custom-scrollbar" data-week-offset="1"></div>
-        </div>
-        <div class="bg-slate-100 dark:bg-slate-800/50 rounded-xl p-3 border-2 border-dashed">
-            <h4 class="text-base font-bold text-center text-slate-500 dark:text-slate-400 mb-3">Semana +2</h4>
-            <div class="task-list h-96 overflow-y-auto custom-scrollbar" data-week-offset="2"></div>
-        </div>
-    `;
+    const futureColumnsHTML =
+        renderTaskColumn('Semana +1', tasksByColumn.week1, { 'data-week-offset': 1, isFuture: true }) +
+        renderTaskColumn('Semana +2', tasksByColumn.week2, { 'data-week-offset': 2, isFuture: true });
 
     container.innerHTML = dayColumnsHTML + futureColumnsHTML;
 
     lucide.createIcons();
     initWeeklyTasksSortable();
 }
+
+function renderTaskColumn(title, tasks, attributes) {
+    const users = appState.collectionsById.usuarios || new Map();
+    const priorityStyles = {
+        high: { label: 'Alta', color: 'bg-red-500' },
+        medium: { label: 'Media', color: 'bg-yellow-500' },
+        low: { label: 'Baja', color: 'bg-green-500' }
+    };
+
+    const taskCards = tasks.length > 0 ? tasks.map(task => {
+        const assignee = users.get(task.assigneeUid);
+        const priority = task.priority || 'medium';
+        const style = priorityStyles[priority];
+        const canDrag = appState.currentUser.role === 'admin' || appState.currentUser.uid === task.assigneeUid;
+        const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
+
+        return `
+            <div class="task-card-compact border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}"
+                 data-task-id="${task.docId}"
+                 data-assignee-uid="${task.assigneeUid}">
+                <div class="flex items-start justify-between">
+                    <p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p>
+                    <span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style.color}" title="Prioridad: ${style.label}"></span>
+                </div>
+                <div class="text-right text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                    <span>${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
+                </div>
+            </div>
+        `;
+    }).join('') : `<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">${attributes.isFuture ? 'Arrastra tareas aquí' : 'No hay tareas'}</p>`;
+
+    const columnClasses = attributes.isFuture
+        ? "bg-slate-100 dark:bg-slate-800/50 rounded-xl p-3 border-2 border-dashed"
+        : "bg-slate-50 dark:bg-slate-800 rounded-xl p-3";
+
+    const titleClasses = attributes.isFuture
+        ? "text-base font-bold text-center text-slate-500 dark:text-slate-400 mb-3"
+        : "text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700";
+
+    const attrs = Object.entries(attributes).map(([key, value]) => `${key}="${value}"`).join(' ');
+
+    return `
+        <div class="${columnClasses}">
+            <h4 class="${titleClasses}">${title}</h4>
+            <div class="task-list space-y-1 h-96 overflow-y-auto custom-scrollbar" ${attrs}>
+                ${taskCards}
+            </div>
+        </div>
+    `;
+}
+
 
 function initWeeklyTasksSortable() {
     const taskLists = document.querySelectorAll('#weekly-tasks-container .task-list');
@@ -332,12 +358,14 @@ async function fetchWeeklyTasks() {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     const { start, end } = getWeekDateRange();
 
+    // The orderBy is not strictly necessary anymore with client-side distribution,
+    // but it can help in debugging. It also doesn't require a new index if
+    // the first inequality is on the same field.
     const q = query(
         tasksRef,
         where('isPublic', '==', true),
         where('dueDate', '>=', start),
-        where('dueDate', '<=', end),
-        orderBy('dueDate', 'asc')
+        where('dueDate', '<=', end)
     );
 
     try {
@@ -434,30 +462,12 @@ export async function runLandingPageLogic() {
     renderLandingPageHTML();
 
     try {
-        // Use Promise.allSettled to allow parts of the page to load even if one promise fails
-        const results = await Promise.allSettled([
-            fetchKpiData(),
-            fetchWeeklyTasks()
-        ]);
+        // Fetch KPI data separately
+        const kpiData = await fetchKpiData();
+        updateKpiCards(kpiData);
 
-        const kpiDataResult = results[0];
-        const weeklyTasksResult = results[1];
-
-        if (kpiDataResult.status === 'fulfilled') {
-            updateKpiCards(kpiDataResult.value);
-        } else {
-            console.error("Failed to fetch KPI data:", kpiDataResult.reason);
-        }
-
-        if (weeklyTasksResult.status === 'fulfilled') {
-            renderWeeklyTasks(weeklyTasksResult.value);
-        } else {
-            console.error("Failed to fetch weekly tasks:", weeklyTasksResult.reason);
-            const container = document.getElementById('weekly-tasks-container');
-            if (container) {
-                container.innerHTML = '<p class="text-red-500 text-center col-span-5">Error al cargar las tareas de la semana.</p>';
-            }
-        }
+        // Perform the initial render of the weekly tasks view
+        await refreshWeeklyTasksView();
 
     } catch (error) {
         console.error("Error loading landing page data:", error);
