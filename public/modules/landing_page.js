@@ -107,6 +107,9 @@ function renderLandingPageHTML() {
                             <button id="ai-analyst-btn" class="bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-700 flex items-center shadow-md transition-transform transform hover:scale-105">
                                 <i data-lucide="brain-circuit" class="mr-2 h-5 w-5"></i>Analista IA
                             </button>
+                            <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                                <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
+                            </button>
                         </div>
                     </div>
                      <div id="priority-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
@@ -115,7 +118,7 @@ function renderLandingPageHTML() {
                         <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span>Media</div>
                         <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span>Baja</div>
                     </div>
-                    <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-5 gap-6 min-h-[400px]">
+                    <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-7 gap-6 min-h-[400px]">
                         <!-- Day columns will be injected here -->
                     </div>
                 </div>
@@ -238,7 +241,22 @@ function renderWeeklyTasks(tasks) {
     const weekDates = getWeekDateRange(true);
     const mondayOfCurrentWeek = new Date(weekDates[0] + 'T00:00:00Z');
 
+    const format = (d) => d.toISOString().split('T')[0];
+
+    // Define date ranges for the next two weeks
+    const nextWeekStart = new Date(mondayOfCurrentWeek);
+    nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+    const nextWeekEnd = new Date(nextWeekStart);
+    nextWeekEnd.setDate(nextWeekEnd.getDate() + 4);
+
+    const followingWeekStart = new Date(mondayOfCurrentWeek);
+    followingWeekStart.setDate(followingWeekStart.getDate() + 14);
+    const followingWeekEnd = new Date(followingWeekStart);
+    followingWeekEnd.setDate(followingWeekEnd.getDate() + 4);
+
     const tasksByDay = { day0: [], day1: [], day2: [], day3: [], day4: [] };
+    const nextWeekTasks = [];
+    const followingWeekTasks = [];
     const overdueTasks = [];
     const unscheduledTasks = [];
 
@@ -250,20 +268,29 @@ function renderWeeklyTasks(tasks) {
         } else {
             const dueDate = new Date(task.dueDate + 'T00:00:00Z');
             const diffDays = (dueDate - mondayOfCurrentWeek) / (1000 * 60 * 60 * 24);
+
             if (diffDays >= 0 && diffDays < 5) {
                 const dayIndex = dueDate.getUTCDay() - 1;
                 if (dayIndex >= 0 && dayIndex < 5) {
                     tasksByDay[`day${dayIndex}`].push(task);
                 }
+            } else if (task.dueDate >= format(nextWeekStart) && task.dueDate <= format(nextWeekEnd)) {
+                nextWeekTasks.push(task);
+            } else if (task.dueDate >= format(followingWeekStart) && task.dueDate <= format(followingWeekEnd)) {
+                followingWeekTasks.push(task);
             }
         }
     });
 
     const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-    const dayColumnsHTML = dayNames.map((dayName, index) => {
+    let dayColumnsHTML = dayNames.map((dayName, index) => {
         const dateForColumn = weekDates[index];
         return renderTaskColumn(dayName, tasksByDay[`day${index}`] || [], { 'data-date': dateForColumn });
     }).join('');
+
+    dayColumnsHTML += renderTaskColumn('Semana Siguiente', nextWeekTasks, { 'data-column-type': 'next-week' });
+    dayColumnsHTML += renderTaskColumn('Próxima Semana', followingWeekTasks, { 'data-column-type': 'following-week' });
+
 
     weeklyContainer.innerHTML = dayColumnsHTML;
     overdueContainer.innerHTML = renderTaskCardsHTML(overdueTasks);
@@ -304,6 +331,17 @@ function initWeeklyTasksSortable() {
     const taskLists = document.querySelectorAll('.task-list');
     if (taskLists.length === 0) return;
 
+    // Get Monday of the current week to calculate future dates
+    const today = new Date();
+    today.setDate(today.getDate() + (appState.weekOffset * 7));
+    const day = today.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+    const format = (d) => d.toISOString().split('T')[0];
+
+
     taskLists.forEach(list => {
         if (list.sortable) { // Destroy previous instance if it exists
             list.sortable.destroy();
@@ -325,14 +363,23 @@ function initWeeklyTasksSortable() {
                 const itemEl = evt.item;
                 const taskId = itemEl.dataset.taskId;
                 const newColumn = evt.to;
+                const columnType = newColumn.dataset.columnType;
 
                 let newDate;
 
                 if (newColumn.dataset.date) {
                     newDate = newColumn.dataset.date;
-                } else if (newColumn.dataset.columnType === 'unscheduled') {
+                } else if (columnType === 'unscheduled') {
                     newDate = null; // Set dueDate to null
-                } else if (newColumn.dataset.columnType === 'overdue') {
+                } else if (columnType === 'next-week') {
+                    const nextWeekMonday = new Date(monday);
+                    nextWeekMonday.setDate(monday.getDate() + 7);
+                    newDate = format(nextWeekMonday);
+                } else if (columnType === 'following-week') {
+                    const followingWeekMonday = new Date(monday);
+                    followingWeekMonday.setDate(monday.getDate() + 14);
+                    newDate = format(followingWeekMonday);
+                } else if (columnType === 'overdue') {
                     showToast('No se puede arrastrar una tarea a la columna "Vencidas".', 'error');
                     refreshWeeklyTasksView(); // Revert visual change
                     return;
