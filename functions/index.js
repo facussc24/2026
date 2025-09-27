@@ -378,22 +378,36 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
 
         const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        // Get user info for the prompt
         const user = await admin.auth().getUser(context.auth.uid);
         const userName = user.displayName || user.email;
 
+        // --- Improved Date Logic ---
         const today = new Date();
-        today.setDate(today.getDate() + (weekOffset || 0) * 7);
-        const dayOfWeek = today.getDay();
-        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        const monday = new Date(today);
-        monday.setDate(today.getDate() + diffToMonday);
+        const dayOfWeek = today.getUTCDay(); // Sunday = 0, Saturday = 6
+
+        let effectiveOffset = weekOffset || 0;
+        // If it's Saturday or Sunday and the user is viewing the current week, plan for the next week.
+        if ((dayOfWeek === 6 || dayOfWeek === 0) && effectiveOffset === 0) {
+            effectiveOffset = 1;
+        }
+
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + (effectiveOffset * 7));
+
+        const targetDayOfWeek = targetDate.getDay();
+        const diffToMonday = targetDayOfWeek === 0 ? -6 : 1 - targetDayOfWeek;
+        const monday = new Date(targetDate);
+        monday.setDate(targetDate.getDate() + diffToMonday);
 
         const weekDates = Array.from({ length: 5 }).map((_, i) => {
             const date = new Date(monday);
             date.setDate(monday.getDate() + i);
             return date.toISOString().split('T')[0];
         });
+
+        const planningHorizonEndDate = new Date(weekDates[4]);
+        planningHorizonEndDate.setDate(planningHorizonEndDate.getDate() + 14);
+
 
         const tasksForPrompt = tasks.map(t => ({
             taskId: t.docId,
@@ -405,13 +419,16 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
         }));
 
         const prompt = `
-        Actúa como un Asistente de Productividad experto. Tu objetivo es analizar una lista de tareas y proponer un plan de trabajo optimizado para la semana, junto con un análisis útil.
+        Actúa como un Asistente de Productividad experto y estratégico para ${userName}. Tu misión es analizar una lista de tareas y proponer un plan de trabajo realista y optimizado para la semana, junto con un análisis inteligente.
 
-        **Contexto General:**
-        - Estás ayudando a: ${userName}
-        - La fecha de hoy es: ${new Date().toISOString().split('T')[0]}
-        - La semana que se está planificando es del ${weekDates[0]} al ${weekDates[4]}.
-        - **Regla de Oro:** Todas las tareas, incluidas las vencidas o sin fecha, DEBEN ser reprogramadas para esta semana. No se pueden asignar fechas pasadas.
+        **Contexto Clave:**
+        - La fecha de hoy es: ${new Date().toISOString().split('T')[0]}.
+        - La semana a planificar es del ${weekDates[0]} al ${weekDates[4]}.
+        - **Regla de Planificación Principal:** Solo debes incluir en el plan las siguientes tareas:
+            1.  Tareas que ya están vencidas (su \`dueDate\` es anterior a hoy).
+            2.  Tareas sin fecha de vencimiento (\`dueDate\` es nulo).
+            3.  Tareas cuya fecha de vencimiento sea anterior al ${planningHorizonEndDate.toISOString().split('T')[0]}.
+        - **Ignora el resto:** Las tareas con fecha de vencimiento posterior a la del horizonte de planificación deben ser ignoradas y NO incluidas en el plan JSON.
 
         **Tareas para Analizar (formato JSON):**
         \`\`\`json
@@ -421,23 +438,24 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
         **Tu Tarea (Respuesta en 2 Partes Estrictas):**
 
         **PARTE 1: El Plan (JSON)**
-        1.  **Analiza y Distribuye:** Revisa cada tarea y asígnale una nueva fecha de vencimiento (\`newDueDate\`) dentro de la semana de planificación.
+        1.  **Filtra y Distribuye:** De la lista de tareas, selecciona solo las que cumplen la "Regla de Planificación Principal". Asigna a cada una una nueva fecha de vencimiento (\`newDueDate\`) dentro de la semana de planificación (${weekDates[0]} a ${weekDates[4]}).
         2.  **Prioriza Inteligentemente:**
-            - **Urgente (Lunes/Martes):** Tareas vencidas (con \`dueDate\` en el pasado) y tareas de prioridad 'high'.
-            - **Importante (Miércoles/Jueves):** Tareas de prioridad 'medium' y tareas sin fecha.
-            - **Otros (Viernes):** Tareas de prioridad 'low'.
-            - **Equilibrio:** Evita sobrecargar un solo día. Distribuye el trabajo de manera uniforme.
-        3.  **Formato de Salida JSON:** Genera un objeto JSON con una única clave "plan". El valor debe ser un array de objetos, cada uno con la forma: \`{ "taskId": "ID_DE_LA_TAREA", "newDueDate": "YYYY-MM-DD" }\`.
+            - **Lunes/Martes (Máxima Urgencia):** Asigna aquí las tareas vencidas y las de prioridad 'high' que vencen esta semana. Despeja los bloqueos primero.
+            - **Miércoles/Jueves (Foco Principal):** Asigna las tareas de prioridad 'medium' y las tareas importantes sin fecha.
+            - **Viernes (Cierre de Semana):** Asigna tareas de prioridad 'low' o aquellas que son menos urgentes.
+        3.  **Equilibrio de Carga:** No sobrecargues un solo día. Distribuye el trabajo de manera lógica y realista a lo largo de los 5 días.
+        4.  **Formato de Salida JSON:** Genera un objeto JSON con una única clave "plan". El valor debe ser un array de objetos, cada uno con la forma: \`{ "taskId": "ID_DE_LA_TAREA", "newDueDate": "YYYY-MM-DD" }\`. Si ninguna tarea cumple los criterios, devuelve un array vacío: \`{ "plan": [] }\`.
 
         **PARTE 2: El Análisis (Markdown)**
         1.  **Separador:** Después del bloque JSON, inserta este separador exacto en su propia línea: \`---JSON_PLAN_SEPARATOR---\`
         2.  **Análisis Detallado:** Debajo del separador, escribe un análisis en formato Markdown con las siguientes secciones:
-            *   \`### 💡 Estrategia de Planificación\`: Explica brevemente cómo organizaste la semana (ej: "He priorizado las tareas vencidas para el lunes para despejar bloqueos...").
-            *   \`### 🎯 Foco de la Semana\`: Lista 2-3 tareas que son las más críticas o que tendrán el mayor impacto esta semana.
-            *   \`### ⚠️ Puntos de Atención\`: Menciona cualquier riesgo, como tareas sin fecha que necesitan clarificación, o una alta concentración de tareas en un día específico.
+            *   \`### 💡 Estrategia de Planificación\`: Explica brevemente tu lógica (ej: "He priorizado las tareas vencidas para el lunes para despejar bloqueos y he distribuido las de media prioridad a mitad de semana...").
+            *   \`### 🎯 Foco de la Semana\`: Lista 2-3 tareas del plan que consideras más críticas.
+            *   \`### ⚠️ Puntos de Atención\`: Menciona cualquier riesgo, como una alta concentración de tareas de alta prioridad o tareas sin fecha que necesitan más definición.
+            *   \`### 🗓️ Tareas a Futuro\`: Si ignoraste tareas porque su vencimiento es lejano, menciónalas brevemente aquí para que el usuario no las olvide.
 
         **Formato Final de Respuesta (Regla Inquebrantable):**
-        Tu respuesta DEBE ser el bloque JSON, seguido del separador, y luego el análisis en Markdown. No incluyas texto introductorio, explicaciones adicionales, ni bloques de código markdown (\`\`\`json\`). La respuesta debe empezar con \`{\` y terminar con el texto del análisis.
+        Tu respuesta DEBE ser el bloque JSON, seguido del separador, y luego el análisis en Markdown. No incluyas texto introductorio, ni explicaciones adicionales, ni bloques de código markdown (\`\`\`json\`). La respuesta debe empezar con \`{\` y terminar con el texto del análisis.
         `;
 
         const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
