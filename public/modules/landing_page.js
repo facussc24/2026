@@ -1,7 +1,7 @@
 import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
-import { showAIAnalysisModal, showPlannerHelpModal } from './tasks/task.ui.js';
+import { showPlannerHelpModal, showAIAnalysisModal } from './tasks/task.ui.js';
 
 
 // --- 1. DEPENDENCIES AND STATE ---
