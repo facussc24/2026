@@ -145,6 +145,7 @@ export async function handleTaskFormSubmit(e) {
         description: form.querySelector('[name="description"]').value,
         assigneeUid: form.querySelector('[name="assigneeUid"]').value,
         priority: form.querySelector('[name="priority"]').value,
+        effort: form.querySelector('[name="effort"]').value,
         startDate: form.querySelector('[name="startDate"]').value,
         dueDate: form.querySelector('[name="dueDate"]').value,
         plannedDate: form.querySelector('[name="plannedDate"]').value,
