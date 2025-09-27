@@ -507,6 +507,14 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     };
     const priority = priorities[task.priority] || priorities.medium;
 
+    const efforts = {
+        low: { label: 'Bajo', icon: 'battery-low' },
+        medium: { label: 'Medio', icon: 'battery-medium' },
+        high: { label: 'Alto', icon: 'battery-full' }
+    };
+    const effort = efforts[task.effort] || efforts.low;
+
+
     const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00") : null;
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -573,11 +581,13 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
 
             <div class="mt-auto pt-3 border-t border-slate-200/80">
                 <div class="flex justify-between items-center text-xs text-slate-500 mb-3">
-                    <span class="px-2 py-0.5 rounded-full font-semibold ${priority.color}">${priority.label}</span>
-                    <div class="flex items-center gap-3">
-                        <span class="flex items-center gap-1.5 font-medium" title="Fecha de creación">
-                            <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> ${creationDateStr}
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded-full font-semibold ${priority.color}">${priority.label}</span>
+                        <span class="flex items-center gap-1 text-slate-500" title="Esfuerzo: ${effort.label}">
+                            <i data-lucide="${effort.icon}" class="w-4 h-4"></i>
                         </span>
+                    </div>
+                    <div class="flex items-center gap-3">
                         <span class="flex items-center gap-1.5 font-medium ${dateClass}" title="Fecha de entrega">
                             <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> ${dueDateStr}
                         </span>
@@ -698,7 +708,7 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                         <i data-lucide="calendar-clock" class="w-5 h-5"></i>
                         <h4>Planificación</h4>
                     </div>
-                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                         <div class="input-group">
                             <label for="task-assignee">Asignar a</label>
                             <select id="task-assignee" name="assigneeUid" data-selected-uid="${selectedUid}" ${!isAdmin ? 'disabled' : ''}><option value="">Cargando...</option></select>
@@ -712,6 +722,14 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                             </select>
                         </div>
                         <div class="input-group">
+                            <label for="task-effort">Esfuerzo Estimado</label>
+                            <select id="task-effort" name="effort">
+                                <option value="low" ${isEditing && task.effort === 'low' ? 'selected' : ''}>Bajo</option>
+                                <option value="medium" ${!isEditing || (isEditing && task.effort === 'medium') ? 'selected' : ''}>Medio</option>
+                                <option value="high" ${isEditing && task.effort === 'high' ? 'selected' : ''}>Alto</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
                             <label for="task-startdate">Fecha de Inicio</label>
                             <input type="date" id="task-startdate" name="startDate" value="${isEditing && task.startDate ? task.startDate : (defaultDate || '')}">
                         </div>
@@ -719,7 +737,7 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                             <label for="task-duedate">Fecha Límite</label>
                             <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
                         </div>
-                        <div class="input-group">
+                         <div class="input-group">
                             <label for="task-planneddate">Fecha Planificada (para Planner)</label>
                             <input type="date" id="task-planneddate" name="plannedDate" value="${isEditing && task.plannedDate ? task.plannedDate : ''}">
                         </div>
@@ -820,37 +838,6 @@ export function getPlannerHelpModalHTML() {
                 </div>
             </div>
         </div>
-    `;
-}
-
-export function getAIAnalysisModalHTML() {
-    return `
-    <div id="ai-analysis-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
-            <div class="flex justify-between items-center p-5 border-b">
-                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-3">
-                    <i data-lucide="brain-circuit" class="w-6 h-6 text-purple-600"></i>
-                    Análisis del Asistente IA
-                </h3>
-                <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors">
-                    <i data-lucide="x" class="h-6 w-6"></i>
-                </button>
-            </div>
-            <div id="ai-analysis-content" class="p-6 overflow-y-auto custom-scrollbar space-y-4 prose prose-slate max-w-none">
-                <div id="ai-analysis-loader" class="flex flex-col items-center justify-center text-center text-slate-500 py-16">
-                    <i data-lucide="loader" class="animate-spin h-12 w-12 text-purple-500"></i>
-                    <p class="mt-4 font-semibold">Analizando tareas, por favor espere...</p>
-                </div>
-            </div>
-            <div class="flex justify-end items-center p-4 border-t bg-slate-50 gap-3">
-                 <button data-action="close" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold">Cancelar</button>
-                 <button id="apply-ai-plan-btn" data-action="apply-plan" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                    <i data-lucide="check-check" class="w-5 h-5"></i>
-                    Aplicar Plan Sugerido
-                 </button>
-            </div>
-        </div>
-    </div>
     `;
 }
 

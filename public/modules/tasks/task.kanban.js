@@ -99,21 +99,11 @@ function setupTaskFilters(container) {
 
 export function runKanbanBoardLogic(container) {
     const state = getState();
-
-    // Create a dedicated container for the Kanban board to manage its lifecycle
-    const kanbanContainerId = 'kanban-board-container';
-    let kanbanContainer = container.querySelector(`#${kanbanContainerId}`);
-    if (!kanbanContainer) {
-        kanbanContainer = document.createElement('div');
-        kanbanContainer.id = kanbanContainerId;
-        container.appendChild(kanbanContainer);
-    }
-
     if (state.kanban.activeFilter === 'supervision' && !state.kanban.selectedUserId) {
         const users = appState.collections.usuarios.filter(u => u.docId !== appState.currentUser.uid);
-        renderAdminUserList(users, kanbanContainer);
+        renderAdminUserList(users, container);
 
-        const userListContainer = kanbanContainer.querySelector('#admin-user-list-container');
+        const userListContainer = container.querySelector('#admin-user-list-container');
         if (userListContainer) {
             userListContainer.addEventListener('click', e => {
                 const card = e.target.closest('.admin-user-card');
@@ -123,27 +113,29 @@ export function runKanbanBoardLogic(container) {
                 }
             });
         }
-    } else {
-        const selectedUser = appState.collections.usuarios.find(u => u.docId === state.kanban.selectedUserId);
-        kanbanContainer.innerHTML = getKanbanBoardHTML(state, selectedUser);
-        lucide.createIcons();
+        return;
+    }
 
-        // All event listeners and logic are now scoped to the kanbanContainer
-        const addTaskBtn = kanbanContainer.querySelector('#add-new-task-btn');
+    const selectedUser = appState.collections.usuarios.find(u => u.docId === state.kanban.selectedUserId);
+    container.innerHTML = getKanbanBoardHTML(state, selectedUser);
+    lucide.createIcons();
+
+    setTimeout(() => {
+        const addTaskBtn = container.querySelector('#add-new-task-btn');
         if (addTaskBtn) {
             addTaskBtn.addEventListener('click', () => openTaskFormModal());
         }
 
-        const toggleArchivedBtn = kanbanContainer.querySelector('#toggle-archived-btn');
+        const toggleArchivedBtn = container.querySelector('#toggle-archived-btn');
         if (toggleArchivedBtn) {
             toggleArchivedBtn.addEventListener('click', () => {
-                const currentState = getState();
-                const newShowArchived = !currentState.kanban.showArchived;
+                const state = getState();
+                const newShowArchived = !state.kanban.showArchived;
                 setShowArchived(newShowArchived);
 
-                const archivedColumn = kanbanContainer.querySelector('.task-column[data-status="done"]');
-                const taskBoard = kanbanContainer.querySelector('#task-board');
-                const toggleText = kanbanContainer.querySelector('#toggle-archived-text');
+                const archivedColumn = container.querySelector('.task-column[data-status="done"]');
+                const taskBoard = container.querySelector('#task-board');
+                const toggleText = container.querySelector('#toggle-archived-text');
 
                 if (newShowArchived) {
                     archivedColumn.classList.remove('hidden');
@@ -159,7 +151,7 @@ export function runKanbanBoardLogic(container) {
             });
         }
 
-        const taskBoard = kanbanContainer.querySelector('#task-board');
+        const taskBoard = container.querySelector('#task-board');
         if(taskBoard) {
             taskBoard.addEventListener('click', e => {
                 const header = e.target.closest('.kanban-column-header');
@@ -169,39 +161,31 @@ export function runKanbanBoardLogic(container) {
             });
         }
 
-        const searchInput = kanbanContainer.querySelector('#task-search-input');
+        const searchInput = container.querySelector('#task-search-input');
         if(searchInput) {
             searchInput.addEventListener('input', e => {
                 setKanbanSearchTerm(e.target.value.toLowerCase());
-                fetchAndRenderTasks(kanbanContainer);
+                fetchAndRenderTasks(container);
             });
         }
 
-        const priorityFilter = kanbanContainer.querySelector('#task-priority-filter');
+        const priorityFilter = container.querySelector('#task-priority-filter');
         if(priorityFilter) {
             priorityFilter.addEventListener('change', e => {
                 setKanbanPriorityFilter(e.target.value);
-                fetchAndRenderTasks(kanbanContainer);
+                fetchAndRenderTasks(container);
             });
         }
 
-        setupTaskFilters(kanbanContainer);
-        renderTaskFilters(kanbanContainer);
-        fetchAndRenderTasks(kanbanContainer);
-    }
+        setupTaskFilters(container);
+        renderTaskFilters(container);
+        fetchAndRenderTasks(container);
 
-    // --- CRITICAL FIX ---
-    // The cleanup function now removes the specific container for the Kanban board.
-    // This prevents DOM elements and event listeners from leaking into other views.
-    appState.currentViewCleanup = () => {
-        const boardContainer = document.getElementById(kanbanContainerId);
-        if (boardContainer) {
-            boardContainer.remove();
-        }
-        clearUnsubscribers();
-        setKanbanSearchTerm('');
-        setKanbanPriorityFilter('all');
-        setKanbanSelectedUser(null);
-        console.log("Kanban view cleaned up successfully.");
-    };
+        appState.currentViewCleanup = () => {
+            clearUnsubscribers();
+            setKanbanSearchTerm('');
+            setKanbanPriorityFilter('all');
+            setKanbanSelectedUser(null);
+        };
+    }, 0);
 }

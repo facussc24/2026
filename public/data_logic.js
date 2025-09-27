@@ -90,4 +90,3 @@ export async function deleteProductAndOrphanedSubProducts(productDocId, db, fire
         throw error;
     }
 }
-
