@@ -3488,7 +3488,7 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal };
+            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, writeBatch };
             initTasksModule(appDependencies);
             initLandingPageModule(appDependencies);
 
