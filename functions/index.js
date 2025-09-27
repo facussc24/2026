@@ -441,7 +441,10 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
         `;
 
         const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
-        const responseText = result.response.candidates[0].content.parts[0].text;
+        let responseText = result.response.candidates[0].content.parts[0].text;
+
+        // Clean the response to remove potential markdown wrappers.
+        responseText = responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
 
         const separator = '---JSON_PLAN_SEPARATOR---';
         const parts = responseText.split(separator);
