@@ -1,4 +1,4 @@
-import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
 import { showAIAnalysisModal } from './tasks/task.ui.js';
@@ -436,46 +436,36 @@ async function fetchKpiData() {
 async function fetchWeeklyTasks() {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     const todayStr = new Date().toISOString().split('T')[0];
+    const user = appState.currentUser;
 
-    // Query for all public, non-completed tasks.
-    // This is a broader query, and we'll do the filtering/bucketing on the client.
-    // This is more efficient than running multiple queries.
+    // Query for tasks that are either public, assigned to the user, or created by the user.
+    // Firestore's 'or' query allows combining these conditions.
     const q = query(
         tasksRef,
-        where('isPublic', '==', true),
-        where('status', '!=', 'done')
+        or(
+            where('isPublic', '==', true),
+            where('creatorUid', '==', user.uid),
+            where('assigneeUid', '==', user.uid)
+        )
     );
 
     try {
         const querySnapshot = await getDocs(q);
-        const allTasks = querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
 
-        const categorizedTasks = {
-            overdue: [],
-            unscheduled: [],
-            weekly: []
-        };
+        // Client-side filter to exclude 'done' tasks, as 'or' queries
+        // cannot be combined with inequality filters like '!='.
+        const allTasks = querySnapshot.docs
+            .map(doc => ({ ...doc.data(), docId: doc.id }))
+            .filter(task => task.status !== 'done');
 
-        const { start, end } = getWeekDateRange();
-
-        allTasks.forEach(task => {
-            if (!task.dueDate) {
-                categorizedTasks.unscheduled.push(task);
-            } else if (task.dueDate < todayStr) {
-                categorizedTasks.overdue.push(task);
-            } else if (task.dueDate >= start && task.dueDate <= end) {
-                categorizedTasks.weekly.push(task);
-            }
-            // Tasks with future dates beyond the range are ignored for this view
-        });
-
-        // Return all tasks fetched, as they will be needed for the AI analysis
+        // Return all relevant, non-completed tasks for categorization.
         return allTasks;
 
     } catch (error) {
         console.error("Error fetching all relevant tasks:", error);
         if (error.code === 'failed-precondition') {
             showToast('Se necesita un índice de base de datos. Revise la consola para el enlace de creación.', 'error');
+            console.error("Firestore index required. Please create it using the link in the browser console.");
         } else {
             showToast('Error al cargar las tareas.', 'error');
         }
