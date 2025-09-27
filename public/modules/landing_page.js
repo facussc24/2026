@@ -1,5 +1,8 @@
 import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
+import { showAIAnalysisModal } from './tasks/task.ui.js';
+
 
 // --- 1. DEPENDENCIES AND STATE ---
 let db;
@@ -8,6 +11,7 @@ let dom;
 let lucide;
 let showToast;
 let openTaskFormModal;
+let functions;
 
 // Functions from main.js to be injected
 let seedDatabase;
@@ -99,6 +103,9 @@ function renderLandingPageHTML() {
                             </button>
                             <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana">
                                 <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                            </button>
+                            <button id="ai-analyst-btn" class="bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                                <i data-lucide="brain-circuit" class="mr-2 h-5 w-5"></i>Analista IA
                             </button>
                             <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
                                 <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
@@ -444,6 +451,32 @@ function setupActionButtons() {
         adminContainer.style.display = 'none';
     }
 
+    document.getElementById('ai-analyst-btn')?.addEventListener('click', async () => {
+        if (weeklyTasksCache.length === 0) {
+            showToast('No hay tareas en la vista actual para analizar.', 'info');
+            return;
+        }
+
+        const modalElement = showAIAnalysisModal();
+        const contentContainer = modalElement.querySelector('#ai-analysis-content');
+
+        try {
+            const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
+            const result = await analyzeWeeklyTasks({ tasks: weeklyTasksCache });
+
+            if (result.data.analysis) {
+                const analysisHTML = marked.parse(result.data.analysis);
+                contentContainer.innerHTML = analysisHTML;
+            } else {
+                throw new Error("La respuesta de la IA estaba vacía.");
+            }
+        } catch (error) {
+            console.error("Error calling analyzeWeeklyTasks function:", error);
+            showToast('Error al contactar al Analista IA.', 'error');
+            contentContainer.innerHTML = `<p class="text-red-500 p-4">Ocurrió un error al generar el análisis. Por favor, intente de nuevo.</p>`;
+        }
+    });
+
     document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', () => {
         if (openTaskFormModal) {
             openTaskFormModal(null, 'todo'); // Open new task modal with default status
@@ -604,6 +637,7 @@ export function initLandingPageModule(dependencies) {
     lucide = dependencies.lucide;
     showToast = dependencies.showToast;
     openTaskFormModal = dependencies.openTaskFormModal;
+    functions = dependencies.functions;
 
     // Injecting functions from main.js to be called from the landing page
     seedDatabase = dependencies.seedDatabase;

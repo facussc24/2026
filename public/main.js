@@ -3491,7 +3491,6 @@ onAuthStateChanged(auth, async (user) => {
             const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal };
             initTasksModule(appDependencies);
             initLandingPageModule(appDependencies);
-            initKanban(appDependencies);
 
 
             if (!isTestMode) {
