@@ -36,6 +36,9 @@ export function getKanbanBoardHTML(state, selectedUser) {
             </div>
 
             <div id="kanban-header-buttons" class="flex items-center gap-4 flex-shrink-0">
+                <button id="ai-analyst-btn" class="bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                    <i data-lucide="brain-circuit" class="mr-2 h-5 w-5"></i>Analista IA
+                </button>
                 <button id="add-new-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
                     <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
                 </button>
@@ -768,6 +771,33 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                 ${isEditing ? `<button data-action="delete" class="text-red-600 font-semibold mr-auto px-4 py-2 rounded-md hover:bg-red-50">Eliminar Tarea</button>` : ''}
                 <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold">Cancelar</button>
                 <button type="submit" form="task-form" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 font-semibold ml-3">Guardar Tarea</button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+export function getAIAnalysisModalHTML() {
+    return `
+    <div id="ai-analysis-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-5 border-b">
+                <h3 class="text-xl font-bold text-slate-800 flex items-center gap-3">
+                    <i data-lucide="brain-circuit" class="w-6 h-6 text-purple-600"></i>
+                    Análisis del Asistente IA
+                </h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 transition-colors">
+                    <i data-lucide="x" class="h-6 w-6"></i>
+                </button>
+            </div>
+            <div id="ai-analysis-content" class="p-6 overflow-y-auto custom-scrollbar space-y-4 prose prose-slate max-w-none">
+                <div id="ai-analysis-loader" class="flex flex-col items-center justify-center text-center text-slate-500 py-16">
+                    <i data-lucide="loader" class="animate-spin h-12 w-12 text-purple-500"></i>
+                    <p class="mt-4 font-semibold">Analizando tareas, por favor espere...</p>
+                </div>
+            </div>
+            <div class="flex justify-end items-center p-4 border-t bg-slate-50">
+                 <button data-action="close" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Entendido</button>
             </div>
         </div>
     </div>
