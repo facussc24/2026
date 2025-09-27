@@ -391,14 +391,15 @@ async function fetchWeeklyTasks() {
     const q = query(
         tasksRef,
         where('isPublic', '==', true),
-        where('status', '!=', 'done'),
         where('dueDate', '>=', start),
         where('dueDate', '<=', end)
     );
 
     try {
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+        const tasks = querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+        // Filter out completed tasks on the client-side to avoid composite query errors
+        return tasks.filter(task => task.status !== 'done');
     } catch (error) {
         console.error("Error fetching weekly tasks:", error);
         // Check if it's an index error
