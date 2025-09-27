@@ -360,6 +360,80 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
     }
 });
 
+exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const { tasks } = data;
+    if (!tasks || !Array.isArray(tasks)) {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'tasks' (array) argument.");
+    }
+
+    try {
+        const vertexAI = new VertexAI({
+            project: process.env.GCLOUD_PROJECT,
+            location: "us-central1",
+        });
+
+        const generativeModel = vertexAI.getGenerativeModel({
+            model: "gemini-2.0-flash",
+        });
+
+        // Clean up tasks for the prompt, keeping only relevant fields
+        const tasksForPrompt = tasks.map(t => ({
+            title: t.title,
+            status: t.status,
+            priority: t.priority,
+            dueDate: t.dueDate,
+            description: t.description ? t.description.substring(0, 150) : undefined // Truncate description
+        }));
+
+        const prompt = `
+        Eres un Project Manager Senior y un analista de datos experto. Tu tarea es analizar un conjunto de tareas de un equipo de ingeniería y desarrollo para la semana y proporcionar un informe claro, conciso y accionable.
+
+        **Contexto:**
+        - Hoy es ${new Date().toLocaleDateString('es-AR')}.
+        - Las tareas a analizar son las siguientes (en formato JSON):
+        \`\`\`json
+        ${JSON.stringify(tasksForPrompt, null, 2)}
+        \`\`\`
+
+        **Tu Misión:**
+        Genera un informe con un formato profesional y fácil de leer que incluya las siguientes secciones:
+
+        1.  **Resumen Ejecutivo:** Un párrafo corto (2-3 frases) que resuma el estado general de la semana.
+        2.  **Focos de Atención Críticos:** Usando viñetas, enumera las 2-3 tareas que requieren atención inmediata. Basa tu criterio en una combinación de alta prioridad, fechas de vencimiento próximas y estado actual (ej. una tarea de alta prioridad que vence pronto y sigue "Por Hacer").
+        3.  **Riesgos y Cuellos de Botella:** Identifica posibles problemas. Busca tareas de alta dependencia que no han comenzado, o varias tareas asignadas a una sola persona que podrían causar un cuello de botella.
+        4.  **Sugerencias de Priorización:** Recomienda un orden o enfoque para abordar las tareas. Por ejemplo, "Sugiero comenzar con la **Tarea X** ya que desbloquea la **Tarea Y**".
+        5.  **Progreso General:** Ofrece una visión rápida del avance, mencionando el porcentaje de tareas completadas.
+
+        **Instrucciones de Formato (MUY IMPORTANTE):**
+        - Responde en **español**.
+        - Utiliza **Markdown** para dar formato a tu respuesta.
+        - Usa títulos con "###" para cada sección (ej: "### Resumen Ejecutivo").
+        - Usa viñetas ("-") para las listas.
+        - Usa **negrita** para resaltar los títulos de las tareas o puntos clave.
+        - Tu respuesta debe ser solo el informe en Markdown, sin saludos, despedidas, ni explicaciones adicionales.
+      `;
+
+        const result = await generativeModel.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
+
+        const responseText = result.response.candidates[0].content.parts[0].text;
+
+        return { analysis: responseText };
+
+    } catch (error) {
+        console.error("Error en analyzeWeeklyTasks con Vertex AI:", error);
+        throw new functions.https.HttpsError(
+            "internal",
+            `An error occurred while analyzing tasks with AI. Full Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
+        );
+    }
+});
+
 exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
