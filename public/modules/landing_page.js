@@ -242,17 +242,26 @@ function renderTaskColumn(title, tasks, attributes) {
         const style = priorityStyles[priority];
         const canDrag = appState.currentUser.role === 'admin' || appState.currentUser.uid === task.assigneeUid;
         const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
+        const canComplete = appState.currentUser.role === 'admin' || appState.currentUser.uid === task.assigneeUid || appState.currentUser.uid === task.creatorUid;
+        const completeButton = canComplete
+            ? `<button data-action="complete-task" title="Marcar como completada" class="complete-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200">
+                   <i data-lucide="check" class="w-3.5 h-3.5 pointer-events-none"></i>
+               </button>`
+            : '';
 
         return `
-            <div class="task-card-compact border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}"
+            <div class="task-card-compact group border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}"
                  data-task-id="${task.docId}"
                  data-assignee-uid="${task.assigneeUid}">
                 <div class="flex items-start justify-between">
                     <p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p>
                     <span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style.color}" title="Prioridad: ${style.label}"></span>
                 </div>
-                <div class="text-right text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                    <span>${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
+                <div class="flex items-end justify-between mt-1">
+                    ${completeButton}
+                    <span class="text-right text-[11px] text-slate-500 dark:text-slate-400">
+                        ${assignee ? assignee.name.split(' ')[0] : 'N/A'}
+                    </span>
                 </div>
             </div>
         `;
@@ -382,6 +391,7 @@ async function fetchWeeklyTasks() {
     const q = query(
         tasksRef,
         where('isPublic', '==', true),
+        where('status', '!=', 'done'),
         where('dueDate', '>=', start),
         where('dueDate', '<=', end)
     );
@@ -453,7 +463,42 @@ function setupActionButtons() {
     });
 
     const weeklyTasksContainer = document.getElementById('weekly-tasks-container');
-    weeklyTasksContainer?.addEventListener('click', (e) => {
+    weeklyTasksContainer?.addEventListener('click', async (e) => {
+        const completeButton = e.target.closest('[data-action="complete-task"]');
+        if (completeButton) {
+            e.stopPropagation(); // Prevent the modal from opening
+            const taskCard = completeButton.closest('.task-card-compact');
+            const taskId = taskCard.dataset.taskId;
+            if (!taskId) return;
+
+            try {
+                const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+                await updateDoc(taskRef, { status: 'done' });
+                showToast('Tarea completada.', 'success');
+
+                taskCard.style.transition = 'opacity 0.3s, transform 0.3s, height 0.3s, padding 0.3s, margin 0.3s';
+                taskCard.style.opacity = '0';
+                taskCard.style.transform = 'scale(0.95)';
+                taskCard.style.height = '0px';
+                taskCard.style.padding = '0';
+                taskCard.style.margin = '0';
+
+                setTimeout(() => {
+                    taskCard.remove();
+                    // Check if column is empty and show placeholder
+                    const column = taskCard.parentElement;
+                    if (column && column.children.length === 0) {
+                         column.innerHTML = `<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>`;
+                    }
+                }, 300);
+
+            } catch (error) {
+                console.error("Error completing task:", error);
+                showToast('Error al completar la tarea.', 'error');
+            }
+            return;
+        }
+
         // To prevent the modal from opening when a drag is initiated.
         if (e.target.closest('.sortable-drag')) {
             return;
