@@ -73,6 +73,35 @@ export function getKanbanBoardHTML(state, selectedUser) {
     `;
 }
 
+export function getAIAnalysisModalHTML() {
+    return `
+    <div id="ai-analysis-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-3">
+                    <i data-lucide="brain-circuit" class="text-purple-600 dark:text-purple-400 h-6 w-6"></i>
+                    Análisis del Planificador IA
+                </h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><i data-lucide="x" class="h-6 w-6"></i></button>
+            </div>
+            <div id="ai-analysis-content" class="p-6 overflow-y-auto prose dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-1">
+                <div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
+                    <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
+                    <p>Analizando tareas y generando plan...</p>
+                </div>
+            </div>
+            <div class="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 flex justify-end items-center gap-3">
+                 <button data-action="close" class="bg-slate-200 text-slate-800 px-5 py-2 rounded-md hover:bg-slate-300 font-semibold">Cerrar</button>
+                 <button id="apply-ai-plan-btn" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold flex items-center gap-2" disabled>
+                    <i data-lucide="check-check" class="w-5 h-5"></i>
+                    Aplicar Plan Sugerido
+                </button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
 export function getMultiTaskConfirmationHTML(suggestedTasks) {
     const tasksListHTML = suggestedTasks.map((task, index) => {
         const priorityMap = { high: 'Alta', medium: 'Media', low: 'Baja' };

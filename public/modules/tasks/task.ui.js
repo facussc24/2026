@@ -3,7 +3,7 @@ import { getState } from './task.state.js';
 import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram, completeAndArchiveTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML, getPlannerHelpModalHTML } from './task.templates.js';
+import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML, getPlannerHelpModalHTML, getAIAnalysisModalHTML } from './task.templates.js';
 import { openTaskFormModal } from './task.modal.js';
 
 let appState;
@@ -285,6 +285,26 @@ export function openAIAssistantModal() {
 export function showPlannerHelpModal() {
     const modalId = 'planner-help-modal';
     dom.modalContainer.innerHTML = getPlannerHelpModalHTML();
+    lucide.createIcons();
+
+    const modalElement = document.getElementById(modalId);
+
+    const closeModal = () => {
+        modalElement.remove();
+    };
+
+    modalElement.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action="close"]')) {
+            closeModal();
+        }
+    });
+
+    return modalElement;
+}
+
+export function showAIAnalysisModal() {
+    const modalId = 'ai-analysis-modal';
+    dom.modalContainer.innerHTML = getAIAnalysisModalHTML();
     lucide.createIcons();
 
     const modalElement = document.getElementById(modalId);

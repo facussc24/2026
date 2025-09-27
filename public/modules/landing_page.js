@@ -405,7 +405,7 @@ export function initLandingPageModule(dependencies) {
     showToast = dependencies.showToast;
     openTaskFormModal = dependencies.openTaskFormModal;
     functions = dependencies.functions;
-    writeBatch = dependencies.writeBatch;
+    // writeBatch is now imported directly in this module.
     seedDatabase = dependencies.seedDatabase;
     clearDataOnly = dependencies.clearDataOnly;
     clearOtherUsers = dependencies.clearOtherUsers;
