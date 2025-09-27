@@ -1,7 +1,7 @@
 import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
-import { showAIAnalysisModal } from './tasks/task.ui.js';
+import { showAIAnalysisModal, showPlannerHelpModal } from './tasks/task.ui.js';
 
 
 // --- 1. DEPENDENCIES AND STATE ---
@@ -94,10 +94,13 @@ function renderLandingPageHTML() {
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
                     <div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
                              <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Planificador Semanal</h3>
-                             <div id="week-display" class="font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"></div>
+                             <button id="show-planner-help-btn" class="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400" title="Ayuda sobre el planificador">
+                                 <i data-lucide="help-circle" class="w-5 h-5"></i>
+                             </button>
                         </div>
+                        <div id="week-display" class="font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"></div>
                         <div class="flex items-center gap-2">
                              <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior">
                                 <i data-lucide="chevron-left" class="w-5 h-5"></i>
@@ -216,15 +219,6 @@ function renderTaskCardsHTML(tasks) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        let plannedDateHTML = '';
-        if (task.plannedDate) {
-            plannedDateHTML = `
-                <span class="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-300" title="Fecha Planificada: ${task.plannedDate}">
-                    <i data-lucide="calendar-clock" class="w-3.5 h-3.5"></i>
-                    <span>${new Date(task.plannedDate + 'T00:00:00').toLocaleDateString('es-AR')}</span>
-                </span>`;
-        }
-
         let dueDateHTML = '';
         if (task.dueDate) {
             const dueDate = new Date(task.dueDate + 'T00:00:00');
@@ -237,10 +231,9 @@ function renderTaskCardsHTML(tasks) {
                 </span>`;
         }
 
-        const datesHTML = (plannedDateHTML || dueDateHTML)
-            ? `<div class="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-600/60 flex items-center justify-between text-xs">
-                   ${plannedDateHTML || '<span></span>'}
-                   ${dueDateHTML || '<span></span>'}
+        const datesHTML = dueDateHTML
+            ? `<div class="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-600/60 flex items-center justify-end text-xs">
+                   ${dueDateHTML}
                </div>`
             : '';
         // --- END NEW DATE LOGIC ---
@@ -331,7 +324,13 @@ function renderWeeklyTasks(tasks) {
     const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
     let dayColumnsHTML = dayNames.map((dayName, index) => {
         const dateForColumn = weekDates[index];
-        return renderTaskColumn(dayName, tasksByDay[`day${index}`] || [], { 'data-date': dateForColumn });
+        // Create a date object, ensuring it's treated as local time to avoid timezone issues.
+        const date = new Date(dateForColumn + 'T00:00:00');
+        const day = date.getDate();
+        const month = date.getMonth() + 1; // getMonth() is zero-based, so add 1.
+        // Combine the day name with the formatted date, wrapped in a span for styling.
+        const titleWithDate = `${dayName} <span class="text-sm font-normal text-slate-400 dark:text-slate-500">${day}/${month}</span>`;
+        return renderTaskColumn(titleWithDate, tasksByDay[`day${index}`] || [], { 'data-date': dateForColumn });
     }).join('');
 
     dayColumnsHTML += renderTaskColumn('Semana Siguiente', nextWeekTasks, { 'data-column-type': 'next-week' });
@@ -549,6 +548,10 @@ function setupActionButtons() {
     } else {
         adminContainer.style.display = 'none';
     }
+
+    document.getElementById('show-planner-help-btn')?.addEventListener('click', () => {
+        showPlannerHelpModal();
+    });
 
     document.getElementById('ai-analyst-btn')?.addEventListener('click', async () => {
         if (weeklyTasksCache.length === 0) {
