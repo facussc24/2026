@@ -793,8 +793,12 @@ export function getAIAnalysisModalHTML() {
                     <p class="mt-4 font-semibold">Analizando tareas, por favor espere...</p>
                 </div>
             </div>
-            <div class="flex justify-end items-center p-4 border-t bg-slate-50">
-                 <button data-action="close" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Entendido</button>
+            <div class="flex justify-end items-center p-4 border-t bg-slate-50 gap-3">
+                 <button data-action="close" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold">Cancelar</button>
+                 <button id="apply-ai-plan-btn" data-action="apply-plan" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <i data-lucide="check-check" class="w-5 h-5"></i>
+                    Aplicar Plan Sugerido
+                 </button>
             </div>
         </div>
     </div>
