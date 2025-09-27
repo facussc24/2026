@@ -94,7 +94,7 @@ function renderLandingPageHTML() {
                 <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
                     <div class="flex justify-between items-center mb-4">
                         <div class="flex items-center gap-4">
-                             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Tareas de Ingeniería</h3>
+                             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Planificador Semanal</h3>
                              <div id="week-display" class="font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"></div>
                         </div>
                         <div class="flex items-center gap-2">
@@ -107,9 +107,6 @@ function renderLandingPageHTML() {
                             <button id="ai-analyst-btn" class="bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-700 flex items-center shadow-md transition-transform transform hover:scale-105">
                                 <i data-lucide="brain-circuit" class="mr-2 h-5 w-5"></i>Analista IA
                             </button>
-                            <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
-                                <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
-                            </button>
                         </div>
                     </div>
                      <div id="priority-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
@@ -118,10 +115,20 @@ function renderLandingPageHTML() {
                         <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span>Media</div>
                         <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span>Baja</div>
                     </div>
-                    <div id="weekly-tasks-container" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-6 min-h-[400px]">
+                    <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-5 gap-6 min-h-[400px]">
                         <!-- Day columns will be injected here -->
                     </div>
                 </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                 <div id="overdue-tasks-container" class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
+                    <h4 class="font-bold text-red-700 dark:text-red-300 mb-3 flex items-center gap-2"><i data-lucide="alert-triangle"></i>Tareas Vencidas</h4>
+                    <div class="task-list space-y-1 h-64 overflow-y-auto custom-scrollbar" data-column-type="overdue"></div>
+                 </div>
+                 <div id="unscheduled-tasks-container" class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
+                    <h4 class="font-bold text-amber-700 dark:text-amber-300 mb-3 flex items-center gap-2"><i data-lucide="calendar-x"></i>Tareas sin Fecha</h4>
+                    <div class="task-list space-y-1 h-64 overflow-y-auto custom-scrollbar" data-column-type="unscheduled"></div>
+                 </div>
             </div>
             <div id="admin-actions-container" class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
                 <h3 class="text-lg font-semibold mb-4 text-text-light dark:text-text-dark">Acciones de Base de Datos (Administrador)</h3>
@@ -176,9 +183,10 @@ function getWeekDateRange(returnFullWeek = false) {
     return { start: format(monday), end: format(friday) };
 }
 
-function renderWeeklyTasks(tasks) {
-    const container = document.getElementById('weekly-tasks-container');
-    if (!container) return;
+function renderTaskCardsHTML(tasks) {
+    if (!tasks || tasks.length === 0) {
+        return `<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>`;
+    }
 
     const users = appState.collectionsById.usuarios || new Map();
     const priorityStyles = {
@@ -187,63 +195,7 @@ function renderWeeklyTasks(tasks) {
         low: { label: 'Baja', color: 'bg-green-500' }
     };
 
-    const weekDates = getWeekDateRange(true);
-    const mondayOfCurrentWeek = new Date(weekDates[0] + 'T00:00:00Z');
-
-    const tasksByColumn = {
-        day0: [], day1: [], day2: [], day3: [], day4: [],
-        week1: [], week2: []
-    };
-
-    tasks.forEach(task => {
-        if (task.dueDate) {
-            const dueDate = new Date(task.dueDate + 'T00:00:00Z');
-            const diffDays = (dueDate - mondayOfCurrentWeek) / (1000 * 60 * 60 * 24);
-
-            if (diffDays >= 0 && diffDays < 5) {
-                const dayIndex = dueDate.getUTCDay() - 1;
-                tasksByColumn[`day${dayIndex}`].push(task);
-            } else if (diffDays >= 7 && diffDays < 14) {
-                tasksByColumn.week1.push(task);
-            } else if (diffDays >= 14 && diffDays < 21) {
-                tasksByColumn.week2.push(task);
-            }
-        }
-    });
-
-    const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-    const dayColumnsHTML = dayNames.map((dayName, index) => {
-        const tasks = tasksByColumn[`day${index}`];
-        const dateForColumn = weekDates[index];
-        return renderTaskColumn(dayName, tasks, { 'data-date': dateForColumn });
-    }).join('');
-
-    const futureColumnsHTML =
-        renderTaskColumn('Semana +1', tasksByColumn.week1, { 'data-week-offset': 1, isFuture: true }) +
-        renderTaskColumn('Semana +2', tasksByColumn.week2, { 'data-week-offset': 2, isFuture: true });
-
-    container.innerHTML = dayColumnsHTML + futureColumnsHTML;
-
-    // Apply staggered animation to newly rendered cards
-    const taskCards = container.querySelectorAll('.task-card-compact');
-    taskCards.forEach((card, index) => {
-        card.style.animationDelay = `${index * 50}ms`;
-        card.classList.add('fade-in-up');
-    });
-
-    lucide.createIcons();
-    initWeeklyTasksSortable();
-}
-
-function renderTaskColumn(title, tasks, attributes) {
-    const users = appState.collectionsById.usuarios || new Map();
-    const priorityStyles = {
-        high: { label: 'Alta', color: 'bg-red-500' },
-        medium: { label: 'Media', color: 'bg-yellow-500' },
-        low: { label: 'Baja', color: 'bg-green-500' }
-    };
-
-    const taskCards = tasks.length > 0 ? tasks.map(task => {
+    return tasks.map(task => {
         const assignee = users.get(task.assigneeUid);
         const priority = task.priority || 'medium';
         const style = priorityStyles[priority];
@@ -272,23 +224,76 @@ function renderTaskColumn(title, tasks, attributes) {
                 </div>
             </div>
         `;
-    }).join('') : `<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">${attributes.isFuture ? 'Arrastra tareas aquí' : 'No hay tareas'}</p>`;
+    }).join('');
+}
 
-    const columnClasses = attributes.isFuture
-        ? "bg-slate-100 dark:bg-slate-800/50 rounded-xl p-3 border-2 border-dashed"
-        : "bg-slate-50 dark:bg-slate-800 rounded-xl p-3";
+function renderWeeklyTasks(tasks) {
+    const weeklyContainer = document.getElementById('weekly-tasks-container');
+    const overdueContainer = document.querySelector('#overdue-tasks-container .task-list');
+    const unscheduledContainer = document.querySelector('#unscheduled-tasks-container .task-list');
 
-    const titleClasses = attributes.isFuture
-        ? "text-base font-bold text-center text-slate-500 dark:text-slate-400 mb-3"
-        : "text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700";
+    if (!weeklyContainer || !overdueContainer || !unscheduledContainer) return;
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    const weekDates = getWeekDateRange(true);
+    const mondayOfCurrentWeek = new Date(weekDates[0] + 'T00:00:00Z');
+
+    const tasksByDay = { day0: [], day1: [], day2: [], day3: [], day4: [] };
+    const overdueTasks = [];
+    const unscheduledTasks = [];
+
+    tasks.forEach(task => {
+        if (!task.dueDate) {
+            unscheduledTasks.push(task);
+        } else if (task.dueDate < todayStr) {
+            overdueTasks.push(task);
+        } else {
+            const dueDate = new Date(task.dueDate + 'T00:00:00Z');
+            const diffDays = (dueDate - mondayOfCurrentWeek) / (1000 * 60 * 60 * 24);
+            if (diffDays >= 0 && diffDays < 5) {
+                const dayIndex = dueDate.getUTCDay() - 1;
+                if (dayIndex >= 0 && dayIndex < 5) {
+                    tasksByDay[`day${dayIndex}`].push(task);
+                }
+            }
+        }
+    });
+
+    const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+    const dayColumnsHTML = dayNames.map((dayName, index) => {
+        const dateForColumn = weekDates[index];
+        return renderTaskColumn(dayName, tasksByDay[`day${index}`] || [], { 'data-date': dateForColumn });
+    }).join('');
+
+    weeklyContainer.innerHTML = dayColumnsHTML;
+    overdueContainer.innerHTML = renderTaskCardsHTML(overdueTasks);
+    unscheduledContainer.innerHTML = renderTaskCardsHTML(unscheduledTasks);
+
+    // Apply staggered animation to newly rendered cards
+    const taskCards = document.querySelectorAll('.task-card-compact');
+    taskCards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 50}ms`;
+        card.classList.add('fade-in-up');
+    });
+
+    lucide.createIcons();
+    initWeeklyTasksSortable();
+}
+
+function renderTaskColumn(title, tasks, attributes) {
+    const taskCardsHTML = renderTaskCardsHTML(tasks);
     const attrs = Object.entries(attributes).map(([key, value]) => `${key}="${value}"`).join(' ');
+
+    // Do not render a title for the special columns, as they have their own styled header.
+    const titleHTML = title ? `<h4 class="text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">${title}</h4>` : '';
+    const columnClasses = title ? "bg-slate-50 dark:bg-slate-800 rounded-xl p-3" : "";
+
 
     return `
         <div class="${columnClasses}">
-            <h4 class="${titleClasses}">${title}</h4>
-            <div class="task-list space-y-1 h-96 overflow-y-auto custom-scrollbar" ${attrs}>
-                ${taskCards}
+            ${titleHTML}
+            <div class="task-list space-y-1 h-full" ${attrs}>
+                ${taskCardsHTML}
             </div>
         </div>
     `;
@@ -296,21 +301,24 @@ function renderTaskColumn(title, tasks, attributes) {
 
 
 function initWeeklyTasksSortable() {
-    const taskLists = document.querySelectorAll('#weekly-tasks-container .task-list');
+    const taskLists = document.querySelectorAll('.task-list');
     if (taskLists.length === 0) return;
 
     taskLists.forEach(list => {
+        if (list.sortable) { // Destroy previous instance if it exists
+            list.sortable.destroy();
+        }
         new Sortable(list, {
-            group: 'weekly-tasks',
+            group: 'weekly-planning',
             animation: 150,
             filter: '.no-drag',
             onStart: function (evt) {
-                document.querySelectorAll('#weekly-tasks-container .task-list').forEach(el => {
-                    el.closest('.bg-slate-50, .bg-slate-100')?.classList.add('drop-target-highlight');
+                document.querySelectorAll('.task-list').forEach(el => {
+                    el.closest('.bg-slate-50, .bg-red-50, .bg-amber-50')?.classList.add('drop-target-highlight');
                 });
             },
             onEnd: async (evt) => {
-                document.querySelectorAll('#weekly-tasks-container .drop-target-highlight').forEach(el => {
+                document.querySelectorAll('.drop-target-highlight').forEach(el => {
                     el.classList.remove('drop-target-highlight');
                 });
 
@@ -321,46 +329,36 @@ function initWeeklyTasksSortable() {
                 let newDate;
 
                 if (newColumn.dataset.date) {
-                    // Dropped on a specific day column
                     newDate = newColumn.dataset.date;
-                } else if (newColumn.dataset.weekOffset) {
-                    // Dropped on a future week column
-                    const offset = parseInt(newColumn.dataset.weekOffset, 10);
-
-                    const today = new Date();
-                    // First, get to the correct week, considering the current view's offset and the column's offset
-                    today.setDate(today.getDate() + (appState.weekOffset * 7) + (offset * 7));
-
-                    // Then, find Monday of that week
-                    const day = today.getDay(); // Sunday - 0, Monday - 1, ...
-                    const diffToMonday = day === 0 ? -6 : 1 - day;
-                    const monday = new Date(today);
-                    monday.setDate(today.getDate() + diffToMonday);
-
-                    newDate = monday.toISOString().split('T')[0];
+                } else if (newColumn.dataset.columnType === 'unscheduled') {
+                    newDate = null; // Set dueDate to null
+                } else if (newColumn.dataset.columnType === 'overdue') {
+                    showToast('No se puede arrastrar una tarea a la columna "Vencidas".', 'error');
+                    refreshWeeklyTasksView(); // Revert visual change
+                    return;
+                } else {
+                    console.error("Invalid drop target column:", newColumn);
+                    refreshWeeklyTasksView();
+                    return;
                 }
 
-
-                if (!taskId || !newDate) {
-                    console.error("Task ID or new date is missing or could not be calculated.");
-                    // Refresh to revert the visual change if the drop is invalid
+                if (!taskId) {
+                    console.error("Task ID is missing from dragged item.");
                     refreshWeeklyTasksView();
                     return;
                 }
 
                 try {
                     const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
-                    await updateDoc(taskRef, {
-                        dueDate: newDate
-                    });
+                    await updateDoc(taskRef, { dueDate: newDate });
                     showToast('Fecha de tarea actualizada.', 'success');
-                    // Refresh the view to correctly place the task
+                    // The view will be refreshed by the real-time listener,
+                    // but we can force it for immediate feedback.
                     refreshWeeklyTasksView();
                 } catch (error) {
                     console.error("Error updating task dueDate:", error);
                     showToast('Error al actualizar la tarea.', 'error');
-                    // Refresh to revert the visual change on error
-                    refreshWeeklyTasksView();
+                    refreshWeeklyTasksView(); // Revert on error
                 }
             }
         });
@@ -390,31 +388,49 @@ async function fetchKpiData() {
 
 async function fetchWeeklyTasks() {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
-    const { start, end } = getWeekDateRange();
+    const todayStr = new Date().toISOString().split('T')[0];
 
-    // The orderBy is not strictly necessary anymore with client-side distribution,
-    // but it can help in debugging. It also doesn't require a new index if
-    // the first inequality is on the same field.
+    // Query for all public, non-completed tasks.
+    // This is a broader query, and we'll do the filtering/bucketing on the client.
+    // This is more efficient than running multiple queries.
     const q = query(
         tasksRef,
         where('isPublic', '==', true),
-        where('dueDate', '>=', start),
-        where('dueDate', '<=', end)
+        where('status', '!=', 'done')
     );
 
     try {
         const querySnapshot = await getDocs(q);
-        const tasks = querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-        // Filter out completed tasks on the client-side to avoid composite query errors
-        return tasks.filter(task => task.status !== 'done');
+        const allTasks = querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+
+        const categorizedTasks = {
+            overdue: [],
+            unscheduled: [],
+            weekly: []
+        };
+
+        const { start, end } = getWeekDateRange();
+
+        allTasks.forEach(task => {
+            if (!task.dueDate) {
+                categorizedTasks.unscheduled.push(task);
+            } else if (task.dueDate < todayStr) {
+                categorizedTasks.overdue.push(task);
+            } else if (task.dueDate >= start && task.dueDate <= end) {
+                categorizedTasks.weekly.push(task);
+            }
+            // Tasks with future dates beyond the range are ignored for this view
+        });
+
+        // Return all tasks fetched, as they will be needed for the AI analysis
+        return allTasks;
+
     } catch (error) {
-        console.error("Error fetching weekly tasks:", error);
-        // Check if it's an index error
+        console.error("Error fetching all relevant tasks:", error);
         if (error.code === 'failed-precondition') {
-            showToast('Se necesita un índice de base de datos para las tareas semanales. Revise la consola.', 'error');
-            console.error("Firestore index missing. Please create it. The error message should contain a link to create it automatically.");
+            showToast('Se necesita un índice de base de datos. Revise la consola para el enlace de creación.', 'error');
         } else {
-            showToast('Error al cargar las tareas de la semana.', 'error');
+            showToast('Error al cargar las tareas.', 'error');
         }
         return []; // Return empty array on error
     }
@@ -453,23 +469,53 @@ function setupActionButtons() {
 
     document.getElementById('ai-analyst-btn')?.addEventListener('click', async () => {
         if (weeklyTasksCache.length === 0) {
-            showToast('No hay tareas en la vista actual para analizar.', 'info');
+            showToast('No hay tareas para analizar.', 'info');
             return;
         }
 
         const modalElement = showAIAnalysisModal();
         const contentContainer = modalElement.querySelector('#ai-analysis-content');
+        const applyPlanBtn = modalElement.querySelector('#apply-ai-plan-btn');
 
         try {
             const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
-            const result = await analyzeWeeklyTasks({ tasks: weeklyTasksCache });
+            const result = await analyzeWeeklyTasks({ tasks: weeklyTasksCache, weekOffset: appState.weekOffset });
 
-            if (result.data.analysis) {
-                const analysisHTML = marked.parse(result.data.analysis);
-                contentContainer.innerHTML = analysisHTML;
+            const { plan, analysis } = result.data;
+
+            if (analysis) {
+                contentContainer.innerHTML = marked.parse(analysis);
             } else {
-                throw new Error("La respuesta de la IA estaba vacía.");
+                throw new Error("La respuesta de la IA no incluyó un análisis.");
             }
+
+            if (plan && plan.length > 0) {
+                applyPlanBtn.disabled = false;
+                applyPlanBtn.addEventListener('click', async () => {
+                    applyPlanBtn.disabled = true;
+                    applyPlanBtn.innerHTML = `<i data-lucide="loader" class="animate-spin w-5 h-5"></i> Aplicando...`;
+                    lucide.createIcons();
+
+                    try {
+                        const batch = writeBatch(db);
+                        plan.forEach(taskUpdate => {
+                            const taskRef = doc(db, COLLECTIONS.TAREAS, taskUpdate.taskId);
+                            batch.update(taskRef, { dueDate: taskUpdate.newDueDate });
+                        });
+                        await batch.commit();
+                        showToast('¡Plan semanal aplicado con éxito!', 'success');
+                        modalElement.remove();
+                        refreshWeeklyTasksView();
+                    } catch (e) {
+                        console.error("Error applying AI plan:", e);
+                        showToast('Error al aplicar el plan sugerido.', 'error');
+                        applyPlanBtn.disabled = false;
+                        applyPlanBtn.innerHTML = `<i data-lucide="check-check" class="w-5 h-5"></i> Aplicar Plan Sugerido`;
+                        lucide.createIcons();
+                    }
+                }, { once: true });
+            }
+
         } catch (error) {
             console.error("Error calling analyzeWeeklyTasks function:", error);
             showToast('Error al contactar al Analista IA.', 'error');

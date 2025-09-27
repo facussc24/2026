@@ -365,7 +365,7 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
-    const { tasks } = data;
+    const { tasks, weekOffset } = data;
     if (!tasks || !Array.isArray(tasks)) {
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'tasks' (array) argument.");
     }
@@ -376,60 +376,97 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
             location: "us-central1",
         });
 
-        const generativeModel = vertexAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
+        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+        // Get user info for the prompt
+        const user = await admin.auth().getUser(context.auth.uid);
+        const userName = user.displayName || user.email;
+
+        const today = new Date();
+        today.setDate(today.getDate() + (weekOffset || 0) * 7);
+        const dayOfWeek = today.getDay();
+        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() + diffToMonday);
+
+        const weekDates = Array.from({ length: 5 }).map((_, i) => {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + i);
+            return date.toISOString().split('T')[0];
         });
 
-        // Clean up tasks for the prompt, keeping only relevant fields
         const tasksForPrompt = tasks.map(t => ({
+            taskId: t.docId,
             title: t.title,
-            status: t.status,
             priority: t.priority,
             dueDate: t.dueDate,
-            description: t.description ? t.description.substring(0, 150) : undefined // Truncate description
+            description: t.description ? t.description.substring(0, 100) : undefined,
+            creatorUid: t.creatorUid,
         }));
 
         const prompt = `
-        Eres un Project Manager Senior y un analista de datos experto. Tu tarea es analizar un conjunto de tareas de un equipo de ingeniería y desarrollo para la semana y proporcionar un informe claro, conciso y accionable.
+        Actúa como un Asistente de Productividad experto. Tu objetivo es analizar una lista de tareas y proponer un plan de trabajo optimizado para la semana, junto con un análisis útil.
 
-        **Contexto:**
-        - Hoy es ${new Date().toLocaleDateString('es-AR')}.
-        - Las tareas a analizar son las siguientes (en formato JSON):
+        **Contexto General:**
+        - Estás ayudando a: ${userName}
+        - La fecha de hoy es: ${new Date().toISOString().split('T')[0]}
+        - La semana que se está planificando es del ${weekDates[0]} al ${weekDates[4]}.
+        - **Regla de Oro:** Todas las tareas, incluidas las vencidas o sin fecha, DEBEN ser reprogramadas para esta semana. No se pueden asignar fechas pasadas.
+
+        **Tareas para Analizar (formato JSON):**
         \`\`\`json
         ${JSON.stringify(tasksForPrompt, null, 2)}
         \`\`\`
 
-        **Tu Misión:**
-        Genera un informe con un formato profesional y fácil de leer que incluya las siguientes secciones:
+        **Tu Tarea (Respuesta en 2 Partes Estrictas):**
 
-        1.  **Resumen Ejecutivo:** Un párrafo corto (2-3 frases) que resuma el estado general de la semana.
-        2.  **Focos de Atención Críticos:** Usando viñetas, enumera las 2-3 tareas que requieren atención inmediata. Basa tu criterio en una combinación de alta prioridad, fechas de vencimiento próximas y estado actual (ej. una tarea de alta prioridad que vence pronto y sigue "Por Hacer").
-        3.  **Riesgos y Cuellos de Botella:** Identifica posibles problemas. Busca tareas de alta dependencia que no han comenzado, o varias tareas asignadas a una sola persona que podrían causar un cuello de botella.
-        4.  **Sugerencias de Priorización:** Recomienda un orden o enfoque para abordar las tareas. Por ejemplo, "Sugiero comenzar con la **Tarea X** ya que desbloquea la **Tarea Y**".
-        5.  **Progreso General:** Ofrece una visión rápida del avance, mencionando el porcentaje de tareas completadas.
+        **PARTE 1: El Plan (JSON)**
+        1.  **Analiza y Distribuye:** Revisa cada tarea y asígnale una nueva fecha de vencimiento (\`newDueDate\`) dentro de la semana de planificación.
+        2.  **Prioriza Inteligentemente:**
+            - **Urgente (Lunes/Martes):** Tareas vencidas (con \`dueDate\` en el pasado) y tareas de prioridad 'high'.
+            - **Importante (Miércoles/Jueves):** Tareas de prioridad 'medium' y tareas sin fecha.
+            - **Otros (Viernes):** Tareas de prioridad 'low'.
+            - **Equilibrio:** Evita sobrecargar un solo día. Distribuye el trabajo de manera uniforme.
+        3.  **Formato de Salida JSON:** Genera un objeto JSON con una única clave "plan". El valor debe ser un array de objetos, cada uno con la forma: \`{ "taskId": "ID_DE_LA_TAREA", "newDueDate": "YYYY-MM-DD" }\`.
 
-        **Instrucciones de Formato (MUY IMPORTANTE):**
-        - Responde en **español**.
-        - Utiliza **Markdown** para dar formato a tu respuesta.
-        - Usa títulos con "###" para cada sección (ej: "### Resumen Ejecutivo").
-        - Usa viñetas ("-") para las listas.
-        - Usa **negrita** para resaltar los títulos de las tareas o puntos clave.
-        - Tu respuesta debe ser solo el informe en Markdown, sin saludos, despedidas, ni explicaciones adicionales.
-      `;
+        **PARTE 2: El Análisis (Markdown)**
+        1.  **Separador:** Después del bloque JSON, inserta este separador exacto en su propia línea: \`---JSON_PLAN_SEPARATOR---\`
+        2.  **Análisis Detallado:** Debajo del separador, escribe un análisis en formato Markdown con las siguientes secciones:
+            *   \`### 💡 Estrategia de Planificación\`: Explica brevemente cómo organizaste la semana (ej: "He priorizado las tareas vencidas para el lunes para despejar bloqueos...").
+            *   \`### 🎯 Foco de la Semana\`: Lista 2-3 tareas que son las más críticas o que tendrán el mayor impacto esta semana.
+            *   \`### ⚠️ Puntos de Atención\`: Menciona cualquier riesgo, como tareas sin fecha que necesitan clarificación, o una alta concentración de tareas en un día específico.
 
-        const result = await generativeModel.generateContent({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-        });
+        **Formato Final de Respuesta (Regla Inquebrantable):**
+        Tu respuesta DEBE ser el bloque JSON, seguido del separador, y luego el análisis en Markdown. No incluyas texto introductorio, explicaciones adicionales, ni bloques de código markdown (\`\`\`json\`). La respuesta debe empezar con \`{\` y terminar con el texto del análisis.
+        `;
 
+        const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
         const responseText = result.response.candidates[0].content.parts[0].text;
 
-        return { analysis: responseText };
+        const separator = '---JSON_PLAN_SEPARATOR---';
+        const parts = responseText.split(separator);
+
+        if (parts.length < 2) {
+            console.error("AI response did not contain the separator:", responseText);
+            throw new Error("La respuesta de la IA no contiene el separador requerido. No se pudo analizar el plan.");
+        }
+
+        const jsonPart = parts[0].trim();
+        const analysisPart = parts[1].trim();
+
+        const planData = JSON.parse(jsonPart);
+
+        if (!planData || !Array.isArray(planData.plan)) {
+             throw new Error("La parte JSON de la respuesta de la IA no es válida o no contiene un array 'plan'.");
+        }
+
+        return { plan: planData.plan, analysis: analysisPart };
 
     } catch (error) {
         console.error("Error en analyzeWeeklyTasks con Vertex AI:", error);
         throw new functions.https.HttpsError(
             "internal",
-            `An error occurred while analyzing tasks with AI. Full Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
+            `Ocurrió un error al analizar las tareas con IA. Error: ${error.message}`
         );
     }
 });
