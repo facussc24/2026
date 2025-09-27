@@ -212,6 +212,39 @@ function renderTaskCardsHTML(tasks) {
                </button>`
             : '';
 
+        // --- NEW DATE LOGIC ---
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let plannedDateHTML = '';
+        if (task.plannedDate) {
+            plannedDateHTML = `
+                <span class="flex items-center gap-1.5 font-medium text-slate-600 dark:text-slate-300" title="Fecha Planificada: ${task.plannedDate}">
+                    <i data-lucide="calendar-clock" class="w-3.5 h-3.5"></i>
+                    <span>${new Date(task.plannedDate + 'T00:00:00').toLocaleDateString('es-AR')}</span>
+                </span>`;
+        }
+
+        let dueDateHTML = '';
+        if (task.dueDate) {
+            const dueDate = new Date(task.dueDate + 'T00:00:00');
+            const isOverdue = dueDate < today;
+            const dateClass = isOverdue ? 'text-red-600 font-bold' : 'text-slate-500';
+            dueDateHTML = `
+                <span class="flex items-center gap-1.5 font-medium ${dateClass}" title="Fecha Límite: ${task.dueDate}">
+                    <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i>
+                    <span>${dueDate.toLocaleDateString('es-AR')}</span>
+                </span>`;
+        }
+
+        const datesHTML = (plannedDateHTML || dueDateHTML)
+            ? `<div class="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-600/60 flex items-center justify-between text-xs">
+                   ${plannedDateHTML || '<span></span>'}
+                   ${dueDateHTML || '<span></span>'}
+               </div>`
+            : '';
+        // --- END NEW DATE LOGIC ---
+
         return `
             <div class="task-card-compact group border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}"
                  data-task-id="${task.docId}"
@@ -220,6 +253,9 @@ function renderTaskCardsHTML(tasks) {
                     <p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p>
                     <span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style.color}" title="Prioridad: ${style.label}"></span>
                 </div>
+
+                ${datesHTML}
+
                 <div class="flex items-end justify-between mt-1">
                     ${completeButton}
                     <span class="text-right text-[11px] text-slate-500 dark:text-slate-400">
@@ -262,25 +298,34 @@ function renderWeeklyTasks(tasks) {
     const unscheduledTasks = [];
 
     tasks.forEach(task => {
-        if (!task.dueDate) {
-            unscheduledTasks.push(task);
-        } else if (task.dueDate < todayStr) {
+        // A task is overdue if its dueDate is in the past. This is its primary, most urgent status.
+        if (task.dueDate && task.dueDate < todayStr) {
             overdueTasks.push(task);
-        } else {
-            const dueDate = new Date(task.dueDate + 'T00:00:00Z');
-            const diffDays = (dueDate - mondayOfCurrentWeek) / (1000 * 60 * 60 * 24);
-
-            if (diffDays >= 0 && diffDays < 5) {
-                const dayIndex = dueDate.getUTCDay() - 1;
-                if (dayIndex >= 0 && dayIndex < 5) {
-                    tasksByDay[`day${dayIndex}`].push(task);
-                }
-            } else if (task.dueDate >= format(nextWeekStart) && task.dueDate <= format(nextWeekEnd)) {
-                nextWeekTasks.push(task);
-            } else if (task.dueDate >= format(followingWeekStart) && task.dueDate <= format(followingWeekEnd)) {
-                followingWeekTasks.push(task);
-            }
+            return; // It will only appear in the "Overdue" list to avoid duplication.
         }
+
+        // A task is unscheduled if it's not overdue and has no plannedDate.
+        if (!task.plannedDate) {
+            unscheduledTasks.push(task);
+            return;
+        }
+
+        // Otherwise, the task has a plannedDate. Let's try to place it on the board.
+        const plannedDate = new Date(task.plannedDate + 'T00:00:00Z');
+        const diffDays = (plannedDate - mondayOfCurrentWeek) / (1000 * 60 * 60 * 24);
+
+        if (diffDays >= 0 && diffDays < 5) {
+            const dayIndex = plannedDate.getUTCDay() - 1;
+            if (dayIndex >= 0 && dayIndex < 5) {
+                tasksByDay[`day${dayIndex}`].push(task);
+            }
+        } else if (task.plannedDate >= format(nextWeekStart) && task.plannedDate <= format(nextWeekEnd)) {
+            nextWeekTasks.push(task);
+        } else if (task.plannedDate >= format(followingWeekStart) && task.plannedDate <= format(followingWeekEnd)) {
+            followingWeekTasks.push(task);
+        }
+        // If the task has a plannedDate but it's outside the visible range (e.g., next month),
+        // it is correctly ignored and not displayed anywhere, preventing clutter.
     });
 
     const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
@@ -371,7 +416,7 @@ function initWeeklyTasksSortable() {
                 if (newColumn.dataset.date) {
                     newDate = newColumn.dataset.date;
                 } else if (columnType === 'unscheduled') {
-                    newDate = null; // Set dueDate to null
+                    newDate = null; // Set plannedDate to null
                 } else if (columnType === 'next-week') {
                     const nextWeekMonday = new Date(monday);
                     nextWeekMonday.setDate(monday.getDate() + 7);
@@ -398,13 +443,13 @@ function initWeeklyTasksSortable() {
 
                 try {
                     const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
-                    await updateDoc(taskRef, { dueDate: newDate });
-                    showToast('Fecha de tarea actualizada.', 'success');
+                    await updateDoc(taskRef, { plannedDate: newDate });
+                    showToast('Fecha de tarea planificada actualizada.', 'success');
                     // The view will be refreshed by the real-time listener,
                     // but we can force it for immediate feedback.
                     refreshWeeklyTasksView();
                 } catch (error) {
-                    console.error("Error updating task dueDate:", error);
+                    console.error("Error updating task plannedDate:", error);
                     showToast('Error al actualizar la tarea.', 'error');
                     refreshWeeklyTasksView(); // Revert on error
                 }
@@ -538,7 +583,7 @@ function setupActionButtons() {
                         const batch = writeBatch(db);
                         plan.forEach(taskUpdate => {
                             const taskRef = doc(db, COLLECTIONS.TAREAS, taskUpdate.taskId);
-                            batch.update(taskRef, { dueDate: taskUpdate.newDueDate });
+                            batch.update(taskRef, { plannedDate: taskUpdate.plannedDate });
                         });
                         await batch.commit();
                         showToast('¡Plan semanal aplicado con éxito!', 'success');

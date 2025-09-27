@@ -147,6 +147,7 @@ export async function handleTaskFormSubmit(e) {
         priority: form.querySelector('[name="priority"]').value,
         startDate: form.querySelector('[name="startDate"]').value,
         dueDate: form.querySelector('[name="dueDate"]').value,
+        plannedDate: form.querySelector('[name="plannedDate"]').value,
         updatedAt: new Date(),
         subtasks: modalElement.dataset.subtasks ? JSON.parse(modalElement.dataset.subtasks) : []
     };
