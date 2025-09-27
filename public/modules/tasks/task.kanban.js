@@ -1,18 +1,15 @@
 import { updateTaskStatus, subscribeToTasks, saveTelegramConfig, sendTestTelegram, loadTelegramConfig } from './task.service.js';
-import { renderTaskFilters, renderTasks, renderAdminUserList, showAIAnalysisModal } from './task.ui.js';
+import { renderTaskFilters, renderTasks, renderAdminUserList } from './task.ui.js';
 import { openTaskFormModal } from './task.modal.js';
 import { getKanbanBoardHTML } from './task.templates.js';
 import { getState, setKanbanFilter, setKanbanSearchTerm, setKanbanPriorityFilter, setKanbanSelectedUser, setShowArchived, addUnsubscriber, clearUnsubscribers } from './task.state.js';
 import { showToast } from '../../main.js';
-import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 
 let db;
 let appState;
 let dom;
 let lucide;
 let switchView;
-let functions;
-let currentTasks = [];
 
 export function initKanban(dependencies) {
     db = dependencies.db;
@@ -20,7 +17,6 @@ export function initKanban(dependencies) {
     dom = dependencies.dom;
     lucide = dependencies.lucide;
     switchView = dependencies.switchView;
-    functions = dependencies.functions;
 }
 
 export function initTasksSortable(container) {
@@ -67,7 +63,6 @@ function fetchAndRenderTasks(container) {
                 (task.description && task.description.toLowerCase().includes(state.kanban.searchTerm))
             );
         }
-        currentTasks = filteredTasks; // Store the currently displayed tasks
         setTimeout(() => renderTasks(filteredTasks, container), 0);
     };
 
@@ -129,38 +124,6 @@ export function runKanbanBoardLogic(container) {
         const addTaskBtn = container.querySelector('#add-new-task-btn');
         if (addTaskBtn) {
             addTaskBtn.addEventListener('click', () => openTaskFormModal());
-        }
-
-        const aiAnalystBtn = container.querySelector('#ai-analyst-btn');
-        if (aiAnalystBtn) {
-            aiAnalystBtn.addEventListener('click', async () => {
-                if (currentTasks.length === 0) {
-                    showToast('No hay tareas para analizar.', 'info');
-                    return;
-                }
-
-                const modalElement = showAIAnalysisModal();
-                const loader = modalElement.querySelector('#ai-analysis-loader');
-                const contentContainer = modalElement.querySelector('#ai-analysis-content');
-
-                try {
-                    const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
-                    const result = await analyzeWeeklyTasks({ tasks: currentTasks });
-
-                    if (result.data.analysis) {
-                        // Use the 'marked' library to parse the Markdown response
-                        const analysisHTML = marked.parse(result.data.analysis);
-                        contentContainer.innerHTML = analysisHTML;
-                    } else {
-                        throw new Error("La respuesta de la IA estaba vacía.");
-                    }
-
-                } catch (error) {
-                    console.error("Error calling analyzeWeeklyTasks function:", error);
-                    showToast('Error al contactar al Analista IA.', 'error');
-                    contentContainer.innerHTML = `<p class="text-red-500 p-4">Ocurrió un error al generar el análisis. Por favor, intente de nuevo.</p>`;
-                }
-            });
         }
 
         const toggleArchivedBtn = container.querySelector('#toggle-archived-btn');

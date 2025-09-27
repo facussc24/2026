@@ -36,9 +36,6 @@ export function getKanbanBoardHTML(state, selectedUser) {
             </div>
 
             <div id="kanban-header-buttons" class="flex items-center gap-4 flex-shrink-0">
-                <button id="ai-analyst-btn" class="bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-700 flex items-center shadow-md transition-transform transform hover:scale-105">
-                    <i data-lucide="brain-circuit" class="mr-2 h-5 w-5"></i>Analista IA
-                </button>
                 <button id="add-new-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
                     <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
                 </button>
