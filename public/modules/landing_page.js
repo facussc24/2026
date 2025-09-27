@@ -1,4 +1,4 @@
-import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
 import { showAIAnalysisModal } from './tasks/task.ui.js';
@@ -12,6 +12,7 @@ let lucide;
 let showToast;
 let openTaskFormModal;
 let functions;
+let writeBatch;
 
 // Functions from main.js to be injected
 let seedDatabase;
@@ -721,6 +722,7 @@ export function initLandingPageModule(dependencies) {
     showToast = dependencies.showToast;
     openTaskFormModal = dependencies.openTaskFormModal;
     functions = dependencies.functions;
+    writeBatch = dependencies.writeBatch; // Correctly accept writeBatch
 
     // Injecting functions from main.js to be called from the landing page
     seedDatabase = dependencies.seedDatabase;
