@@ -76,7 +76,14 @@ export function getKanbanBoardHTML(state, selectedUser) {
 export function getAIAnalysisModalHTML() {
     return `
     <div id="ai-analysis-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in relative">
+
+            {/* Applying Plan Overlay */}
+            <div id="ai-applying-plan-overlay" class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-20 hidden flex-col items-center justify-center text-center p-8">
+                <i data-lucide="loader-circle" class="w-12 h-12 animate-spin text-blue-600"></i>
+                <p class="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-200">Aplicando plan, por favor espere...</p>
+            </div>
+
             <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
                 <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-3">
                     <i data-lucide="brain-circuit" class="text-purple-600 dark:text-purple-400 h-6 w-6"></i>

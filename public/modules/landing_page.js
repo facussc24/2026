@@ -1,7 +1,8 @@
-import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
 import { showPlannerHelpModal, showAIAnalysisModal } from './tasks/task.ui.js';
+import { marked } from 'marked';
 
 
 // --- 1. DEPENDENCIES AND STATE ---
@@ -12,6 +13,7 @@ let lucide;
 let showToast;
 let openTaskFormModal;
 let functions;
+let writeBatch;
 
 // Functions from main.js to be injected
 let seedDatabase;
@@ -317,9 +319,13 @@ function setupActionButtons() {
             if (plan && plan.length > 0) {
                 applyPlanBtn.disabled = false;
                 applyPlanBtn.addEventListener('click', async () => {
+                    const overlay = modalElement.querySelector('#ai-applying-plan-overlay');
+                    if(overlay) {
+                        overlay.classList.remove('hidden');
+                        overlay.classList.add('flex');
+                    }
                     applyPlanBtn.disabled = true;
-                    applyPlanBtn.innerHTML = `<i data-lucide="loader" class="animate-spin w-5 h-5"></i> Aplicando...`;
-                    lucide.createIcons();
+
                     try {
                         const batch = writeBatch(db);
                         plan.forEach(taskUpdate => batch.update(doc(db, COLLECTIONS.TAREAS, taskUpdate.taskId), { plannedDate: taskUpdate.plannedDate }));
@@ -330,9 +336,8 @@ function setupActionButtons() {
                     } catch (e) {
                         console.error("Error applying AI plan:", e);
                         showToast('Error al aplicar el plan sugerido.', 'error');
+                        if(overlay) overlay.classList.add('hidden');
                         applyPlanBtn.disabled = false;
-                        applyPlanBtn.innerHTML = `<i data-lucide="check-check" class="w-5 h-5"></i> Aplicar Plan Sugerido`;
-                        lucide.createIcons();
                     }
                 }, { once: true });
             }
@@ -405,7 +410,7 @@ export function initLandingPageModule(dependencies) {
     showToast = dependencies.showToast;
     openTaskFormModal = dependencies.openTaskFormModal;
     functions = dependencies.functions;
-    // writeBatch is now imported directly in this module.
+    writeBatch = dependencies.writeBatch; // Injected dependency
     seedDatabase = dependencies.seedDatabase;
     clearDataOnly = dependencies.clearDataOnly;
     clearOtherUsers = dependencies.clearOtherUsers;
