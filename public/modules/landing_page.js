@@ -2,7 +2,7 @@ import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, 
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
 import { showPlannerHelpModal, showAIAnalysisModal } from './tasks/task.ui.js';
-import { marked } from 'marked';
+import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
 // --- 1. DEPENDENCIES AND STATE ---
