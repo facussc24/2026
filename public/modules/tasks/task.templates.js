@@ -877,6 +877,30 @@ export function getPlannerHelpModalHTML() {
     `;
 }
 
+export function getTasksModalHTML(title) {
+    return `
+    <div id="tasks-list-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-lg sticky top-0">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                    <i data-lucide="list-checks" class="w-6 h-6 text-primary-DEFAULT"></i>
+                    ${title}
+                </h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    <i data-lucide="x" class="h-6 w-6"></i>
+                </button>
+            </div>
+            <div id="modal-tasks-container" class="p-4 overflow-y-auto space-y-3">
+
+            </div>
+            <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm text-right sticky bottom-0">
+                <button data-action="close" class="btn btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
 export function getAIAssistantModalHTML() {
     return `
     <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
