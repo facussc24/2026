@@ -460,6 +460,72 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
     }
 });
 
+exports.createTaskFromText = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const { text } = data;
+    if (!text || typeof text !== 'string') {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'text' argument.");
+    }
+
+    const { uid } = context.auth;
+
+    try {
+        const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
+        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+        const currentDate = new Date().toISOString().split('T')[0];
+        const prompt = `
+        Analiza el siguiente texto de un usuario y conviértelo en un objeto de tarea JSON.
+        Texto: "${text}"
+        Fecha de hoy: ${currentDate}.
+
+        Extrae los siguientes campos:
+        - title: Un título corto y conciso.
+        - description: Una descripción más detallada si está disponible.
+        - dueDate: La fecha de vencimiento en formato YYYY-MM-DD. Calcula fechas relativas como "mañana" o "próximo lunes". Si no se menciona fecha, déjalo como null.
+        - priority: Estima la prioridad ('high', 'medium', 'low') basado en palabras como "urgente", "importante", etc. Por defecto es 'medium'.
+
+        Tu respuesta DEBE SER ÚNICAMENTE un objeto JSON válido, sin texto adicional ni markdown.
+        Ejemplo de respuesta:
+        {
+          "title": "Llamar a Juan",
+          "description": "Discutir la revisión de los planos.",
+          "dueDate": "${new Date(Date.now() + 86400000).toISOString().split('T')[0]}",
+          "priority": "medium"
+        }
+        `;
+
+        const result = await generativeModel.generateContent({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+        });
+
+        const responseText = result.response.candidates[0].content.parts[0].text;
+        const taskData = JSON.parse(responseText.trim());
+
+        const newTask = {
+            ...taskData,
+            creatorUid: uid,
+            assigneeUid: uid, // Assign to self by default
+            status: 'todo',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            isPublic: false, // Private by default
+            search_keywords: taskData.title.toLowerCase().split(' ').filter(w => w.length > 2)
+        };
+
+        await admin.firestore().collection('tareas').add(newTask);
+
+        return { success: true, message: "Tarea creada con IA exitosamente." };
+
+    } catch (error) {
+        console.error("Error en createTaskFromText con Vertex AI:", error);
+        throw new functions.https.HttpsError("internal", "Error al procesar la tarea con IA.");
+    }
+});
+
 exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     // ... function logic
 });
