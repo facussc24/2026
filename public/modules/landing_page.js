@@ -223,11 +223,50 @@ function renderWeeklyTasks(tasks) {
 }
 
 function renderTaskColumn(title, tasks, attributes) {
-    const taskCardsHTML = renderTaskCardsHTML(tasks);
+    const TASK_LIMIT = 4;
+    const totalTasks = tasks.length;
+    let taskCardsHTML;
+    let viewMoreButtonHTML = '';
+
+    if (totalTasks > TASK_LIMIT) {
+        const visibleTasks = tasks.slice(0, TASK_LIMIT);
+        const hiddenTasks = tasks.slice(TASK_LIMIT);
+
+        const visibleTasksHTML = renderTaskCardsHTML(visibleTasks);
+        const hiddenTasksHTML = renderTaskCardsHTML(hiddenTasks);
+
+        taskCardsHTML = `
+            ${visibleTasksHTML}
+            <div class="hidden-tasks hidden">
+                ${hiddenTasksHTML}
+            </div>
+        `;
+
+        const remainingCount = totalTasks - TASK_LIMIT;
+        viewMoreButtonHTML = `
+            <button data-action="toggle-more-tasks" class="w-full text-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-2 py-1">
+                Ver ${remainingCount} más...
+            </button>
+        `;
+
+    } else {
+        taskCardsHTML = renderTaskCardsHTML(tasks);
+    }
+
     const attrs = Object.entries(attributes).map(([key, value]) => `${key}="${value}"`).join(' ');
     const titleHTML = title ? `<h4 class="text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">${title}</h4>` : '';
     const columnClasses = title ? "bg-slate-50 dark:bg-slate-800 rounded-xl p-3" : "";
-    return `<div class="${columnClasses}">${titleHTML}<div class="task-list space-y-1 h-full" ${attrs}>${taskCardsHTML}</div></div>`;
+
+    return `
+        <div class="${columnClasses}">
+            ${titleHTML}
+            <div class="task-list-wrapper">
+                <div class="task-list space-y-1 h-full" ${attrs}>
+                    ${taskCardsHTML}
+                </div>
+                ${viewMoreButtonHTML}
+            </div>
+        </div>`;
 }
 
 function initWeeklyTasksSortable() {
@@ -350,9 +389,29 @@ function setupActionButtons() {
     document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', () => openTaskFormModal(null, 'todo'));
     document.getElementById('prev-week-btn')?.addEventListener('click', () => { appState.weekOffset--; refreshWeeklyTasksView('prev'); });
     document.getElementById('next-week-btn')?.addEventListener('click', () => { appState.weekOffset++; refreshWeeklyTasksView('next'); });
-    document.getElementById('weekly-tasks-container')?.addEventListener('click', async (e) => {
-        const taskCard = e.target.closest('.task-card-compact');
-        if (taskCard && !e.target.closest('[data-action="complete-task"]')) {
+    const weeklyContainer = document.getElementById('weekly-tasks-container');
+    weeklyContainer?.addEventListener('click', async (e) => {
+        const target = e.target;
+        const taskCard = target.closest('.task-card-compact');
+        const viewMoreBtn = target.closest('[data-action="toggle-more-tasks"]');
+
+        if (viewMoreBtn) {
+            const wrapper = viewMoreBtn.closest('.task-list-wrapper');
+            const hiddenTasks = wrapper.querySelector('.hidden-tasks');
+            if (hiddenTasks) {
+                const isHidden = hiddenTasks.classList.toggle('hidden');
+                const remainingCount = hiddenTasks.children.length;
+
+                if (isHidden) {
+                    viewMoreBtn.textContent = `Ver ${remainingCount} más...`;
+                } else {
+                    viewMoreBtn.textContent = 'Ver menos';
+                }
+            }
+            return;
+        }
+
+        if (taskCard && !target.closest('[data-action="complete-task"]')) {
             const task = weeklyTasksCache.find(t => t.docId === taskCard.dataset.taskId);
             if (task) openTaskFormModal(task);
         }
