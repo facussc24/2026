@@ -1,7 +1,7 @@
 import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
-import { showPlannerHelpModal, showAIAnalysisModal } from './tasks/task.ui.js';
+import { showPlannerHelpModal, showAIAnalysisModal, showTasksInModal } from './tasks/task.ui.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -21,6 +21,7 @@ let clearDataOnly;
 let clearOtherUsers;
 
 let weeklyTasksCache = [];
+let columnTasksMap = new Map();
 
 // --- 2. UI RENDERING ---
 
@@ -173,6 +174,7 @@ function renderTaskCardsHTML(tasks) {
 }
 
 function renderWeeklyTasks(tasks) {
+    columnTasksMap.clear();
     const weeklyContainer = document.getElementById('weekly-tasks-container');
     const overdueContainer = document.querySelector('#overdue-tasks-container .task-list');
     const unscheduledContainer = document.querySelector('#unscheduled-tasks-container .task-list');
@@ -228,23 +230,19 @@ function renderTaskColumn(title, tasks, attributes) {
     let taskCardsHTML;
     let viewMoreButtonHTML = '';
 
+    // The key for our map will be the unique identifier of the column
+    const columnId = attributes['data-date'] || attributes['data-column-type'];
+    if (columnId) {
+        columnTasksMap.set(columnId, tasks);
+    }
+
     if (totalTasks > TASK_LIMIT) {
         const visibleTasks = tasks.slice(0, TASK_LIMIT);
-        const hiddenTasks = tasks.slice(TASK_LIMIT);
-
-        const visibleTasksHTML = renderTaskCardsHTML(visibleTasks);
-        const hiddenTasksHTML = renderTaskCardsHTML(hiddenTasks);
-
-        taskCardsHTML = `
-            ${visibleTasksHTML}
-            <div class="hidden-tasks hidden">
-                ${hiddenTasksHTML}
-            </div>
-        `;
+        taskCardsHTML = renderTaskCardsHTML(visibleTasks);
 
         const remainingCount = totalTasks - TASK_LIMIT;
         viewMoreButtonHTML = `
-            <button data-action="toggle-more-tasks" class="w-full text-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-2 py-1">
+            <button data-action="show-all-tasks-modal" data-column-id="${columnId}" class="w-full text-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline mt-2 py-1">
                 Ver ${remainingCount} más...
             </button>
         `;
@@ -254,11 +252,11 @@ function renderTaskColumn(title, tasks, attributes) {
     }
 
     const attrs = Object.entries(attributes).map(([key, value]) => `${key}="${value}"`).join(' ');
-    const titleHTML = title ? `<h4 class="text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">${title}</h4>` : '';
+    const titleHTML = title ? `<h4 class="column-title text-base font-bold text-center text-slate-600 dark:text-slate-300 mb-3 pb-2 border-b border-slate-200 dark:border-slate-700">${title}</h4>` : '';
     const columnClasses = title ? "bg-slate-50 dark:bg-slate-800 rounded-xl p-3" : "";
 
     return `
-        <div class="${columnClasses}">
+        <div class="task-column-container ${columnClasses}">
             ${titleHTML}
             <div class="task-list-wrapper">
                 <div class="task-list space-y-1 h-full" ${attrs}>
@@ -393,20 +391,17 @@ function setupActionButtons() {
     weeklyContainer?.addEventListener('click', async (e) => {
         const target = e.target;
         const taskCard = target.closest('.task-card-compact');
-        const viewMoreBtn = target.closest('[data-action="toggle-more-tasks"]');
+        const viewMoreBtn = target.closest('[data-action="show-all-tasks-modal"]');
 
         if (viewMoreBtn) {
-            const wrapper = viewMoreBtn.closest('.task-list-wrapper');
-            const hiddenTasks = wrapper.querySelector('.hidden-tasks');
-            if (hiddenTasks) {
-                const isHidden = hiddenTasks.classList.toggle('hidden');
-                const remainingCount = hiddenTasks.children.length;
+            const columnId = viewMoreBtn.dataset.columnId;
+            const tasks = columnTasksMap.get(columnId);
+            const columnContainer = viewMoreBtn.closest('.task-column-container');
+            const titleElement = columnContainer.querySelector('.column-title');
+            const title = titleElement ? titleElement.textContent : 'Tareas';
 
-                if (isHidden) {
-                    viewMoreBtn.textContent = `Ver ${remainingCount} más...`;
-                } else {
-                    viewMoreBtn.textContent = 'Ver menos';
-                }
+            if (tasks) {
+                showTasksInModal(title, tasks);
             }
             return;
         }

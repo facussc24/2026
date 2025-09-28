@@ -3,7 +3,7 @@ import { getState } from './task.state.js';
 import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram, completeAndArchiveTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML, getPlannerHelpModalHTML, getAIAnalysisModalHTML } from './task.templates.js';
+import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML, getPlannerHelpModalHTML, getAIAnalysisModalHTML, getTasksModalHTML } from './task.templates.js';
 import { openTaskFormModal } from './task.modal.js';
 
 let appState;
@@ -164,6 +164,42 @@ export function renderTasksByProjectChart(tasks) {
             }
         }
     });
+}
+
+export function showTasksInModal(title, tasks) {
+    // 1. Render the modal structure
+    dom.modalContainer.innerHTML = getTasksModalHTML(title);
+    const modalElement = document.getElementById('tasks-list-modal');
+    const tasksContainer = modalElement.querySelector('#modal-tasks-container');
+
+    // 2. Populate with tasks or a message
+    if (!tasks || tasks.length === 0) {
+        tasksContainer.innerHTML = `<p class="text-center text-slate-500 py-8">No hay tareas para mostrar en esta sección.</p>`;
+    } else {
+        tasks.forEach(task => {
+            const taskCardHTML = createTaskCard(task);
+            const template = document.createElement('template');
+            template.innerHTML = taskCardHTML.trim();
+            const cardNode = template.content.firstChild;
+
+            // 3. Add event listener to each card
+            cardNode.addEventListener('click', (e) => {
+                if (e.target.closest('.task-actions')) return;
+                openTaskFormModal(task);
+            });
+            tasksContainer.appendChild(cardNode);
+        });
+    }
+
+    // 4. Add event listener to close the modal
+    modalElement.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action="close"]')) {
+            modalElement.remove();
+        }
+    });
+
+    // 5. Render icons
+    lucide.createIcons();
 }
 
 export function openTelegramConfigModal() {
