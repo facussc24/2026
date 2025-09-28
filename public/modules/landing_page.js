@@ -2,6 +2,7 @@ import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, 
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
 import { showPlannerHelpModal, showAIAnalysisModal, showTasksInModal } from './tasks/task.ui.js';
+import { subscribeToTasks } from './tasks/task.service.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -14,6 +15,7 @@ let showToast;
 let openTaskFormModal;
 let functions;
 let writeBatch;
+let switchView;
 
 // Functions from main.js to be injected
 let seedDatabase;
@@ -24,6 +26,47 @@ let weeklyTasksCache = [];
 let columnTasksMap = new Map();
 
 // --- 2. UI RENDERING ---
+
+async function renderMyTasksWidget() {
+    const container = document.getElementById('my-tasks-list');
+    if (!container) return;
+
+    container.innerHTML = `<p class="text-slate-500 px-3">Cargando tareas...</p>`;
+
+    const userTasksFilters = {
+        mode: 'user',
+        userId: appState.currentUser.uid,
+        limit: 15 // get a few more to filter from
+    };
+
+    if (window.myTasksWidgetUnsubscribe) {
+        window.myTasksWidgetUnsubscribe();
+    }
+
+    window.myTasksWidgetUnsubscribe = subscribeToTasks(userTasksFilters, ({ tasks }) => {
+        const pendingTasks = tasks.filter(t => t.status !== 'done').slice(0, 5);
+
+        if (pendingTasks.length === 0) {
+            container.innerHTML = `<p class="text-center text-slate-500 py-4">¡Excelente! No tienes tareas pendientes.</p>`;
+            return;
+        }
+
+        container.innerHTML = pendingTasks.map(task => `
+            <div class="flex items-center justify-between p-3 bg-slate-50 hover:bg-slate-100 dark:bg-slate-700/50 dark:hover:bg-slate-600/50 rounded-lg transition-colors duration-150">
+                <div>
+                    <p class="font-semibold text-slate-800 dark:text-slate-200">${task.title}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">${task.dueDate ? `Vence: ${task.dueDate}` : 'Sin fecha'}</p>
+                </div>
+                <button data-action="go-to-tasks" class="text-blue-600 dark:text-blue-400 hover:underline text-sm font-semibold">
+                    Ver
+                </button>
+            </div>
+        `).join('');
+    }, (error) => {
+        console.error("Error loading tasks for widget:", error);
+        container.innerHTML = `<p class="text-red-500 px-3">Error al cargar tareas.</p>`;
+    });
+}
 
 function getWeekInfo(offset = 0) {
     const date = new Date();
@@ -91,15 +134,23 @@ function renderLandingPageHTML() {
                     <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-7 gap-6 min-h-[400px]"></div>
                 </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                 <div id="overdue-tasks-container" class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-                    <h4 class="font-bold text-red-700 dark:text-red-300 mb-3 flex items-center gap-2"><i data-lucide="alert-triangle"></i>Tareas Vencidas</h4>
-                    <div class="task-list space-y-1 h-64 overflow-y-auto custom-scrollbar" data-column-type="overdue"></div>
-                 </div>
-                 <div id="unscheduled-tasks-container" class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
-                    <h4 class="font-bold text-amber-700 dark:text-amber-300 mb-3 flex items-center gap-2"><i data-lucide="calendar-x"></i>Tareas sin Fecha</h4>
-                    <div class="task-list space-y-1 h-64 overflow-y-auto custom-scrollbar" data-column-type="unscheduled"></div>
-                 </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="lg:col-span-2 bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
+                    <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4">Creación Rápida de Tareas (IA)</h3>
+                    <div class="relative">
+                        <input type="text" id="ai-task-input" placeholder="Ej: Llamar a Juan mañana para revisar el plano" class="w-full bg-slate-100 dark:bg-slate-700 border-2 border-transparent focus:border-blue-500 focus:ring-0 rounded-lg py-3 px-4 pr-28">
+                        <button id="ai-task-submit" class="absolute right-2 top-1/2 -translate-y-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">Crear Tarea</button>
+                    </div>
+                </div>
+                <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Mis Tareas Pendientes</h3>
+                        <button data-action="go-to-tasks" class="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">Ver todas</button>
+                    </div>
+                    <div id="my-tasks-list" class="space-y-2">
+                        <!-- Tasks will be rendered here by renderMyTasksWidget -->
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -341,6 +392,17 @@ function updateKpiCards(kpiData) {
 }
 
 function setupActionButtons() {
+    dom.viewContent.addEventListener('click', async (e) => {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+
+        if (action === 'go-to-tasks') {
+            switchView('tareas');
+        }
+    });
+
     document.getElementById('show-planner-help-btn')?.addEventListener('click', () => showPlannerHelpModal());
     document.getElementById('ai-analyst-btn')?.addEventListener('click', async () => {
         if (weeklyTasksCache.length === 0) { showToast('No hay tareas para analizar.', 'info'); return; }
@@ -446,9 +508,13 @@ export async function runLandingPageLogic() {
     appState.weekOffset = 0;
     renderLandingPageHTML();
     try {
-        const kpiData = await fetchKpiData();
+        const kpiDataPromise = fetchKpiData();
+        const weeklyTasksPromise = refreshWeeklyTasksView();
+
+        const [kpiData, _] = await Promise.all([kpiDataPromise, weeklyTasksPromise]);
+
         updateKpiCards(kpiData);
-        await refreshWeeklyTasksView();
+        renderMyTasksWidget(); // Render the new widget
     } catch (error) {
         console.error("Error loading landing page data:", error);
         showToast("Error al cargar los datos del dashboard.", "error");
@@ -464,8 +530,9 @@ export function initLandingPageModule(dependencies) {
     showToast = dependencies.showToast;
     openTaskFormModal = dependencies.openTaskFormModal;
     functions = dependencies.functions;
-    writeBatch = dependencies.writeBatch; // Injected dependency
+    writeBatch = dependencies.writeBatch;
     seedDatabase = dependencies.seedDatabase;
     clearDataOnly = dependencies.clearDataOnly;
     clearOtherUsers = dependencies.clearOtherUsers;
+    switchView = dependencies.switchView; // Inject switchView
 }
