@@ -21,20 +21,22 @@ const closeButtons = document.querySelectorAll('[data-action="close-release-note
  */
 async function fetchVersionInfo() {
     try {
-        const response = await fetch('/version.json', {
-            cache: 'no-store', // Clave para evitar la caché del navegador
+        const response = await fetch(`/version.json?t=${new Date().getTime()}`, {
+            cache: 'no-store',
             headers: {
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache',
             },
         });
         if (!response.ok) {
-            console.error('No se pudo encontrar el archivo version.json en el servidor.');
+            console.error('[Versiones] Error: No se pudo encontrar el archivo version.json en el servidor. Código de estado:', response.status);
             return null;
         }
-        return await response.json();
+        const data = await response.json();
+        console.log('[Versiones] Información de versión remota obtenida:', data);
+        return data;
     } catch (error) {
-        console.error('Error al obtener la información de la versión:', error);
+        console.error('[Versiones] Error catastrófico al obtener la información de la versión:', error);
         return null;
     }
 }
@@ -56,25 +58,31 @@ function showUpdateNotification() {
  * Comprueba si hay una nueva versión disponible.
  */
 async function checkForUpdates() {
-    console.log('Buscando actualizaciones...');
+    console.log('[Versiones] Buscando actualizaciones...');
     const latestVersion = await fetchVersionInfo();
 
-    if (!latestVersion) return;
+    if (!latestVersion || !latestVersion.hash) {
+        console.error('[Versiones] No se pudo obtener la información de la versión más reciente o el hash está vacío.');
+        return;
+    }
 
     // La primera vez, solo almacenamos la versión actual.
     if (currentVersionInfo === null) {
         currentVersionInfo = latestVersion;
-        console.log(`Versión actual cargada: ${currentVersionInfo.hash}`);
+        console.log(`[Versiones] Versión inicial cargada. Hash: ${currentVersionInfo.hash}`);
         return;
     }
 
-    // Si el hash es diferente, hay una nueva versión.
-    if (latestVersion.hash !== currentVersionInfo.hash) {
-        console.log(`¡Nueva versión detectada! Hash anterior: ${currentVersionInfo.hash}, Nuevo hash: ${latestVersion.hash}`);
+    // Comparamos los hashes para ver si hay una nueva versión.
+    const hasNewVersion = latestVersion.hash !== currentVersionInfo.hash;
+    console.log(`[Versiones] Comparando hashes -> Actual: ${currentVersionInfo.hash}, Remoto: ${latestVersion.hash}. ¿Hay nueva versión? ${hasNewVersion}`);
+
+    if (hasNewVersion) {
+        console.log(`[Versiones] ¡Nueva versión detectada!`);
         newVersionInfo = latestVersion;
         showUpdateNotification();
     } else {
-        console.log('La aplicación ya está en la última versión.');
+        console.log('[Versiones] La aplicación ya está en la última versión.');
     }
 }
 
@@ -109,6 +117,13 @@ function applyUpdate() {
  * Inicializa el verificador de versiones.
  */
 export function initVersionChecker() {
+    console.log('[Versiones] Inicializando el verificador de versiones...');
+
+    if (!banner || !modal) {
+        console.error('[Versiones] Error: No se encontraron los elementos del DOM necesarios (banner o modal). El script no puede continuar.');
+        return;
+    }
+
     // Asignar eventos a los botones
     viewNotesBtn.addEventListener('click', showReleaseNotes);
     updateNowBtn.addEventListener('click', applyUpdate);
@@ -121,5 +136,5 @@ export function initVersionChecker() {
     // Configurar la comprobación periódica.
     checkInterval = setInterval(checkForUpdates, CHECK_INTERVAL_MS);
 
-    console.log('Verificador de versión inicializado. Buscando actualizaciones cada 15 minutos.');
+    console.log('[Versiones] Verificador inicializado. Próxima comprobación en 15 minutos.');
 }
