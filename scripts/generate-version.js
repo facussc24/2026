@@ -1,19 +1,26 @@
 import { execSync } from 'child_process';
-import { writeFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 
-console.log('Generando archivo de versión...');
+console.log('Generando archivo de versión desde package.json...');
 
 try {
   // Obtener el hash corto del último commit
   const hash = execSync('git rev-parse --short HEAD').toString().trim();
 
-  // Obtener el mensaje completo del último commit
-  const message = execSync('git log -1 --pretty=%B').toString().trim();
+  // Leer la versión y las notas de la versión desde package.json
+  const packageJsonPath = resolve(process.cwd(), 'package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  const { version, releaseNotes } = packageJson;
+
+  if (!version || !releaseNotes) {
+    throw new Error('La versión o las notas de la versión no están definidas en package.json.');
+  }
 
   const versionInfo = {
     hash,
-    message,
+    version,
+    message: releaseNotes,
     date: new Date().toISOString(),
   };
 
@@ -29,12 +36,12 @@ try {
   writeFileSync(filePath, JSON.stringify(versionInfo, null, 2));
 
   console.log(`Archivo de versión creado exitosamente en ${filePath}`);
+  console.log(`   - Versión: ${version}`);
   console.log(`   - Hash: ${hash}`);
-  console.log(`   - Mensaje: "${message}"`);
+  console.log(`   - Mensaje: "${releaseNotes}"`);
 
 } catch (error) {
   console.error('Error al generar el archivo de versión.');
-  console.error('Asegúrate de que estás en un repositorio de Git y que tienes commits.');
   console.error(error);
   process.exit(1);
 }
