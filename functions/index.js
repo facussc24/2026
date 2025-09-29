@@ -539,6 +539,54 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
     // ... function logic
   });
 
+exports.onVersionCreate = functions.firestore
+    .document('versiones/{versionId}')
+    .onCreate(async (snap, context) => {
+        const versionData = snap.data();
+        const versionId = context.params.versionId;
+
+        console.log(`New version created: ${versionData.versionTag}. Broadcasting notifications.`);
+
+        const db = admin.firestore();
+        // Get all non-disabled users
+        const usersSnapshot = await db.collection('usuarios').where('disabled', '!=', true).get();
+
+        if (usersSnapshot.empty) {
+            console.log("No active users found to notify.");
+            return null;
+        }
+
+        const batch = db.batch();
+        const notificationMessage = `¡Nueva versión disponible! ${versionData.versionTag} ya está aquí.`;
+
+        usersSnapshot.forEach(userDoc => {
+            const userId = userDoc.id;
+            const notificationRef = db.collection('notifications').doc(); // Auto-generate ID
+
+            batch.set(notificationRef, {
+                userId: userId,
+                message: notificationMessage,
+                view: 'version_release', // A new view type for the frontend to handle
+                params: {
+                    versionId: versionId,
+                    versionTag: versionData.versionTag
+                },
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                isRead: false,
+                icon: 'gift' // A nice icon for the notification
+            });
+        });
+
+        try {
+            await batch.commit();
+            console.log(`Successfully sent notifications to ${usersSnapshot.size} users.`);
+        } catch (error) {
+            console.error("Failed to send version update notifications:", error);
+        }
+
+        return null;
+    });
+
 // CORRECTED SYNTAX
 exports.sendTaskNotification = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .firestore.document('tareas/{taskId}')
