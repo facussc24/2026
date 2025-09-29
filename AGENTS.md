@@ -64,6 +64,21 @@ This file contains guidelines and lessons learned for AI agents working on this 
     2.  **Programmatic Generation:** Instantiate `jsPDF` and use `doc.autoTable()` to build the table. This allows for features like cover pages, headers, and footers with page numbers to be added programmatically.
     3.  **Dependency Check:** Always ensure that the `jspdf.umd.min.js` and `jspdf.plugin.autotable.min.js` scripts are correctly loaded in `index.html`. A `TypeError` related to an undefined `window.jspdf` object is a clear indicator that these scripts are missing.
 
+### Deployment & Versioning: Notifying Users of Updates
+
+*   **Directive:** To ensure users are always on the latest version of the application without needing a manual hard-refresh, a version-checking system has been implemented. This system relies on a `public/version.json` file that is generated before deployment.
+*   **Workflow:**
+    1.  **Commit Your Changes:** Make sure all your code changes are committed with a clear and descriptive message.
+    2.  **Generate Version File:** Before deploying, you **must** run the command: `npm run version`.
+    3.  **Deploy:** Proceed with your standard deployment process (e.g., `firebase deploy`).
+*   **How it Works:**
+    *   The `npm run version` command executes a script (`scripts/generate-version.js`) that captures the hash and the **message** of the latest git commit.
+    *   It saves this information into `public/version.json`.
+    *   The web application periodically checks this file on the server. If the hash changes, it notifies the user that a new version is available.
+*   **CRITICAL: User-Facing Commit Messages:** The message of the commit you generate the version from will be displayed to the user as "Release Notes" or "Novedades".
+    *   **DO:** Write clear, user-centric commit messages. Example: "Agrega la capacidad de exportar la lista de materiales a PDF desde la vista tabular."
+    *   **DO NOT:** Use generic or technical messages like "fix bug", "apply patch", or "refactor code". These messages will confuse the user. Always describe the feature or fix from the user's perspective.
+
 ### General Technical Details
 
 *   **Note on E2E Testing with Playwright (As of 2025-09-02):** The Playwright E2E test suite has been temporarily disabled by renaming `playwright.config.js` to `playwright.config.js.disabled`.
