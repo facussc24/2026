@@ -1506,13 +1506,15 @@ function renderNotificationCenter() {
     if (notifications.length === 0) {
         notificationItemsHTML = '<p class="text-center text-sm text-slate-500 py-8">No tienes notificaciones.</p>';
     } else {
-        notificationItemsHTML = notifications.slice(0, 10).map(n => `
-            <a href="#" data-action="notification-click" data-view='${n.view}' data-params='${JSON.stringify(n.params)}' data-id="${n.docId}"
+        notificationItemsHTML = notifications.slice(0, 10).map(n => {
+            const customActionAttr = n.action ? `data-custom-action="${n.action}"` : '';
+            return `
+            <a href="#" data-action="notification-click" data-view='${n.view || ''}' data-params='${JSON.stringify(n.params || {})}' data-id="${n.docId}" ${customActionAttr}
                class="block p-3 hover:bg-slate-100 transition-colors duration-150 ${n.isRead ? 'opacity-60' : 'font-semibold'}">
                 <p class="text-sm">${n.message}</p>
                 <p class="text-xs text-slate-400 mt-1">${formatTimeAgo(n.createdAt.seconds * 1000)}</p>
             </a>
-        `).join('');
+        `}).join('');
     }
 
     container.innerHTML = `
@@ -2096,15 +2098,25 @@ function handleGlobalClick(e) {
     const notificationLink = target.closest('[data-action="notification-click"]');
     if (notificationLink) {
         e.preventDefault();
-        const { view, params, id } = notificationLink.dataset;
+        const { view, params, id, customAction } = notificationLink.dataset;
 
         // Mark as read
         const notifRef = doc(db, COLLECTIONS.NOTIFICATIONS, id);
         updateDoc(notifRef, { isRead: true });
-
-        // Navigate
         document.getElementById('notification-dropdown')?.classList.add('hidden');
-        switchView(view, JSON.parse(params));
+
+        if (customAction === 'show-release-notes') {
+            const releaseNotesModal = document.getElementById('release-notes-modal');
+            const releaseNotesContent = document.getElementById('release-notes-content');
+            const versionInfo = JSON.parse(params).versionInfo;
+            if (releaseNotesModal && releaseNotesContent && versionInfo) {
+                releaseNotesContent.textContent = versionInfo.message || 'No se proporcionaron detalles para esta versión.';
+                releaseNotesModal.classList.remove('hidden');
+            }
+        } else if (view) {
+            // Default behavior: navigate to a view
+            switchView(view, JSON.parse(params));
+        }
         return;
     }
 
@@ -3154,21 +3166,24 @@ function renderSubtask(subtask) {
  * @param {string} message - El mensaje de la notificación.
  * @param {string} view - La vista a la que debe navegar el usuario al hacer clic.
  */
-async function sendNotification(userId, message, view, params = {}) {
-    if (!userId || !message || !view) {
-        console.error('sendNotification called with invalid parameters:', { userId, message, view });
+async function sendNotification(userId, message, { view, action, params = {} }) {
+    if (!userId || !message || (!view && !action)) {
+        console.error('sendNotification called with invalid parameters:', { userId, message, view, action });
         return;
     }
 
     try {
-        await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), {
+        const notificationData = {
             userId,
             message,
-            view,
             params,
             createdAt: new Date(),
             isRead: false,
-        });
+        };
+        if (view) notificationData.view = view;
+        if (action) notificationData.action = action;
+
+        await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), notificationData);
     } catch (error) {
         console.error("Error sending notification:", error);
     }
@@ -3512,7 +3527,7 @@ onAuthStateChanged(auth, async (user) => {
             // Iniciar el verificador de actualizaciones de versión en segundo plano
             // Se envuelve en DOMContentLoaded para asegurar que el DOM esté listo.
             document.addEventListener('DOMContentLoaded', () => {
-                initVersionChecker();
+                initVersionChecker({ sendNotification, appState });
             });
 
             console.log("About to switch view to landing-page...");
