@@ -1506,15 +1506,13 @@ function renderNotificationCenter() {
     if (notifications.length === 0) {
         notificationItemsHTML = '<p class="text-center text-sm text-slate-500 py-8">No tienes notificaciones.</p>';
     } else {
-        notificationItemsHTML = notifications.slice(0, 10).map(n => {
-            const customActionAttr = n.action ? `data-custom-action="${n.action}"` : '';
-            return `
-            <a href="#" data-action="notification-click" data-view='${n.view || ''}' data-params='${JSON.stringify(n.params || {})}' data-id="${n.docId}" ${customActionAttr}
+        notificationItemsHTML = notifications.slice(0, 10).map(n => `
+            <a href="#" data-action="notification-click" data-view='${n.view}' data-params='${JSON.stringify(n.params)}' data-id="${n.docId}"
                class="block p-3 hover:bg-slate-100 transition-colors duration-150 ${n.isRead ? 'opacity-60' : 'font-semibold'}">
                 <p class="text-sm">${n.message}</p>
                 <p class="text-xs text-slate-400 mt-1">${formatTimeAgo(n.createdAt.seconds * 1000)}</p>
             </a>
-        `}).join('');
+        `).join('');
     }
 
     container.innerHTML = `
@@ -2098,24 +2096,15 @@ function handleGlobalClick(e) {
     const notificationLink = target.closest('[data-action="notification-click"]');
     if (notificationLink) {
         e.preventDefault();
-        const { view, params, id, customAction } = notificationLink.dataset;
+        const { view, params, id } = notificationLink.dataset;
 
         // Mark as read
         const notifRef = doc(db, COLLECTIONS.NOTIFICATIONS, id);
         updateDoc(notifRef, { isRead: true });
-        document.getElementById('notification-dropdown')?.classList.add('hidden');
 
-        if (customAction === 'show_release_notes') {
-            if (window.showReleaseNotes) {
-                window.showReleaseNotes();
-            } else {
-                console.error("La función showReleaseNotes no está disponible globalmente.");
-                showToast("No se pudieron mostrar las notas de la versión.", "error");
-            }
-        } else if (view) {
-            // Default behavior: navigate to a view
-            switchView(view, JSON.parse(params || '{}'));
-        }
+        // Navigate
+        document.getElementById('notification-dropdown')?.classList.add('hidden');
+        switchView(view, JSON.parse(params));
         return;
     }
 
@@ -3165,24 +3154,21 @@ function renderSubtask(subtask) {
  * @param {string} message - El mensaje de la notificación.
  * @param {string} view - La vista a la que debe navegar el usuario al hacer clic.
  */
-async function sendNotification(userId, message, { view, action, params = {} }) {
-    if (!userId || !message || (!view && !action)) {
-        console.error('sendNotification called with invalid parameters:', { userId, message, view, action });
+async function sendNotification(userId, message, view, params = {}) {
+    if (!userId || !message || !view) {
+        console.error('sendNotification called with invalid parameters:', { userId, message, view });
         return;
     }
 
     try {
-        const notificationData = {
+        await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), {
             userId,
             message,
+            view,
             params,
             createdAt: new Date(),
             isRead: false,
-        };
-        if (view) notificationData.view = view;
-        if (action) notificationData.action = action;
-
-        await addDoc(collection(db, COLLECTIONS.NOTIFICATIONS), notificationData);
+        });
     } catch (error) {
         console.error("Error sending notification:", error);
     }

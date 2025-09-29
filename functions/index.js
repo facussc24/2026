@@ -276,15 +276,20 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
             model: "gemini-2.0-flash",
         });
 
-        const currentDate = new Date().toISOString().split("T")[0];
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+
+        const currentDate = today.toISOString().split("T")[0];
         const tomorrowDate = tomorrow.toISOString().split("T")[0];
 
         const prompt = `
         Analiza el siguiente texto de un usuario. Tu objetivo es identificar si el texto describe una o varias tareas gestionables.
 
-        **Contexto Clave:** La fecha de hoy es ${currentDate}. Todas las fechas relativas (como "mañana" o "próxima semana") deben calcularse a partir de esta fecha.
+        **Contexto Clave:**
+        - La fecha de hoy es ${currentDate}.
+        - La fecha de mañana es ${tomorrowDate}.
+        - Todas las fechas relativas (como "mañana" o "próxima semana") deben calcularse a partir de la fecha de hoy.
 
         Texto del usuario: "${text}"
 
@@ -301,10 +306,10 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
             *   \\\`assignee\\\`: Nombre de la persona o \\\`null\\\`.
             *   \\\`isPublic\\\`: \\\`true\\\` (equipo/proyecto) o \\\`false\\\` (personal).
             *   \\\`project\\\`: Nombre del proyecto o \\\`null\\\`.
-        3.  **Asignación de Fechas Inteligente:**
-            *   Si el texto menciona una fecha específica (ej: "para el viernes", "el 15 de julio"), úsala para el campo \\\`dueDate\\\`.
-            *   **Si el texto implica inmediatez pero sin una fecha concreta (ej: "hacer esto ya", "encargarse de esto pronto", "lo antes posible"), DEBES asignar la fecha de mañana (${tomorrowDate}) al campo \\\`dueDate\\\`.**
-            *   Si no se menciona ninguna fecha o urgencia, deja \\\`dueDate\\\` como \\\`null\\\`.
+        3.  **Asignación de Fechas (Regla Maestra):** Debes asignar una fecha a \`dueDate\` siguiendo estas prioridades:
+            a.  **Fecha Específica:** Si el usuario menciona una fecha concreta (ej: "para el viernes", "el 25 de diciembre"), usa esa fecha.
+            b.  **Urgencia Implícita:** Si el texto sugiere urgencia (ej: "pronto", "lo antes posible") pero sin fecha, asigna la fecha de mañana (\`${tomorrowDate}\`).
+            c.  **Sin Fecha (Por Defecto):** Si no hay ninguna mención de fecha o urgencia, asigna la fecha de hoy (\`${currentDate}\`) como valor predeterminado. **Ninguna tarea puede quedar sin fecha.**
         4.  **Generación de Tags:** Analiza el texto para extraer conceptos, tecnologías, nombres de proyectos o temas clave. Conviértelos en tags cortos, en minúsculas y sin caracteres especiales. Por ejemplo, "Arreglar bug en login de app Android" podría generar tags como ["bugfix", "login", "android"].
         5.  **Corrección de Texto:** Corrige la gramática y ortografía en \\\`title\\\` y \\\`description\\\` para mayor claridad.
 
@@ -493,6 +498,34 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
     }
 });
 
+exports.applyPlan = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const { plan } = data;
+    if (!plan || !Array.isArray(plan) || plan.length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'plan' array.");
+    }
+
+    const db = admin.firestore();
+    const batch = db.batch();
+
+    plan.forEach(item => {
+        if (item.taskId && item.plannedDate) {
+            const taskRef = db.collection('tareas').doc(item.taskId);
+            batch.update(taskRef, { plannedDate: item.plannedDate });
+        }
+    });
+
+    try {
+        await batch.commit();
+        return { success: true, message: `Plan aplicado a ${plan.length} tareas.` };
+    } catch (error) {
+        console.error("Error applying weekly plan:", error);
+        throw new functions.https.HttpsError("internal", "Ocurrió un error al guardar el plan en la base de datos.");
+    }
+});
 
 exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     // ... function logic

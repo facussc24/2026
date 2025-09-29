@@ -246,73 +246,98 @@ export function openAIAssistantModal() {
     const placeholder = modalElement.querySelector('#ai-assistant-placeholder');
     const loader = modalElement.querySelector('#ai-assistant-loader');
     const questionButtons = modalElement.querySelectorAll('.ai-question-btn');
-    const planMyWeekBtn = modalElement.querySelector('#plan-my-week-btn');
 
-    const handlePlanMyWeek = async () => {
-        placeholder.classList.add('hidden');
-        responseContainer.innerHTML = '';
-        responseContainer.appendChild(loader);
-        loader.classList.remove('hidden');
-        planMyWeekBtn.disabled = true;
-        questionButtons.forEach(btn => btn.disabled = true);
+    // This is a copy of the filter logic from task.dashboard.js
+    // It's duplicated here to avoid a larger refactor of the state management.
+    const applyFiltersForAI = (tasks) => {
+        const { tableFilters } = getState().dashboard;
+        const { searchTerm, user, status, priority } = tableFilters;
+        const lowercasedFilter = searchTerm.toLowerCase();
+        const userMap = appState.collectionsById.usuarios;
 
-        try {
-            const tasksRef = collection(db, COLLECTIONS.TAREAS);
-            const q = query(tasksRef, where('plannedDate', '==', null));
-            const querySnapshot = await getDocs(q);
-            const unscheduledTasks = querySnapshot.docs.map(doc => ({ docId: doc.id, ...doc.data() }));
+        return tasks.filter(task => {
+            const matchesUser = user === 'all' || task.assigneeUid === user;
+            const matchesStatus = status === 'all' || task.status === status;
+            const matchesPriority = priority === 'all' || task.priority === priority;
 
-            if (unscheduledTasks.length === 0) {
-                throw new Error("¡Buenas noticias! No tienes tareas sin planificar.");
-            }
+            const assignee = userMap.get(task.assigneeUid);
+            const assigneeName = assignee ? assignee.name.toLowerCase() : '';
 
-            const functions = getFunctions();
-            const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
-            const result = await analyzeWeeklyTasks({ tasks: unscheduledTasks, weekOffset: 0 });
+            const matchesSearch = !lowercasedFilter ||
+                task.title.toLowerCase().includes(lowercasedFilter) ||
+                (task.proyecto && task.proyecto.toLowerCase().includes(lowercasedFilter)) ||
+                (assigneeName && assigneeName.includes(lowercasedFilter));
 
-            if (result.data.plan && result.data.plan.length > 0) {
-                await applyPlan(result.data.plan);
-                showToast(`¡Planificación completada! Se organizaron ${result.data.plan.length} tareas.`, 'success');
-            }
-            responseContainer.innerHTML = result.data.analysis;
-
-        } catch (error) {
-            const errorMessage = error.details?.message || error.message || "Ocurrió un error desconocido.";
-            showToast(`Error del Planificador IA: ${errorMessage}`, 'error');
-            responseContainer.innerHTML = `<p class="text-red-500">${errorMessage}</p>`;
-            console.error("Error calling analyzeWeeklyTasks:", error);
-        } finally {
-            loader.classList.add('hidden');
-            planMyWeekBtn.disabled = false;
-            questionButtons.forEach(btn => btn.disabled = false);
-        }
+            return matchesUser && matchesStatus && matchesPriority && matchesSearch;
+        });
     };
 
     const handleQuestionClick = async (e) => {
         const button = e.currentTarget;
         const question = button.dataset.question;
 
-        planMyWeekBtn.disabled = true;
+        // Disable all buttons to prevent multiple requests
         questionButtons.forEach(btn => btn.disabled = true);
 
         placeholder.classList.add('hidden');
-        responseContainer.innerHTML = '';
+        responseContainer.innerHTML = ''; // Clear previous response
         responseContainer.appendChild(loader);
         loader.classList.remove('hidden');
 
         try {
-            const allTasks = getState().dashboard.allTasks;
-            const visibleTasks = allTasks.filter(task => !task.isArchived);
-
-            if (visibleTasks.length === 0) {
-                throw new Error("No hay tareas activas para analizar.");
-            }
-
             const functions = getFunctions();
-            const getTaskSummaryWithAI = httpsCallable(functions, 'getTaskSummaryWithAI');
-            const result = await getTaskSummaryWithAI({ tasks: visibleTasks, question });
+            const allTasks = getState().dashboard.allTasks;
 
-            responseContainer.innerHTML = result.data.summary;
+            if (question === 'plan-my-week') {
+                const unscheduledTasks = allTasks.filter(t => !t.plannedDate);
+
+                if (unscheduledTasks.length === 0) {
+                    showToast("¡Excelente! No tienes tareas sin planificar.", "success");
+                    placeholder.classList.remove('hidden');
+                    return; // Exit early
+                }
+
+                modalElement.remove(); // Close the current modal
+                const analysisModal = showAIAnalysisModal();
+                const analysisContent = analysisModal.querySelector('#ai-analysis-content');
+                const applyBtn = analysisModal.querySelector('#apply-ai-plan-btn');
+
+                const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
+                const result = await analyzeWeeklyTasks({ tasks: unscheduledTasks });
+
+                // Using a library like 'marked' would be better, but for now, we'll inject the HTML.
+                // The 'prose' class from Tailwind Typography will style it.
+                analysisContent.innerHTML = result.data.analysis;
+
+                applyBtn.disabled = false;
+                applyBtn.addEventListener('click', async () => {
+                    const overlay = analysisModal.querySelector('#ai-applying-plan-overlay');
+                    overlay.classList.remove('hidden');
+                    try {
+                        const applyPlan = httpsCallable(functions, 'applyPlan');
+                        await applyPlan({ plan: result.data.plan });
+                        showToast('¡Plan semanal aplicado con éxito!', 'success');
+                        analysisModal.remove();
+                    } catch (err) {
+                        showToast(`Error al aplicar el plan: ${err.message}`, 'error');
+                        overlay.classList.add('hidden');
+                    }
+                });
+
+            } else {
+                 const visibleTasks = applyFiltersForAI(allTasks);
+
+                if (visibleTasks.length === 0) {
+                    throw new Error("No hay tareas visibles para analizar. Por favor, ajusta los filtros e inténtalo de nuevo.");
+                }
+
+                const getTaskSummaryWithAI = httpsCallable(functions, 'getTaskSummaryWithAI');
+                const result = await getTaskSummaryWithAI({ tasks: visibleTasks, question });
+
+                // The AI response is expected to be simple markdown.
+                // We can inject it directly as the 'prose' class will style it.
+                responseContainer.innerHTML = result.data.summary;
+            }
 
         } catch (error) {
             const errorMessage = error.details?.message || error.message || "Ocurrió un error desconocido.";
@@ -321,13 +346,12 @@ export function openAIAssistantModal() {
             console.error("Error calling getTaskSummaryWithAI:", error);
         } finally {
             loader.classList.add('hidden');
-            planMyWeekBtn.disabled = false;
+            // Re-enable all buttons
             questionButtons.forEach(btn => btn.disabled = false);
         }
     };
 
     modalElement.querySelector('button[data-action="close"]').addEventListener('click', () => modalElement.remove());
-    planMyWeekBtn.addEventListener('click', handlePlanMyWeek);
     questionButtons.forEach(button => {
         button.addEventListener('click', handleQuestionClick);
     });
