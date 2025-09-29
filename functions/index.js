@@ -397,47 +397,54 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
             dueDate: t.dueDate,
             description: t.description ? t.description.substring(0, 100) : undefined,
             creatorUid: t.creatorUid,
+            isSelfAssigned: t.creatorUid === context.auth.uid,
         }));
 
         const prompt = `
-        Actúa como "El Planificador Lógico", un asistente de IA ultra-preciso para ${userName}. Tu única función es analizar una lista de tareas y generar un plan de trabajo para la semana siguiendo un conjunto de reglas inflexibles. No tienes permitido desviarte de estas reglas.
+        Actúa como "El Planificador Estratégico", un asistente de IA para ${userName}. Tu objetivo es crear el plan de trabajo semanal más inteligente y realista posible.
 
         **DATOS DE ENTRADA:**
+        - Usuario Actual: ${userName} (ID: ${context.auth.uid})
         - Fecha Actual: ${new Date().toISOString().split('T')[0]}.
         - Semana de Planificación: De Lunes ${weekDates[0]} a Viernes ${weekDates[4]}.
         - Horizonte de Planificación: Solo se considerarán tareas que venzan antes del ${planningHorizonEndDate.toISOString().split('T')[0]}.
 
-        **REGLAS DE PLANIFICACIÓN (NO NEGOCIABLES):**
-        1.  **EXCLUSIÓN DE FIN DE SEMANA:** Está terminantemente prohibido asignar una \`plannedDate\` a un Sábado o Domingo.
-        2.  **FILTRADO DE TAREAS:** Tu plan SÓLO debe incluir tareas que cumplan una de estas condiciones:
-            a) Tareas con \`dueDate\` anterior a la fecha actual (vencidas).
-            b) Tareas sin \`dueDate\` (valor nulo).
-            c) Tareas con \`dueDate\` dentro del horizonte de planificación.
-            **Cualquier otra tarea debe ser ignorada en el plan JSON y mencionada en la sección "Tareas a Futuro".**
-        3.  **JERARQUÍA DE PRIORIZACIÓN (SEGUIR EN ESTE ORDEN ESTRICTO):**
-            a) **PRIORIDAD 1 (VENCIDAS):** Todas las tareas vencidas DEBEN ser asignadas al Lunes (${weekDates[0]}). Sin excepción.
-            b) **PRIORIDAD 2 (FECHA LÍMITE):** La \`dueDate\` es el factor decisivo. Una tarea que vence esta semana tiene prioridad absoluta sobre cualquier otra tarea que no venza esta semana, sin importar el campo \`priority\`. Organiza las tareas para que se completen antes de su \`dueDate\`.
-            c) **PRIORIDAD 3 (BALANCE DE CARGA):** Después de aplicar las reglas anteriores, balancea la carga. **Regla de Oro: NUNCA más de UNA (1) tarea con \`effort: 'high'\` por día.** Usa las tareas de esfuerzo 'medium' y 'low' para rellenar los días de manera equitativa.
+        **REGLAS DE PLANIFICACIÓN (ORDEN DE IMPORTANCIA):**
+        1.  **EXCLUSIÓN DE FIN DE SEMANA:** Jamás asignar una \`plannedDate\` a un Sábado o Domingo.
+        2.  **FILTRADO DE TAREAS:** Ignora tareas cuya \`dueDate\` esté más allá del horizonte de planificación. Menciona estas tareas en la sección "Tareas a Futuro" del análisis.
+        3.  **GESTIÓN DE TAREAS VENCIDAS:**
+            a. Identifica todas las tareas con \`dueDate\` anterior a la fecha actual.
+            b. Distribúyelas de forma inteligente entre el Lunes (${weekDates[0]}) y el Martes (${weekDates[1]}), priorizando las más antiguas primero. No las acumules todas en un solo día.
+        4.  **PLANIFICACIÓN PROACTIVA (BÚFER DE TIEMPO):**
+            a. Para tareas con \`dueDate\`, intenta asignar la \`plannedDate\` al menos **1 o 2 días ANTES** de la fecha límite. Esto crea un margen de seguridad.
+            b. Si una tarea vence el Miércoles, idealmente debería planificarse para el Lunes o Martes.
+        5.  **JERARQUÍA DE PRIORIZACIÓN (Como desempate):**
+            a. **Fecha Límite:** Una \`dueDate\` más cercana siempre tiene mayor prioridad.
+            b. **Prioridad del Campo:** Si las fechas límite son similares, una tarea con \`priority: 'high'\` va antes que una \`medium\`.
+            c. **Esfuerzo:** Considera el campo \`effort\` para el balanceo de carga.
+        6.  **BALANCE DE CARGA INTELIGENTE:**
+            a. **Regla de Oro:** NUNCA más de UNA (1) tarea con \`effort: 'high'\` por día.
+            b. Distribuye las tareas de esfuerzo 'medium' y 'low' para crear días de trabajo equilibrados. Evita días con muchas tareas y otros vacíos.
 
         **LISTA DE TAREAS A ANALIZAR:**
         \`\`\`json
         ${JSON.stringify(tasksForPrompt, null, 2)}
         \`\`\`
 
-        **FORMATO DE SALIDA (DOS PARTES OBLIGATORIAS):**
+        **FORMATO DE SALIDA (OBLIGATORIO):**
 
         **PARTE 1: EL PLAN (JSON)**
-        Genera un objeto JSON que contenga una única clave "plan". El valor debe ser un array de objetos. Cada objeto debe tener esta estructura exacta: \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD" }\`. Si ninguna tarea es planificada, el array debe estar vacío.
+        Genera un objeto JSON con una clave "plan". El valor debe ser un array de objetos \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD" }\`. Si no hay tareas que planificar, el array debe estar vacío.
 
         **PARTE 2: EL ANÁLISIS (MARKDOWN)**
-        Inserta este separador exacto en una nueva línea después del JSON: \`---JSON_PLAN_SEPARATOR---\`
-        Luego, escribe un análisis conciso en Markdown con estas secciones:
-        *   \`### 💡 Estrategia Aplicada\`: Describe cómo aplicaste las reglas ("Se priorizaron X tareas vencidas para el lunes. Se balanceó la carga para no exceder una tarea de alto esfuerzo diaria...").
+        Inserta este separador exacto: \`---JSON_PLAN_SEPARATOR---\`
+        Luego, escribe un análisis en Markdown claro y útil:
+        *   \`### 💡 Estrategia Aplicada\`: Explica **por qué** tomaste tus decisiones. ("Se distribuyeron X tareas vencidas entre lunes y martes para no sobrecargar. La Tarea 'ABC' se planificó para el miércoles, dándote un día de margen antes de su vencimiento el jueves...").
         *   \`### 🎯 Foco de la Semana\`: Lista las 2-3 tareas más críticas del plan.
-        *   \`### ⚠️ Riesgos Identificados\`: Menciona si una tarea de alto esfuerzo está muy cerca de su fecha límite.
-        *   \`### 🗓️ Tareas Fuera de Horizonte\`: Lista las tareas que ignoraste porque su fecha de vencimiento es muy lejana.
+        *   \`### ⚠️ Riesgos Identificados\`: Menciona si un día está muy cargado o si una tarea de alto esfuerzo está muy cerca de su fecha límite.
+        *   \`### 🗓️ Tareas Fuera de Horizonte\`: Lista las tareas que ignoraste por tener una fecha de vencimiento lejana.
 
-        **REGLA FINAL:** Tu respuesta debe ser únicamente el JSON, el separador y el Markdown. No agregues saludos, explicaciones adicionales ni bloques de código markdown (\`\`\`json).
+        **REGLA FINAL:** Tu respuesta debe ser únicamente el JSON, el separador y el Markdown. Sin saludos ni texto extra.
         `;
         const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
         let responseText = result.response.candidates[0].content.parts[0].text;
