@@ -1,7 +1,7 @@
 // /public/modules/admin/versions.js
 
 import { createVersion, getVersions } from '../../js/services/version.service.js';
-import { showToast } from '../../js/utils.js';
+import { showToast } from '../../../js/utils.js';
 
 /**
  * Ensures the marked.js library is loaded and ready to use.
