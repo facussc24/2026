@@ -3510,7 +3510,10 @@ onAuthStateChanged(auth, async (user) => {
             renderNotificationCenter();
 
             // Iniciar el verificador de actualizaciones de versión en segundo plano
-            initVersionChecker();
+            // Se envuelve en DOMContentLoaded para asegurar que el DOM esté listo.
+            document.addEventListener('DOMContentLoaded', () => {
+                initVersionChecker();
+            });
 
             console.log("About to switch view to landing-page...");
             // This is the critical sequence: render the content, THEN hide the loading screen.
