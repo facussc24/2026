@@ -2105,17 +2105,16 @@ function handleGlobalClick(e) {
         updateDoc(notifRef, { isRead: true });
         document.getElementById('notification-dropdown')?.classList.add('hidden');
 
-        if (customAction === 'show-release-notes') {
-            const releaseNotesModal = document.getElementById('release-notes-modal');
-            const releaseNotesContent = document.getElementById('release-notes-content');
-            const versionInfo = JSON.parse(params).versionInfo;
-            if (releaseNotesModal && releaseNotesContent && versionInfo) {
-                releaseNotesContent.textContent = versionInfo.message || 'No se proporcionaron detalles para esta versión.';
-                releaseNotesModal.classList.remove('hidden');
+        if (customAction === 'show_release_notes') {
+            if (window.showReleaseNotes) {
+                window.showReleaseNotes();
+            } else {
+                console.error("La función showReleaseNotes no está disponible globalmente.");
+                showToast("No se pudieron mostrar las notas de la versión.", "error");
             }
         } else if (view) {
             // Default behavior: navigate to a view
-            switchView(view, JSON.parse(params));
+            switchView(view, JSON.parse(params || '{}'));
         }
         return;
     }
@@ -3527,7 +3526,7 @@ onAuthStateChanged(auth, async (user) => {
             // Iniciar el verificador de actualizaciones de versión en segundo plano
             // Se envuelve en DOMContentLoaded para asegurar que el DOM esté listo.
             document.addEventListener('DOMContentLoaded', () => {
-                initVersionChecker({ sendNotification, appState });
+                initVersionChecker();
             });
 
             console.log("About to switch view to landing-page...");
