@@ -4,8 +4,6 @@
 let currentVersionInfo = null;
 let newVersionInfo = null;
 let checkInterval = null;
-let sendNotification = null;
-let appState = null;
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutos
 
@@ -43,18 +41,7 @@ async function fetchVersionInfo() {
     }
 }
 
-/**
- * Muestra el banner de notificación de actualización.
- */
-function showUpdateNotification() {
-    if (banner) {
-        banner.classList.remove('hidden');
-        // Detener las comprobaciones futuras una vez que se muestra la notificación.
-        if (checkInterval) {
-            clearInterval(checkInterval);
-        }
-    }
-}
+// La función showUpdateNotification ya no es necesaria, la eliminamos.
 
 /**
  * Comprueba si hay una nueva versión disponible.
@@ -82,12 +69,27 @@ async function checkForUpdates() {
     if (hasNewVersion) {
         console.log(`[Versiones] ¡Nueva versión detectada!`);
         newVersionInfo = latestVersion;
-        showUpdateNotification(); // Keep the banner for now as a visual cue
-        if (sendNotification && appState.currentUser) {
-            sendNotification(appState.currentUser.uid, `Nueva versión ${newVersionInfo.version || ''} disponible.`, {
-                action: 'show-release-notes',
-                params: { versionInfo: newVersionInfo }
-            });
+
+        // Ocultar el banner por defecto, ya que ahora usamos el centro de notificaciones.
+        if (banner) {
+            banner.classList.add('hidden');
+        }
+
+        // Enviar una notificación al centro de notificaciones.
+        // La acción 'show_release_notes' será manejada por el manejador de clics global en main.js
+        window.sendNotification(
+            '¡Nueva versión disponible!',
+            'Se ha detectado una nueva versión de la aplicación. Haz clic para ver las novedades.',
+            'info',
+            {
+                action: 'show_release_notes',
+                version_hash: newVersionInfo.hash,
+            }
+        );
+
+        // Detener las comprobaciones futuras una vez que se detecta una nueva versión.
+        if (checkInterval) {
+            clearInterval(checkInterval);
         }
     } else {
         console.log('[Versiones] La aplicación ya está en la última versión.');
@@ -96,13 +98,25 @@ async function checkForUpdates() {
 
 /**
  * Muestra el modal con las notas de la versión.
+ * Ahora es accesible globalmente para ser llamada desde main.js.
  */
-function showReleaseNotes() {
-    if (modal && newVersionInfo) {
-        releaseNotesContent.textContent = newVersionInfo.message || 'No se proporcionaron detalles para esta versión.';
+window.showReleaseNotes = function() {
+    const versionData = window.getNewVersionInfo();
+    if (modal && versionData) {
+        releaseNotesContent.textContent = versionData.message || 'No se proporcionaron detalles para esta versión.';
         modal.classList.remove('hidden');
+    } else {
+        console.error('[Versiones] No se pudo mostrar el modal de notas de versión porque no se encontró información de la nueva versión.');
     }
 }
+
+/**
+ * Expone la información de la nueva versión de forma segura.
+ * @returns {object|null}
+ */
+window.getNewVersionInfo = function() {
+    return newVersionInfo;
+};
 
 /**
  * Oculta el modal de las notas de la versión.
@@ -124,10 +138,8 @@ function applyUpdate() {
 /**
  * Inicializa el verificador de versiones.
  */
-export function initVersionChecker(dependencies = {}) {
+export function initVersionChecker() {
     console.log('[Versiones] Inicializando el verificador de versiones...');
-    sendNotification = dependencies.sendNotification;
-    appState = dependencies.appState;
 
     if (!banner || !modal) {
         console.error('[Versiones] Error: No se encontraron los elementos del DOM necesarios (banner o modal). El script no puede continuar.');
