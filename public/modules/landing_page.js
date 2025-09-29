@@ -2,6 +2,7 @@ import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, 
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
 import { showPlannerHelpModal, showAIAnalysisModal, showTasksInModal } from './tasks/task.ui.js';
+import { completeAndArchiveTask } from './tasks/task.service.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -45,7 +46,7 @@ function getWeekInfo(offset = 0) {
 
 function renderLandingPageHTML() {
     dom.viewContent.innerHTML = `
-        <div class="animate-fade-in-up">
+        <div id="landing-page-container" class="animate-fade-in-up">
             <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
                 <div id="kpi-proyectos" class="bg-card-light dark:bg-card-dark p-6 rounded-lg flex items-center justify-between shadow-sm">
                     <div><p class="text-sm text-secondary-light dark:text-secondary-dark">Proyectos</p><p class="text-3xl font-bold text-text-light dark:text-text-dark">0</p></div>
@@ -454,6 +455,44 @@ export async function runLandingPageLogic() {
         showToast("Error al cargar los datos del dashboard.", "error");
     }
     setupActionButtons();
+
+    // This listener handles clicks on the entire view, specifically for the complete task button
+    const landingPageContainer = dom.viewContent.querySelector('#landing-page-container');
+    if (!landingPageContainer) return;
+
+    landingPageContainer.addEventListener('click', async (e) => {
+        const completeBtn = e.target.closest('[data-action="complete-task"]');
+        if (completeBtn) {
+            const taskCard = completeBtn.closest('.task-card-compact');
+            if (taskCard) {
+                e.stopPropagation(); // Prevent other listeners from firing (like the one to open the modal)
+                const taskId = taskCard.dataset.taskId;
+                if (taskId) {
+                    try {
+                        // Optimistically update the UI
+                        taskCard.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                        taskCard.style.opacity = '0';
+                        taskCard.style.transform = 'scale(0.95)';
+
+                        await completeAndArchiveTask(taskId);
+                        showToast('Tarea completada y archivada.', 'success');
+
+                        // Wait for animation to finish before refreshing the data
+                        setTimeout(() => {
+                            refreshWeeklyTasksView();
+                        }, 300);
+
+                    } catch (error) {
+                        console.error('Error completing task:', error);
+                        showToast('Error al completar la tarea.', 'error');
+                        // Restore card if the backend call fails
+                        taskCard.style.opacity = '1';
+                        taskCard.style.transform = 'scale(1)';
+                    }
+                }
+            }
+        }
+    });
 }
 
 export function initLandingPageModule(dependencies) {
