@@ -37,6 +37,7 @@ El proyecto ha evolucionado desde un prototipo hasta convertirse en una aplicaci
 - **Vista Sinóptica Mejorada:** Una vista interactiva para explorar la estructura completa de todos los productos, con edición de cantidades en contexto y diferenciación visual de componentes.
 - **Exportación de Estructura de Producto a PDF Profesional:** Se ha implementado una función de exportación que genera un listado de materiales (Estructura de Producto) en formato PDF tabular. El reporte se presenta en formato horizontal e incluye columnas detalladas para Nivel, Descripción, Código, Cantidad y Unidad de Medida.
 - **Flujograma de Procesos:** Una nueva vista dedicada que lee la información de los árboles de producto para generar automáticamente un flujograma visual del proceso de fabricación completo. El diagrama, inspirado en la industria automotriz, muestra la jerarquía de componentes y sus relaciones, facilitando la comprensión del flujo de ensamblaje desde los insumos hasta el producto final.
+- **Notificaciones de Nuevas Versiones:** Un sistema automatizado que notifica a todos los usuarios a través del centro de notificaciones (ícono de campana) cada vez que se publica una nueva versión de la aplicación. Los usuarios pueden ver las notas de la versión detalladas en un modal para mantenerse informados sobre las últimas mejoras y cambios.
 
 ### Gestión de Cambios de Ingeniería (ECR/ECO)
 
@@ -103,7 +104,9 @@ Para mantener a todos los involucrados informados, el sistema cuenta con un cent
         -   *Ejemplo:* "Se te ha asignado una nueva tarea en el plan de acción para el ECO: ECO-2024-015."
     2.  **Cambio de Estado de ECR:** Cuando un ECR cambia su estado final a `approved` o `rejected`, el usuario que creó el ECR recibe una notificación.
         -   *Ejemplo:* "El estado del ECR "ECR-2024-021" ha cambiado a approved."
--   **Navegación:** Hacer clic en una notificación marca la misma como leída y redirige al usuario directamente al formulario del ECR o ECO correspondiente.
+    3.  **Publicación de Nueva Versión:** Cuando un administrador publica una nueva versión de la aplicación, todos los usuarios reciben una notificación para ver las novedades.
+        -   *Ejemplo:* "¡Nueva versión disponible! v2.1.0 ya está aquí."
+-   **Navegación:** Hacer clic en una notificación marca la misma como leída y redirige al usuario directamente al formulario del ECR o ECO correspondiente, o muestra un modal con detalles como en el caso de las notas de versión.
 
 #### 5. Flujo de Aprobación de Partes de Producción (PPAP)
 
