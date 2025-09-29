@@ -774,7 +774,7 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                             <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
                         </div>
                          <div class="input-group">
-                            <label for="task-planneddate">Fecha Planificada (para Planner)</label>
+                            <label for="task-planneddate">Fecha Planificada</label>
                             <input type="date" id="task-planneddate" name="plannedDate" value="${isEditing && task.plannedDate ? task.plannedDate : ''}">
                         </div>
                     </div>
