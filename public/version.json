@@ -1,5 +1,4 @@
 {
-  "hash": "1e7c3cc",
-  "message": "Apply patch /tmp/41526331-ef43-4e75-8488-7832c1030107.patch",
-  "date": "2025-09-29T14:01:47.920Z"
+  "version": "1.1.0",
+  "releaseNotes": "Enhanced AI-powered task management. New tasks with implied urgency are now automatically scheduled for the next day. The 'Plan My Week' feature now correctly analyzes all unscheduled tasks, not just filtered ones."
 }
