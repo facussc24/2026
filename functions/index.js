@@ -389,62 +389,81 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
         const planningHorizonEndDate = new Date(weekDates[4]);
         planningHorizonEndDate.setDate(planningHorizonEndDate.getDate() + 14);
 
+        const weekDayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+        const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+        const weekDatesWithNames = weekDates.map(dateStr => {
+            const date = new Date(dateStr + "T12:00:00Z"); // Use noon to avoid timezone issues
+            const dayName = weekDayNames[date.getUTCDay()];
+            const monthName = monthNames[date.getUTCMonth()];
+            return `${dayName} ${date.getUTCDate()} de ${monthName}`;
+        });
+
         const tasksForPrompt = tasks.map(t => ({
             taskId: t.docId,
             title: t.title,
             priority: t.priority,
             effort: t.effort,
             dueDate: t.dueDate,
-            description: t.description ? t.description.substring(0, 100) : undefined,
-            creatorUid: t.creatorUid,
             isSelfAssigned: t.creatorUid === context.auth.uid,
         }));
 
         const prompt = `
-        Actúa como "El Planificador Estratégico", un asistente de IA para ${userName}. Tu objetivo es crear el plan de trabajo semanal más inteligente y realista posible.
+        Actúa como "El Planificador Estratégico", un asistente de IA para ${userName}. Tu objetivo es crear el plan de trabajo semanal más inteligente y realista posible, y comunicarlo de forma excepcionalmente clara.
 
         **DATOS DE ENTRADA:**
         - Usuario Actual: ${userName} (ID: ${context.auth.uid})
         - Fecha Actual: ${new Date().toISOString().split('T')[0]}.
-        - Semana de Planificación: De Lunes ${weekDates[0]} a Viernes ${weekDates[4]}.
-        - Horizonte de Planificación: Solo se considerarán tareas que venzan antes del ${planningHorizonEndDate.toISOString().split('T')[0]}.
+        - Semana de Planificación:
+            - Lunes: ${weekDatesWithNames[0]} (${weekDates[0]})
+            - Martes: ${weekDatesWithNames[1]} (${weekDates[1]})
+            - Miércoles: ${weekDatesWithNames[2]} (${weekDates[2]})
+            - Jueves: ${weekDatesWithNames[3]} (${weekDates[3]})
+            - Viernes: ${weekDatesWithNames[4]} (${weekDates[4]})
 
         **REGLAS DE PLANIFICACIÓN (ORDEN DE IMPORTANCIA):**
         1.  **EXCLUSIÓN DE FIN DE SEMANA:** Jamás asignar una \`plannedDate\` a un Sábado o Domingo.
-        2.  **FILTRADO DE TAREAS:** Ignora tareas cuya \`dueDate\` esté más allá del horizonte de planificación. Menciona estas tareas en la sección "Tareas a Futuro" del análisis.
-        3.  **GESTIÓN DE TAREAS VENCIDAS:**
-            a. Identifica todas las tareas con \`dueDate\` anterior a la fecha actual.
-            b. Distribúyelas de forma inteligente entre el Lunes (${weekDates[0]}) y el Martes (${weekDates[1]}), priorizando las más antiguas primero. No las acumules todas en un solo día.
-        4.  **PLANIFICACIÓN PROACTIVA (BÚFER DE TIEMPO):**
-            a. Para tareas con \`dueDate\`, intenta asignar la \`plannedDate\` al menos **1 o 2 días ANTES** de la fecha límite. Esto crea un margen de seguridad.
-            b. Si una tarea vence el Miércoles, idealmente debería planificarse para el Lunes o Martes.
-        5.  **JERARQUÍA DE PRIORIZACIÓN (Como desempate):**
-            a. **Fecha Límite:** Una \`dueDate\` más cercana siempre tiene mayor prioridad.
-            b. **Prioridad del Campo:** Si las fechas límite son similares, una tarea con \`priority: 'high'\` va antes que una \`medium\`.
-            c. **Esfuerzo:** Considera el campo \`effort\` para el balanceo de carga.
-        6.  **BALANCE DE CARGA INTELIGENTE:**
-            a. **Regla de Oro:** NUNCA más de UNA (1) tarea con \`effort: 'high'\` por día.
-            b. Distribuye las tareas de esfuerzo 'medium' y 'low' para crear días de trabajo equilibrados. Evita días con muchas tareas y otros vacíos.
+        2.  **GESTIÓN DE TAREAS VENCIDAS:** Distribuye las tareas con \`dueDate\` anterior a la fecha actual de forma inteligente entre el Lunes y el Martes, priorizando las más antiguas. No las acumules todas en un solo día.
+        3.  **PLANIFICACIÓN PROACTIVA (BÚFER DE TIEMPO):** Intenta asignar la \`plannedDate\` al menos **1 o 2 días ANTES** de la \`dueDate\`. Si una tarea vence el Miércoles, idealmente planifícala para el Lunes o Martes.
+        4.  **JERARQUÍA DE PRIORIZACIÓN:** Usa esto como desempate: 1º \`dueDate\` más cercana, 2º \`priority: 'high'\`, 3º \`effort: 'high'\`.
+        5.  **BALANCE DE CARGA INTELIGENTE:** NUNCA más de UNA (1) tarea con \`effort: 'high'\` por día. Distribuye las tareas de esfuerzo 'medium' y 'low' para crear días equilibrados.
 
         **LISTA DE TAREAS A ANALIZAR:**
         \`\`\`json
         ${JSON.stringify(tasksForPrompt, null, 2)}
         \`\`\`
 
-        **FORMATO DE SALIDA (OBLIGATORIO):**
+        **REGLAS DE COMUNICACIÓN Y FORMATO DE SALIDA (OBLIGATORIO):**
 
         **PARTE 1: EL PLAN (JSON)**
-        Genera un objeto JSON con una clave "plan". El valor debe ser un array de objetos \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD" }\`. Si no hay tareas que planificar, el array debe estar vacío.
+        Genera un objeto JSON con una clave "plan". El valor debe ser un array de objetos \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD" }\`.
 
         **PARTE 2: EL ANÁLISIS (MARKDOWN)**
         Inserta este separador exacto: \`---JSON_PLAN_SEPARATOR---\`
-        Luego, escribe un análisis en Markdown claro y útil:
-        *   \`### 💡 Estrategia Aplicada\`: Explica **por qué** tomaste tus decisiones. ("Se distribuyeron X tareas vencidas entre lunes y martes para no sobrecargar. La Tarea 'ABC' se planificó para el miércoles, dándote un día de margen antes de su vencimiento el jueves...").
-        *   \`### 🎯 Foco de la Semana\`: Lista las 2-3 tareas más críticas del plan.
-        *   \`### ⚠️ Riesgos Identificados\`: Menciona si un día está muy cargado o si una tarea de alto esfuerzo está muy cerca de su fecha límite.
-        *   \`### 🗓️ Tareas Fuera de Horizonte\`: Lista las tareas que ignoraste por tener una fecha de vencimiento lejana.
+        Luego, escribe un análisis en Markdown claro y útil con la siguiente estructura:
 
-        **REGLA FINAL:** Tu respuesta debe ser únicamente el JSON, el separador y el Markdown. Sin saludos ni texto extra.
+        ### Resumen del Plan Semanal
+        Un párrafo corto y amigable resumiendo la semana.
+
+        ### Plan Detallado Día por Día
+        *   **${weekDatesWithNames[0]}**:
+            *   (Tarea 1) - **[Título de la Tarea]**. *Justificación: [Explica brevemente por qué la tarea está aquí, ej: "Es una tarea vencida de alta prioridad." o "Se planificó con 2 días de antelación a su vencimiento."]*
+            *   (Tarea 2) - **[Otro Título]**. *Justificación: [Otra explicación.]*
+        *   **${weekDatesWithNames[1]}**:
+            *   (Tarea 3) - **[Título de la Tarea]**. *Justificación: [Explicación.]*
+        *   ... (continúa para todos los días con tareas)
+
+        ### ⚠️ Justificación de Riesgos y Decisiones Clave
+        Si tuviste que tomar una decisión difícil, justifícala aquí. Por ejemplo:
+        "La tarea **'Realizar AMFE'** se planificó para el **${weekDatesWithNames[3]}**, el mismo día de su vencimiento. Esto se debe a que los días anteriores ya contenían tareas de alta prioridad o de alto esfuerzo, siendo este el primer espacio disponible para asegurar su finalización."
+
+        ### 🗓️ Tareas Fuera de Horizonte
+        Lista aquí cualquier tarea que no fue planificada porque su fecha de vencimiento es muy lejana.
+
+        **REGLAS FINALES:**
+        - En el análisis, SIEMPRE refiérete a las tareas por su \`title\`, NUNCA por su \`taskId\`.
+        - Usa el formato de fecha natural (ej: "Lunes 1 de Octubre") que te proporcioné.
+        - Tu respuesta debe ser únicamente el JSON, el separador y el Markdown. Sin saludos ni texto extra.
         `;
         const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
         let responseText = result.response.candidates[0].content.parts[0].text;
