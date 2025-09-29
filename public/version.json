@@ -1,6 +1,5 @@
 {
-  "hash": "34d07eb",
-  "version": "1.1.0",
-  "message": "feat: Enhance AI Task Creation and Planning\n\n- New AI-generated tasks with implied urgency are now automatically scheduled for the next day.\n- The 'Plan My Week' feature now correctly analyzes all unscheduled tasks, not just filtered ones.",
-  "date": "2025-09-29T15:45:34.216Z"
+  "hash": "a1b2c3d",
+  "message": "Test: Triggering new version for notification system verification.",
+  "date": "2025-09-29T17:19:00.000Z"
 }
