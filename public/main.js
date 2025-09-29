@@ -73,6 +73,7 @@ const viewConfig = {
     arboles: { title: 'Editor de Estructura de Producto', singular: 'Árbol' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
     tareas: { title: 'Gestor de Tareas', singular: 'Tarea' },
+    'task-dashboard': { title: 'Dashboard de Tareas', singular: 'Dashboard de Tareas' },
     proyectos: {
         title: 'Proyectos',
         singular: 'Proyecto',
@@ -1340,7 +1341,8 @@ async function switchView(viewName, params = null) {
     else if (viewName === 'flujograma') await runFlujogramaLogic();
     else if (viewName === 'arboles') await renderArbolesInitialView();
     else if (viewName === 'profile') await runProfileLogic();
-    else if (viewName === 'tareas') await runTasksLogicFromModule();
+    else if (viewName === 'tareas') await runTasksLogicFromModule('kanban');
+    else if (viewName === 'task-dashboard') await runTasksLogicFromModule('dashboard');
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
         dom.searchInput.style.display = 'block';
