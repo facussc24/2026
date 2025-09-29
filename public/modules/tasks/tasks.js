@@ -1,8 +1,10 @@
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { initTaskState } from './task.state.js';
-import { initTaskService, deleteTask, subscribeToTasks, updateTaskStatus } from './task.service.js';
+import { initTaskService, deleteTask } from './task.service.js';
 import { initTaskUI, renderMyPendingTasksWidget, renderTasksByProjectChart, openTelegramConfigModal } from './task.ui.js';
 import { initTaskModal, openTaskFormModal } from './task.modal.js';
+import { initKanban, runKanbanBoardLogic } from './task.kanban.js';
+import { initDashboard, renderTaskDashboardView } from './task.dashboard.js';
+import { initCalendar, renderTaskCalendar } from './task.calendar.js';
 import { calculateOverdueTasksCount, fetchAllTasks, completeAndArchiveTask } from './task.service.js';
 
 let dom;
@@ -15,6 +17,7 @@ export {
     fetchAllTasks,
     renderMyPendingTasksWidget,
     renderTasksByProjectChart,
+    renderTaskDashboardView,
     openTaskFormModal
 };
 
@@ -26,198 +29,143 @@ export function initTasksModule(deps) {
     initTaskService(dependencies);
     initTaskUI(dependencies);
     initTaskModal(dependencies);
+    initKanban(dependencies);
+    initDashboard(dependencies);
+    initCalendar(dependencies);
     console.log("Tasks module initialized.");
 }
 
-export function runTasksLogic() {
-    // Local state for the unified view
-    let state = {
-        activeFilter: 'user', // 'user', 'public', 'all'
-        searchTerm: '',
-        unsubscribe: null
-    };
+export function runTasksLogic(initialView = 'kanban') {
+    const renderView = (view) => {
+        const viewContainer = dom.viewContent.querySelector('#task-view-container');
+        if (!viewContainer) return;
+        viewContainer.innerHTML = ''; // Clear previous view
 
-    const fetchAndRender = () => {
-        if (state.unsubscribe) {
-            state.unsubscribe();
-        }
-
-        const { appState } = dependencies;
-        const filters = {
-            mode: state.activeFilter,
-            userId: appState.currentUser.uid,
-            searchTerm: state.searchTerm
-        };
-
-        const container = dom.viewContent.querySelector('#task-list-container');
-        if (container) {
-             container.innerHTML = `<div class="text-center py-16 text-gray-500"><i data-lucide="loader" class="animate-spin h-8 w-8 mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`;
-             lucide.createIcons();
-        }
-
-        state.unsubscribe = subscribeToTasks(filters, ({ tasks }) => {
-            renderTaskList(tasks);
-        }, (error) => {
-            console.error("Error fetching tasks for unified view", error);
-            if (container) {
-                container.innerHTML = `<p class="text-red-500 text-center">Error al cargar las tareas.</p>`;
-            }
+        // New class handling for navigation buttons
+        dom.viewContent.querySelectorAll('.task-nav-btn').forEach(btn => {
+            btn.classList.remove('bg-white', 'dark:bg-gray-800', 'text-primary-DEFAULT', 'shadow-sm');
+            btn.classList.add('text-text-secondary-light', 'dark:text-text-secondary-dark', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
         });
-    };
 
-    const renderTaskList = (tasks) => {
-        const container = dom.viewContent.querySelector('#task-list-container');
-        if (!container) return;
-
-        if (tasks.length === 0) {
-            container.innerHTML = `<div class="text-center py-16 text-gray-500"><i data-lucide="inbox" class="mx-auto h-16 w-16 text-gray-300"></i><h3 class="mt-4 text-lg font-semibold">No hay tareas</h3><p class="text-sm">No se encontraron tareas con los filtros actuales.</p></div>`;
-            lucide.createIcons();
-            return;
+        const activeButton = dom.viewContent.querySelector(`.task-nav-btn[data-task-view="${view}"]`);
+        if (activeButton) {
+            activeButton.classList.add('bg-white', 'dark:bg-gray-800', 'text-primary-DEFAULT', 'shadow-sm');
+            activeButton.classList.remove('text-text-secondary-light', 'dark:text-text-secondary-dark', 'hover:bg-gray-300', 'dark:hover:bg-gray-600');
         }
 
-        container.innerHTML = `<div class="space-y-4">${tasks.map(createTaskItem).join('')}</div>`;
-        lucide.createIcons();
+        const dashboardFilters = dom.viewContent.querySelector('#dashboard-filters');
+        if (dashboardFilters) {
+            dashboardFilters.classList.toggle('hidden', view !== 'dashboard');
+        }
+
+        if (view === 'dashboard') {
+            // The container for the dashboard view is the view-container itself
+            renderTaskDashboardView(viewContainer);
+        } else if (view === 'calendar') {
+            renderTaskCalendar(viewContainer);
+        } else if (view === 'kanban') {
+            runKanbanBoardLogic(viewContainer);
+        }
     };
 
-    const createTaskItem = (task) => {
-        const assignee = dependencies.appState.collectionsById.usuarios.get(task.assigneeUid);
-        const creator = dependencies.appState.collectionsById.usuarios.get(task.creatorUid);
-
-        const priorityClasses = {
-            high: 'border-red-500',
-            medium: 'border-yellow-500',
-            low: 'border-gray-400',
-        };
-
-        const statusOptions = ['todo', 'inprogress', 'done'].map(status =>
-            `<option value="${status}" ${task.status === status ? 'selected' : ''}>
-                ${{todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Completada'}[status]}
-            </option>`
-        ).join('');
-
-        return `
-            <div class="task-item bg-white shadow-sm rounded-lg p-4 flex items-start gap-4 border-l-4 ${priorityClasses[task.priority] || 'border-transparent'}">
-                <div class="flex-grow">
-                    <p class="font-bold text-lg text-gray-800">${task.title}</p>
-                    <p class="text-sm text-gray-600 mt-1">${task.description || ''}</p>
-                    <div class="text-xs text-gray-500 mt-3 flex items-center gap-4">
-                        <span>Creada por: <strong>${creator ? creator.name : 'Desconocido'}</strong></span>
-                        <span>Asignada a: <strong>${assignee ? assignee.name : 'Nadie'}</strong></span>
-                        <span>Vencimiento: <strong>${task.dueDate || 'Sin fecha'}</strong></span>
+    dom.viewContent.innerHTML = `
+        <div id="task-main-container">
+            <div class="bg-card-light dark:bg-card-dark p-4 rounded-lg shadow-sm mb-8 flex flex-wrap items-center border border-border-light dark:border-border-dark">
+                <div id="dashboard-filters" class="flex items-center space-x-4 mb-4 md:mb-0 hidden">
+                    <label class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark" for="view-select">Vista:</label>
+                    <div class="relative">
+                        <select class="appearance-none bg-background-light dark:bg-background-dark border border-border-light dark:border-border-dark rounded-md text-sm py-2 pl-3 pr-8 focus:ring-2 focus:ring-primary-DEFAULT focus:border-primary-DEFAULT" id="view-select">
+                            <option>Todas las Tareas</option>
+                            <option>Mis Tareas</option>
+                            <option>Tareas Asignadas</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-text-secondary-light dark:text-text-secondary-dark">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </div>
                     </div>
                 </div>
-                <div class="flex-shrink-0 flex flex-col items-end gap-2">
-                    <select data-action="change-status" data-task-id="${task.docId}" class="text-sm border-gray-300 rounded-md p-1.5">${statusOptions}</select>
-                    <button data-action="edit-task" data-task-id="${task.docId}" class="text-gray-500 hover:text-blue-600 p-1"><i data-lucide="edit" class="w-5 h-5 pointer-events-none"></i></button>
-                </div>
-            </div>
-        `;
-    };
 
-    const renderMainLayout = () => {
-        const { appState } = dependencies;
-        const isAdmin = appState.currentUser.role === 'admin';
-
-        dom.viewContent.innerHTML = `
-            <div id="unified-task-view" class="animate-fade-in-up">
-                <header class="flex justify-between items-center mb-6">
-                    <div>
-                        <h2 class="text-3xl font-bold text-slate-800">Gestor de Tareas</h2>
-                        <p class="text-slate-500">Un lugar central para todas tus tareas.</p>
-                    </div>
-                    <button id="add-new-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
-                        <i data-lucide="plus" class="mr-2 h-5 w-5"></i><span>Nueva Tarea</span>
+                <nav id="task-navigation" class="flex items-center bg-gray-200 dark:bg-gray-700 rounded-lg p-1 ml-auto">
+                    <button data-task-view="kanban" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
+                        <i data-lucide="list-checks" class="w-4 h-4 mr-2"></i> Kanban
                     </button>
-                </header>
-
-                <div class="bg-white p-4 rounded-lg shadow-sm mb-6 flex items-center gap-4">
-                    <div id="task-filters" class="flex items-center bg-gray-200 rounded-lg p-1">
-                        <button data-filter="user" class="task-filter-btn">Mis Tareas</button>
-                        <button data-filter="public" class="task-filter-btn">Ingeniería (Públicas)</button>
-                        ${isAdmin ? '<button data-filter="all" class="task-filter-btn">Todas</button>' : ''}
-                    </div>
-                    <div class="relative flex-grow">
-                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
-                        <input type="text" id="task-search-input" placeholder="Buscar por título o tag..." class="w-full pl-10 pr-4 py-2 border rounded-full bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none">
-                    </div>
-                </div>
-
-                <div id="task-list-container"></div>
+                    <button data-task-view="dashboard" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4 mr-2"></i> Dashboard
+                    </button>
+                    <button data-task-view="calendar" class="task-nav-btn px-4 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors">
+                        <i data-lucide="calendar" class="w-4 h-4 mr-2"></i> Calendario
+                    </button>
+                    <button id="task-settings-btn" class="px-3 py-1.5 text-sm font-medium rounded-md flex items-center transition-colors text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-300 dark:hover:bg-gray-600" title="Configuración">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                    </button>
+                </nav>
             </div>
-        `;
-        lucide.createIcons();
-        attachEventListeners();
-        updateFilterButtons();
-        fetchAndRender();
-    };
 
-    const updateFilterButtons = () => {
-        dom.viewContent.querySelectorAll('.task-filter-btn').forEach(btn => {
-            btn.classList.toggle('bg-white', btn.dataset.filter === state.activeFilter);
-            btn.classList.toggle('shadow-sm', btn.dataset.filter === state.activeFilter);
-            btn.classList.toggle('text-blue-600', btn.dataset.filter === state.activeFilter);
+            <div id="task-view-container" class="mt-4">
+                <!-- Content for the selected view will be rendered here -->
+            </div>
+        </div>
+    `;
+
+    const taskNav = dom.viewContent.querySelector('#task-navigation');
+    if (taskNav) {
+        taskNav.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (!button) return;
+
+            if (button.dataset.taskView) {
+                renderView(button.dataset.taskView);
+            } else if (button.id === 'task-settings-btn') {
+                openTelegramConfigModal();
+            }
         });
-    };
+    }
 
-    const attachEventListeners = () => {
-        const view = dom.viewContent.querySelector('#unified-task-view');
-        if (!view) return;
+    // Render the initial view passed to the function
+    renderView(initialView);
+    lucide.createIcons();
 
-        view.addEventListener('click', (e) => {
-            const filterButton = e.target.closest('.task-filter-btn');
-            if (filterButton) {
-                state.activeFilter = filterButton.dataset.filter;
-                updateFilterButtons();
-                fetchAndRender();
-            }
+    const taskMainContainer = dom.viewContent.querySelector('#task-main-container');
+    if (taskMainContainer) {
+        taskMainContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action]');
+            if (!button) return;
 
-            const addTaskBtn = e.target.closest('#add-new-task-btn');
-            if(addTaskBtn) {
-                openTaskFormModal();
-            }
+            const taskId = button.dataset.docId;
+            const action = button.dataset.action;
 
-            const editTaskBtn = e.target.closest('button[data-action="edit-task"]');
-            if(editTaskBtn) {
-                const taskId = editTaskBtn.dataset.taskId;
-                const taskDocRef = doc(dependencies.db, "tareas", taskId);
-                getDoc(taskDocRef).then(docSnap => {
-                    if (docSnap.exists()) {
-                        openTaskFormModal({ ...docSnap.data(), docId: docSnap.id });
-                    } else {
-                        dependencies.showToast('Error: No se pudo encontrar la tarea para editar.', 'error');
+            if (action === 'search-by-tag') {
+                const tag = button.dataset.tag;
+                const searchInput = dom.viewContent.querySelector('#task-search-input');
+                if (searchInput && tag) {
+                    searchInput.value = tag;
+                    // Dispatch an input event to trigger the search
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            } else if (action === 'delete-task') {
+                if (!taskId) return;
+                dependencies.showConfirmationModal(
+                    'Eliminar Tarea',
+                    '¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.',
+                    async () => {
+                        try {
+                            await deleteTask(taskId);
+                            dependencies.showToast('Tarea eliminada con éxito.', 'success');
+                        } catch (error) {
+                            console.error('Error deleting task:', error);
+                            dependencies.showToast('Error al eliminar la tarea.', 'error');
+                        }
                     }
+                );
+            } else if (action === 'complete-task') {
+                if (!taskId) return;
+                completeAndArchiveTask(taskId).then(() => {
+                    dependencies.showToast('Tarea completada y archivada.', 'success');
                 }).catch(error => {
-                    console.error("Error fetching task for edit:", error);
-                    dependencies.showToast('Error al cargar datos de la tarea.', 'error');
+                    console.error('Error completing task:', error);
+                    dependencies.showToast('Error al completar la tarea.', 'error');
                 });
             }
         });
-
-        view.addEventListener('change', (e) => {
-            const statusSelect = e.target.closest('select[data-action="change-status"]');
-            if(statusSelect) {
-                const taskId = statusSelect.dataset.taskId;
-                const newStatus = statusSelect.value;
-                updateTaskStatus(taskId, newStatus)
-                    .then(() => dependencies.showToast('Estado de la tarea actualizado.', 'success'))
-                    .catch(() => dependencies.showToast('Error al actualizar estado.', 'error'));
-            }
-        });
-
-        const searchInput = view.querySelector('#task-search-input');
-        searchInput.addEventListener('input', () => {
-            state.searchTerm = searchInput.value;
-            fetchAndRender();
-        });
-    };
-
-    renderMainLayout();
-
-    // Cleanup logic
-    dependencies.appState.currentViewCleanup = () => {
-        if (state.unsubscribe) {
-            state.unsubscribe();
-        }
-        console.log("Cleaned up unified task view listeners.");
-    };
+    }
 }

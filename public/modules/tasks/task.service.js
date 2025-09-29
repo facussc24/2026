@@ -255,96 +255,119 @@ export async function completeAndArchiveTask(taskId) {
     });
 }
 
-/**
- * Subscribes to a filtered list of tasks from Firestore and provides real-time updates.
- * This is the new unified function for all task fetching operations.
- *
- * @param {object} filters - An object containing filter criteria.
- * @param {string} [filters.mode='all'] - The main filter mode. Can be 'all', 'user', 'public'.
- * @param {string} [filters.userId] - The user ID to filter by (used with 'user' mode).
- * @param {string} [filters.priority] - Filter by priority ('low', 'medium', 'high').
- * @param {string} [filters.status] - Filter by status ('todo', 'inprogress', 'done').
- * @param {string} [filters.searchTerm] - A term to search for in the task's keywords.
- * @param {number} [filters.limit] - The number of tasks to retrieve per page.
- * @param {object} [filters.startAfter] - The Firestore document snapshot to start after for pagination.
- * @param {function} callback - The function to call with the results ({ tasks, lastVisible, isLastPage }).
- * @param {function} handleError - The function to call when an error occurs.
- * @returns {function} An unsubscribe function to stop the listener.
- */
-export function subscribeToTasks(filters = {}, callback, handleError) {
-    const {
-        mode = 'all', // 'all', 'user', 'public'
-        userId,
-        priority,
-        status,
-        searchTerm,
-        limit: pageSize,
-        startAfter: paginationStartAfter
-    } = filters;
-
+export function subscribeToAllTasks(callback, handleError) {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
-    let queryConstraints = [];
+    // Always order by creation date descending for consistency.
+    const q = query(tasksRef, orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const allTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+        callback(allTasks);
+    }, handleError);
+    return unsubscribe;
+}
 
-    // --- Filter Conditions ---
-    const filterConditions = [];
+export function subscribeToTasks(callback, handleError) {
+    const tasksRef = collection(db, COLLECTIONS.TAREAS);
+    const user = appState.currentUser;
+    const state = getState();
 
-    // Main mode filters
-    if (mode === 'user' && userId) {
-        filterConditions.push(or(
-            where('assigneeUid', '==', userId),
-            where('creatorUid', '==', userId)
-        ));
-    } else if (mode === 'public') {
-        filterConditions.push(where('isPublic', '==', true));
-    }
-    // 'all' mode has no primary filter condition.
+    let filterConditions = [];
 
-    // Additional filters
-    if (priority && priority !== 'all') {
-        filterConditions.push(where('priority', '==', priority));
+    // --- NEW LOGIC ---
+    // If user is not an admin, they can ONLY see their own tasks within this module.
+    if (user.role !== 'admin') {
+        filterConditions.push(where('assigneeUid', '==', user.uid));
     }
-    if (status && status !== 'all') {
-        filterConditions.push(where('status', '==', status));
+    // Admin can filter by user, or see public/all tasks
+    else {
+        if (state.kanban.activeFilter === 'personal') {
+            filterConditions.push(
+                or(
+                    where('assigneeUid', '==', user.uid),
+                    where('creatorUid', '==', user.uid)
+                )
+            );
+        } else if (state.kanban.selectedUserId) {
+            filterConditions.push(where('assigneeUid', '==', state.kanban.selectedUserId));
+        } else if (state.kanban.activeFilter === 'engineering') {
+            filterConditions.push(where('isPublic', '==', true));
+        }
+        // No special condition for 'all' for admin, it will just fetch all tasks.
     }
+
+    if (state.kanban.priorityFilter !== 'all') {
+        filterConditions.push(where('priority', '==', state.kanban.priorityFilter));
+    }
+
+    const searchTerm = state.kanban.searchTerm.toLowerCase().trim();
     if (searchTerm) {
-        filterConditions.push(where('search_keywords', 'array-contains', searchTerm.toLowerCase().trim()));
+        filterConditions.push(where('search_keywords', 'array-contains', searchTerm));
     }
 
-    // Combine filter conditions with 'and' if multiple exist
+    let queryConstraints = [];
     if (filterConditions.length > 1) {
         queryConstraints.push(and(...filterConditions));
     } else if (filterConditions.length === 1) {
         queryConstraints.push(filterConditions[0]);
     }
 
-    // --- Sorting and Pagination ---
     queryConstraints.push(orderBy('createdAt', 'desc'));
 
-    if (paginationStartAfter) {
-        queryConstraints.push(startAfter(paginationStartAfter));
-    }
-    if (pageSize) {
-        queryConstraints.push(limit(pageSize));
-    }
-
     const finalQuery = query(tasksRef, ...queryConstraints);
-
     const unsubscribe = onSnapshot(finalQuery, (snapshot) => {
+        const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+        callback(tasks);
+    }, (error) => {
+        console.error("Error in subscribeToTasks:", error);
+        if (error.code === 'failed-precondition') {
+            console.error("This error likely means you're missing a Firestore index. Check the browser's developer console for a link to create it automatically.");
+        }
+        handleError(error);
+    });
+
+    return [unsubscribe];
+}
+
+export function subscribeToPaginatedTasks(filters, pagination, callback, handleError) {
+    const { searchTerm, user, status, priority } = filters;
+    const { lastVisible, pageSize = 10 } = pagination;
+
+    const tasksRef = collection(db, COLLECTIONS.TAREAS);
+    let queryConstraints = [orderBy('createdAt', 'desc')];
+
+    if (user && user !== 'all') {
+        queryConstraints.push(where('assigneeUid', '==', user));
+    }
+    if (status && status !== 'all') {
+        queryConstraints.push(where('status', '==', status));
+    }
+    if (priority && priority !== 'all') {
+        queryConstraints.push(where('priority', '==', priority));
+    }
+
+    const lowercasedFilter = searchTerm ? searchTerm.toLowerCase().trim() : '';
+    if (lowercasedFilter) {
+        queryConstraints.push(where('search_keywords', 'array-contains', lowercasedFilter));
+    }
+
+    if (lastVisible) {
+        queryConstraints.push(startAfter(lastVisible));
+    }
+    queryConstraints.push(limit(pageSize));
+
+    const q = query(tasksRef, ...queryConstraints);
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
         const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
         const newLastVisible = snapshot.docs[snapshot.docs.length - 1];
 
-        const result = {
-            tasks,
+        callback({
+            tasks: tasks,
             lastVisible: newLastVisible,
-        };
-
-        if (pageSize) {
-            result.isLastPage = snapshot.docs.length < pageSize;
-        }
-
-        callback(result);
+            isLastPage: snapshot.docs.length < pageSize
+        });
     }, (error) => {
-        console.error("Error in unified subscribeToTasks:", error);
+        console.error("Error in subscribeToPaginatedTasks:", error);
         if (error.code === 'failed-precondition') {
             const indexLink = error.message.match(/(https?:\/\/[^\s]+)/);
             if (indexLink) {
@@ -352,9 +375,7 @@ export function subscribeToTasks(filters = {}, callback, handleError) {
                 showToast('Se requiere un índice de base de datos. Consulte la consola para obtener el enlace para crearlo.', 'error', 10000);
             }
         }
-        if (handleError) {
-            handleError(error);
-        }
+        handleError(error);
     });
 
     return unsubscribe;
