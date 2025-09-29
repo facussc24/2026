@@ -277,6 +277,9 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
         });
 
         const currentDate = new Date().toISOString().split("T")[0];
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowDate = tomorrow.toISOString().split("T")[0];
 
         const prompt = `
         Analiza el siguiente texto de un usuario. Tu objetivo es identificar si el texto describe una o varias tareas gestionables.
@@ -298,8 +301,12 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
             *   \\\`assignee\\\`: Nombre de la persona o \\\`null\\\`.
             *   \\\`isPublic\\\`: \\\`true\\\` (equipo/proyecto) o \\\`false\\\` (personal).
             *   \\\`project\\\`: Nombre del proyecto o \\\`null\\\`.
-        3.  **Generación de Tags:** Analiza el texto para extraer conceptos, tecnologías, nombres de proyectos o temas clave. Conviértelos en tags cortos, en minúsculas y sin caracteres especiales. Por ejemplo, "Arreglar bug en login de app Android" podría generar tags como ["bugfix", "login", "android"].
-        4.  **Corrección de Texto:** Corrige la gramática y ortografía en \\\`title\\\` y \\\`description\\\` para mayor claridad.
+        3.  **Asignación de Fechas Inteligente:**
+            *   Si el texto menciona una fecha específica (ej: "para el viernes", "el 15 de julio"), úsala para el campo \\\`dueDate\\\`.
+            *   **Si el texto implica inmediatez pero sin una fecha concreta (ej: "hacer esto ya", "encargarse de esto pronto", "lo antes posible"), DEBES asignar la fecha de mañana (${tomorrowDate}) al campo \\\`dueDate\\\`.**
+            *   Si no se menciona ninguna fecha o urgencia, deja \\\`dueDate\\\` como \\\`null\\\`.
+        4.  **Generación de Tags:** Analiza el texto para extraer conceptos, tecnologías, nombres de proyectos o temas clave. Conviértelos en tags cortos, en minúsculas y sin caracteres especiales. Por ejemplo, "Arreglar bug en login de app Android" podría generar tags como ["bugfix", "login", "android"].
+        5.  **Corrección de Texto:** Corrige la gramática y ortografía en \\\`title\\\` y \\\`description\\\` para mayor claridad.
 
         **Formato de Salida - REGLA CRÍTICA:**
         Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON. Este objeto debe contener una clave "tasks", cuyo valor es un array de los objetos de tarea que creaste.
