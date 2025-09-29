@@ -20,7 +20,6 @@ import {
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
-import { initVersionChecker } from './js/version-checker.js';
 import { getVersionById } from './js/services/version.service.js';
 
 // NOTA DE SEGURIDAD: La configuración de Firebase no debe estar hardcodeada en el código fuente.
@@ -3588,11 +3587,8 @@ onAuthStateChanged(auth, async (user) => {
             renderUserMenu();
             renderNotificationCenter();
 
-            // Iniciar el verificador de actualizaciones de versión en segundo plano
-            // Se envuelve en DOMContentLoaded para asegurar que el DOM esté listo.
-            document.addEventListener('DOMContentLoaded', () => {
-                initVersionChecker();
-            });
+            // The old version checker has been removed.
+            // The new system uses Firestore listeners for real-time notifications.
 
             console.log("About to switch view to landing-page...");
             // This is the critical sequence: render the content, THEN hide the loading screen.
