@@ -246,6 +246,17 @@ export function updateTaskStatus(taskId, newStatus) {
     return updateDoc(taskRef, { status: newStatus });
 }
 
+export async function applyPlan(plan) {
+    const batch = writeBatch(db);
+    plan.forEach(item => {
+        if (item.taskId && item.plannedDate) {
+            const taskRef = doc(db, COLLECTIONS.TAREAS, item.taskId);
+            batch.update(taskRef, { plannedDate: item.plannedDate });
+        }
+    });
+    await batch.commit();
+}
+
 export async function completeAndArchiveTask(taskId) {
     const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
     await updateDoc(taskRef, {
