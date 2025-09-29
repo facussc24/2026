@@ -917,6 +917,10 @@ export function getAIAssistantModalHTML() {
                 <div>
                     <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Selecciona una pregunta para obtener un resumen de las tareas visibles actualmente:</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <button data-question="plan-my-week" class="ai-question-btn col-span-1 sm:col-span-2 bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200">
+                            <i data-lucide="calendar-days"></i>
+                            <span class="font-bold">Planificar mi Semana (Tareas sin fecha)</span>
+                        </button>
                         <button data-question="summary" class="ai-question-btn">
                             <i data-lucide="align-left"></i>
                             <span>Generar resumen del estado actual</span>

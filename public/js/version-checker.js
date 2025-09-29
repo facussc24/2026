@@ -41,7 +41,18 @@ async function fetchVersionInfo() {
     }
 }
 
-// La función showUpdateNotification ya no es necesaria, la eliminamos.
+/**
+ * Muestra el banner de notificación de actualización.
+ */
+function showUpdateNotification() {
+    if (banner) {
+        banner.classList.remove('hidden');
+        // Detener las comprobaciones futuras una vez que se muestra la notificación.
+        if (checkInterval) {
+            clearInterval(checkInterval);
+        }
+    }
+}
 
 /**
  * Comprueba si hay una nueva versión disponible.
@@ -69,28 +80,7 @@ async function checkForUpdates() {
     if (hasNewVersion) {
         console.log(`[Versiones] ¡Nueva versión detectada!`);
         newVersionInfo = latestVersion;
-
-        // Ocultar el banner por defecto, ya que ahora usamos el centro de notificaciones.
-        if (banner) {
-            banner.classList.add('hidden');
-        }
-
-        // Enviar una notificación al centro de notificaciones.
-        // La acción 'show_release_notes' será manejada por el manejador de clics global en main.js
-        window.sendNotification(
-            '¡Nueva versión disponible!',
-            'Se ha detectado una nueva versión de la aplicación. Haz clic para ver las novedades.',
-            'info',
-            {
-                action: 'show_release_notes',
-                version_hash: newVersionInfo.hash,
-            }
-        );
-
-        // Detener las comprobaciones futuras una vez que se detecta una nueva versión.
-        if (checkInterval) {
-            clearInterval(checkInterval);
-        }
+        showUpdateNotification();
     } else {
         console.log('[Versiones] La aplicación ya está en la última versión.');
     }
@@ -98,25 +88,13 @@ async function checkForUpdates() {
 
 /**
  * Muestra el modal con las notas de la versión.
- * Ahora es accesible globalmente para ser llamada desde main.js.
  */
-window.showReleaseNotes = function() {
-    const versionData = window.getNewVersionInfo();
-    if (modal && versionData) {
-        releaseNotesContent.textContent = versionData.message || 'No se proporcionaron detalles para esta versión.';
+function showReleaseNotes() {
+    if (modal && newVersionInfo) {
+        releaseNotesContent.textContent = newVersionInfo.message || 'No se proporcionaron detalles para esta versión.';
         modal.classList.remove('hidden');
-    } else {
-        console.error('[Versiones] No se pudo mostrar el modal de notas de versión porque no se encontró información de la nueva versión.');
     }
 }
-
-/**
- * Expone la información de la nueva versión de forma segura.
- * @returns {object|null}
- */
-window.getNewVersionInfo = function() {
-    return newVersionInfo;
-};
 
 /**
  * Oculta el modal de las notas de la versión.
