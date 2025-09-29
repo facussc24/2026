@@ -4,6 +4,8 @@
 let currentVersionInfo = null;
 let newVersionInfo = null;
 let checkInterval = null;
+let sendNotification = null;
+let appState = null;
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutos
 
@@ -80,7 +82,13 @@ async function checkForUpdates() {
     if (hasNewVersion) {
         console.log(`[Versiones] ¡Nueva versión detectada!`);
         newVersionInfo = latestVersion;
-        showUpdateNotification();
+        showUpdateNotification(); // Keep the banner for now as a visual cue
+        if (sendNotification && appState.currentUser) {
+            sendNotification(appState.currentUser.uid, `Nueva versión ${newVersionInfo.version || ''} disponible.`, {
+                action: 'show-release-notes',
+                params: { versionInfo: newVersionInfo }
+            });
+        }
     } else {
         console.log('[Versiones] La aplicación ya está en la última versión.');
     }
@@ -116,8 +124,10 @@ function applyUpdate() {
 /**
  * Inicializa el verificador de versiones.
  */
-export function initVersionChecker() {
+export function initVersionChecker(dependencies = {}) {
     console.log('[Versiones] Inicializando el verificador de versiones...');
+    sendNotification = dependencies.sendNotification;
+    appState = dependencies.appState;
 
     if (!banner || !modal) {
         console.error('[Versiones] Error: No se encontraron los elementos del DOM necesarios (banner o modal). El script no puede continuar.');

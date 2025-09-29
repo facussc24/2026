@@ -1,12 +1,10 @@
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
-import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram, completeAndArchiveTask, applyPlan } from './task.service.js';
+import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram, completeAndArchiveTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML, getPlannerHelpModalHTML, getAIAnalysisModalHTML, getTasksModalHTML } from './task.templates.js';
 import { openTaskFormModal } from './task.modal.js';
-import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { COLLECTIONS } from '../../utils.js';
 
 let appState;
 let dom;

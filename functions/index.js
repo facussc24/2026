@@ -493,6 +493,7 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
     }
 });
 
+
 exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     // ... function logic
 });

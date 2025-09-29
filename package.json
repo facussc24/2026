@@ -1,8 +1,7 @@
 {
   "name": "app",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "**Gestión PRO** es una aplicación web completa diseñada para la gestión integral de procesos de producción industrial. Permite administrar productos, semiterminados, insumos, clientes, proveedores y otras entidades clave del negocio. Su funcionalidad central es la capacidad de construir y visualizar las complejas relaciones jerárquicas entre componentes a través de \"árboles de producto\" dinámicos.",
-  "releaseNotes": "feat: Enhance AI Task Creation and Planning\n\n- New AI-generated tasks with implied urgency are now automatically scheduled for the next day.\n- The 'Plan My Week' feature now correctly analyzes all unscheduled tasks, not just filtered ones.",
   "main": "public/main.js",
   "type": "module",
   "scripts": {
