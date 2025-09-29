@@ -5,7 +5,8 @@
   "main": "public/main.js",
   "type": "module",
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "version": "node scripts/generate-version.js"
   },
   "repository": {
     "type": "git",

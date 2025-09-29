@@ -20,6 +20,7 @@ import {
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
+import { initVersionChecker } from './js/version-checker.js';
 
 // NOTA DE SEGURIDAD: La configuración de Firebase no debe estar hardcodeada en el código fuente.
 // En un entorno de producción, estos valores deben cargarse de forma segura,
@@ -3507,6 +3508,9 @@ onAuthStateChanged(auth, async (user) => {
             updateNavForRole();
             renderUserMenu();
             renderNotificationCenter();
+
+            // Iniciar el verificador de actualizaciones de versión en segundo plano
+            initVersionChecker();
 
             console.log("About to switch view to landing-page...");
             // This is the critical sequence: render the content, THEN hide the loading screen.
