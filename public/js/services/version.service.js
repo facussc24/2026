@@ -15,10 +15,6 @@ import {
 import { getAuth } from "https://www.gstatic.com/firebasejs/9.10.0/firebase-auth.js";
 import { Version } from "../models/Version.js";
 
-const db = getFirestore();
-const auth = getAuth();
-const versionsCollection = collection(db, "versiones");
-
 /**
  * Creates a new version announcement in Firestore.
  * @param {string} versionTag - The version tag, e.g., "v1.2.3".
@@ -26,6 +22,10 @@ const versionsCollection = collection(db, "versiones");
  * @returns {Promise<string>} The ID of the newly created version document.
  */
 export async function createVersion(versionTag, notes) {
+    const auth = getAuth();
+    const db = getFirestore();
+    const versionsCollection = collection(db, "versiones");
+
     const user = auth.currentUser;
     if (!user) {
         throw new Error("User must be authenticated to create a version.");
@@ -52,6 +52,8 @@ export async function createVersion(versionTag, notes) {
  * @returns {Promise<Version[]>} An array of Version instances.
  */
 export async function getVersions() {
+    const db = getFirestore();
+    const versionsCollection = collection(db, "versiones");
     const q = query(versionsCollection, orderBy("releaseDate", "desc"));
     try {
         const querySnapshot = await getDocs(q);
@@ -67,6 +69,8 @@ export async function getVersions() {
  * @returns {Promise<Version|null>} The latest Version instance, or null if none exist.
  */
 export async function getLatestVersion() {
+    const db = getFirestore();
+    const versionsCollection = collection(db, "versiones");
     const q = query(versionsCollection, orderBy("releaseDate", "desc"), limit(1));
     try {
         const querySnapshot = await getDocs(q);
@@ -88,6 +92,7 @@ export async function getLatestVersion() {
  */
 export async function getVersionById(versionId) {
     if (!versionId) return null;
+    const db = getFirestore();
     const docRef = doc(db, "versiones", versionId);
     try {
         const docSnap = await getDoc(docRef);
