@@ -50,6 +50,11 @@ module.exports = {
     "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js": "<rootDir>/__mocks__/firebase-storage.js",
     "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js": "<rootDir>/__mocks__/firebase-firestore.js",
     "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js": "<rootDir>/__mocks__/firebase-functions.js",
+    "https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js": "<rootDir>/__mocks__/firebase-app.js",
+    "https://www.gstatic.com/firebasejs/9.10.0/firebase-auth.js": "<rootDir>/__mocks__/firebase-auth.js",
+    "https://www.gstatic.com/firebasejs/9.10.0/firebase-storage.js": "<rootDir>/__mocks__/firebase-storage.js",
+    "https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js": "<rootDir>/__mocks__/firebase-firestore.js",
+    "https://www.gstatic.com/firebasejs/9.10.0/firebase-functions.js": "<rootDir>/__mocks__/firebase-functions.js",
 
     // Mock Three.js and its addons
     "^three/examples/jsm/controls/OrbitControls.js$": "<rootDir>/__mocks__/three.js",
