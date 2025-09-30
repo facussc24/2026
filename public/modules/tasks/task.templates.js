@@ -994,7 +994,7 @@ export function getWeekOrganizerModalHTML() {
             <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
                 <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
                     <i data-lucide="wand-2" class="w-6 h-6 text-teal-500"></i>
-                    Organizador Semanal Inteligente
+                    Asistente de Tareas Inteligente
                 </h3>
                 <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                     <i data-lucide="x" class="h-6 w-6"></i>
@@ -1013,18 +1013,18 @@ export function getWeekOrganizerModalHTML() {
                 </div>
                 <!-- User Feedback Section -->
                 <div id="organizer-feedback-view" class="flex flex-col">
-                    <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Haz ajustes o contrapropuestas</h4>
+                    <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Indica los cambios que quieres hacer</h4>
                     <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                        Puedes decirle a la IA qué cambiar. Por ejemplo: "El lunes quiero un día tranquilo" o "La tarea 'Revisar Planos' es para el martes, no el lunes".
+                        El asistente puede actualizar el estado, fechas o títulos de tus tareas. También puedes pedirle que re-organice lo que queda pendiente.
                     </p>
-                    <textarea id="organizer-prompt-textarea" class="w-full h-full flex-grow bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-teal-500" placeholder="Escribe tus indicaciones aquí..."></textarea>
+                    <textarea id="organizer-prompt-textarea" class="w-full h-full flex-grow bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-teal-500" placeholder="Ej: Hoy terminé la tarea de 'Revisar Planos'. La de llamar al proveedor de acero es para mañana. Con eso, reorganiza mis tareas pendientes."></textarea>
                 </div>
             </div>
             <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
                 <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
                 <button id="organizer-submit-btn" type="button" class="bg-teal-600 text-white px-5 py-2 rounded-md hover:bg-teal-700 font-semibold transition-colors flex items-center gap-2">
                     <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-                    Refinar Plan
+                    Generar Propuesta
                 </button>
                  <button id="organizer-apply-plan-btn" type="button" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold transition-colors flex items-center gap-2">
                     <i data-lucide="check-check" class="w-5 h-5"></i>
@@ -1033,6 +1033,47 @@ export function getWeekOrganizerModalHTML() {
             </div>
         </div>
     </div>
+    `;
+}
+
+export function getAIModificationPlanHTML(plan) {
+    if (!plan || plan.length === 0) {
+        return '<p class="text-center text-slate-500">La IA no sugirió ninguna acción.</p>';
+    }
+
+    const modificationItems = plan.filter(item => item.updates).map(item => {
+        const { originalTitle, updates } = item;
+        let actionText = '';
+        if (updates.status === 'done') {
+            actionText = `<span class="font-bold text-green-600">Marcar como completada:</span> "${originalTitle}"`;
+        } else if (updates.dueDate) {
+            const date = new Date(updates.dueDate + 'T00:00:00').toLocaleDateString('es-AR');
+            actionText = `<span class="font-bold text-blue-600">Cambiar fecha a ${date}:</span> "${originalTitle}"`;
+        } else if (updates.title) {
+            actionText = `<span class="font-bold text-orange-600">Renombrar:</span> "${originalTitle}" a "${updates.title}"`;
+        } else {
+            actionText = `Acción desconocida para: "${originalTitle}"`;
+        }
+        return `<li class="flex items-start gap-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-md">
+                    <i data-lucide="check" class="w-5 h-5 text-green-500 mt-1"></i>
+                    <span class="text-slate-700 dark:text-slate-300">${actionText}</span>
+                </li>`;
+    }).join('');
+
+    const reorganizeItem = plan.find(item => item.action === 'reorganize');
+    const reorganizeHTML = reorganizeItem ? `
+        <li class="flex items-start gap-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-md">
+            <i data-lucide="refresh-cw" class="w-5 h-5 text-purple-500 mt-1"></i>
+            <span class="text-slate-700 dark:text-slate-300"><span class="font-bold text-purple-600">Re-organizar</span> las tareas pendientes restantes.</span>
+        </li>` : '';
+
+    return `
+        <h4 class="text-base font-bold text-slate-800 dark:text-slate-200 mb-3">Plan de Acción Propuesto</h4>
+        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Revisa las acciones que el asistente propone. Si estás de acuerdo, haz clic en "Aplicar este Plan".</p>
+        <ul class="space-y-3">
+            ${modificationItems}
+            ${reorganizeHTML}
+        </ul>
     `;
 }
 

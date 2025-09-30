@@ -16,7 +16,8 @@ import {
     getAIAssistantPromptViewHTML,
     getAILoadingViewHTML,
     getAIReviewViewHTML,
-    getWeekOrganizerModalHTML
+    getWeekOrganizerModalHTML,
+    getAIModificationPlanHTML
 } from './task.templates.js';
 
 let appState;
@@ -530,17 +531,21 @@ export async function openWeekOrganizerModal() {
     const modalElement = document.getElementById('week-organizer-modal');
     const planContentEl = document.getElementById('ai-week-plan-content');
     const promptTextarea = document.getElementById('organizer-prompt-textarea');
-    const refineBtn = document.getElementById('organizer-submit-btn');
+    const submitBtn = document.getElementById('organizer-submit-btn');
     const applyBtn = document.getElementById('organizer-apply-plan-btn');
     const functions = getFunctions();
 
-    // Disable buttons until plan is loaded
-    refineBtn.disabled = true;
+    // Set initial state
+    planContentEl.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
+        <i data-lucide="edit" class="w-10 h-10 mb-2"></i>
+        <p>Escribe tu petición en el cuadro de la derecha para comenzar.</p>
+    </div>`;
+    lucide.createIcons();
     applyBtn.disabled = true;
 
     const showLoading = (button, text) => {
         button.disabled = true;
-        button.innerHTML = `<i data-lucide="loader-circle" class="animate-spin w-5 h-5"></i><span>${text}</span>`;
+        button.innerHTML = `<i data-lucide="loader-circle" class="animate-spin w-5 h-5 mr-2"></i><span>${text}</span>`;
         lucide.createIcons();
     };
 
@@ -550,39 +555,50 @@ export async function openWeekOrganizerModal() {
         lucide.createIcons();
     };
 
-    const originalRefineHTML = refineBtn.innerHTML;
+    const originalSubmitHTML = submitBtn.innerHTML;
     const originalApplyHTML = applyBtn.innerHTML;
 
-    const refinePlan = async () => {
-        const currentPlan = planContentEl.dataset.rawPlan;
-        const userInstruction = promptTextarea.value.trim();
-
-        if (!userInstruction) {
-            showToast('Por favor, escribe una instrucción para refinar el plan.', 'warning');
+    const handleModificationRequest = async () => {
+        const userPrompt = promptTextarea.value.trim();
+        if (!userPrompt) {
+            showToast('Por favor, escribe una instrucción para el asistente.', 'warning');
             return;
         }
 
-        showLoading(refineBtn, 'Refinando...');
-        planContentEl.classList.add('opacity-50');
+        showLoading(submitBtn, 'Generando...');
+        planContentEl.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
+            <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
+            <p>Analizando tu petición y generando un plan...</p>
+        </div>`;
+        lucide.createIcons();
+        applyBtn.disabled = true;
+
 
         try {
-            const refineWeeklyPlan = httpsCallable(functions, 'refineWeeklyPlan');
-            const result = await refineWeeklyPlan({
-                plan: JSON.parse(currentPlan),
-                instruction: userInstruction
-            });
+            const allTasks = await fetchAllTasks();
+            const getTaskModificationPlan = httpsCallable(functions, 'getTaskModificationPlan');
+            const result = await getTaskModificationPlan({ userPrompt, tasks: allTasks });
 
-            const { plan: newPlan, analysis: newAnalysis } = result.data;
-            planContentEl.innerHTML = marked.parse(newAnalysis);
-            planContentEl.dataset.rawPlan = JSON.stringify(newPlan);
-            promptTextarea.value = ''; // Clear prompt after successful refinement
+            const modificationPlan = result.data.plan;
+
+            // Store the raw plan for the apply function
+            planContentEl.dataset.rawPlan = JSON.stringify(modificationPlan);
+
+            // Render the generated plan for user confirmation
+            planContentEl.innerHTML = getAIModificationPlanHTML(modificationPlan);
+            lucide.createIcons();
+
+
+            applyBtn.disabled = false; // Enable apply button now that there's a plan
 
         } catch (error) {
-            console.error("Error refining weekly plan:", error);
-            showToast(error.message || 'Error al refinar el plan.', 'error');
+            console.error("Error getting modification plan:", error);
+            const errorMessage = error.details?.message || error.message || 'Error al generar el plan de modificación.';
+            showToast(errorMessage, 'error');
+            planContentEl.innerHTML = `<div class="text-center text-red-500"><i data-lucide="alert-triangle" class="mx-auto w-10 h-10 mb-2"></i><p>${errorMessage}</p></div>`;
+            lucide.createIcons();
         } finally {
-            hideLoading(refineBtn, originalRefineHTML);
-            planContentEl.classList.remove('opacity-50');
+            hideLoading(submitBtn, originalSubmitHTML);
         }
     };
 
@@ -594,108 +610,29 @@ export async function openWeekOrganizerModal() {
         }
 
         showLoading(applyBtn, 'Aplicando...');
-        refineBtn.disabled = true;
+        submitBtn.disabled = true;
 
         try {
-            const executeWeeklyPlan = httpsCallable(functions, 'executeWeeklyPlan');
-            await executeWeeklyPlan({ plan: JSON.parse(finalPlan) });
+            const executeTaskModificationPlan = httpsCallable(functions, 'executeTaskModificationPlan');
+            await executeTaskModificationPlan({ plan: JSON.parse(finalPlan) });
 
-            showToast('¡Plan semanal aplicado con éxito! Tus tareas han sido reprogramadas.', 'success');
+            showToast('¡Plan aplicado con éxito! Tus tareas han sido actualizadas.', 'success');
             closeModal();
             // A simple page reload is the easiest way to ensure all components are updated
-            // with the new task dates.
+            // with the new task data.
             location.reload();
 
         } catch (error) {
-            console.error("Error executing weekly plan:", error);
+            console.error("Error executing modification plan:", error);
             showToast(error.message || 'Error al aplicar el plan.', 'error');
             hideLoading(applyBtn, originalApplyHTML);
-            refineBtn.disabled = false;
+            submitBtn.disabled = false;
         }
     };
 
     // Define close action
     const closeModal = () => modalElement.remove();
     modalElement.querySelector('[data-action="close"]').addEventListener('click', closeModal);
-    refineBtn.addEventListener('click', refinePlan);
+    submitBtn.addEventListener('click', handleModificationRequest);
     applyBtn.addEventListener('click', applyPlan);
-
-    // Initial plan generation
-    try {
-        const allTasks = await fetchAllTasks();
-        const pendingTasks = allTasks.filter(task => task.status !== 'done' || !task.plannedDate);
-
-        const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
-        const result = await analyzeWeeklyTasks({ tasks: pendingTasks });
-        const { plan } = result.data;
-
-        const generateAnalysisMarkdown = (plan, tasks) => {
-            const today = new Date();
-            const dayOfWeek = today.getDay(); // Sunday - Saturday : 0 - 6
-            const isWeekend = dayOfWeek === 6 || dayOfWeek === 0;
-            const diffToMonday = isWeekend ? (dayOfWeek === 6 ? 2 : 1) : 1 - dayOfWeek;
-            const monday = new Date(today);
-            monday.setDate(today.getDate() + diffToMonday);
-
-            const weekDates = Array.from({ length: 5 }).map((_, i) => {
-                const date = new Date(monday);
-                date.setDate(monday.getDate() + i);
-                return date.toISOString().split('T')[0];
-            });
-
-            const weekDayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-            const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-            const weekDatesWithNames = weekDates.map(dateStr => {
-                const date = new Date(dateStr + "T12:00:00Z"); // Use UTC to avoid timezone issues
-                const dayName = weekDayNames[date.getUTCDay()];
-                return `${dayName} ${date.getUTCDate()} de ${monthNames[date.getUTCMonth()]}`;
-            });
-
-            const tasksByDate = {};
-            plan.forEach(p => {
-                if (!tasksByDate[p.plannedDate]) {
-                    tasksByDate[p.plannedDate] = [];
-                }
-                tasksByDate[p.plannedDate].push(p.title);
-            });
-
-            let markdown = "### Propuesta de la IA\nEsta es una propuesta inicial para organizar tus tareas de la semana. Puedes refinarla usando el cuadro de texto de abajo.\n\n### Plan Detallado\n";
-
-            weekDates.forEach((date, index) => {
-                if (tasksByDate[date] && tasksByDate[date].length > 0) {
-                    markdown += `*   **${weekDatesWithNames[index]}**:\n`;
-                    tasksByDate[date].forEach(title => {
-                        markdown += `    *   ${title}\n`;
-                    });
-                }
-            });
-
-            const plannedTaskIds = new Set(plan.map(p => p.taskId));
-            const unplannedTasks = tasks.filter(t => !plannedTaskIds.has(t.docId));
-
-            if (unplannedTasks.length > 0) {
-                markdown += "\n### 🗓️ Tareas Fuera de Horizonte\n";
-                unplannedTasks.forEach(task => {
-                    markdown += `*   ${task.title}\n`;
-                });
-            }
-
-            return markdown;
-        };
-
-        const analysis = generateAnalysisMarkdown(plan, pendingTasks);
-        planContentEl.innerHTML = marked.parse(analysis);
-        planContentEl.dataset.rawPlan = JSON.stringify(plan);
-
-        refineBtn.disabled = false;
-        applyBtn.disabled = false;
-
-    } catch (error) {
-        console.error("Error organizing week:", error);
-        const errorMessage = error.details?.message || error.message || 'Error al generar el plan semanal.';
-        showToast(errorMessage, 'error');
-        planContentEl.innerHTML = `<div class="text-center text-red-500"><i data-lucide="alert-triangle" class="mx-auto w-10 h-10 mb-2"></i><p>${errorMessage}</p><p>Por favor, intente de nuevo.</p></div>`;
-        lucide.createIcons();
-    }
 }
