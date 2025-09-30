@@ -80,7 +80,12 @@ function renderLandingPageHTML() {
                         <div class="flex items-center gap-2">
                              <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
                             <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
-                            <button id="ai-assistant-btn" class="bg-purple-600 text-white px-5 py-2.5 rounded-full hover:bg-purple-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="sparkles" class="mr-2 h-5 w-5"></i>Asistente IA</button>
+                            <button id="gemini-create-task-btn" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
+                                <span class="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></span>
+                                <span class="relative flex items-center">
+                                    <i data-lucide="sparkles" class="mr-2 h-5 w-5"></i>Crear con Gemini
+                                </span>
+                            </button>
                             <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea</button>
                         </div>
                     </div>
@@ -359,7 +364,7 @@ function updateKpiCards(kpiData) {
 
 function setupActionButtons() {
     document.getElementById('show-planner-help-btn')?.addEventListener('click', () => showPlannerHelpModal());
-    document.getElementById('ai-assistant-btn')?.addEventListener('click', () => {
+    document.getElementById('gemini-create-task-btn')?.addEventListener('click', () => {
         if (openAIAssistantModal) {
             openAIAssistantModal();
         } else {
