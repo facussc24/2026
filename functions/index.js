@@ -539,6 +539,46 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
     // ... function logic
   });
 
+/**
+ * Scheduled function to delete archived tasks older than 6 months.
+ * Runs every day at 3:00 AM (Argentina time).
+ */
+exports.deleteOldArchivedTasks = functions.pubsub.schedule("every day 03:00")
+  .timeZone("America/Argentina/Buenos_Aires")
+  .onRun(async (context) => {
+    console.log("Running scheduled task: Deleting old archived tasks...");
+
+    const db = admin.firestore();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const tasksRef = db.collection("tareas");
+    const q = query(tasksRef,
+        where('isArchived', '==', true),
+        where('completedAt', '<', sixMonthsAgo)
+    );
+
+    try {
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            console.log("No old archived tasks to delete.");
+            return null;
+        }
+
+        const batch = db.batch();
+        querySnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+        console.log(`Successfully deleted ${querySnapshot.size} old archived tasks.`);
+        return null;
+    } catch (error) {
+        console.error("Error deleting old archived tasks:", error);
+        return null;
+    }
+});
+
 // CORRECTED SYNTAX
 exports.sendTaskNotification = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .firestore.document('tareas/{taskId}')

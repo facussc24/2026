@@ -3,6 +3,23 @@
  * These functions are responsible for generating the HTML structure of the components.
  */
 
+export function getEmptyStateHTML(icon, title, message, ctaButton) {
+    const buttonHTML = ctaButton ?
+        `<button data-action="${ctaButton.action}" data-status="${ctaButton.status || ''}" class="mt-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm py-1.5 px-4 rounded-full mx-auto flex items-center transition-colors">
+            <i data-lucide="${ctaButton.icon || 'plus'}" class="mr-1.5 h-4 w-4"></i>${ctaButton.text}
+        </button>` :
+        '';
+
+    return `
+        <div class="empty-state-container p-6 text-center text-slate-500 border-2 border-dashed border-slate-200 rounded-lg h-full flex flex-col justify-center items-center no-drag animate-fade-in">
+            <i data-lucide="${icon}" class="h-12 w-12 mx-auto text-slate-400"></i>
+            <h4 class="mt-4 font-semibold text-slate-600">${title}</h4>
+            <p class="text-sm mt-1 mb-4 max-w-xs mx-auto">${message}</p>
+            ${buttonHTML}
+        </div>
+    `;
+}
+
 export function getKanbanBoardHTML(state, selectedUser) {
     let topBarHTML = '';
     if (state.kanban.selectedUserId) {
@@ -54,6 +71,9 @@ export function getKanbanBoardHTML(state, selectedUser) {
                     <button class="kanban-toggle-btn p-1 hover:bg-slate-200 rounded-full"><i data-lucide="chevron-down" class="w-5 h-5 transition-transform"></i></button>
                 </h3>
                 <div class="task-list min-h-[300px] p-4 space-y-4 overflow-y-auto"></div>
+                <div class="p-4 mt-auto border-t border-slate-200">
+                    <input type="text" id="quick-add-task-input" placeholder="Añadir tarea y presionar Enter..." class="w-full px-3 py-2 border rounded-md bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm" />
+                </div>
             </div>
             <div class="task-column bg-slate-100/80 rounded-xl" data-status="inprogress">
                 <h3 class="font-bold text-slate-800 p-3 border-b-2 border-slate-300 mb-4 flex justify-between items-center cursor-pointer kanban-column-header">
@@ -259,14 +279,6 @@ export function getAdminUserListHTML(users) {
 }
 
 export function getTasksTableHTML(tasks, userMap) {
-    if (tasks.length === 0) {
-        return `<div class="text-center py-16 text-slate-500 dark:text-slate-400">
-            <i data-lucide="inbox" class="w-12 h-12 mx-auto text-slate-400"></i>
-            <h3 class="mt-4 text-lg font-semibold">No se encontraron tareas</h3>
-            <p class="text-sm text-slate-400 mt-1">Intenta ajustar los filtros de búsqueda.</p>
-        </div>`;
-    }
-
     const tableRows = tasks.map(task => {
         const assignee = userMap.get(task.assigneeUid);
         const assigneeName = assignee ? assignee.name : 'No asignado';
@@ -389,10 +401,6 @@ export function getTaskTableFiltersHTML(currentUser, users) {
 }
 
 export function getMyPendingTasksWidgetHTML(tasks) {
-    if (tasks.length === 0) {
-        return '<p class="text-sm text-slate-500 text-center py-4">¡No tienes tareas pendientes!</p>';
-    }
-
     return tasks.map(task => {
         const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00") : null;
         const today = new Date();
