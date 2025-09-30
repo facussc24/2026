@@ -20,7 +20,6 @@ import {
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
-import { getVersionById } from './js/services/version.service.js';
 
 // NOTA DE SEGURIDAD: La configuración de Firebase no debe estar hardcodeada en el código fuente.
 // En un entorno de producción, estos valores deben cargarse de forma segura,
@@ -222,10 +221,6 @@ const viewConfig = {
             { key: 'id', label: 'ID (admin, editor, lector)', type: 'text', required: true },
             { key: 'descripcion', label: 'Descripción (Administrador, Editor, Lector)', type: 'text', required: true }
         ]
-    },
-    versions: {
-        title: 'Gestión de Versiones',
-        singular: 'Versión'
     }
 };
 
@@ -440,69 +435,6 @@ function openAvatarSelectionModal() {
             }
         }
     });
-}
-
-async function showVersionReleaseModal(versionId) {
-    if (!versionId) return;
-
-    const toastId = showToast('Cargando novedades...', 'loading', { duration: 0 });
-
-    try {
-        const version = await getVersionById(versionId);
-
-        if (!version) {
-            showToast('No se pudieron cargar las notas de la versión.', 'error', { toastId });
-            return;
-        }
-
-        showToast('Cargado', 'success', { toastId, duration: 1 });
-
-        // Ensure marked.js is available
-        if (typeof marked === 'undefined') {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
-            document.head.appendChild(script);
-            await new Promise(resolve => script.onload = resolve);
-        }
-
-        const releaseNotesHTML = marked.parse(version.notes || '*No se proporcionaron notas para esta versión.*');
-
-        const modalId = `version-release-modal-${version.id}`;
-        const modalHTML = `
-            <div id="${modalId}" class="fixed inset-0 z-[11000] flex items-center justify-center modal-backdrop animate-fade-in">
-                <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl m-4 modal-content max-h-[90vh] flex flex-col">
-                    <div class="flex justify-between items-center p-5 border-b">
-                        <h3 class="text-xl font-bold text-slate-800 flex items-center gap-3">
-                            <i data-lucide="sparkles" class="w-6 h-6 text-blue-500"></i>
-                            Novedades en la Versión ${version.versionTag}
-                        </h3>
-                        <button data-action="close-modal" class="text-gray-500 hover:text-gray-800">
-                             <i data-lucide="x" class="w-6 h-6"></i>
-                        </button>
-                    </div>
-                    <div class="p-6 prose prose-sm max-w-none custom-scrollbar overflow-y-auto">
-                        ${releaseNotesHTML}
-                    </div>
-                    <div class="flex justify-end items-center p-4 border-t bg-gray-50 mt-auto">
-                        <button data-action="close-modal" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 font-semibold">Cerrar</button>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
-        lucide.createIcons();
-
-        const modalElement = document.getElementById(modalId);
-        modalElement.addEventListener('click', (e) => {
-            if (e.target.closest('[data-action="close-modal"]')) {
-                modalElement.remove();
-            }
-        });
-    } catch (error) {
-        console.error("Error showing version release modal:", error);
-        showToast('Error al mostrar las novedades.', 'error', { toastId });
-    }
 }
 
 function stopRealtimeListeners() {
@@ -1411,11 +1343,6 @@ async function switchView(viewName, params = null) {
     else if (viewName === 'profile') await runProfileLogic();
     else if (viewName === 'tareas') await runTasksLogicFromModule('kanban');
     else if (viewName === 'task-dashboard') await runTasksLogicFromModule('dashboard');
-    else if (viewName === 'versions') {
-        const response = await fetch('modules/admin/versions.html');
-        dom.viewContent.innerHTML = await response.text();
-        await import('./modules/admin/versions.js');
-    }
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
         dom.searchInput.style.display = 'block';
@@ -2178,11 +2105,7 @@ function handleGlobalClick(e) {
         document.getElementById('notification-dropdown')?.classList.add('hidden');
         const parsedParams = JSON.parse(params);
 
-        if (view === 'version_release') {
-            showVersionReleaseModal(parsedParams.versionId);
-        } else {
-            switchView(view, parsedParams);
-        }
+        switchView(view, parsedParams);
         return;
     }
 
