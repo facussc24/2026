@@ -3,7 +3,7 @@ import { getState } from './task.state.js';
 import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram, completeAndArchiveTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML, getPlannerHelpModalHTML, getAIAnalysisModalHTML, getTasksModalHTML } from './task.templates.js';
+import { getEmptyStateHTML, getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getAIAssistantModalHTML, getPlannerHelpModalHTML, getAIAnalysisModalHTML, getTasksModalHTML } from './task.templates.js';
 import { openTaskFormModal } from './task.modal.js';
 
 let appState;
@@ -49,19 +49,7 @@ export function renderTaskFilters(container) {
 }
 
 export function renderTasks(tasks, container) {
-    const getEmptyColumnHTML = (status) => {
-        const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Archivadas' };
-        return `
-            <div class="p-4 text-center text-slate-500 border-2 border-dashed border-slate-200 rounded-lg h-full flex flex-col justify-center items-center no-drag animate-fade-in">
-                <i data-lucide="inbox" class="h-10 w-10 mx-auto text-slate-400"></i>
-                <h4 class="mt-4 font-semibold text-slate-600">Columna Vacía</h4>
-                <p class="text-sm mt-1 mb-4">No hay tareas en estado "${statusMap[status]}".</p>
-                <button data-action="add-task-to-column" data-status="${status}" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm py-1.5 px-3 rounded-full mx-auto flex items-center">
-                    <i data-lucide="plus" class="mr-1.5 h-4 w-4"></i>Añadir Tarea
-                </button>
-            </div>
-        `;
-    };
+    const statusMap = { todo: 'Por Hacer', inprogress: 'En Progreso', done: 'Archivadas' };
 
     const state = getState();
     const showArchived = state.kanban.showArchived;
@@ -84,7 +72,12 @@ export function renderTasks(tasks, container) {
         const columnTasks = tasksByStatus[status];
 
         if (columnTasks.length === 0) {
-            taskListEl.innerHTML = getEmptyColumnHTML(status);
+            taskListEl.innerHTML = getEmptyStateHTML(
+                'inbox',
+                'Columna Vacía',
+                `No hay tareas en estado "${statusMap[status]}".`,
+                { action: 'add-task-to-column', status: status, text: 'Añadir Tarea', icon: 'plus' }
+            );
         } else {
             taskListEl.innerHTML = '';
             columnTasks.forEach(task => {
@@ -437,6 +430,16 @@ export function hideTableLoading() {
 export function renderTasksTable(container, tasks, userMap) {
     if (!container) return;
 
+    if (tasks.length === 0) {
+        container.innerHTML = getEmptyStateHTML(
+            'search-x',
+            'No se encontraron tareas',
+            'Prueba a cambiar o eliminar los filtros de búsqueda para ver más resultados.'
+        );
+        if (lucide) lucide.createIcons();
+        return;
+    }
+
     container.innerHTML = getTasksTableHTML(tasks, userMap);
     if (lucide) {
         lucide.createIcons();
@@ -496,6 +499,16 @@ export function renderMyPendingTasksWidget(tasks) {
     }
 
     countEl.textContent = tasks.length;
+
+    if (tasks.length === 0) {
+        container.innerHTML = getEmptyStateHTML(
+            'check-circle-2',
+            '¡Todo en orden!',
+            'No tienes ninguna tarea pendiente asignada a ti.'
+        );
+        lucide.createIcons();
+        return;
+    }
 
     container.innerHTML = getMyPendingTasksWidgetHTML(tasks);
 

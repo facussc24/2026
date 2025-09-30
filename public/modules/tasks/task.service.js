@@ -10,44 +10,12 @@ let appState;
 let showToast;
 let lucide;
 
-async function deleteOldArchivedTasks() {
-    console.log("Running scheduled task: Deleting old archived tasks...");
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-    const tasksRef = collection(db, COLLECTIONS.TAREAS);
-    const q = query(tasksRef,
-        where('isArchived', '==', true),
-        where('completedAt', '<', sixMonthsAgo)
-    );
-
-    try {
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
-            console.log("No old archived tasks to delete.");
-            return;
-        }
-
-        const batch = writeBatch(db);
-        querySnapshot.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-
-        await batch.commit();
-        console.log(`Successfully deleted ${querySnapshot.size} old archived tasks.`);
-        showToast(`${querySnapshot.size} tarea(s) archivada(s) antigua(s) fueron eliminadas.`, 'info');
-    } catch (error) {
-        console.error("Error deleting old archived tasks:", error);
-    }
-}
-
 export function initTaskService(dependencies) {
     db = dependencies.db;
     functions = dependencies.functions;
     appState = dependencies.appState;
     showToast = dependencies.showToast;
     lucide = dependencies.lucide;
-    deleteOldArchivedTasks();
 }
 
 export async function fetchAllTasks() {
@@ -269,51 +237,60 @@ export function subscribeToAllTasks(callback, handleError) {
 export function subscribeToTasks(callback, handleError) {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     const user = appState.currentUser;
-    const state = getState();
+    const { activeFilter, selectedUserId, priorityFilter, searchTerm } = getState().kanban;
 
-    let filterConditions = [];
+    let conditions = [];
 
-    // --- NEW LOGIC ---
-    // If user is not an admin, they can ONLY see their own tasks within this module.
+    // User and Role-based filtering
     if (user.role !== 'admin') {
-        filterConditions.push(where('assigneeUid', '==', user.uid));
-    }
-    // Admin can filter by user, or see public/all tasks
-    else {
-        if (state.kanban.activeFilter === 'personal') {
-            filterConditions.push(
-                or(
+        // Non-admins only see tasks assigned to them.
+        conditions.push(where('assigneeUid', '==', user.uid));
+    } else {
+        // Admin filtering logic
+        switch (activeFilter) {
+            case 'personal':
+                conditions.push(or(
                     where('assigneeUid', '==', user.uid),
                     where('creatorUid', '==', user.uid)
-                )
-            );
-        } else if (state.kanban.selectedUserId) {
-            filterConditions.push(where('assigneeUid', '==', state.kanban.selectedUserId));
-        } else if (state.kanban.activeFilter === 'engineering') {
-            filterConditions.push(where('isPublic', '==', true));
+                ));
+                break;
+            case 'supervision':
+                if (selectedUserId) {
+                    conditions.push(where('assigneeUid', '==', selectedUserId));
+                }
+                // If no user is selected in supervision, it shows a user list, not tasks.
+                // An empty condition array here is correct.
+                break;
+            case 'engineering':
+                conditions.push(where('isPublic', '==', true));
+                break;
+            // For 'all', no specific user/role filter is added.
         }
-        // No special condition for 'all' for admin, it will just fetch all tasks.
     }
 
-    if (state.kanban.priorityFilter !== 'all') {
-        filterConditions.push(where('priority', '==', state.kanban.priorityFilter));
+    // Priority filtering
+    if (priorityFilter !== 'all') {
+        conditions.push(where('priority', '==', priorityFilter));
     }
 
-    const searchTerm = state.kanban.searchTerm.toLowerCase().trim();
-    if (searchTerm) {
-        filterConditions.push(where('search_keywords', 'array-contains', searchTerm));
+    // Search term filtering
+    const trimmedSearch = searchTerm.toLowerCase().trim();
+    if (trimmedSearch) {
+        conditions.push(where('search_keywords', 'array-contains', trimmedSearch));
     }
 
-    let queryConstraints = [];
-    if (filterConditions.length > 1) {
-        queryConstraints.push(and(...filterConditions));
-    } else if (filterConditions.length === 1) {
-        queryConstraints.push(filterConditions[0]);
+    // Build the final query
+    const queryConstraints = [];
+    if (conditions.length > 0) {
+        // Use 'and()' to combine all filter conditions.
+        // Firestore requires that 'or()' queries are not mixed with other 'where' clauses in the same 'and()'.
+        // The current logic correctly separates the 'or' for the 'personal' filter, so this is safe.
+        queryConstraints.push(and(...conditions));
     }
-
     queryConstraints.push(orderBy('createdAt', 'desc'));
 
     const finalQuery = query(tasksRef, ...queryConstraints);
+
     const unsubscribe = onSnapshot(finalQuery, (snapshot) => {
         const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
         callback(tasks);
@@ -321,6 +298,7 @@ export function subscribeToTasks(callback, handleError) {
         console.error("Error in subscribeToTasks:", error);
         if (error.code === 'failed-precondition') {
             console.error("This error likely means you're missing a Firestore index. Check the browser's developer console for a link to create it automatically.");
+            showToast('Se requiere un índice de base de datos para este filtro. Revisa la consola.', 'error');
         }
         handleError(error);
     });
