@@ -16,7 +16,7 @@ import {
     renderTasksByProjectChart,
     renderTaskDashboardView,
     openTaskFormModal,
-    openAICreationModal
+    openAIAssistantModal
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
@@ -1218,21 +1218,6 @@ function initializeAppListeners() {
 function setupGlobalEventListeners() {
     dom.searchInput.addEventListener('input', handleSearch);
     dom.addNewButton.addEventListener('click', () => openFormModal());
-
-    // --- New Task Creation Buttons ---
-    const navBar = document.getElementById('main-nav');
-    if (navBar) {
-        navBar.addEventListener('click', (e) => {
-            const aiButton = e.target.closest('#ai-create-task-btn');
-            const manualButton = e.target.closest('#manual-create-task-btn');
-
-            if (aiButton) {
-                openAICreationModal();
-            } else if (manualButton) {
-                openTaskFormModal(); // Opens a blank task form
-            }
-        });
-    }
 
     const onTutorialEnd = () => {
         appState.isTutorialActive = false;
@@ -3506,7 +3491,7 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, writeBatch };
+            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
             initTasksModule(appDependencies);
             initLandingPageModule(appDependencies);
 

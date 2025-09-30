@@ -7,7 +7,15 @@ import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
 import { handleTaskFormSubmit, deleteTask, createTask, fetchAllTasks } from './task.service.js';
-import { getTaskFormModalHTML, getSubtaskHTML, getMultiTaskConfirmationHTML, getAICreationModalHTML } from './task.templates.js';
+import {
+    getTaskFormModalHTML,
+    getSubtaskHTML,
+    getMultiTaskConfirmationHTML,
+    getAIAssistantModalHTML,
+    getAIAssistantPromptViewHTML,
+    getAILoadingViewHTML,
+    getAIReviewViewHTML
+} from './task.templates.js';
 
 let appState;
 let dom;
@@ -418,95 +426,93 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
     }
 }
 
-export async function openAICreationModal() {
-    const modalHTML = getAICreationModalHTML();
-    dom.modalContainer.innerHTML = modalHTML;
-    lucide.createIcons();
+export async function openAIAssistantModal() {
+    dom.modalContainer.innerHTML = getAIAssistantModalHTML();
+    const modalElement = document.getElementById('ai-assistant-modal');
+    const viewContainer = document.getElementById('ai-assistant-view-container');
 
-    const modalElement = document.getElementById('ai-creation-modal');
-    const modalContent = document.getElementById('ai-creation-modal-content');
-    const promptView = document.getElementById('ai-prompt-view');
-    const reviewView = document.getElementById('ai-review-view');
-    const promptTextarea = document.getElementById('ai-prompt-textarea');
-    const generateBtn = document.getElementById('ai-generate-tasks-btn');
-
-    const closeModal = () => modalElement.remove();
-
-    modalElement.querySelectorAll('[data-action="close"]').forEach(btn => {
-        btn.addEventListener('click', closeModal);
-    });
-
-    generateBtn.addEventListener('click', async () => {
-        const promptText = promptTextarea.value.trim();
-        if (!promptText) {
-            showToast('Por favor, describe las tareas que necesitas crear.', 'warning');
-            return;
+    const closeModal = () => {
+        if (modalElement) {
+            modalElement.remove();
         }
+    };
 
-        generateBtn.disabled = true;
-        generateBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Analizando...';
+    const renderReviewView = (plan) => {
+        viewContainer.innerHTML = getAIReviewViewHTML(plan);
         lucide.createIcons();
 
-        try {
-            // Fetch user's tasks to provide context to the AI
-            const allTasks = await fetchAllTasks();
-            const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid && task.status !== 'done');
+        viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+        viewContainer.querySelector('#ai-reject-plan-btn').addEventListener('click', renderPromptView);
 
-            const functions = getFunctions();
-            const organizeTaskWithAI = httpsCallable(functions, 'organizeTaskWithAI');
-            const result = await organizeTaskWithAI({ text: promptText, userTasks });
-            const suggestedTasks = result.data.tasks;
+        const confirmBtn = viewContainer.querySelector('#ai-confirm-plan-btn');
+        confirmBtn.addEventListener('click', async () => {
+            confirmBtn.disabled = true;
+            confirmBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Ejecutando...';
+            lucide.createIcons();
 
-            if (!suggestedTasks || suggestedTasks.length === 0) {
-                throw new Error("La IA no pudo generar ninguna tarea a partir de tu petición.");
+            try {
+                const functions = getFunctions();
+                const executePlan = httpsCallable(functions, 'executeAIAssistantPlan');
+                await executePlan({ plan });
+
+                showToast('¡Plan ejecutado con éxito!', 'success');
+                closeModal();
+                // A full reload is a simple way to ensure the UI is up-to-date
+                location.reload();
+            } catch (error) {
+                console.error("Error executing AI plan:", error);
+                showToast(error.message || 'Error al ejecutar el plan.', 'error');
+                confirmBtn.disabled = false;
+                confirmBtn.innerHTML = '<i data-lucide="check-check" class="w-5 h-5"></i> Confirmar y Ejecutar Plan';
+                lucide.createIcons();
+            }
+        });
+    };
+
+    const renderPromptView = () => {
+        viewContainer.innerHTML = getAIAssistantPromptViewHTML();
+        lucide.createIcons();
+
+        viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+
+        const submitBtn = viewContainer.querySelector('#ai-submit-prompt-btn');
+        const promptTextarea = viewContainer.querySelector('#ai-prompt-textarea');
+        promptTextarea.focus();
+
+        submitBtn.addEventListener('click', async () => {
+            const promptText = promptTextarea.value.trim();
+            if (!promptText) {
+                showToast('Por favor, describe tu petición al asistente.', 'warning');
+                return;
             }
 
-            promptView.classList.add('hidden');
-            reviewView.innerHTML = getMultiTaskConfirmationHTML(suggestedTasks);
-            reviewView.classList.remove('hidden');
+            viewContainer.innerHTML = getAILoadingViewHTML();
             lucide.createIcons();
 
-            reviewView.querySelector('#cancel-multi-task-btn').addEventListener('click', closeModal);
+            try {
+                const allTasks = await fetchAllTasks();
+                const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid && task.status !== 'done');
 
-            reviewView.querySelector('#create-selected-tasks-btn').addEventListener('click', async (e) => {
-                const createBtn = e.currentTarget;
-                createBtn.disabled = true;
-                createBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Creando...';
-                lucide.createIcons();
+                const functions = getFunctions();
+                const runAIAssistant = httpsCallable(functions, 'runAIAssistant');
+                const result = await runAIAssistant({ text: promptText, userTasks });
 
-                const selectedTasks = [];
-                const checkboxes = reviewView.querySelectorAll('.suggested-task-checkbox:checked');
-                checkboxes.forEach(cb => {
-                    const taskIndex = parseInt(cb.dataset.taskIndex, 10);
-                    selectedTasks.push(suggestedTasks[taskIndex]);
-                });
+                const plan = result.data;
 
-                if (selectedTasks.length === 0) {
-                    showToast('No se ha seleccionado ninguna tarea para crear.', 'warning');
-                    createBtn.disabled = false;
-                    createBtn.innerHTML = 'Crear Tareas Seleccionadas';
-                    return;
+                if (!plan || !plan.action || !plan.tasks) {
+                    throw new Error("La IA devolvió un plan inválido. Por favor, intenta ser más específico.");
                 }
 
-                let successCount = 0;
-                for (const task of selectedTasks) {
-                    const success = await createTask(task);
-                    if (success) successCount++;
-                }
+                renderReviewView(plan);
 
-                showToast(`${successCount} de ${selectedTasks.length} tareas creadas con éxito.`, 'success');
-                closeModal();
-            });
+            } catch (error) {
+                console.error("Error calling AI Assistant:", error);
+                showToast(error.message || 'Ocurrió un error al contactar al Asistente IA.', 'error');
+                renderPromptView();
+            }
+        });
+    };
 
-
-        } catch (error) {
-            console.error("Error calling organizeTaskWithAI function:", error);
-            showToast(error.message || 'Ocurrió un error al contactar a la IA.', 'error');
-            generateBtn.disabled = false;
-            generateBtn.innerHTML = '<i data-lucide="brain-circuit" class="w-5 h-5"></i> Analizar y Generar Tareas';
-            lucide.createIcons();
-        }
-    });
-
-    promptTextarea.focus();
+    // Initial render
+    renderPromptView();
 }
