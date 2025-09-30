@@ -1014,7 +1014,6 @@ export function getTasksModalHTML(title) {
     `;
 }
 
-
 export function getDashboardLayoutHTML() {
     return `
     <div class="flex flex-col flex-1 w-full mx-auto">

@@ -458,6 +458,7 @@ export async function openAIAssistantModal() {
                 showToast('¡Plan ejecutado con éxito!', 'success');
                 closeModal();
                 // A full reload is a simple way to ensure the UI is up-to-date
+                // This is a simple but effective way to refresh all views.
                 location.reload();
             } catch (error) {
                 console.error("Error executing AI plan:", error);
@@ -490,6 +491,7 @@ export async function openAIAssistantModal() {
             lucide.createIcons();
 
             try {
+                // This function needs to be available in task.service.js
                 const allTasks = await fetchAllTasks();
                 const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid && task.status !== 'done');
 
