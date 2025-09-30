@@ -1036,7 +1036,7 @@ export function getWeekOrganizerModalHTML() {
     `;
 }
 
-export function getAIModificationPlanHTML(plan) {
+export function getAIModificationPlanHTML(plan, suggestions = []) {
     if (!plan || plan.length === 0) {
         return '<p class="text-center text-slate-500">La IA no sugirió ninguna acción.</p>';
     }
@@ -1051,6 +1051,9 @@ export function getAIModificationPlanHTML(plan) {
             actionText = `<span class="font-bold text-blue-600">Cambiar fecha a ${date}:</span> "${originalTitle}"`;
         } else if (updates.title) {
             actionText = `<span class="font-bold text-orange-600">Renombrar:</span> "${originalTitle}" a "${updates.title}"`;
+        } else if (updates.plannedDate) {
+             const date = new Date(updates.plannedDate + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' });
+             actionText = `<span class="font-bold text-blue-600">Planificar para el ${date}:</span> "${originalTitle}"`;
         } else {
             actionText = `Acción desconocida para: "${originalTitle}"`;
         }
@@ -1067,6 +1070,21 @@ export function getAIModificationPlanHTML(plan) {
             <span class="text-slate-700 dark:text-slate-300"><span class="font-bold text-purple-600">Re-organizar</span> las tareas pendientes restantes.</span>
         </li>` : '';
 
+    let suggestionsHTML = '';
+    if (suggestions && suggestions.length > 0) {
+        suggestionsHTML = `
+            <div class="mt-6">
+                <h5 class="text-base font-bold text-yellow-600 dark:text-yellow-400 mb-2 flex items-center gap-2">
+                    <i data-lucide="lightbulb" class="w-5 h-5"></i>
+                    Consejos del Asistente
+                </h5>
+                <ul class="space-y-2 text-sm">
+                    ${suggestions.map(s => `<li class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 rounded-r-md text-yellow-800 dark:text-yellow-200">${s}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
     return `
         <h4 class="text-base font-bold text-slate-800 dark:text-slate-200 mb-3">Plan de Acción Propuesto</h4>
         <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Revisa las acciones que el asistente propone. Si estás de acuerdo, haz clic en "Aplicar este Plan".</p>
@@ -1074,6 +1092,7 @@ export function getAIModificationPlanHTML(plan) {
             ${modificationItems}
             ${reorganizeHTML}
         </ul>
+        ${suggestionsHTML}
     `;
 }
 

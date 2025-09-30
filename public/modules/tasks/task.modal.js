@@ -580,15 +580,22 @@ export async function openWeekOrganizerModal() {
             const result = await getTaskModificationPlan({ userPrompt, tasks: allTasks });
 
             const modificationPlan = result.data.plan;
+            let suggestions = [];
+
+            // --- New Sanity Check Step ---
+            if (modificationPlan && modificationPlan.length > 0) {
+                const analyzePlanSanity = httpsCallable(functions, 'analyzePlanSanity');
+                const sanityResult = await analyzePlanSanity({ plan: modificationPlan, tasks: allTasks });
+                suggestions = sanityResult.data.suggestions;
+            }
 
             // Store the raw plan and prompt for the apply function
             planContentEl.dataset.rawPlan = JSON.stringify(modificationPlan);
             planContentEl.dataset.userPrompt = userPrompt;
 
-            // Render the generated plan for user confirmation
-            planContentEl.innerHTML = getAIModificationPlanHTML(modificationPlan);
+            // Render the generated plan and suggestions for user confirmation
+            planContentEl.innerHTML = getAIModificationPlanHTML(modificationPlan, suggestions);
             lucide.createIcons();
-
 
             applyBtn.disabled = false; // Enable apply button now that there's a plan
 

@@ -883,7 +883,6 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
     const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const today = new Date();
-    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
     const todayStr = today.toISOString().split('T')[0];
 
     // Calculate remaining workdays
@@ -897,30 +896,47 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
         }
     }
 
-    const tasksForPrompt = pendingTasks.map(t => ({ docId: t.docId, title: t.title, dueDate: t.dueDate }));
+    const tasksForPrompt = pendingTasks.map(t => ({ docId: t.docId, title: t.title, dueDate: t.dueDate, effort: t.effort || 'medium' }));
 
     const prompt = `
-        Eres un asistente de planificación experto. Tu misión es reorganizar una lista de tareas pendientes para los días restantes de la semana, comenzando desde hoy.
+        Eres un asistente experto en planificación y gestión de proyectos. Tu misión es reorganizar una lista de tareas pendientes de manera inteligente y realista para los próximos días laborables.
 
-        **Contexto:**
-        - Fecha de Hoy: ${todayStr} (Día de la semana: ${dayOfWeek})
-        - Días Laborables Restantes: ${remainingDays.join(', ')}
-        - Prioridad del Usuario: "${userPriority || 'No especificada'}"
+        **Contexto Clave:**
+        - Fecha de Hoy: ${todayStr}
+        - Días Laborables Disponibles: ${remainingDays.join(', ')}
+        - Prioridad General del Usuario: "${userPriority || 'No especificada'}"
+
+        **Concepto de "Esfuerzo" y "Capacidad Diaria":**
+        - Cada tarea tiene un 'esfuerzo': 'high' (alto), 'medium' (medio), 'low' (bajo).
+        - Cada día laborable tiene una capacidad máxima de 8 puntos de esfuerzo.
+        - Costo de Esfuerzo de Tareas:
+          - 'high': 5 puntos
+          - 'medium': 3 puntos
+          - 'low': 1 punto
+        - NO debes exceder la capacidad de 8 puntos por día. Si un día se llena, debes pasar al siguiente día disponible.
 
         **Tareas Pendientes a Reorganizar:**
         \`\`\`json
         ${JSON.stringify(tasksForPrompt, null, 2)}
         \`\`\`
 
-        **Reglas de Reorganización (Orden Estricto):**
-        1.  **Tareas Atrasadas:** Cualquier tarea con una \`dueDate\` anterior a hoy (${todayStr}) es de máxima prioridad. Debes asignarle la \`plannedDate\` de hoy.
-        2.  **Prioridad del Usuario:** Las tareas cuyo título coincida con la prioridad del usuario (ej: "PWA") deben programarse inmediatamente después de las atrasadas.
-        3.  **Fecha de Vencimiento:** Las tareas restantes deben ordenarse por su \`dueDate\`. Las que vencen antes, se planifican antes.
-        4.  **Distribución:** Distribuye las tareas de manera equitativa entre los días laborables restantes. No acumules todo en un solo día si no es necesario.
-        5.  **Asignación de Fechas:** La \`plannedDate\` que asignes debe ser una de las fechas en la lista de "Días Laborables Restantes".
+        **Algoritmo de Planificación (SEGUIR ESTRICTAMENTE ESTE ORDEN):**
 
-        **Formato de Salida JSON (OBLIGATORIO):**
-        - Tu respuesta DEBE ser únicamente un objeto JSON.
+        1.  **Procesar Tareas Atrasadas:**
+            - Identifica todas las tareas con una \`dueDate\` anterior a hoy (${todayStr}).
+            - Estas son de MÁXIMA prioridad.
+            - Comienza a asignarlas a los días laborables disponibles (empezando por hoy), respetando el presupuesto de 8 puntos diarios.
+
+        2.  **Procesar Tareas Prioritarias del Usuario:**
+            - De las tareas restantes, identifica las que contengan la frase de prioridad del usuario ("${userPriority || ''}") en su título.
+            - Asígnalas a los huecos de esfuerzo que queden en los días laborables, después de las tareas atrasadas.
+
+        3.  **Procesar el Resto de Tareas:**
+            - Ordena las tareas restantes por su \`dueDate\` (las más cercanas primero).
+            - Distribúyelas en los huecos de esfuerzo restantes de la semana.
+
+        **Formato de Salida JSON (REGLA CRÍTICA):**
+        - Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON.
         - El objeto debe tener una clave \`plan\`, que es un array de objetos.
         - Cada objeto en el array debe tener esta estructura exacta: \`{ "docId": "ID_DE_LA_TAREA", "updates": { "plannedDate": "YYYY-MM-DD" }, "originalTitle": "Título de la Tarea" }\`.
         - NO incluyas explicaciones, saludos, ni bloques de código markdown.
@@ -951,6 +967,54 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
         console.error("Error en reorganizeTasksWithAI:", error);
         throw new functions.https.HttpsError("internal", error.message || "Error al procesar la reorganización con la IA.");
     }
+});
+
+exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const { plan, tasks } = data;
+    if (!plan || !tasks || !Array.isArray(plan) || !Array.isArray(tasks)) {
+        throw new functions.https.HttpsError("invalid-argument", "Se requiere 'plan' (array) y 'tasks' (array).");
+    }
+
+    const suggestions = [];
+    const effortCost = { high: 5, medium: 3, low: 1 };
+    const dailyEffort = {};
+    const tasksById = new Map(tasks.map(t => [t.docId, t]));
+
+    // Calculate daily effort from the plan
+    plan.forEach(item => {
+        if (item.updates && item.updates.plannedDate) {
+            const task = tasksById.get(item.docId);
+            if (task) {
+                const date = item.updates.plannedDate;
+                const effort = effortCost[task.effort] || 3; // Default to medium
+                dailyEffort[date] = (dailyEffort[date] || 0) + effort;
+            }
+        }
+    });
+
+    // Check for overloaded days
+    for (const date in dailyEffort) {
+        if (dailyEffort[date] > 8) {
+            const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' });
+            suggestions.push(`El día ${formattedDate} parece sobrecargado. Considera mover alguna tarea para balancear la semana.`);
+        }
+    }
+
+    // Check for tasks planned after their due date
+    plan.forEach(item => {
+        if (item.updates && item.updates.plannedDate) {
+            const task = tasksById.get(item.docId);
+            if (task && task.dueDate && item.updates.plannedDate > task.dueDate) {
+                suggestions.push(`La tarea "${task.title}" está planificada después de su fecha de vencimiento. Considera adelantarla.`);
+            }
+        }
+    });
+
+    return { suggestions };
 });
 
 
