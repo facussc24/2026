@@ -6,8 +6,8 @@ import { collection, onSnapshot, query, orderBy, addDoc } from "https://www.gsta
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
 import { getState } from './task.state.js';
-import { handleTaskFormSubmit, deleteTask, createTask } from './task.service.js';
-import { getTaskFormModalHTML, getSubtaskHTML, getMultiTaskConfirmationHTML } from './task.templates.js';
+import { handleTaskFormSubmit, deleteTask, createTask, fetchAllTasks } from './task.service.js';
+import { getTaskFormModalHTML, getSubtaskHTML, getMultiTaskConfirmationHTML, getAICreationModalHTML } from './task.templates.js';
 
 let appState;
 let dom;
@@ -416,4 +416,97 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
     if (!isEditing) {
         modalElement.querySelector('#task-ai-braindump').focus();
     }
+}
+
+export async function openAICreationModal() {
+    const modalHTML = getAICreationModalHTML();
+    dom.modalContainer.innerHTML = modalHTML;
+    lucide.createIcons();
+
+    const modalElement = document.getElementById('ai-creation-modal');
+    const modalContent = document.getElementById('ai-creation-modal-content');
+    const promptView = document.getElementById('ai-prompt-view');
+    const reviewView = document.getElementById('ai-review-view');
+    const promptTextarea = document.getElementById('ai-prompt-textarea');
+    const generateBtn = document.getElementById('ai-generate-tasks-btn');
+
+    const closeModal = () => modalElement.remove();
+
+    modalElement.querySelectorAll('[data-action="close"]').forEach(btn => {
+        btn.addEventListener('click', closeModal);
+    });
+
+    generateBtn.addEventListener('click', async () => {
+        const promptText = promptTextarea.value.trim();
+        if (!promptText) {
+            showToast('Por favor, describe las tareas que necesitas crear.', 'warning');
+            return;
+        }
+
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Analizando...';
+        lucide.createIcons();
+
+        try {
+            // Fetch user's tasks to provide context to the AI
+            const allTasks = await fetchAllTasks();
+            const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid && task.status !== 'done');
+
+            const functions = getFunctions();
+            const organizeTaskWithAI = httpsCallable(functions, 'organizeTaskWithAI');
+            const result = await organizeTaskWithAI({ text: promptText, userTasks });
+            const suggestedTasks = result.data.tasks;
+
+            if (!suggestedTasks || suggestedTasks.length === 0) {
+                throw new Error("La IA no pudo generar ninguna tarea a partir de tu petición.");
+            }
+
+            promptView.classList.add('hidden');
+            reviewView.innerHTML = getMultiTaskConfirmationHTML(suggestedTasks);
+            reviewView.classList.remove('hidden');
+            lucide.createIcons();
+
+            reviewView.querySelector('#cancel-multi-task-btn').addEventListener('click', closeModal);
+
+            reviewView.querySelector('#create-selected-tasks-btn').addEventListener('click', async (e) => {
+                const createBtn = e.currentTarget;
+                createBtn.disabled = true;
+                createBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Creando...';
+                lucide.createIcons();
+
+                const selectedTasks = [];
+                const checkboxes = reviewView.querySelectorAll('.suggested-task-checkbox:checked');
+                checkboxes.forEach(cb => {
+                    const taskIndex = parseInt(cb.dataset.taskIndex, 10);
+                    selectedTasks.push(suggestedTasks[taskIndex]);
+                });
+
+                if (selectedTasks.length === 0) {
+                    showToast('No se ha seleccionado ninguna tarea para crear.', 'warning');
+                    createBtn.disabled = false;
+                    createBtn.innerHTML = 'Crear Tareas Seleccionadas';
+                    return;
+                }
+
+                let successCount = 0;
+                for (const task of selectedTasks) {
+                    const success = await createTask(task);
+                    if (success) successCount++;
+                }
+
+                showToast(`${successCount} de ${selectedTasks.length} tareas creadas con éxito.`, 'success');
+                closeModal();
+            });
+
+
+        } catch (error) {
+            console.error("Error calling organizeTaskWithAI function:", error);
+            showToast(error.message || 'Ocurrió un error al contactar a la IA.', 'error');
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<i data-lucide="brain-circuit" class="w-5 h-5"></i> Analizar y Generar Tareas';
+            lucide.createIcons();
+        }
+    });
+
+    promptTextarea.focus();
 }

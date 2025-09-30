@@ -259,19 +259,17 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
-    const text = data.text;
+    const { text, userTasks } = data;
     if (!text || typeof text !== "string" || text.trim().length === 0) {
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
     }
 
     try {
-        // Inicializa Vertex AI con la configuración del proyecto y la ubicación.
         const vertexAI = new VertexAI({
             project: process.env.GCLOUD_PROJECT,
             location: "us-central1",
         });
 
-        // Selecciona el modelo generativo.
         const generativeModel = vertexAI.getGenerativeModel({
             model: "gemini-2.0-flash",
         });
@@ -283,59 +281,63 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
         const currentDate = today.toISOString().split("T")[0];
         const tomorrowDate = tomorrow.toISOString().split("T")[0];
 
+        const userAgendaString = Array.isArray(userTasks) && userTasks.length > 0
+            ? userTasks.map(task => `- "${task.title}" (Vence: ${task.dueDate || 'N/A'})`).join('\n')
+            : "El usuario no tiene tareas pendientes.";
+
         const prompt = `
-        Analiza el siguiente texto de un usuario. Tu objetivo es identificar si el texto describe una o varias tareas gestionables.
+        Actúa como un asistente de creación de tareas experto para un sistema de gestión de proyectos.
 
-        **Contexto Clave:**
-        - La fecha de hoy es ${currentDate}.
-        - La fecha de mañana es ${tomorrowDate}.
-        - Todas las fechas relativas (como "mañana" o "próxima semana") deben calcularse a partir de la fecha de hoy.
+        **Contexto General:**
+        - La fecha de hoy es: ${currentDate}.
+        - El usuario que hace la petición tiene la siguiente carga de trabajo (agenda de tareas pendientes):
+          ${userAgendaString}
 
-        Texto del usuario: "${text}"
+        **Petición del Usuario:**
+        "${text}"
 
-        **Instrucciones Estrictas:**
-        1.  **Detección de Tareas:** Identifica si el texto representa una única acción o múltiples acciones distintas. Si son distintas (ej: "revisar planos y llamar a proveedor"), crea un objeto de tarea para cada una. Si es una acción con pasos, trátalo como una sola tarea con subtareas.
-        2.  **Estructura de Tarea (JSON):** Para cada tarea, genera un objeto JSON con estos campos EXACTOS:
-            *   \\\`title\\\`: Título conciso (máx 10 palabras).
-            *   \\\`description\\\`: Resumen corto del objetivo.
-            *   \\\`subtasks\\\`: Array de strings con subtareas accionables. Si no hay, \\\`[]\\\`.
-            *   \\\`tags\\\`: Array de strings con palabras clave relevantes (1-3 palabras por tag). Si no hay, \\\`[]\\\`.
-            *   \\\`priority\\\`: 'high', 'medium', o 'low'.
-            *   \\\`startDate\\\`: 'YYYY-MM-DD' o \\\`null\\\`.
-            *   \\\`dueDate\\\`: 'YYYY-MM-DD' o \\\`null\\\`.
-            *   \\\`assignee\\\`: Nombre de la persona o \\\`null\\\`.
-            *   \\\`isPublic\\\`: \\\`true\\\` (equipo/proyecto) o \\\`false\\\` (personal).
-            *   \\\`project\\\`: Nombre del proyecto o \\\`null\\\`.
-        3.  **Asignación de Fechas (Regla Maestra):** Debes asignar una fecha a \`dueDate\` siguiendo estas prioridades:
-            a.  **Fecha Específica:** Si el usuario menciona una fecha concreta (ej: "para el viernes", "el 25 de diciembre"), usa esa fecha.
-            b.  **Urgencia Implícita:** Si el texto sugiere urgencia (ej: "pronto", "lo antes posible") pero sin fecha, asigna la fecha de mañana (\`${tomorrowDate}\`).
-            c.  **Sin Fecha (Por Defecto):** Si no hay ninguna mención de fecha o urgencia, asigna la fecha de hoy (\`${currentDate}\`) como valor predeterminado. **Ninguna tarea puede quedar sin fecha.**
-        4.  **Generación de Tags:** Analiza el texto para extraer conceptos, tecnologías, nombres de proyectos o temas clave. Conviértelos en tags cortos, en minúsculas y sin caracteres especiales. Por ejemplo, "Arreglar bug en login de app Android" podría generar tags como ["bugfix", "login", "android"].
-        5.  **Corrección de Texto:** Corrige la gramática y ortografía en \\\`title\\\` y \\\`description\\\` para mayor claridad.
+        **Tu Misión (Realizar todas las acciones en orden):**
 
-        **Formato de Salida - REGLA CRÍTICA:**
-        Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON. Este objeto debe contener una clave "tasks", cuyo valor es un array de los objetos de tarea que creaste.
-        NO incluyas absolutamente NADA más en tu respuesta. Ni texto introductorio, ni explicaciones, ni bloques de código markdown (como \\\`\\\`\\\`json).
-        La respuesta debe empezar con \\\`{\\\` y terminar con \\\`}\\\`.
+        **Acción 1: Análisis de Tareas**
+        - Lee la petición del usuario y determina si se trata de una única tarea o de múltiples tareas distintas.
+        - Si la petición es "Revisar planos y llamar a proveedor", son DOS tareas.
+        - Si la petición es "Preparar informe que incluye investigar datos y crear gráficos", es UNA tarea con subtareas.
 
-        **Ejemplo de respuesta VÁLIDA:**
-        {"tasks":[{"title":"Revisar planos del chasis","description":"Revisar los planos detallados del nuevo chasis para el modelo 2024.","subtasks":[],"tags":["diseño","chasis","planos","2024"],"priority":"high","startDate":null,"dueDate":null,"assignee":null,"isPublic":true,"project":"Chasis-2024"},{"title":"Llamar a proveedor de acero","description":"Llamar al proveedor para confirmar la fecha de entrega del acero.","subtasks":[],"tags":["proveedores","acero","logística"],"priority":"medium","startDate":null,"dueDate":null,"assignee":"Marcos","isPublic":true,"project":"Chasis-2024"}]}
+        **Acción 2: Extracción y Estructuración de Datos**
+        - Para CADA tarea identificada, extrae la siguiente información y formatéala en un objeto JSON con estas claves EXACTAS:
+          - \`title\`: Título conciso y claro de la tarea (máximo 10 palabras).
+          - \`description\`: Descripción detallada de lo que se debe hacer.
+          - \`subtasks\`: Un array de strings con los pasos o subtareas. Si no hay, \`[]\`.
+          - \`tags\`: Un array de 1 a 3 palabras clave relevantes (en minúsculas). Ejemplo: ["diseño", "bugfix", "cliente"].
+          - \`priority\`: 'high', 'medium', o 'low'.
+          - \`startDate\`: Fecha de inicio en formato 'YYYY-MM-DD' o \`null\`.
+          - \`dueDate\`: Fecha de entrega en formato 'YYYY-MM-DD'. **Este campo es OBLIGATORIO.**
+          - \`assignee\`: El nombre de la persona a la que se asigna, o \`null\`.
+          - \`isPublic\`: \`true\` (si es una tarea de equipo/proyecto) o \`false\` (si es personal).
+          - \`project\`: Nombre del proyecto asociado, o \`null\`.
+          - \`suggestion\`: Un string con una sugerencia o comentario sobre la planificación, o \`null\`.
 
-        **Ejemplo de respuesta INVÁLIDA:**
-        \\\`\\\`\\\`json
-        {"tasks": [...]}
-        \\\`\\\`\\\`
+        **Acción 3: Asignación de Fechas INTELIGENTE (Regla Maestra)**
+        - Para el campo \`dueDate\`, sigue esta lógica estricta:
+          1.  **Fecha Explícita:** Si el usuario dice "para el viernes" o "el 15 de julio", usa esa fecha.
+          2.  **Fecha Flexible (INTELIGENCIA DE AGENDA):** Si el usuario dice "la semana que viene" o "pronto", **revisa su agenda de tareas (proporcionada arriba)**. Busca un día con poca carga de trabajo y asigna esa fecha. Justifica tu elección en el campo \`suggestion\`. Ejemplo: "Te agendé esto para el lunes, ya que martes y miércoles tienes otras entregas importantes."
+          3.  **Sin Fecha (Por Defecto):** Si no hay ninguna mención de fecha o urgencia, asigna la fecha de hoy (${currentDate}).
+
+        **Acción 4: Formato de Salida (REGLA CRÍTICA)**
+        - Tu respuesta DEBE ser un único objeto JSON.
+        - Este objeto debe tener una clave "tasks", cuyo valor es un array de los objetos de tarea que creaste.
+        - NO incluyas NADA más. Ni texto introductorio, ni explicaciones, ni bloques de código markdown (\`\`\`json). Tu respuesta debe empezar con \`{\` y terminar con \`}\`.
+
+        **Ejemplo de Respuesta VÁLIDA:**
+        {"tasks":[{"title":"Revisar planos del chasis","description":"Revisar los planos detallados del nuevo chasis para el modelo 2024.","subtasks":[],"tags":["diseño","chasis","planos","2024"],"priority":"high","startDate":null,"dueDate":"2024-10-04","assignee":null,"isPublic":true,"project":"Chasis-2024", "suggestion": null},{"title":"Llamar a proveedor de acero","description":"Llamar al proveedor para confirmar la fecha de entrega del acero.","subtasks":[],"tags":["proveedores","acero","logística"],"priority":"medium","startDate":null,"dueDate":"2024-10-02","assignee":"Marcos","isPublic":true,"project":"Chasis-2024", "suggestion": "Te agendé la llamada para el miércoles para darte tiempo a revisar los planos primero."}]}
       `;
 
-        // Genera el contenido usando el SDK de Vertex AI.
         const result = await generativeModel.generateContent({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
         });
 
-        // Extrae el texto de la respuesta.
         const responseText = result.response.candidates[0].content.parts[0].text;
 
-        // Extrae el bloque JSON de la respuesta.
         const jsonMatch = responseText.match(/{[\s\S]*}/);
         if (!jsonMatch) {
             console.error("No valid JSON block found in AI response. Raw response:", responseText);
@@ -344,12 +346,10 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
         const parsedData = JSON.parse(jsonMatch[0]);
 
-        // Valida la estructura de la respuesta.
         if (!parsedData || typeof parsedData !== 'object' || !Array.isArray(parsedData.tasks)) {
             throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de tareas.");
         }
 
-        // Asegura que cada tarea tenga un array de 'tags' válido.
         parsedData.tasks.forEach(task => {
             if (!Array.isArray(task.tags)) {
                 task.tags = [];
@@ -360,7 +360,6 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
     } catch (error) {
         console.error("Error en organizeTaskWithAI con Vertex AI:", error);
-        // Hyper-detailed logging for final diagnosis
         throw new functions.https.HttpsError(
             "internal",
             `Vertex AI Full Error: ${JSON.stringify(error, Object.getOwnPropertyNames(error))}`
