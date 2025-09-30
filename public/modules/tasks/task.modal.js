@@ -581,8 +581,9 @@ export async function openWeekOrganizerModal() {
 
             const modificationPlan = result.data.plan;
 
-            // Store the raw plan for the apply function
+            // Store the raw plan and prompt for the apply function
             planContentEl.dataset.rawPlan = JSON.stringify(modificationPlan);
+            planContentEl.dataset.userPrompt = userPrompt;
 
             // Render the generated plan for user confirmation
             planContentEl.innerHTML = getAIModificationPlanHTML(modificationPlan);
@@ -603,27 +604,53 @@ export async function openWeekOrganizerModal() {
     };
 
     const applyPlan = async () => {
-        const finalPlan = planContentEl.dataset.rawPlan;
-        if (!finalPlan) {
+        const finalPlanJSON = planContentEl.dataset.rawPlan;
+        const userPrompt = planContentEl.dataset.userPrompt;
+
+        if (!finalPlanJSON) {
             showToast('No hay un plan final para aplicar.', 'error');
             return;
         }
+
+        const finalPlan = JSON.parse(finalPlanJSON);
+        const directModifications = finalPlan.filter(item => item.updates);
+        const needsReorganization = finalPlan.some(item => item.action === 'reorganize');
 
         showLoading(applyBtn, 'Aplicando...');
         submitBtn.disabled = true;
 
         try {
-            const executeTaskModificationPlan = httpsCallable(functions, 'executeTaskModificationPlan');
-            await executeTaskModificationPlan({ plan: JSON.parse(finalPlan) });
+            // --- Phase 1: Apply Direct Edits ---
+            if (directModifications.length > 0) {
+                const executeTaskModificationPlan = httpsCallable(functions, 'executeTaskModificationPlan');
+                await executeTaskModificationPlan({ plan: directModifications });
+            }
+
+            // --- Phase 2: Intelligent Reorganization ---
+            if (needsReorganization) {
+                // Fetch the latest task state *after* direct edits
+                const allTasks = await fetchAllTasks();
+                const pendingTasks = allTasks.filter(task => task.status !== 'done');
+
+                const reorganizeTasksWithAI = httpsCallable(functions, 'reorganizeTasksWithAI');
+                const reorganizationResult = await reorganizeTasksWithAI({
+                    pendingTasks: pendingTasks,
+                    userPriority: userPrompt // Pass the original prompt for context
+                });
+
+                const reorganizationPlan = reorganizationResult.data.plan;
+                if (reorganizationPlan && reorganizationPlan.length > 0) {
+                    const executeTaskModificationPlan = httpsCallable(functions, 'executeTaskModificationPlan');
+                    await executeTaskModificationPlan({ plan: reorganizationPlan });
+                }
+            }
 
             showToast('¡Plan aplicado con éxito! Tus tareas han sido actualizadas.', 'success');
             closeModal();
-            // A simple page reload is the easiest way to ensure all components are updated
-            // with the new task data.
             location.reload();
 
         } catch (error) {
-            console.error("Error executing modification plan:", error);
+            console.error("Error executing full plan:", error);
             showToast(error.message || 'Error al aplicar el plan.', 'error');
             hideLoading(applyBtn, originalApplyHTML);
             submitBtn.disabled = false;

@@ -783,17 +783,13 @@ exports.getTaskModificationPlan = functions.runWith({timeoutSeconds: 540, memory
         2.  **Mapear Tareas:** Para cada intención, identifica la tarea correspondiente del listado de "Tareas Actuales" basándote en su título. Sé flexible con el matching (ej: "revisar planos" debe coincidir con "Revisar los planos del cliente X").
 
         3.  **Generar Plan de Modificación (JSON):**
-            *   Crea un array llamado \`modifications\`.
-            *   Para cada tarea a modificar, añade un objeto a este array con:
+            *   Para cada tarea a modificar, crea un objeto con:
                 *   \`docId\`: El ID exacto de la tarea.
-                *   \`updates\`: Un objeto con los campos a cambiar.
-                    *   Para completar: \`{ "status": "done" }\`
-                    *   Para cambiar fecha: \`{ "dueDate": "YYYY-MM-DD" }\` (calcula la fecha correcta).
-                    *   Para cambiar título: \`{ "title": "Nuevo título" }\`
-                *   \`originalTitle\`: El título original de la tarea para mostrar al usuario.
+                *   \`updates\`: Un objeto con los campos a cambiar (ej: \`{ "status": "done" }\`, \`{ "dueDate": "YYYY-MM-DD" }\`).
+                *   \`originalTitle\`: El título original de la tarea.
 
         4.  **Manejar Reorganización:**
-            *   Si el usuario pide "reorganizar", añade un objeto al plan principal con \`action: "reorganize"\` y \`excludeIds\`: un array con los docIds de las tareas que ya fueron completadas en este mismo plan.
+            *   Si el usuario pide explícitamente "reorganizar", "reorganiza", etc., simplemente añade un objeto \`{ "action": "reorganize" }\` al plan. No intentes calcular las fechas aquí.
 
         **Formato de Salida JSON (OBLIGATORIO):**
         - Tu respuesta DEBE ser únicamente un objeto JSON.
@@ -871,6 +867,89 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
     } catch (error) {
         console.error("Error aplicando el plan de modificación de tareas:", error);
         throw new functions.https.HttpsError("internal", "Ocurrió un error al guardar los cambios en la base de datos.");
+    }
+});
+
+exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { pendingTasks, userPriority } = data;
+    if (!pendingTasks || !Array.isArray(pendingTasks)) {
+        throw new functions.https.HttpsError("invalid-argument", "Se requiere 'pendingTasks' (array).");
+    }
+
+    const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
+    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    const todayStr = today.toISOString().split('T')[0];
+
+    // Calculate remaining workdays
+    const remainingDays = [];
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const day = date.getDay();
+        if (day > 0 && day < 6) { // Monday to Friday
+            remainingDays.push(date.toISOString().split('T')[0]);
+        }
+    }
+
+    const tasksForPrompt = pendingTasks.map(t => ({ docId: t.docId, title: t.title, dueDate: t.dueDate }));
+
+    const prompt = `
+        Eres un asistente de planificación experto. Tu misión es reorganizar una lista de tareas pendientes para los días restantes de la semana, comenzando desde hoy.
+
+        **Contexto:**
+        - Fecha de Hoy: ${todayStr} (Día de la semana: ${dayOfWeek})
+        - Días Laborables Restantes: ${remainingDays.join(', ')}
+        - Prioridad del Usuario: "${userPriority || 'No especificada'}"
+
+        **Tareas Pendientes a Reorganizar:**
+        \`\`\`json
+        ${JSON.stringify(tasksForPrompt, null, 2)}
+        \`\`\`
+
+        **Reglas de Reorganización (Orden Estricto):**
+        1.  **Tareas Atrasadas:** Cualquier tarea con una \`dueDate\` anterior a hoy (${todayStr}) es de máxima prioridad. Debes asignarle la \`plannedDate\` de hoy.
+        2.  **Prioridad del Usuario:** Las tareas cuyo título coincida con la prioridad del usuario (ej: "PWA") deben programarse inmediatamente después de las atrasadas.
+        3.  **Fecha de Vencimiento:** Las tareas restantes deben ordenarse por su \`dueDate\`. Las que vencen antes, se planifican antes.
+        4.  **Distribución:** Distribuye las tareas de manera equitativa entre los días laborables restantes. No acumules todo en un solo día si no es necesario.
+        5.  **Asignación de Fechas:** La \`plannedDate\` que asignes debe ser una de las fechas en la lista de "Días Laborables Restantes".
+
+        **Formato de Salida JSON (OBLIGATORIO):**
+        - Tu respuesta DEBE ser únicamente un objeto JSON.
+        - El objeto debe tener una clave \`plan\`, que es un array de objetos.
+        - Cada objeto en el array debe tener esta estructura exacta: \`{ "docId": "ID_DE_LA_TAREA", "updates": { "plannedDate": "YYYY-MM-DD" }, "originalTitle": "Título de la Tarea" }\`.
+        - NO incluyas explicaciones, saludos, ni bloques de código markdown.
+
+        **Ejemplo de Salida VÁLIDA:**
+        {
+          "plan": [
+            { "docId": "task_123", "updates": { "plannedDate": "${todayStr}" }, "originalTitle": "Tarea Atrasada" },
+            { "docId": "task_789", "updates": { "plannedDate": "${todayStr}" }, "originalTitle": "Tarea de Proyecto PWA" },
+            { "docId": "task_456", "updates": { "plannedDate": "${remainingDays[1] || todayStr}" }, "originalTitle": "Otra Tarea" }
+          ]
+        }
+    `;
+
+    try {
+        const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+        const responseText = result.response.candidates[0].content.parts[0].text;
+        const jsonMatch = responseText.match(/{[\s\S]*}/);
+        if (!jsonMatch) {
+            throw new Error("La IA no pudo generar un plan de reorganización válido.");
+        }
+        const reorganizationPlan = JSON.parse(jsonMatch[0]);
+        if (!reorganizationPlan.plan) {
+            throw new Error("El plan de reorganización de la IA tiene un formato incorrecto.");
+        }
+        return reorganizationPlan;
+    } catch (error) {
+        console.error("Error en reorganizeTasksWithAI:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Error al procesar la reorganización con la IA.");
     }
 });
 
