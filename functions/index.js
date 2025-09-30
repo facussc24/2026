@@ -744,6 +744,137 @@ exports.executeAIAssistantPlan = functions.https.onCall(async (data, context) =>
     }
 });
 
+exports.getTaskModificationPlan = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { userPrompt, tasks } = data;
+    if (!userPrompt || !tasks || !Array.isArray(tasks)) {
+        throw new functions.https.HttpsError("invalid-argument", "Se requiere 'userPrompt' (string) y 'tasks' (array).");
+    }
+
+    const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
+    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+    const today = new Date().toISOString().split('T')[0];
+    const tasksForPrompt = tasks.map(t => ({ docId: t.docId, title: t.title, status: t.status, dueDate: t.dueDate }));
+
+    const prompt = `
+        Eres un asistente experto en gestión de tareas. Tu misión es analizar una petición de un usuario y un listado de sus tareas actuales para generar un plan de modificación en formato JSON.
+
+        **Contexto:**
+        - Fecha de Hoy: ${today}
+        - Tareas Actuales del Usuario:
+        \`\`\`json
+        ${JSON.stringify(tasksForPrompt, null, 2)}
+        \`\`\`
+
+        **Petición del Usuario:**
+        "${userPrompt}"
+
+        **PROCESO DE ANÁLISIS (SEGUIR ESTRICTAMENTE):**
+
+        1.  **Identificar Intenciones:** Lee la petición del usuario para identificar las acciones que desea realizar. Las acciones posibles son:
+            *   **Completar Tarea:** El usuario indica que una tarea ya fue realizada (ej: "terminé", "ya hice", "completé").
+            *   **Cambiar Fecha:** El usuario quiere mover una tarea a una fecha específica (ej: "es para mañana", "pasa al viernes").
+            *   **Actualizar Título:** El usuario quiere renombrar una tarea.
+            *   **Reorganizar:** El usuario pide reorganizar las tareas restantes.
+
+        2.  **Mapear Tareas:** Para cada intención, identifica la tarea correspondiente del listado de "Tareas Actuales" basándote en su título. Sé flexible con el matching (ej: "revisar planos" debe coincidir con "Revisar los planos del cliente X").
+
+        3.  **Generar Plan de Modificación (JSON):**
+            *   Crea un array llamado \`modifications\`.
+            *   Para cada tarea a modificar, añade un objeto a este array con:
+                *   \`docId\`: El ID exacto de la tarea.
+                *   \`updates\`: Un objeto con los campos a cambiar.
+                    *   Para completar: \`{ "status": "done" }\`
+                    *   Para cambiar fecha: \`{ "dueDate": "YYYY-MM-DD" }\` (calcula la fecha correcta).
+                    *   Para cambiar título: \`{ "title": "Nuevo título" }\`
+                *   \`originalTitle\`: El título original de la tarea para mostrar al usuario.
+
+        4.  **Manejar Reorganización:**
+            *   Si el usuario pide "reorganizar", añade un objeto al plan principal con \`action: "reorganize"\` y \`excludeIds\`: un array con los docIds de las tareas que ya fueron completadas en este mismo plan.
+
+        **Formato de Salida JSON (OBLIGATORIO):**
+        - Tu respuesta DEBE ser únicamente un objeto JSON.
+        - El objeto principal debe tener una clave \`plan\`, que es un array.
+        - Este array contendrá los objetos de modificación y, si aplica, el objeto de reorganización.
+        - NO incluyas explicaciones, saludos, ni bloques de código markdown (\`\`\`json).
+
+        **EJEMPLO COMPLETO:**
+        - Petición: "Hoy terminé la tarea de 'Revisar Planos'. La de llamar al proveedor de acero es para mañana. Con eso, reorganiza mis tareas pendientes."
+        - Salida Esperada:
+          {
+            "plan": [
+              {
+                "docId": "task_123",
+                "updates": { "status": "done" },
+                "originalTitle": "Revisar Planos del Cliente X"
+              },
+              {
+                "docId": "task_456",
+                "updates": { "dueDate": "${new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}" },
+                "originalTitle": "Llamar al proveedor de acero"
+              },
+              {
+                "action": "reorganize",
+                "excludeIds": ["task_123"]
+              }
+            ]
+          }
+    `;
+
+    try {
+        const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+        const responseText = result.response.candidates[0].content.parts[0].text;
+        const jsonMatch = responseText.match(/{[\s\S]*}/);
+        if (!jsonMatch) {
+            throw new Error("La IA no pudo generar un plan de modificación válido.");
+        }
+        const modificationPlan = JSON.parse(jsonMatch[0]);
+        if (!modificationPlan.plan) {
+            throw new Error("El plan de la IA tiene un formato incorrecto.");
+        }
+        return modificationPlan;
+    } catch (error) {
+        console.error("Error en getTaskModificationPlan:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Error al procesar la petición con la IA.");
+    }
+});
+
+exports.executeTaskModificationPlan = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const { plan } = data;
+    if (!plan || !Array.isArray(plan)) {
+        throw new functions.https.HttpsError("invalid-argument", "Se requiere un 'plan' (array) no vacío.");
+    }
+
+    const db = admin.firestore();
+    const batch = db.batch();
+    const tasksRef = db.collection('tareas');
+
+    plan.forEach(item => {
+        if (item.docId && item.updates) {
+            const taskRef = tasksRef.doc(item.docId);
+            batch.update(taskRef, { ...item.updates, updatedAt: new Date() });
+        }
+        // Note: The 'reorganize' action is handled client-side if needed,
+        // this function only handles direct data modifications.
+    });
+
+    try {
+        await batch.commit();
+        return { success: true, message: `Plan aplicado con éxito.` };
+    } catch (error) {
+        console.error("Error aplicando el plan de modificación de tareas:", error);
+        throw new functions.https.HttpsError("internal", "Ocurrió un error al guardar los cambios en la base de datos.");
+    }
+});
+
+
 /**
  * Scheduled function to delete archived tasks older than 6 months.
  * Runs every day at 3:00 AM (Argentina time).
