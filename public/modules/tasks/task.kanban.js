@@ -121,11 +121,6 @@ export function runKanbanBoardLogic(container) {
     lucide.createIcons();
 
     setTimeout(() => {
-        const addTaskBtn = container.querySelector('#add-new-task-btn');
-        if (addTaskBtn) {
-            addTaskBtn.addEventListener('click', () => openTaskFormModal());
-        }
-
         const toggleArchivedBtn = container.querySelector('#toggle-archived-btn');
         if (toggleArchivedBtn) {
             toggleArchivedBtn.addEventListener('click', () => {
