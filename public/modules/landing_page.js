@@ -16,6 +16,7 @@ let functions;
 let writeBatch;
 let openTaskFormModal;
 let openAIAssistantModal;
+let openWeekOrganizerModal;
 
 // Functions from main.js to be injected
 let seedDatabase;
@@ -374,9 +375,12 @@ function setupActionButtons() {
     });
 
     document.getElementById('organize-week-btn')?.addEventListener('click', () => {
-        // This will call a new function to open the weekly planner modal
-        // For now, let's just show a toast. I'll implement the modal next.
-        showToast('Próximamente: Organizador Semanal Inteligente.', 'info');
+        if (openWeekOrganizerModal) {
+            openWeekOrganizerModal();
+        } else {
+            showToast('El Organizador Semanal no está disponible.', 'error');
+            console.error('openWeekOrganizerModal function is not available in landing_page.js');
+        }
     });
 
     document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', () => openTaskFormModal(null, 'todo'));
@@ -497,6 +501,7 @@ export function initLandingPageModule(dependencies) {
     showToast = dependencies.showToast;
     openTaskFormModal = dependencies.openTaskFormModal;
     openAIAssistantModal = dependencies.openAIAssistantModal;
+    openWeekOrganizerModal = dependencies.openWeekOrganizerModal;
     functions = dependencies.functions;
     writeBatch = dependencies.writeBatch; // Injected dependency
     seedDatabase = dependencies.seedDatabase;
