@@ -14,7 +14,8 @@ import {
     getAIAssistantModalHTML,
     getAIAssistantPromptViewHTML,
     getAILoadingViewHTML,
-    getAIReviewViewHTML
+    getAIReviewViewHTML,
+    getWeekOrganizerModalHTML
 } from './task.templates.js';
 
 let appState;
@@ -517,4 +518,47 @@ export async function openAIAssistantModal() {
 
     // Initial render
     renderPromptView();
+}
+
+export async function openWeekOrganizerModal() {
+    // 1. Render the basic modal structure
+    dom.modalContainer.innerHTML = getWeekOrganizerModalHTML();
+    lucide.createIcons();
+
+    const modalElement = document.getElementById('week-organizer-modal');
+    const planContentEl = document.getElementById('ai-week-plan-content');
+    const refineBtn = document.getElementById('organizer-submit-btn');
+    const applyBtn = document.getElementById('organizer-apply-plan-btn');
+
+    // 2. Define close action
+    const closeModal = () => modalElement.remove();
+    modalElement.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+    refineBtn.addEventListener('click', () => showToast('Refinar plan - Próximamente', 'info'));
+    applyBtn.addEventListener('click', () => showToast('Aplicar plan - Próximamente', 'info'));
+
+    // 3. Fetch all user's pending tasks
+    try {
+        const allTasks = await fetchAllTasks();
+        const pendingTasks = allTasks.filter(task => task.status !== 'done');
+
+        // 4. Call the backend function to get the initial plan
+        const functions = getFunctions();
+        const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
+        const result = await analyzeWeeklyTasks({ tasks: pendingTasks, weekOffset: getState().weekOffset || 0 });
+
+        const { plan, analysis } = result.data;
+
+        // 5. Display the plan
+        planContentEl.innerHTML = marked.parse(analysis);
+
+        // Store the plan in the element's dataset to be used later
+        applyBtn.dataset.plan = JSON.stringify(plan);
+        refineBtn.disabled = false;
+        applyBtn.disabled = false;
+
+    } catch (error) {
+        console.error("Error organizing week:", error);
+        showToast(error.message || 'Error al generar el plan semanal.', 'error');
+        planContentEl.innerHTML = `<p class="text-red-500">Error al contactar al asistente. Por favor, intente de nuevo.</p>`;
+    }
 }

@@ -987,6 +987,55 @@ export function getTasksModalHTML(title) {
     `;
 }
 
+export function getWeekOrganizerModalHTML() {
+    return `
+    <div id="week-organizer-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
+            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                    <i data-lucide="wand-2" class="w-6 h-6 text-teal-500"></i>
+                    Organizador Semanal Inteligente
+                </h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    <i data-lucide="x" class="h-6 w-6"></i>
+                </button>
+            </div>
+            <div class="p-6 flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto">
+                <!-- Proposed Plan Section -->
+                <div id="organizer-plan-view" class="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Propuesta de la IA</h4>
+                    <div id="ai-week-plan-content" class="text-sm prose dark:prose-invert max-w-none">
+                        <div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
+                            <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
+                            <p>Analizando tu semana y generando una propuesta...</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- User Feedback Section -->
+                <div id="organizer-feedback-view" class="flex flex-col">
+                    <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Haz ajustes o contrapropuestas</h4>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                        Puedes decirle a la IA qué cambiar. Por ejemplo: "El lunes quiero un día tranquilo" o "La tarea 'Revisar Planos' es para el martes, no el lunes".
+                    </p>
+                    <textarea id="organizer-prompt-textarea" class="w-full h-full flex-grow bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-teal-500" placeholder="Escribe tus indicaciones aquí..."></textarea>
+                </div>
+            </div>
+            <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
+                <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+                <button id="organizer-submit-btn" type="button" class="bg-teal-600 text-white px-5 py-2 rounded-md hover:bg-teal-700 font-semibold transition-colors flex items-center gap-2">
+                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    Refinar Plan
+                </button>
+                 <button id="organizer-apply-plan-btn" type="button" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold transition-colors flex items-center gap-2">
+                    <i data-lucide="check-check" class="w-5 h-5"></i>
+                    Aplicar este Plan
+                </button>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
 export function getDashboardLayoutHTML() {
     return `
     <div class="flex flex-col flex-1 w-full mx-auto">

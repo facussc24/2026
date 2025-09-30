@@ -664,7 +664,7 @@ exports.executeAIAssistantPlan = functions.https.onCall(async (data, context) =>
             batch.set(newTaskRef, {
                 title: task.title || "Tarea sin título",
                 description: task.description || "",
-                dueDate: task.dueDate || new Date().toISOString().split('T')[0],
+                dueDate: task.dueDate, // Allow null or specific date
                 creatorUid: userUid,
                 assigneeUid: userUid, // Default to self-assigned
                 status: 'todo',
