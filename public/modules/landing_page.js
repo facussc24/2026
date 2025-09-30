@@ -4,7 +4,6 @@ import { COLLECTIONS } from '../utils.js';
 import { showPlannerHelpModal, showAIAnalysisModal, showTasksInModal } from './tasks/task.ui.js';
 import { completeAndArchiveTask } from './tasks/task.service.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
-import { openTaskFormModal, openAIAssistantModal } from './tasks/task.modal.js';
 
 
 // --- 1. DEPENDENCIES AND STATE ---
@@ -15,6 +14,8 @@ let lucide;
 let showToast;
 let functions;
 let writeBatch;
+let openTaskFormModal;
+let openAIAssistantModal;
 
 // Functions from main.js to be injected
 let seedDatabase;
