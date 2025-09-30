@@ -273,7 +273,7 @@ exports.organizeTaskWithAI = functions.https.onCall(async (data, context) => {
 
         // Selecciona el modelo generativo.
         const generativeModel = vertexAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
+            model: "gemini-1.0-pro",
         });
 
         const today = new Date();
@@ -378,7 +378,7 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
     }
     try {
         const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.0-pro" });
         const user = await admin.auth().getUser(context.auth.uid);
         const userName = user.displayName || user.email;
 
@@ -489,7 +489,7 @@ exports.refineWeeklyPlan = functions.https.onCall(async (data, context) => {
 
     try {
         const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.0-pro" });
         const user = await admin.auth().getUser(context.auth.uid);
         const userName = user.displayName || user.email;
 
