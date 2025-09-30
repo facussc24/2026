@@ -1000,7 +1000,7 @@ export function getWeekOrganizerModalHTML() {
                     <i data-lucide="x" class="h-6 w-6"></i>
                 </button>
             </div>
-            <div class="p-6 flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 overflow-y-auto">
+            <div class="p-6 flex-grow grid grid-cols-1 gap-6 overflow-y-auto">
                 <!-- Proposed Plan Section -->
                 <div id="organizer-plan-view" class="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                     <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Propuesta de la IA</h4>
