@@ -53,7 +53,9 @@ export function getKanbanBoardHTML(state, selectedUser) {
             </div>
 
             <div id="kanban-header-buttons" class="flex items-center gap-4 flex-shrink-0">
-
+                <button id="add-new-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105">
+                    <i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea
+                </button>
             </div>
         </div>
         <div class="flex justify-end mb-4">
@@ -123,6 +125,112 @@ export function getAIAnalysisModalHTML() {
             </div>
         </div>
     </div>
+    `;
+}
+
+export function getAIAssistantModalHTML() {
+    return `
+    <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+        <div id="ai-assistant-modal-content" class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in transition-all duration-300">
+            <div id="ai-assistant-view-container" class="flex flex-col flex-grow">
+                <!-- Dynamic content will be injected here -->
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+export function getAIAssistantPromptViewHTML() {
+    return `
+        <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                <i data-lucide="sparkles" class="w-6 h-6 text-purple-500"></i>
+                Asistente de Tareas IA
+            </h3>
+            <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                <i data-lucide="x" class="h-6 w-6"></i>
+            </button>
+        </div>
+        <div class="p-6 flex-grow">
+            <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
+                Describe qué necesitas. Puedes crear tareas, reprogramar las existentes y más.
+            </p>
+            <textarea id="ai-prompt-textarea" class="w-full h-48 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear tarea para revisar planos el lunes. Reprogramar las tareas de hoy para mañana..."></textarea>
+        </div>
+        <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
+            <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+            <button id="ai-submit-prompt-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
+                <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+                Enviar al Asistente
+            </button>
+        </div>
+    `;
+}
+
+export function getAILoadingViewHTML() {
+    return `
+        <div class="flex flex-col items-center justify-center h-full p-8 text-center">
+            <i data-lucide="loader-circle" class="w-12 h-12 animate-spin text-purple-500"></i>
+            <p class="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-200">Analizando tu petición...</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">El asistente está pensando. Esto puede tardar unos segundos.</p>
+        </div>
+    `;
+}
+
+export function getAIReviewViewHTML(plan) {
+    const { action, tasks, suggestion } = plan;
+
+    let planDescription = '';
+    if (action === 'CREATE') {
+        planDescription = `La IA propone crear ${tasks.length} nueva(s) tarea(s).`;
+    } else if (action === 'UPDATE') {
+        planDescription = `La IA propone actualizar ${tasks.length} tarea(s) existente(s).`;
+    } else {
+        planDescription = `La IA ha generado el siguiente plan de acción:`;
+    }
+
+    const tasksHTML = tasks.map(task => {
+        if (action === 'CREATE') {
+            return `<div class="p-3 bg-green-50 border-l-4 border-green-500 rounded-md">
+                        <p class="font-bold text-green-800">Crear: "${task.title}"</p>
+                        <p class="text-sm text-slate-600">Fecha Límite: ${task.dueDate}</p>
+                    </div>`;
+        }
+        if (action === 'UPDATE') {
+            return `<div class="p-3 bg-blue-50 border-l-4 border-blue-500 rounded-md">
+                        <p class="font-bold text-blue-800">Actualizar: Tarea ID ${task.id}</p>
+                        <p class="text-sm text-slate-600">Cambiar '${task.field}' a '${task.newValue}'.</p>
+                    </div>`;
+        }
+        return '';
+    }).join('');
+
+    const suggestionHTML = suggestion ? `<div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-800 flex items-center gap-2"><i data-lucide="lightbulb" class="w-4 h-4"></i>${suggestion}</div>` : '';
+
+    return `
+        <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                <i data-lucide="clipboard-check" class="w-6 h-6 text-purple-500"></i>
+                Revisa el Plan Propuesto
+            </h3>
+            <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                <i data-lucide="x" class="h-6 w-6"></i>
+            </button>
+        </div>
+        <div class="p-6 flex-grow overflow-y-auto custom-scrollbar">
+            <p class="text-sm text-slate-700 dark:text-slate-300 mb-4">${planDescription}</p>
+            <div class="space-y-3">
+                ${tasksHTML}
+            </div>
+            ${suggestionHTML}
+        </div>
+        <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
+            <button id="ai-reject-plan-btn" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+            <button id="ai-confirm-plan-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
+                <i data-lucide="check-check" class="w-5 h-5"></i>
+                Confirmar y Ejecutar Plan
+            </button>
+        </div>
     `;
 }
 
@@ -906,104 +1014,6 @@ export function getTasksModalHTML(title) {
     `;
 }
 
-export function getAICreationModalHTML() {
-    return `
-    <div id="ai-creation-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div id="ai-creation-modal-content" class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 animate-scale-in transition-all duration-300">
-
-            <!-- Initial Prompt View -->
-            <div id="ai-prompt-view">
-                <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
-                    <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                        <i data-lucide="sparkles" class="w-6 h-6 text-purple-500"></i>
-                        Crear Tareas con Asistente IA
-                    </h3>
-                    <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                        <i data-lucide="x" class="h-6 w-6"></i>
-                    </button>
-                </div>
-                <div class="p-6">
-                    <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                        Describe las tareas que necesitas crear. Puedes incluir múltiples tareas, asignaciones y fechas en una sola petición.
-                    </p>
-                    <textarea id="ai-prompt-textarea" class="w-full h-40 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear una tarea para revisar los planos el lunes y otra para que Fede apruebe el presupuesto para el miércoles..."></textarea>
-                </div>
-                <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
-                    <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
-                    <button id="ai-generate-tasks-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
-                        <i data-lucide="brain-circuit" class="w-5 h-5"></i>
-                        Analizar y Generar Tareas
-                    </button>
-                </div>
-            </div>
-
-            <!-- Loading/Review View (initially hidden) -->
-            <div id="ai-review-view" class="hidden">
-                <!-- Content will be injected here -->
-            </div>
-
-        </div>
-    </div>
-    `;
-}
-
-export function getAIAssistantModalHTML() {
-    return `
-    <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
-            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-lg sticky top-0">
-                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                    <i data-lucide="brain-circuit" class="w-6 h-6 text-primary-DEFAULT"></i>
-                    Asistente de Tareas IA
-                </h3>
-                <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                    <i data-lucide="x" class="h-6 w-6"></i>
-                </button>
-            </div>
-            <div class="p-6 overflow-y-auto space-y-6">
-                <div>
-                    <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Selecciona una pregunta para obtener un resumen de las tareas visibles actualmente:</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button data-question="plan-my-week" class="ai-question-btn col-span-1 sm:col-span-2 bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200">
-                            <i data-lucide="calendar-days"></i>
-                            <span class="font-bold">Planificar mi Semana (Tareas sin fecha)</span>
-                        </button>
-                        <button data-question="summary" class="ai-question-btn">
-                            <i data-lucide="align-left"></i>
-                            <span>Generar resumen del estado actual</span>
-                        </button>
-                        <button data-question="urgent" class="ai-question-btn">
-                             <i data-lucide="alert-triangle"></i>
-                            <span>¿Cuáles son las 3 tareas más urgentes?</span>
-                        </button>
-                        <button data-question="at_risk" class="ai-question-btn">
-                             <i data-lucide="shield-alert"></i>
-                            <span>¿Qué tareas están en riesgo?</span>
-                        </button>
-                         <button data-question="blocked" class="ai-question-btn">
-                             <i data-lucide="hand"></i>
-                            <span>¿Hay alguna tarea bloqueada?</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="border-t border-slate-200 dark:border-slate-700 pt-4">
-                     <h5 class="text-base font-bold text-slate-800 dark:text-slate-200 mb-3">Respuesta del Asistente:</h5>
-                     <div id="ai-assistant-response-container" class="bg-white dark:bg-slate-900/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[150px] text-sm text-slate-700 dark:text-slate-300 prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-li:my-1">
-                        <div id="ai-assistant-placeholder" class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
-                            <i data-lucide="sparkles" class="w-10 h-10 mb-2"></i>
-                            <p>La respuesta de la IA aparecerá aquí.</p>
-                        </div>
-                        <div id="ai-assistant-loader" class="hidden animate-pulse flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
-                            <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
-                            <p>Analizando tareas...</p>
-                        </div>
-                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    `;
-}
 
 export function getDashboardLayoutHTML() {
     return `
