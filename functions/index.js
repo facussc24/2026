@@ -413,17 +413,17 @@ exports.analyzeWeeklyTasks = functions.runWith({timeoutSeconds: 540, memory: '1G
         }));
 
         const prompt = `
-        Eres un asistente de planificación estratégica para ${userName}. Tu misión es crear un plan de trabajo semanal realista y bien justificado, y comunicarlo de manera clara.
+        Eres un asistente de planificación estratégica para ${userName}. Tu única misión es crear un plan de trabajo semanal realista y devolverlo en formato JSON.
 
         **Contexto:**
         - Usuario: ${userName}
         - Fecha Actual: ${new Date().toISOString().split('T')[0]}
         - Semana de Planificación:
-            - Lunes: ${weekDatesWithNames[0]} (${weekDates[0]})
-            - Martes: ${weekDatesWithNames[1]} (${weekDates[1]})
-            - Miércoles: ${weekDatesWithNames[2]} (${weekDates[2]})
-            - Jueves: ${weekDatesWithNames[3]} (${weekDates[3]})
-            - Viernes: ${weekDatesWithNames[4]} (${weekDates[4]})
+            - Lunes: ${weekDates[0]}
+            - Martes: ${weekDates[1]}
+            - Miércoles: ${weekDates[2]}
+            - Jueves: ${weekDates[3]}
+            - Viernes: ${weekDates[4]}
 
         **Reglas de Planificación (Orden de Importancia):**
         1.  **No Fines de Semana:** Nunca asignes una \`plannedDate\` a un Sábado o Domingo.
@@ -437,41 +437,38 @@ exports.analyzeWeeklyTasks = functions.runWith({timeoutSeconds: 540, memory: '1G
         ${JSON.stringify(tasksForPrompt, null, 2)}
         \`\`\`
 
-        **Formato de Salida (OBLIGATORIO):**
-        1.  **EL PLAN (JSON):** Un objeto JSON con una clave "plan" que contiene un array de objetos \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD", "title": "Título de la Tarea" }\`.
-        2.  **SEPARADOR:** Inserta este separador exacto: \`---JSON_PLAN_SEPARATOR---\`
-        3.  **EL ANÁLISIS (MARKDOWN):** Un análisis en Markdown con la siguiente estructura:
-            ### Resumen del Plan Semanal
-            Párrafo corto resumiendo la semana.
-            ### Plan Detallado Día por Día
-            *   **Lunes 5 de Agosto**:
-                *   **[Título de la Tarea]** - *Justificación: [Explica por qué está aquí, ej: "Tarea vencida de alta prioridad."]*
-            *   ... (continúa para todos los días con tareas)
-            ### ⚠️ Justificación de Riesgos
-            Explica cualquier decisión difícil (ej: "La tarea X se planificó el mismo día de su vencimiento porque...").
-            ### 🗓️ Tareas Fuera de Horizonte
-            Lista las tareas no planificadas por tener una fecha de vencimiento muy lejana.
+        **Formato de Salida (REGLA CRÍTICA):**
+        - Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON.
+        - El objeto debe contener una clave "plan", cuyo valor es un array de objetos.
+        - Cada objeto en el array debe tener esta estructura exacta: \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD", "title": "Título de la Tarea" }\`.
+        - NO incluyas absolutamente NADA más en tu respuesta. Ni texto introductorio, ni explicaciones, ni bloques de código markdown.
+        - La respuesta debe empezar con \`{\` y terminar con \`}\`.
 
-        **Reglas Finales:**
-        - En el análisis, usa los títulos de las tareas, no los IDs.
-        - Usa el formato de fecha natural (ej: "Lunes 5 de Agosto").
-        - Tu respuesta debe ser únicamente el JSON, el separador y el Markdown.
+        **Ejemplo de respuesta VÁLIDA:**
+        {
+          "plan": [
+            { "taskId": "task_123", "plannedDate": "${weekDates[0]}", "title": "Revisar Planos Urgentes" },
+            { "taskId": "task_456", "plannedDate": "${weekDates[2]}", "title": "Llamar a Proveedor" }
+          ]
+        }
         `;
         const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
         let responseText = result.response.candidates[0].content.parts[0].text;
-        responseText = responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
-        const separator = '---JSON_PLAN_SEPARATOR---';
-        const parts = responseText.split(separator);
-        if (parts.length < 2) {
-            throw new Error("La respuesta de la IA no contiene el separador requerido.");
-        }
-        const jsonPart = parts[0].trim();
-        const analysisPart = parts[1].trim();
-        const planData = JSON.parse(jsonPart);
+
+        // Limpiar la respuesta para asegurarse de que sea un JSON válido
+        responseText = responseText.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+
+        const planData = JSON.parse(responseText);
+
         if (!planData || !Array.isArray(planData.plan)) {
-             throw new Error("La parte JSON de la respuesta de la IA no es válida o no contiene un array 'plan'.");
+            throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array 'plan'.");
         }
-        return { plan: planData.plan, analysis: analysisPart };
+
+        // Devolver el plan y un análisis estático, ya que el análisis dinámico se ha eliminado.
+        return {
+            plan: planData.plan,
+            analysis: "### Propuesta de la IA\nAnalizando tu semana y generando una propuesta..."
+        };
     } catch (error) {
         console.error("Error en analyzeWeeklyTasks con Vertex AI:", error);
         throw new functions.https.HttpsError("internal", `Ocurrió un error al analizar las tareas con IA. Error: ${error.message}`);

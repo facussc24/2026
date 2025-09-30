@@ -622,14 +622,68 @@ export async function openWeekOrganizerModal() {
     // Initial plan generation
     try {
         const allTasks = await fetchAllTasks();
-        // Filter for tasks that are not done or are done but have no plannedDate (could be newly completed)
         const pendingTasks = allTasks.filter(task => task.status !== 'done' || !task.plannedDate);
 
         const analyzeWeeklyTasks = httpsCallable(functions, 'analyzeWeeklyTasks');
         const result = await analyzeWeeklyTasks({ tasks: pendingTasks });
+        const { plan } = result.data;
 
-        const { plan, analysis } = result.data;
+        const generateAnalysisMarkdown = (plan, tasks) => {
+            const today = new Date();
+            const dayOfWeek = today.getDay(); // Sunday - Saturday : 0 - 6
+            const isWeekend = dayOfWeek === 6 || dayOfWeek === 0;
+            const diffToMonday = isWeekend ? (dayOfWeek === 6 ? 2 : 1) : 1 - dayOfWeek;
+            const monday = new Date(today);
+            monday.setDate(today.getDate() + diffToMonday);
 
+            const weekDates = Array.from({ length: 5 }).map((_, i) => {
+                const date = new Date(monday);
+                date.setDate(monday.getDate() + i);
+                return date.toISOString().split('T')[0];
+            });
+
+            const weekDayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+            const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+            const weekDatesWithNames = weekDates.map(dateStr => {
+                const date = new Date(dateStr + "T12:00:00Z"); // Use UTC to avoid timezone issues
+                const dayName = weekDayNames[date.getUTCDay()];
+                return `${dayName} ${date.getUTCDate()} de ${monthNames[date.getUTCMonth()]}`;
+            });
+
+            const tasksByDate = {};
+            plan.forEach(p => {
+                if (!tasksByDate[p.plannedDate]) {
+                    tasksByDate[p.plannedDate] = [];
+                }
+                tasksByDate[p.plannedDate].push(p.title);
+            });
+
+            let markdown = "### Propuesta de la IA\nEsta es una propuesta inicial para organizar tus tareas de la semana. Puedes refinarla usando el cuadro de texto de abajo.\n\n### Plan Detallado\n";
+
+            weekDates.forEach((date, index) => {
+                if (tasksByDate[date] && tasksByDate[date].length > 0) {
+                    markdown += `*   **${weekDatesWithNames[index]}**:\n`;
+                    tasksByDate[date].forEach(title => {
+                        markdown += `    *   ${title}\n`;
+                    });
+                }
+            });
+
+            const plannedTaskIds = new Set(plan.map(p => p.taskId));
+            const unplannedTasks = tasks.filter(t => !plannedTaskIds.has(t.docId));
+
+            if (unplannedTasks.length > 0) {
+                markdown += "\n### 🗓️ Tareas Fuera de Horizonte\n";
+                unplannedTasks.forEach(task => {
+                    markdown += `*   ${task.title}\n`;
+                });
+            }
+
+            return markdown;
+        };
+
+        const analysis = generateAnalysisMarkdown(plan, pendingTasks);
         planContentEl.innerHTML = marked.parse(analysis);
         planContentEl.dataset.rawPlan = JSON.stringify(plan);
 
@@ -638,8 +692,9 @@ export async function openWeekOrganizerModal() {
 
     } catch (error) {
         console.error("Error organizing week:", error);
-        showToast(error.message || 'Error al generar el plan semanal.', 'error');
-        planContentEl.innerHTML = `<div class="text-center text-red-500"><i data-lucide="alert-triangle" class="mx-auto w-10 h-10 mb-2"></i><p>Error al contactar al asistente. Por favor, intente de nuevo.</p></div>`;
+        const errorMessage = error.details?.message || error.message || 'Error al generar el plan semanal.';
+        showToast(errorMessage, 'error');
+        planContentEl.innerHTML = `<div class="text-center text-red-500"><i data-lucide="alert-triangle" class="mx-auto w-10 h-10 mb-2"></i><p>${errorMessage}</p><p>Por favor, intente de nuevo.</p></div>`;
         lucide.createIcons();
     }
 }
