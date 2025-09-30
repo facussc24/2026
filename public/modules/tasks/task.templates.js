@@ -1049,8 +1049,12 @@ export function getDashboardLayoutHTML() {
             </div>
             <div class="flex items-center gap-2">
                 <button id="ai-assistant-btn" class="btn btn-secondary flex items-center gap-2">
-                    <i data-lucide="brain-circuit" class="w-4 h-4"></i>
-                    <span>Asistente IA</span>
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    <span>Crear con Gemini</span>
+                </button>
+                <button id="open-week-organizer-btn" class="btn btn-secondary flex items-center gap-2">
+                    <i data-lucide="wand-2" class="w-4 h-4"></i>
+                    <span>✨ Organizar mi Semana</span>
                 </button>
                 <button id="export-tasks-btn" class="btn btn-primary flex items-center gap-2">
                     <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>

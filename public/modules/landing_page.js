@@ -80,6 +80,7 @@ function renderLandingPageHTML() {
                         <div class="flex items-center gap-2">
                              <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
                             <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                            <button id="organize-week-btn" class="bg-teal-500 text-white px-5 py-2.5 rounded-full hover:bg-teal-600 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="wand-2" class="mr-2 h-5 w-5"></i>Organizar mi Semana</button>
                             <button id="gemini-create-task-btn" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
                                 <span class="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-600 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></span>
                                 <span class="relative flex items-center">
@@ -370,6 +371,12 @@ function setupActionButtons() {
         } else {
             showToast('El Asistente IA no está disponible.', 'error');
         }
+    });
+
+    document.getElementById('organize-week-btn')?.addEventListener('click', () => {
+        // This will call a new function to open the weekly planner modal
+        // For now, let's just show a toast. I'll implement the modal next.
+        showToast('Próximamente: Organizador Semanal Inteligente.', 'info');
     });
 
     document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', () => openTaskFormModal(null, 'todo'));
