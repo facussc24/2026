@@ -1,7 +1,8 @@
 import { subscribeToAllTasks, exportTasksToExcel } from './task.service.js';
 import { showToast } from '../../main.js';
 import { getState, setDashboardTasks, resetDashboardState, setDashboardTableFilter, setDashboardTablePage } from './task.state.js';
-import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading, openAIAssistantModal, openWeekOrganizerModal } from './task.ui.js';
+import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading } from './task.ui.js';
+import { openAIAssistantModal, openWeekOrganizerModal } from './task.modal.js';
 import { getDashboardLayoutHTML } from './task.templates.js';
 
 let db;
