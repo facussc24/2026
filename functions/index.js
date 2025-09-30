@@ -885,70 +885,75 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
-    // Calculate remaining workdays
-    const remainingDays = [];
-    for (let i = 0; i < 7; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + i);
-        const day = date.getDay();
+    // --- Internal Classification Step ---
+    const now = new Date(todayStr);
+    const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    const classifiedTasks = {
+        OVERDUE: pendingTasks.filter(t => t.dueDate && new Date(t.dueDate) < now),
+        USER_PRIORITY: pendingTasks.filter(t => !(t.dueDate && new Date(t.dueDate) < now) && userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase())),
+        DUE_SOON: pendingTasks.filter(t => {
+            const dueDate = t.dueDate ? new Date(t.dueDate) : null;
+            return dueDate && dueDate >= now && dueDate <= twoWeeksFromNow && !(userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase()));
+        }),
+        DUE_LATER: pendingTasks.filter(t => {
+            const dueDate = t.dueDate ? new Date(t.dueDate) : null;
+            return dueDate && dueDate > twoWeeksFromNow && !(userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase()));
+        }),
+        NO_DUE_DATE: pendingTasks.filter(t => !t.dueDate && !(userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase()))),
+    };
+
+    // Create a list of the next 60 workdays
+    const workdays = [];
+    let currentDate = new Date(today);
+    while (workdays.length < 60) {
+        const day = currentDate.getDay();
         if (day > 0 && day < 6) { // Monday to Friday
-            remainingDays.push(date.toISOString().split('T')[0]);
+            workdays.push(currentDate.toISOString().split('T')[0]);
         }
+        currentDate.setDate(currentDate.getDate() + 1);
     }
 
     const tasksForPrompt = pendingTasks.map(t => ({ docId: t.docId, title: t.title, dueDate: t.dueDate, effort: t.effort || 'medium' }));
 
     const prompt = `
-        Eres un asistente experto en planificación y gestión de proyectos. Tu misión es reorganizar una lista de tareas pendientes de manera inteligente y realista para los próximos días laborables.
+        Eres un Project Manager experto. Tu única tarea es tomar listas de tareas pre-clasificadas y asignarlas a un calendario de trabajo, respetando estrictamente la capacidad diaria.
 
         **Contexto Clave:**
-        - Fecha de Hoy: ${todayStr}
-        - Días Laborables Disponibles: ${remainingDays.join(', ')}
-        - Prioridad General del Usuario: "${userPriority || 'No especificada'}"
+        - Calendario de Días Laborables Disponibles (60 días): ${workdays.join(', ')}
 
-        **Concepto de "Esfuerzo" y "Capacidad Diaria":**
-        - Cada tarea tiene un 'esfuerzo': 'high' (alto), 'medium' (medio), 'low' (bajo).
-        - Cada día laborable tiene una capacidad máxima de 8 puntos de esfuerzo.
-        - Costo de Esfuerzo de Tareas:
-          - 'high': 5 puntos
-          - 'medium': 3 puntos
-          - 'low': 1 punto
-        - NO debes exceder la capacidad de 8 puntos por día. Si un día se llena, debes pasar al siguiente día disponible.
+        **Reglas Fundamentales:**
+        - **Capacidad Diaria:** Cada día tiene un presupuesto de 8 puntos de esfuerzo. NO se puede exceder.
+        - **Costo de Esfuerzo:** 'high': 5 puntos, 'medium': 3 puntos, 'low': 1 punto.
+        - **Asignación Secuencial:** Debes llenar el calendario en el orden estricto de las categorías de tareas proporcionadas. Si un día se llena, pasa al siguiente día laborable disponible.
 
-        **Tareas Pendientes a Reorganizar:**
-        \`\`\`json
-        ${JSON.stringify(tasksForPrompt, null, 2)}
-        \`\`\`
+        **Tareas Pre-clasificadas para Planificar:**
+        1.  **URGENTES Y ATRASADAS (Máxima Prioridad):**
+            \`\`\`json
+            ${JSON.stringify(classifiedTasks.OVERDUE.map(t => ({...t, effort: t.effort || 'medium'})))}
+            \`\`\`
+        2.  **PRIORIDAD DEL USUARIO:**
+            \`\`\`json
+            ${JSON.stringify(classifiedTasks.USER_PRIORITY.map(t => ({...t, effort: t.effort || 'medium'})))}
+            \`\`\`
+        3.  **VENCIMIENTO PRÓXIMO (Próximas 2 semanas):**
+            \`\`\`json
+            ${JSON.stringify(classifiedTasks.DUE_SOON.map(t => ({...t, effort: t.effort || 'medium'})))}
+            \`\`\`
+        4.  **VENCIMIENTO LEJANO (Más de 2 semanas):**
+            \`\`\`json
+            ${JSON.stringify(classifiedTasks.DUE_LATER.map(t => ({...t, effort: t.effort || 'medium'})))}
+            \`\`\`
+        5.  **SIN FECHA LÍMITE (Menor Prioridad):**
+            \`\`\`json
+            ${JSON.stringify(classifiedTasks.NO_DUE_DATE.map(t => ({...t, effort: t.effort || 'medium'})))}
+            \`\`\`
 
-        **Algoritmo de Planificación (SEGUIR ESTRICTAMENTE ESTE ORDEN):**
-
-        1.  **Procesar Tareas Atrasadas:**
-            - Identifica todas las tareas con una \`dueDate\` anterior a hoy (${todayStr}).
-            - Estas son de MÁXIMA prioridad.
-            - Comienza a asignarlas a los días laborables disponibles (empezando por hoy), respetando el presupuesto de 8 puntos diarios.
-
-        2.  **Procesar Tareas Prioritarias del Usuario:**
-            - De las tareas restantes, identifica las que contengan la frase de prioridad del usuario ("${userPriority || ''}") en su título.
-            - Asígnalas a los huecos de esfuerzo que queden en los días laborables, después de las tareas atrasadas.
-
-        3.  **Procesar el Resto de Tareas:**
-            - Ordena las tareas restantes por su \`dueDate\` (las más cercanas primero).
-            - Distribúyelas en los huecos de esfuerzo restantes de la semana.
-
-        **Formato de Salida JSON (REGLA CRÍTICA):**
-        - Tu respuesta DEBE ser ÚNICAMENTE un objeto JSON.
+        **Instrucciones de Salida (REGLA CRÍTICA):**
+        - Tu respuesta DEBE ser únicamente un objeto JSON.
         - El objeto debe tener una clave \`plan\`, que es un array de objetos.
         - Cada objeto en el array debe tener esta estructura exacta: \`{ "docId": "ID_DE_LA_TAREA", "updates": { "plannedDate": "YYYY-MM-DD" }, "originalTitle": "Título de la Tarea" }\`.
-        - NO incluyas explicaciones, saludos, ni bloques de código markdown.
-
-        **Ejemplo de Salida VÁLIDA:**
-        {
-          "plan": [
-            { "docId": "task_123", "updates": { "plannedDate": "${todayStr}" }, "originalTitle": "Tarea Atrasada" },
-            { "docId": "task_789", "updates": { "plannedDate": "${todayStr}" }, "originalTitle": "Tarea de Proyecto PWA" },
-            { "docId": "task_456", "updates": { "plannedDate": "${remainingDays[1] || todayStr}" }, "originalTitle": "Otra Tarea" }
-          ]
-        }
+        - No incluyas NADA más en tu respuesta.
     `;
 
     try {
@@ -982,9 +987,10 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
     const suggestions = [];
     const effortCost = { high: 5, medium: 3, low: 1 };
     const dailyEffort = {};
+    const dailyTaskCount = {};
     const tasksById = new Map(tasks.map(t => [t.docId, t]));
 
-    // Calculate daily effort from the plan
+    // Calculate daily effort and task count from the plan
     plan.forEach(item => {
         if (item.updates && item.updates.plannedDate) {
             const task = tasksById.get(item.docId);
@@ -992,15 +998,19 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
                 const date = item.updates.plannedDate;
                 const effort = effortCost[task.effort] || 3; // Default to medium
                 dailyEffort[date] = (dailyEffort[date] || 0) + effort;
+                dailyTaskCount[date] = (dailyTaskCount[date] || 0) + 1;
             }
         }
     });
 
-    // Check for overloaded days
+    // Check for overloaded days (by effort and by task count)
     for (const date in dailyEffort) {
+        const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' });
         if (dailyEffort[date] > 8) {
-            const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' });
-            suggestions.push(`El día ${formattedDate} parece sobrecargado. Considera mover alguna tarea para balancear la semana.`);
+            suggestions.push(`El día ${formattedDate} parece sobrecargado en esfuerzo. Considera mover alguna tarea para balancear la semana.`);
+        }
+        if (dailyTaskCount[date] > 4) {
+             suggestions.push(`El día ${formattedDate} tiene muchas tareas (${dailyTaskCount[date]}). Considera distribuir el trabajo para evitar el multitasking excesivo.`);
         }
     }
 
