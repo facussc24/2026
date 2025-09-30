@@ -254,7 +254,7 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
-exports.organizeTaskWithAI = functions.runWith({timeoutSeconds: 300}).https.onCall(async (data, context) => {
+exports.organizeTaskWithAI = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
@@ -368,7 +368,7 @@ exports.organizeTaskWithAI = functions.runWith({timeoutSeconds: 300}).https.onCa
     }
 });
 
-exports.analyzeWeeklyTasks = functions.runWith({timeoutSeconds: 300}).https.onCall(async (data, context) => {
+exports.analyzeWeeklyTasks = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
@@ -478,7 +478,7 @@ exports.analyzeWeeklyTasks = functions.runWith({timeoutSeconds: 300}).https.onCa
     }
 });
 
-exports.refineWeeklyPlan = functions.runWith({timeoutSeconds: 300}).https.onCall(async (data, context) => {
+exports.refineWeeklyPlan = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
@@ -594,7 +594,7 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
     // ... function logic
   });
 
-exports.runAIAssistant = functions.runWith({timeoutSeconds: 300}).https.onCall(async (data, context) => {
+exports.runAIAssistant = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
