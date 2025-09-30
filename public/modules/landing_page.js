@@ -87,28 +87,21 @@ async function fetchAndRenderTasks() {
     const overdueListEl = document.getElementById('overdue-tasks-list');
     const todayListEl = document.getElementById('today-tasks-list');
 
-    const overdueQuery = query(tasksRef,
+    // Correct Query: Fetch all pending tasks for the user.
+    const q = query(tasksRef,
         where('assigneeUid', '==', user.uid),
-        where('status', 'in', ['todo', 'inprogress']),
-        where('dueDate', '<', today)
-    );
-
-    const todayQuery = query(tasksRef,
-        where('assigneeUid', '==', user.uid),
-        where('status', 'in', ['todo', 'inprogress']),
-        where('dueDate', '==', today)
+        where('status', 'in', ['todo', 'inprogress'])
     );
 
     try {
-        const [overdueSnapshot, todaySnapshot] = await Promise.all([
-            getDocs(overdueQuery),
-            getDocs(todayQuery)
-        ]);
+        const querySnapshot = await getDocs(q);
+        const allPendingTasks = querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
 
-        const overdueTasks = overdueSnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-        const todayTasks = todaySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+        // Client-side filtering
+        const overdueTasks = allPendingTasks.filter(task => task.dueDate && task.dueDate < today);
+        const todayTasks = allPendingTasks.filter(task => task.dueDate === today);
 
-        allUserTasks = [...overdueTasks, ...todayTasks];
+        allUserTasks = [...overdueTasks, ...todayTasks]; // Update cache for modal details
 
         if (overdueListEl) {
             overdueListEl.innerHTML = overdueTasks.length > 0 ? overdueTasks.map(renderTaskItemHTML).join('') : '<p class="text-sm text-slate-500 text-center py-4">¡Ninguna tarea vencida! Buen trabajo.</p>';
