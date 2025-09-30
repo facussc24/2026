@@ -145,7 +145,7 @@ export function getAIAssistantPromptViewHTML() {
         <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
                 <i data-lucide="sparkles" class="w-6 h-6 text-purple-500"></i>
-                Asistente de Tareas IA
+                Crear Tareas con Gemini
             </h3>
             <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                 <i data-lucide="x" class="h-6 w-6"></i>
@@ -153,15 +153,15 @@ export function getAIAssistantPromptViewHTML() {
         </div>
         <div class="p-6 flex-grow">
             <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                Describe qué necesitas. Puedes crear tareas, reprogramar las existentes y más.
+                Describe las tareas que necesitas crear. Puedes incluir fechas o pedir varias a la vez.
             </p>
-            <textarea id="ai-prompt-textarea" class="w-full h-48 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear tarea para revisar planos el lunes. Reprogramar las tareas de hoy para mañana..."></textarea>
+            <textarea id="ai-prompt-textarea" class="w-full h-48 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear tarea para revisar planos del cliente X para la próxima semana. Y otra para llamar al proveedor de acero mañana."></textarea>
         </div>
         <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
             <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
             <button id="ai-submit-prompt-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
                 <i data-lucide="brain-circuit" class="w-5 h-5"></i>
-                Enviar al Asistente
+                Generar Tareas
             </button>
         </div>
     `;
@@ -178,34 +178,24 @@ export function getAILoadingViewHTML() {
 }
 
 export function getAIReviewViewHTML(plan) {
-    const { action, tasks, suggestion } = plan;
+    const { tasks, suggestion } = plan;
 
-    let planDescription = '';
-    if (action === 'CREATE') {
-        planDescription = `La IA propone crear ${tasks.length} nueva(s) tarea(s).`;
-    } else if (action === 'UPDATE') {
-        planDescription = `La IA propone actualizar ${tasks.length} tarea(s) existente(s).`;
-    } else {
-        planDescription = `La IA ha generado el siguiente plan de acción:`;
-    }
+    const planDescription = `Gemini propone crear ${tasks.length} nueva(s) tarea(s). Revisa el plan y confirma para añadirlas a tu lista.`;
 
     const tasksHTML = tasks.map(task => {
-        if (action === 'CREATE') {
-            return `<div class="p-3 bg-green-50 border-l-4 border-green-500 rounded-md">
-                        <p class="font-bold text-green-800">Crear: "${task.title}"</p>
-                        <p class="text-sm text-slate-600">Fecha Límite: ${task.dueDate}</p>
-                    </div>`;
-        }
-        if (action === 'UPDATE') {
-            return `<div class="p-3 bg-blue-50 border-l-4 border-blue-500 rounded-md">
-                        <p class="font-bold text-blue-800">Actualizar: Tarea ID ${task.id}</p>
-                        <p class="text-sm text-slate-600">Cambiar '${task.field}' a '${task.newValue}'.</p>
-                    </div>`;
-        }
-        return '';
+        const dueDateString = task.dueDate
+            ? `<strong>Fecha Límite:</strong> ${new Date(task.dueDate + 'T00:00:00').toLocaleDateString('es-AR')}`
+            : `<span class="italic text-slate-500">Sin fecha límite</span>`;
+
+        return `
+            <div class="p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 rounded-r-lg">
+                <p class="font-bold text-green-800 dark:text-green-200">${task.title}</p>
+                ${task.description ? `<p class="text-sm text-slate-600 dark:text-slate-300 mt-1">${task.description}</p>` : ''}
+                <p class="text-sm text-slate-700 dark:text-slate-400 mt-2">${dueDateString}</p>
+            </div>`;
     }).join('');
 
-    const suggestionHTML = suggestion ? `<div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-800 flex items-center gap-2"><i data-lucide="lightbulb" class="w-4 h-4"></i>${suggestion}</div>` : '';
+    const suggestionHTML = suggestion ? `<div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 rounded-md text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2"><i data-lucide="lightbulb" class="w-4 h-4"></i>${suggestion}</div>` : '';
 
     return `
         <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
@@ -225,10 +215,10 @@ export function getAIReviewViewHTML(plan) {
             ${suggestionHTML}
         </div>
         <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
-            <button id="ai-reject-plan-btn" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+            <button id="ai-reject-plan-btn" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Volver</button>
             <button id="ai-confirm-plan-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
                 <i data-lucide="check-check" class="w-5 h-5"></i>
-                Confirmar y Ejecutar Plan
+                Confirmar y Crear
             </button>
         </div>
     `;
@@ -813,23 +803,6 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                 <input type="hidden" name="taskId" value="${isEditing ? task.docId : ''}">
                 <input type="hidden" name="status" value="${isEditing ? task.status : defaultStatus}">
 
-                <!-- AI Section -->
-                <div class="task-form-section bg-blue-50 border border-blue-200">
-                    <div class="form-section-header">
-                        <i data-lucide="brain-circuit" class="w-5 h-5 text-blue-600"></i>
-                        <h4 class="font-bold text-blue-800">Organizador de Tareas con IA</h4>
-                    </div>
-                    <div class="p-4">
-                        <p class="text-sm text-slate-600 mb-3">
-                            Escribe todas tus ideas o lo que necesitas hacer. La IA lo analizará para rellenar los campos automáticamente.
-                        </p>
-                        <textarea id="task-ai-braindump" placeholder="Ej: Necesito preparar la presentación para el cliente nuevo para el viernes. Tengo que investigar sus datos, armar el powerpoint y coordinar con Marcelo." rows="4" class="w-full"></textarea>
-                        <button type="button" id="organize-with-ai-btn" class="btn btn-primary w-full mt-3">
-                            <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>
-                            Organizar Tarea
-                        </button>
-                    </div>
-                </div>
 
                 <!-- Core Details Section -->
                 <div class="task-form-section">

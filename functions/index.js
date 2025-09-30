@@ -558,63 +558,72 @@ exports.runAIAssistant = functions.https.onCall(async (data, context) => {
         : "El usuario no tiene tareas relevantes en su agenda actual.";
 
     const prompt = `
-      Actúa como un asistente experto en gestión de proyectos. Tu misión es analizar la petición de un usuario y convertirla en un plan de acción estructurado en formato JSON.
+      Actúa como un asistente experto en creación de tareas. Tu única misión es analizar la petición de un usuario y convertirla en una o más tareas en formato JSON.
 
       **CONTEXTO:**
       - Fecha de Hoy: ${currentDate}
-      - Tareas Actuales del Usuario (solo para contexto de reprogramación):
-      ${userTasksString}
 
       **PETICIÓN DEL USUARIO:**
       "${text}"
 
       **PROCESO DE ANÁLISIS (SEGUIR ESTRICTAMENTE):**
 
-      **1. DETERMINAR LA INTENCIÓN PRINCIPAL:**
-      - Lee la petición y clasifícala en una de estas dos acciones: 'CREATE' o 'UPDATE'.
-      - 'CREATE': Si el usuario quiere añadir nuevas tareas (ej: "crear tarea", "recordar que", "necesito hacer").
-      - 'UPDATE': Si el usuario quiere modificar tareas existentes (ej: "reprogramar", "mover", "posponer", "cambiar fecha").
-      - Si la intención no es clara, asume 'CREATE'.
+      **1. Identificar Tareas Individuales:**
+         - Lee la petición y determina si se refiere a una sola tarea o a múltiples tareas. Por ejemplo, "Crear tarea para revisar planos y otra para llamar al proveedor" son DOS tareas. "Hacer la presentación del cliente, que incluye investigar y armar el PowerPoint" es UNA tarea con dos subtareas.
 
-      **2. GENERAR EL PLAN DE ACCIÓN JSON:**
-      - Basado en la intención, construye un objeto JSON con las siguientes claves: "action", "tasks", "suggestion".
+      **2. Extraer Información para CADA Tarea:**
+         - Para cada tarea identificada, extrae la siguiente información:
+           - \`title\`: Un título claro y conciso (máx 10 palabras).
+           - \`description\`: Una descripción breve si se proporciona.
+           - \`dueDate\`: La fecha límite.
 
-      **A. Si la acción es 'CREATE':**
-        - Analiza si la petición es para una o varias tareas.
-        - Para CADA tarea nueva, crea un objeto con: \`title\`, \`description\`, \`dueDate\`.
-        - La \`dueDate\` DEBE ser una fecha 'YYYY-MM-DD'. Usa la inteligencia de agenda para proponer la mejor fecha si el usuario es ambiguo (ej: "la semana que viene").
-        - El array "tasks" contendrá estos objetos de tarea nueva.
-        - "suggestion" puede contener una nota sobre por qué elegiste una fecha.
+      **3. REGLAS DE FECHA (MUY IMPORTANTE):**
+         - **SI** el usuario especifica una fecha (ej: "mañana", "el próximo lunes", "el 15 de agosto"), conviértela a formato 'YYYY-MM-DD' y úsala para \`dueDate\`.
+         - **SI NO** se menciona ninguna fecha, el valor de \`dueDate\` DEBE SER \`null\`. No inventes ni asumas una fecha.
 
-      **B. Si la acción es 'UPDATE':**
-        - Identifica las tareas a modificar. Usa el contexto de "Tareas Actuales del Usuario" si es necesario (ej: "reprograma las de hoy").
-        - Para CADA tarea a modificar, crea un objeto con: \`id\` (el ID de la tarea), \`field\` (el campo a cambiar, ej: "dueDate"), \`newValue\` (el nuevo valor para ese campo).
-        - El array "tasks" contendrá estos objetos de actualización.
+      **4. Formato de Salida JSON (OBLIGATORIO):**
+         - Tu respuesta DEBE ser únicamente un objeto JSON.
+         - El objeto debe tener una clave \`action\` con el valor fijo "CREATE".
+         - El objeto debe tener una clave \`tasks\`, que es un array de los objetos de tarea que creaste. Cada objeto de tarea debe tener las claves: \`title\`, \`description\`, \`dueDate\`.
+         - El objeto puede tener una clave opcional \`suggestion\` con un breve comentario si hiciste alguna interpretación importante (ej: "Interpreté 'la semana que viene' como el próximo lunes.").
 
-      **3. REGLAS CRÍTICAS DE FORMATO:**
-      - Tu respuesta DEBE ser ÚNICAMENTE el objeto JSON del plan.
+      **REGLAS CRÍTICAS DE FORMATO:**
       - No incluyas explicaciones, saludos, ni bloques de código markdown (\`\`\`json).
-      - La respuesta debe empezar con \`{\` y terminar con \`}\`.
+      - La respuesta DEBE empezar con \`{\` y terminar con \`}\`.
 
-      **EJEMPLO DE SALIDA PARA 'CREATE':**
-      {
-        "action": "CREATE",
-        "tasks": [
-          {"title": "Revisar planos del nuevo ensamblaje", "description": "Revisar los planos para el nuevo ensamblaje que llegaron hoy.", "dueDate": "${currentDate}"},
-          {"title": "Llamar al proveedor de tornillos", "description": "Confirmar el envío de tornillos especiales.", "dueDate": "2024-10-05"}
-        ],
-        "suggestion": "He agendado la revisión de planos para hoy mismo."
-      }
+      **EJEMPLO 1: Con fecha**
+      - Petición: "crear tarea para la reunión con el cliente X mañana"
+      - Salida Esperada:
+        {
+          "action": "CREATE",
+          "tasks": [
+            {"title": "Reunión con cliente X", "description": "Preparar y asistir a la reunión con el cliente X.", "dueDate": "${new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}"}
+          ],
+          "suggestion": null
+        }
 
-      **EJEMPLO DE SALIDA PARA 'UPDATE':**
-      {
-        "action": "UPDATE",
-        "tasks": [
-          {"id": "task_id_1", "field": "dueDate", "newValue": "2024-10-06"},
-          {"id": "task_id_2", "field": "dueDate", "newValue": "2024-10-06"}
-        ],
-        "suggestion": "He reprogramado las tareas que tenías para hoy para mañana."
-      }
+      **EJEMPLO 2: Sin fecha**
+      - Petición: "Necesito revisar los planos del nuevo ensamblaje"
+      - Salida Esperada:
+        {
+          "action": "CREATE",
+          "tasks": [
+            {"title": "Revisar planos del nuevo ensamblaje", "description": "Revisar los planos detallados del nuevo ensamblaje.", "dueDate": null}
+          ],
+          "suggestion": "No se especificó una fecha, por lo que la tarea se creará sin fecha límite."
+        }
+
+      **EJEMPLO 3: Múltiples tareas**
+      - Petición: "recordar llamar a Ana el viernes y preparar el reporte de ventas"
+      - Salida Esperada:
+        {
+          "action": "CREATE",
+          "tasks": [
+            {"title": "Llamar a Ana", "description": "Llamar a Ana.", "dueDate": "YYYY-MM-DD (la fecha del próximo viernes)"},
+            {"title": "Preparar reporte de ventas", "description": "Preparar el reporte de ventas semanal.", "dueDate": null}
+          ],
+          "suggestion": "He creado dos tareas separadas como solicitaste."
+        }
     `;
 
     try {
