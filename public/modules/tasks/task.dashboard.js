@@ -61,6 +61,18 @@ function setupEventListeners(container) {
         aiAssistantButton.addEventListener('click', () => openAIAssistantModal());
     }
 
+    const weekOrganizerButton = container.querySelector('#open-week-organizer-btn');
+    if (weekOrganizerButton) {
+        weekOrganizerButton.addEventListener('click', () => {
+            // This function needs to be imported from task.modal.js
+            if (typeof openWeekOrganizerModal === 'function') {
+                openWeekOrganizerModal();
+            } else {
+                console.error('openWeekOrganizerModal function not found. Make sure it is imported.');
+            }
+        });
+    }
+
     // Debounced search
     let searchTimeout;
     searchInput.addEventListener('input', (e) => {

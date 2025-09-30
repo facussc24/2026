@@ -372,43 +372,36 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    const { tasks, weekOffset } = data;
+    const { tasks } = data;
     if (!tasks || !Array.isArray(tasks)) {
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'tasks' (array) argument.");
     }
     try {
         const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const user = await admin.auth().getUser(context.auth.uid);
         const userName = user.displayName || user.email;
+
         const today = new Date();
         const dayOfWeek = today.getUTCDay();
-        let effectiveOffset = weekOffset || 0;
-        if ((dayOfWeek === 6 || dayOfWeek === 0) && effectiveOffset === 0) {
-            effectiveOffset = 1;
-        }
-        const targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() + (effectiveOffset * 7));
-        const targetDayOfWeek = targetDate.getDay();
-        const diffToMonday = targetDayOfWeek === 0 ? -6 : 1 - targetDayOfWeek;
-        const monday = new Date(targetDate);
-        monday.setDate(targetDate.getDate() + diffToMonday);
+        const isWeekend = dayOfWeek === 6 || dayOfWeek === 0;
+        const diffToMonday = isWeekend ? (8 - dayOfWeek) % 7 : 1 - dayOfWeek;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() + diffToMonday);
+
         const weekDates = Array.from({ length: 5 }).map((_, i) => {
             const date = new Date(monday);
             date.setDate(monday.getDate() + i);
             return date.toISOString().split('T')[0];
         });
-        const planningHorizonEndDate = new Date(weekDates[4]);
-        planningHorizonEndDate.setDate(planningHorizonEndDate.getDate() + 14);
 
         const weekDayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
         const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
         const weekDatesWithNames = weekDates.map(dateStr => {
-            const date = new Date(dateStr + "T12:00:00Z"); // Use noon to avoid timezone issues
+            const date = new Date(dateStr + "T12:00:00Z");
             const dayName = weekDayNames[date.getUTCDay()];
-            const monthName = monthNames[date.getUTCMonth()];
-            return `${dayName} ${date.getUTCDate()} de ${monthName}`;
+            return `${dayName} ${date.getUTCDate()} de ${monthNames[date.getUTCMonth()]}`;
         });
 
         const tasksForPrompt = tasks.map(t => ({
@@ -417,15 +410,14 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
             priority: t.priority,
             effort: t.effort,
             dueDate: t.dueDate,
-            isSelfAssigned: t.creatorUid === context.auth.uid,
         }));
 
         const prompt = `
-        Actúa como "El Planificador Estratégico", un asistente de IA para ${userName}. Tu objetivo es crear el plan de trabajo semanal más inteligente y realista posible, y comunicarlo de forma excepcionalmente clara.
+        Eres un asistente de planificación estratégica para ${userName}. Tu misión es crear un plan de trabajo semanal realista y bien justificado, y comunicarlo de manera clara.
 
-        **DATOS DE ENTRADA:**
-        - Usuario Actual: ${userName} (ID: ${context.auth.uid})
-        - Fecha Actual: ${new Date().toISOString().split('T')[0]}.
+        **Contexto:**
+        - Usuario: ${userName}
+        - Fecha Actual: ${new Date().toISOString().split('T')[0]}
         - Semana de Planificación:
             - Lunes: ${weekDatesWithNames[0]} (${weekDates[0]})
             - Martes: ${weekDatesWithNames[1]} (${weekDates[1]})
@@ -433,49 +425,37 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
             - Jueves: ${weekDatesWithNames[3]} (${weekDates[3]})
             - Viernes: ${weekDatesWithNames[4]} (${weekDates[4]})
 
-        **REGLAS DE PLANIFICACIÓN (ORDEN DE IMPORTANCIA):**
-        1.  **EXCLUSIÓN DE FIN DE SEMANA:** Jamás asignar una \`plannedDate\` a un Sábado o Domingo.
-        2.  **GESTIÓN DE TAREAS VENCIDAS:** Distribuye las tareas con \`dueDate\` anterior a la fecha actual de forma inteligente entre el Lunes y el Martes, priorizando las más antiguas. No las acumules todas en un solo día.
-        3.  **PLANIFICACIÓN PROACTIVA (BÚFER DE TIEMPO):** Intenta asignar la \`plannedDate\` al menos **1 o 2 días ANTES** de la \`dueDate\`. Si una tarea vence el Miércoles, idealmente planifícala para el Lunes o Martes.
-        4.  **JERARQUÍA DE PRIORIZACIÓN:** Usa esto como desempate: 1º \`dueDate\` más cercana, 2º \`priority: 'high'\`, 3º \`effort: 'high'\`.
-        5.  **BALANCE DE CARGA INTELIGENTE:** NUNCA más de UNA (1) tarea con \`effort: 'high'\` por día. Distribuye las tareas de esfuerzo 'medium' y 'low' para crear días equilibrados.
+        **Reglas de Planificación (Orden de Importancia):**
+        1.  **No Fines de Semana:** Nunca asignes una \`plannedDate\` a un Sábado o Domingo.
+        2.  **Tareas Vencidas:** Distribuye las tareas con \`dueDate\` anterior a la fecha actual entre Lunes y Martes.
+        3.  **Planificación Proactiva:** Asigna la \`plannedDate\` al menos 1-2 días ANTES de la \`dueDate\`.
+        4.  **Jerarquía de Priorización:** Como desempate, usa: 1º \`dueDate\` más cercana, 2º \`priority: 'high'\`, 3º \`effort: 'high'\`.
+        5.  **Balance de Carga:** No más de UNA tarea con \`effort: 'high'\` por día.
 
-        **LISTA DE TAREAS A ANALIZAR:**
+        **Tareas a Analizar:**
         \`\`\`json
         ${JSON.stringify(tasksForPrompt, null, 2)}
         \`\`\`
 
-        **REGLAS DE COMUNICACIÓN Y FORMATO DE SALIDA (OBLIGATORIO):**
+        **Formato de Salida (OBLIGATORIO):**
+        1.  **EL PLAN (JSON):** Un objeto JSON con una clave "plan" que contiene un array de objetos \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD", "title": "Título de la Tarea" }\`.
+        2.  **SEPARADOR:** Inserta este separador exacto: \`---JSON_PLAN_SEPARATOR---\`
+        3.  **EL ANÁLISIS (MARKDOWN):** Un análisis en Markdown con la siguiente estructura:
+            ### Resumen del Plan Semanal
+            Párrafo corto resumiendo la semana.
+            ### Plan Detallado Día por Día
+            *   **Lunes 5 de Agosto**:
+                *   **[Título de la Tarea]** - *Justificación: [Explica por qué está aquí, ej: "Tarea vencida de alta prioridad."]*
+            *   ... (continúa para todos los días con tareas)
+            ### ⚠️ Justificación de Riesgos
+            Explica cualquier decisión difícil (ej: "La tarea X se planificó el mismo día de su vencimiento porque...").
+            ### 🗓️ Tareas Fuera de Horizonte
+            Lista las tareas no planificadas por tener una fecha de vencimiento muy lejana.
 
-        **PARTE 1: EL PLAN (JSON)**
-        Genera un objeto JSON con una clave "plan". El valor debe ser un array de objetos \`{ "taskId": "ID_DE_LA_TAREA", "plannedDate": "YYYY-MM-DD" }\`.
-
-        **PARTE 2: EL ANÁLISIS (MARKDOWN)**
-        Inserta este separador exacto: \`---JSON_PLAN_SEPARATOR---\`
-        Luego, escribe un análisis en Markdown claro y útil con la siguiente estructura:
-
-        ### Resumen del Plan Semanal
-        Un párrafo corto y amigable resumiendo la semana.
-
-        ### Plan Detallado Día por Día
-        *   **${weekDatesWithNames[0]}**:
-            *   (Tarea 1) - **[Título de la Tarea]**. *Justificación: [Explica brevemente por qué la tarea está aquí, ej: "Es una tarea vencida de alta prioridad." o "Se planificó con 2 días de antelación a su vencimiento."]*
-            *   (Tarea 2) - **[Otro Título]**. *Justificación: [Otra explicación.]*
-        *   **${weekDatesWithNames[1]}**:
-            *   (Tarea 3) - **[Título de la Tarea]**. *Justificación: [Explicación.]*
-        *   ... (continúa para todos los días con tareas)
-
-        ### ⚠️ Justificación de Riesgos y Decisiones Clave
-        Si tuviste que tomar una decisión difícil, justifícala aquí. Por ejemplo:
-        "La tarea **'Realizar AMFE'** se planificó para el **${weekDatesWithNames[3]}**, el mismo día de su vencimiento. Esto se debe a que los días anteriores ya contenían tareas de alta prioridad o de alto esfuerzo, siendo este el primer espacio disponible para asegurar su finalización."
-
-        ### 🗓️ Tareas Fuera de Horizonte
-        Lista aquí cualquier tarea que no fue planificada porque su fecha de vencimiento es muy lejana.
-
-        **REGLAS FINALES:**
-        - En el análisis, SIEMPRE refiérete a las tareas por su \`title\`, NUNCA por su \`taskId\`.
-        - Usa el formato de fecha natural (ej: "Lunes 1 de Octubre") que te proporcioné.
-        - Tu respuesta debe ser únicamente el JSON, el separador y el Markdown. Sin saludos ni texto extra.
+        **Reglas Finales:**
+        - En el análisis, usa los títulos de las tareas, no los IDs.
+        - Usa el formato de fecha natural (ej: "Lunes 5 de Agosto").
+        - Tu respuesta debe ser únicamente el JSON, el separador y el Markdown.
         `;
         const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
         let responseText = result.response.candidates[0].content.parts[0].text;
@@ -498,14 +478,89 @@ exports.analyzeWeeklyTasks = functions.https.onCall(async (data, context) => {
     }
 });
 
-exports.applyPlan = functions.https.onCall(async (data, context) => {
+exports.refineWeeklyPlan = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+    const { plan, instruction } = data;
+    if (!plan || !Array.isArray(plan) || !instruction) {
+        throw new functions.https.HttpsError("invalid-argument", "Se requiere un 'plan' (array) y una 'instruction' (string).");
+    }
+
+    try {
+        const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
+        const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const user = await admin.auth().getUser(context.auth.uid);
+        const userName = user.displayName || user.email;
+
+        // Simplify the plan for the prompt, keeping only necessary info
+        const simplifiedPlan = plan.map(item => ({ taskId: item.taskId, title: item.title, plannedDate: item.plannedDate }));
+
+        const prompt = `
+        Actúa como un asistente de planificación que refina un plan existente basado en las instrucciones del usuario, ${userName}.
+
+        **Plan Actual:**
+        \`\`\`json
+        ${JSON.stringify(simplifiedPlan, null, 2)}
+        \`\`\`
+
+        **Instrucción del Usuario:**
+        "${instruction}"
+
+        **Tu Tarea:**
+        Modifica el plan actual para incorporar la instrucción del usuario. Debes mantener la estructura de datos original.
+
+        **Reglas de Refinamiento:**
+        1.  **Interpreta la Instrucción:** Entiende la intención del usuario (ej: mover tarea, día más ligero, priorizar algo).
+        2.  **Modifica Fechas:** Cambia las \`plannedDate\` según la instrucción.
+        3.  **Respeta las Fechas:** Asegúrate de que las nuevas fechas sean válidas y estén en formato 'YYYY-MM-DD'. No uses fines de semana.
+        4.  **No Añadir/Quitar Tareas:** Solo puedes reprogramar las tareas existentes en el plan.
+
+        **Formato de Salida (OBLIGATORIO):**
+        1.  **EL PLAN REFINADO (JSON):** Un objeto JSON con una clave "plan" que contiene el array de tareas COMPLETO Y MODIFICADO.
+        2.  **SEPARADOR:** Inserta este separador exacto: \`---JSON_PLAN_SEPARATOR---\`
+        3.  **EL ANÁLISIS REFINADO (MARKDOWN):** Un nuevo análisis en Markdown que refleje los cambios realizados, explicando CÓMO se incorporó la instrucción del usuario.
+
+        **Ejemplo de Salida:**
+        { "plan": [ { "taskId": "...", "title": "...", "plannedDate": "2025-08-06" } ] }
+        ---JSON_PLAN_SEPARATOR---
+        ### Plan Refinado
+        ¡Entendido! He ajustado el plan según tus indicaciones.
+        *   **Martes 6 de Agosto**:
+            *   **Revisar Planos** - *Justificación: Movida aquí como solicitaste para tener un lunes más tranquilo.*
+        `;
+
+        const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+        let responseText = result.response.candidates[0].content.parts[0].text;
+        responseText = responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+        const separator = '---JSON_PLAN_SEPARATOR---';
+        const parts = responseText.split(separator);
+        if (parts.length < 2) {
+            throw new Error("La respuesta de la IA no contiene el separador requerido.");
+        }
+        const jsonPart = parts[0].trim();
+        const analysisPart = parts[1].trim();
+        const planData = JSON.parse(jsonPart);
+
+        if (!planData || !Array.isArray(planData.plan)) {
+            throw new Error("La parte JSON de la respuesta refinada no es válida.");
+        }
+        return { plan: planData.plan, analysis: analysisPart };
+
+    } catch (error) {
+        console.error("Error en refineWeeklyPlan:", error);
+        throw new functions.https.HttpsError("internal", `Error al refinar el plan con IA. Error: ${error.message}`);
+    }
+});
+
+exports.executeWeeklyPlan = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
     const { plan } = data;
-    if (!plan || !Array.isArray(plan) || plan.length === 0) {
-        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'plan' array.");
+    if (!plan || !Array.isArray(plan)) {
+        throw new functions.https.HttpsError("invalid-argument", "Se requiere un 'plan' (array) no vacío.");
     }
 
     const db = admin.firestore();
@@ -514,7 +569,7 @@ exports.applyPlan = functions.https.onCall(async (data, context) => {
     plan.forEach(item => {
         if (item.taskId && item.plannedDate) {
             const taskRef = db.collection('tareas').doc(item.taskId);
-            batch.update(taskRef, { plannedDate: item.plannedDate });
+            batch.update(taskRef, { plannedDate: item.plannedDate, updatedAt: new Date() });
         }
     });
 
@@ -522,7 +577,7 @@ exports.applyPlan = functions.https.onCall(async (data, context) => {
         await batch.commit();
         return { success: true, message: `Plan aplicado a ${plan.length} tareas.` };
     } catch (error) {
-        console.error("Error applying weekly plan:", error);
+        console.error("Error aplicando el plan semanal:", error);
         throw new functions.https.HttpsError("internal", "Ocurrió un error al guardar el plan en la base de datos.");
     }
 });
