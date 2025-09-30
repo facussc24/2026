@@ -89,13 +89,13 @@ async function fetchAndRenderTasks() {
 
     const overdueQuery = query(tasksRef,
         where('assigneeUid', '==', user.uid),
-        where('status', '!=', 'done'),
+        where('status', 'in', ['todo', 'inprogress']),
         where('dueDate', '<', today)
     );
 
     const todayQuery = query(tasksRef,
         where('assigneeUid', '==', user.uid),
-        where('status', '!=', 'done'),
+        where('status', 'in', ['todo', 'inprogress']),
         where('dueDate', '==', today)
     );
 
