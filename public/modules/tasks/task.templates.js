@@ -101,7 +101,7 @@ export function getAIAssistantModalHTML() {
     return `
     <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
         <div id="ai-assistant-modal-content" class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in transition-all duration-300">
-            <div id="ai-assistant-view-container" class="flex flex-col flex-grow">
+            <div id="ai-assistant-view-container" class="flex flex-col flex-grow overflow-hidden">
                 <!-- Dynamic content (prompt, loading, review) will be injected here -->
             </div>
         </div>
@@ -232,24 +232,26 @@ export function getAIAssistantReviewViewHTML(plan) {
                 <i data-lucide="x" class="h-6 w-6"></i>
             </button>
         </div>
-        <div class="p-6 flex-grow min-h-0 overflow-y-auto custom-scrollbar">
-            <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg mb-6">
-                <button id="thought-process-accordion-btn" class="w-full flex justify-between items-center p-4 font-bold text-slate-700 dark:text-slate-300">
-                    <span>Proceso de Pensamiento de la IA</span>
-                    <i data-lucide="chevron-down" class="transition-transform"></i>
-                </button>
-                <div id="thought-process-content" class="prose prose-sm dark:prose-invert max-w-none p-4 pt-0 custom-scrollbar" style="display: none; max-height: 200px; overflow-y: auto;">
-                    ${marked.parse(thoughtProcess)}
+        <div class="flex-grow min-h-0 overflow-y-auto custom-scrollbar">
+            <div class="p-6">
+                <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg mb-6">
+                    <button id="thought-process-accordion-btn" class="w-full flex justify-between items-center p-4 font-bold text-slate-700 dark:text-slate-300">
+                        <span>Proceso de Pensamiento de la IA</span>
+                        <i data-lucide="chevron-down" class="transition-transform"></i>
+                    </button>
+                    <div id="thought-process-content" class="prose prose-sm dark:prose-invert max-w-none p-4 pt-0 custom-scrollbar" style="display: none; max-height: 200px; overflow-y: auto;">
+                        ${marked.parse(thoughtProcess)}
+                    </div>
                 </div>
-            </div>
 
-            <form id="ai-execution-plan-form">
-                <h4 class="font-bold text-slate-800 dark:text-slate-200 mb-3 text-lg">Plan de Ejecución Propuesto</h4>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Puedes desmarcar o editar cualquier acción antes de confirmar.</p>
-                <div class="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
-                    ${actionsHTML || '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
-                </div>
-            </form>
+                <form id="ai-execution-plan-form">
+                    <h4 class="font-bold text-slate-800 dark:text-slate-200 mb-3 text-lg">Plan de Ejecución Propuesto</h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Puedes desmarcar o editar cualquier acción antes de confirmar.</p>
+                    <div class="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
+                        ${actionsHTML || '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
+                    </div>
+                </form>
+            </div>
         </div>
         <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
             <button id="ai-reject-plan-btn" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Volver a Editar</button>

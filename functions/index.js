@@ -322,77 +322,32 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
     }));
 
     const prompt = `
-      Eres un asistente de gestión de proyectos de clase mundial, hipercompetente y proactivo. Tu misión es analizar la petición de un usuario y su lista de tareas para generar un plan de acción claro, inteligente y bien explicado.
-
-      **Contexto:**
-      - La fecha de hoy es ${currentDate}. Esta es tu referencia para todas las fechas relativas (ej: "mañana", "próximo lunes").
-      - ¡IMPORTANTE! Las tareas tienen dos fechas:
-        - \`dueDate\`: La fecha LÍMITE final para completar la tarea.
-        - \`plannedDate\`: El día específico en que el usuario (o un asistente previo) ha planeado trabajar en la tarea.
-      - Para cualquier solicitud relacionada con la organización de la semana (ej. "revisa mis tareas del lunes", "mueve lo de mañana al viernes"), DEBES usar la \`plannedDate\`. La \`dueDate\` solo debe considerarse para priorización o si el usuario pregunta explícitamente por "vencimientos".
-      - **REGLA DE REPLANIFICACIÓN CRÍTICA:** Si el usuario pide mover tareas de días pasados (ej. "replanifica las tareas de ayer"), NO las acumules todas en el día de hoy. En su lugar, **balancea la carga**: analiza las \\\`plannedDate\\\` de los próximos 5 días y distribuye las tareas de manera inteligente para no sobrecargar ningún día. Explica esta estrategia de distribución en tu \\\`thoughtProcess\\\`.
-      - Tareas Actuales del Usuario:
-      \`\`\`json
+      Eres un asistente de gestión de proyectos. Tu misión es analizar la petición de un usuario y su lista de tareas para generar un plan de acción claro y un JSON con los cambios.
+      Contexto:
+      - La fecha de hoy es ${currentDate}. Esta es tu referencia para fechas relativas (ej: "mañana").
+      - Tareas tienen 'dueDate' (fecha límite) y 'plannedDate' (cuando se planea hacer). Para organizar la semana (ej. "tareas del lunes"), usa 'plannedDate'. Usa 'dueDate' solo si se pide explícitamente por "vencimientos".
+      - REGLA DE REPLANIFICACIÓN CRÍTICA: Si un usuario pide mover tareas de días pasados (ej. "replanifica las tareas de ayer"), NO las acumules todas en el día de hoy. En su lugar, balancea la carga: analiza las 'plannedDate' de los próximos 5 días y distribuye las tareas de manera inteligente para no sobrecargar ningún día. Explica esta estrategia de distribución en tu 'thoughtProcess'.
+      - Tareas Actuales del Usuario (JSON):
       ${JSON.stringify(tasksForPrompt, null, 2)}
-      \`\`\`
 
-      **Petición del Usuario:**
+      Petición del Usuario:
       "${userPrompt}"
 
-      **PROCESO DE ANÁLISIS (SEGUIR ESTRICTAMENTE):**
+      PROCESO DE ANÁLISIS:
+      1. Deconstruir la Petición: Identifica intenciones: CREAR, ACTUALIZAR, COMPLETAR. Si es ambiguo, infiere la acción más lógica y menciónalo.
+      2. Mapeo Inteligente de Tareas: Para ACTUALIZAR/COMPLETAR, busca la tarea correspondiente por semántica, no solo texto exacto.
+      3. Generar Pasos de Pensamiento (thinkingSteps): Crea un array de strings concisos narrando tu proceso.
+      4. Generar Proceso de Pensamiento (thoughtProcess): Escribe un resumen amigable en Markdown. Explica el porqué de tus acciones y cualquier suposición que hiciste.
+      5. Generar Plan de Ejecución (executionPlan): Construye un array de objetos de acción.
+         - Para CREAR: { "action": "CREATE", "task": { "title": "...", "description": "...", "dueDate": "YYYY-MM-DD" or null } }
+         - Para ACTUALIZAR: { "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }
+         - Para COMPLETAR: { "action": "UPDATE", "docId": "...", "updates": { "status": "done" }, "originalTitle": "..." }
 
-      **1. Deconstruir la Petición:**
-         - Lee la petición CUIDADOSAMENTE. Identifica todas las intenciones clave: CREAR, ACTUALIZAR (incluye cambiar fechas, títulos, etc.), y COMPLETAR (que es una actualización de estado a 'done').
-         - Si una petición es ambigua (ej. "ocúpate de la tarea de marketing"), usa el contexto de la lista de tareas para inferir la acción más lógica. Si no puedes decidir, asume la acción más probable y menciónalo en tu proceso de pensamiento.
-
-      **2. Mapeo Inteligente de Tareas:**
-         - Para intenciones de ACTUALIZAR o COMPLETAR, busca la tarea correspondiente en la lista de "Tareas Actuales". No busques una coincidencia exacta. Utiliza la semántica y el contexto. Por ejemplo, si el usuario dice "terminé lo de los planos", y hay una tarea "Revisar planos del nuevo ensamblaje", DEBES mapearla correctamente.
-
-      **3. Generar Pasos de Pensamiento (thinkingSteps):**
-         - Crea un array de strings que narre tu proceso de forma detallada y fácil de seguir para el usuario. Sé más explícito que en el ejemplo.
-         - Ejemplo: \`["Analizando la petición del usuario...", "Identificada una intención de CREAR una nueva tarea.", "Extrayendo detalles: 'Reunión Cliente X' para mañana.", "Identificada una intención de ACTUALIZAR una tarea existente.", "Buscando tarea similar a 'revisar planos'...", "Tarea 'Revisar planos del nuevo ensamblaje' (ID: abc-123) encontrada.", "Formulando el plan de ejecución final."]\`
-
-      **4. Generar Proceso de Pensamiento (thoughtProcess):**
-         - Escribe un resumen en Markdown que sea amigable y claro. Explica POR QUÉ estás haciendo lo que haces.
-         - Comienza con un saludo amigable.
-         - Usa listas con viñetas y negritas para una máxima legibilidad.
-         - Si tuviste que hacer alguna suposición debido a ambigüedad, explícala aquí. Ejemplo: "Noté que mencionaste 'lo de marketing', y asumí que te referías a la tarea 'Preparar campaña de marketing', así que la marcaré como completada."
-
-      **5. Generar Plan de Ejecución (executionPlan):**
-         - Construye un array de objetos de acción. Sé muy preciso.
-         - **Para CREAR:** \`{ "action": "CREATE", "task": { "title": "...", "description": "...", "dueDate": "YYYY-MM-DD" or null } }\`
-         - **Para ACTUALIZAR:** \`{ "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }\`
-         - **Para COMPLETAR:** \`{ "action": "UPDATE", "docId": "...", "updates": { "status": "done" }, "originalTitle": "..." }\`
-
-      **Formato de Salida (REGLA CRÍTICA E INQUEBRANTABLE):**
+      Formato de Salida (REGLA CRÍTICA):
       - Tu respuesta DEBE ser un único bloque de código JSON válido.
-      - NO incluyas NINGÚN texto, explicación o carácter antes de la llave de apertura \`{\` o después de la llave de cierre \`}\`.
-      - NO uses bloques de código markdown como \`\`\`json en tu respuesta final. La respuesta debe ser JSON puro.
-      - El JSON debe tener EXACTAMENTE TRES claves a nivel raíz: \`thinkingSteps\` (array de strings), \`thoughtProcess\` (string con Markdown), y \`executionPlan\` (array de objetos de acción JSON).
-
-      **EJEMPLO COMPLETO MEJORADO:**
-      - **Petición:** "crea una tarea para la reunión con el cliente X mañana y marca como lista la de revisar los planos"
-      - **Salida Esperada:**
-        {
-          "thinkingSteps": ["Analizando la petición...", "Detectada intención de crear una nueva tarea.", "Detalles extraídos: 'Reunión con cliente X', fecha 'mañana'.", "Detectada intención de completar una tarea existente.", "Buscando en la lista de tareas algo similar a 'revisar los planos'...", "Tarea 'Revisar planos del nuevo ensamblaje' con ID 'abc-123' coincide con la petición.", "Plan de ejecución generado con 1 creación y 1 actualización."],
-          "thoughtProcess": "### ¡Plan de Acción Listo!\\n¡Hola! He analizado tu petición y este es el plan que he preparado:\\n\\n*   **Voy a crear** una nueva tarea titulada *'Reunión con cliente X'* y le asignaré la fecha de mañana, como solicitaste.\\n*   **Voy a marcar como completada** la tarea existente *'Revisar planos del nuevo ensamblaje'*.\\n\\nRevisa las acciones a continuación y, si todo es correcto, presiona 'Confirmar y Ejecutar'.",
-          "executionPlan": [
-            {
-              "action": "CREATE",
-              "task": {
-                "title": "Reunión con cliente X",
-                "description": "Preparar y asistir a la reunión con el cliente X.",
-                "dueDate": "${new Date(new Date(currentDate).setDate(new Date(currentDate).getDate() + 1)).toISOString().split('T')[0]}"
-              }
-            },
-            {
-              "action": "UPDATE",
-              "docId": "ID_DE_LA_TAREA_DE_PLANOS",
-              "updates": { "status": "done" },
-              "originalTitle": "Revisar planos del nuevo ensamblaje"
-            }
-          ]
-        }
+      - NO incluyas NINGÚN texto antes de la llave de apertura '{' o después de la llave de cierre '}'.
+      - NO uses bloques de código markdown como \`\`\`json. La respuesta debe ser JSON puro.
+      - El JSON debe tener TRES claves: 'thinkingSteps', 'thoughtProcess', y 'executionPlan'.
     `;
 
     try {
