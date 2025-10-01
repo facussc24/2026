@@ -885,7 +885,6 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
-    // --- Internal Classification Step ---
     const now = new Date(todayStr);
     const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
@@ -903,24 +902,21 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
         NO_DUE_DATE: pendingTasks.filter(t => !t.dueDate && !(userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase()))),
     };
 
-    // Create a list of the next 60 workdays
     const workdays = [];
     let currentDate = new Date(today);
     while (workdays.length < 60) {
         const day = currentDate.getDay();
-        if (day > 0 && day < 6) { // Monday to Friday
+        if (day > 0 && day < 6) {
             workdays.push(currentDate.toISOString().split('T')[0]);
         }
         currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    const tasksForPrompt = pendingTasks.map(t => ({ docId: t.docId, title: t.title, dueDate: t.dueDate, effort: t.effort || 'medium' }));
-
     const prompt = `
-        Eres un Project Manager experto. Tu única tarea es tomar listas de tareas pre-clasificadas y asignarlas a un calendario de trabajo, respetando estrictamente la capacidad diaria.
+        Eres un Project Manager experto. Tu única tarea es tomar listas de tareas pre-clasificadas y asignarlas a un calendario de trabajo, generando un plan de sugerencias en formato JSON.
 
         **Contexto Clave:**
-        - Calendario de Días Laborables Disponibles (60 días): ${workdays.join(', ')}
+        - Calendario de Días Laborables Disponibles (próximos 60 días): ${workdays.join(', ')}
 
         **Reglas Fundamentales:**
         - **Capacidad Diaria:** Cada día tiene un presupuesto de 8 puntos de esfuerzo. NO se puede exceder.
@@ -930,30 +926,38 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
         **Tareas Pre-clasificadas para Planificar:**
         1.  **URGENTES Y ATRASADAS (Máxima Prioridad):**
             \`\`\`json
-            ${JSON.stringify(classifiedTasks.OVERDUE.map(t => ({...t, effort: t.effort || 'medium'})))}
+            ${JSON.stringify(classifiedTasks.OVERDUE.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
             \`\`\`
         2.  **PRIORIDAD DEL USUARIO:**
             \`\`\`json
-            ${JSON.stringify(classifiedTasks.USER_PRIORITY.map(t => ({...t, effort: t.effort || 'medium'})))}
+            ${JSON.stringify(classifiedTasks.USER_PRIORITY.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
             \`\`\`
         3.  **VENCIMIENTO PRÓXIMO (Próximas 2 semanas):**
             \`\`\`json
-            ${JSON.stringify(classifiedTasks.DUE_SOON.map(t => ({...t, effort: t.effort || 'medium'})))}
+            ${JSON.stringify(classifiedTasks.DUE_SOON.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
             \`\`\`
         4.  **VENCIMIENTO LEJANO (Más de 2 semanas):**
             \`\`\`json
-            ${JSON.stringify(classifiedTasks.DUE_LATER.map(t => ({...t, effort: t.effort || 'medium'})))}
+            ${JSON.stringify(classifiedTasks.DUE_LATER.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
             \`\`\`
         5.  **SIN FECHA LÍMITE (Menor Prioridad):**
             \`\`\`json
-            ${JSON.stringify(classifiedTasks.NO_DUE_DATE.map(t => ({...t, effort: t.effort || 'medium'})))}
+            ${JSON.stringify(classifiedTasks.NO_DUE_DATE.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
             \`\`\`
 
         **Instrucciones de Salida (REGLA CRÍTICA):**
         - Tu respuesta DEBE ser únicamente un objeto JSON.
-        - El objeto debe tener una clave \`plan\`, que es un array de objetos.
-        - Cada objeto en el array debe tener esta estructura exacta: \`{ "docId": "ID_DE_LA_TAREA", "updates": { "plannedDate": "YYYY-MM-DD" }, "originalTitle": "Título de la Tarea" }\`.
+        - El objeto debe tener una clave \`suggestions\`, que es un array de objetos.
+        - Cada objeto en el array debe tener esta estructura exacta: \`{ "taskId": "ID_DE_LA_TAREA", "suggestedDate": "YYYY-MM-DD" }\`.
         - No incluyas NADA más en tu respuesta.
+
+        **Ejemplo de respuesta VÁLIDA:**
+        {
+          "suggestions": [
+            { "taskId": "task_123", "suggestedDate": "${workdays[0]}" },
+            { "taskId": "task_456", "suggestedDate": "${workdays[1]}" }
+          ]
+        }
     `;
 
     try {
@@ -961,13 +965,13 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
         const responseText = result.response.candidates[0].content.parts[0].text;
         const jsonMatch = responseText.match(/{[\s\S]*}/);
         if (!jsonMatch) {
-            throw new Error("La IA no pudo generar un plan de reorganización válido.");
+            throw new Error("La IA no pudo generar un plan de sugerencias válido.");
         }
-        const reorganizationPlan = JSON.parse(jsonMatch[0]);
-        if (!reorganizationPlan.plan) {
-            throw new Error("El plan de reorganización de la IA tiene un formato incorrecto.");
+        const suggestionData = JSON.parse(jsonMatch[0]);
+        if (!suggestionData || !Array.isArray(suggestionData.suggestions)) {
+            throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de sugerencias.");
         }
-        return reorganizationPlan;
+        return suggestionData;
     } catch (error) {
         console.error("Error en reorganizeTasksWithAI:", error);
         throw new functions.https.HttpsError("internal", error.message || "Error al procesar la reorganización con la IA.");
