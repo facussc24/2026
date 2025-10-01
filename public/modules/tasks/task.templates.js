@@ -3,6 +3,8 @@
  * These functions are responsible for generating the HTML structure of the components.
  */
 
+import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
+
 export function getEmptyStateHTML(icon, title, message, ctaButton) {
     const buttonHTML = ctaButton ?
         `<button data-action="${ctaButton.action}" data-status="${ctaButton.status || ''}" class="mt-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm py-1.5 px-4 rounded-full mx-auto flex items-center transition-colors">
@@ -171,12 +173,14 @@ export function getAIAssistantPromptViewHTML() {
 }
 
 export function getAIAssistantLoadingViewHTML(title = 'Analizando tu petición...') {
-    // Step 2: Show a loading/thinking state.
+    // Step 2: Show a loading/thinking state with a container for dynamic steps.
     return `
         <div class="flex flex-col items-center justify-center h-full p-8 text-center">
             <i data-lucide="loader-circle" class="w-12 h-12 animate-spin text-purple-500"></i>
             <p class="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-200">${title}</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">El asistente está pensando. Esto puede tardar unos segundos.</p>
+            <div id="thinking-steps-container" class="mt-4 text-left text-sm w-full max-w-md h-24 overflow-y-auto custom-scrollbar border bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
+                 <p class="text-slate-500 dark:text-slate-400 animate-pulse">Iniciando análisis...</p>
+            </div>
         </div>
     `;
 }

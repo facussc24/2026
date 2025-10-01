@@ -639,31 +639,28 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
       **PROCESO DE ANÁLISIS (SEGUIR ESTRICTAMENTE):**
 
       **1. Identificar Intenciones Clave:**
-         - Lee la petición para identificar las acciones principales. Las acciones pueden ser:
-           - **CREAR:** El usuario quiere una nueva tarea (ej: "crear tarea para...", "recordar...", "necesito hacer...").
-           - **ACTUALIZAR:** El usuario quiere modificar una tarea existente (ej: "cambiar fecha de...", "renombrar...", "posponer...").
-           - **COMPLETAR:** El usuario indica que una tarea ya está hecha (ej: "ya terminé...", "completé...", "lista la tarea de...").
+         - Lee la petición para identificar las acciones principales (CREAR, ACTUALIZAR, COMPLETAR).
 
       **2. Mapear Tareas Existentes:**
-         - Para intenciones de **ACTUALIZAR** o **COMPLETAR**, busca la tarea correspondiente en la lista de "Tareas Actuales". Usa el título para el matching, siendo flexible (ej: "llamar proveedor" debe coincidir con la tarea "Llamar al proveedor de acero").
+         - Para intenciones de ACTUALIZAR o COMPLETAR, busca la tarea correspondiente en la lista de "Tareas Actuales" usando el título.
 
-      **3. Generar el Proceso de Pensamiento (Markdown):**
-         - Escribe un resumen en Markdown de lo que entendiste y lo que planeas hacer.
-         - Usa listas con viñetas para cada acción.
-         - Sé claro y conciso. Por ejemplo:
-           *   "Entendido. Voy a crear una nueva tarea para 'Revisar los planos'."
-           *   "Marcaré la tarea 'Llamar al proveedor' como completada."
-           *   "Cambiaré la fecha de vencimiento de 'Preparar reporte' para mañana."
+      **3. Generar Pasos de Pensamiento (Array de Strings):**
+         - Crea un array de strings llamado \`thinkingSteps\`.
+         - Cada string debe ser una frase corta que describa un paso de tu análisis.
+         - Ejemplo: \`["Analizando la petición...", "Detectada intención de crear tarea.", "Extrayendo detalles para 'Reunión con cliente X'...", "Detectada intención de completar tarea.", "Mapeando tarea 'revisar planos'...", "Formulando plan de ejecución..."]\`
 
-      **4. Generar el Plan de Ejecución (JSON):**
-         - Construye un array de objetos, donde cada objeto representa una acción.
+      **4. Generar el Proceso de Pensamiento (Markdown):**
+         - Escribe un resumen en Markdown de lo que entendiste y lo que planeas hacer. Usa listas con viñetas.
+
+      **5. Generar el Plan de Ejecución (JSON):**
+         - Construye un array de objetos (\`executionPlan\`) donde cada objeto representa una acción.
          - **Para CREAR:** \`{ "action": "CREATE", "task": { "title": "...", "description": "...", "dueDate": "YYYY-MM-DD" or null } }\`
          - **Para ACTUALIZAR:** \`{ "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }\`
          - **Para COMPLETAR:** \`{ "action": "UPDATE", "docId": "...", "updates": { "status": "done" }, "originalTitle": "..." }\`
 
       **Formato de Salida (REGLA CRÍTICA):**
       - Tu respuesta DEBE ser un único bloque de código JSON.
-      - El JSON debe tener dos claves a nivel raíz: \`thoughtProcess\` (string con Markdown) y \`executionPlan\` (array de acciones JSON).
+      - El JSON debe tener TRES claves a nivel raíz: \`thinkingSteps\` (array de strings), \`thoughtProcess\` (string con Markdown) y \`executionPlan\` (array de acciones JSON).
       - NO incluyas absolutamente NADA más en tu respuesta. La respuesta debe empezar con \`{\` y terminar con \`}\`.
 
       **EJEMPLO COMPLETO:**
