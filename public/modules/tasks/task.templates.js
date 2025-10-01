@@ -178,6 +178,7 @@ export function getAIAssistantLoadingViewHTML(title = 'Analizando tu petición..
         <div class="flex flex-col items-center justify-center h-full p-8 text-center">
             <i data-lucide="loader-circle" class="w-12 h-12 animate-spin text-purple-500"></i>
             <p class="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-200">${title}</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Esto puede tomar unos segundos. La IA está procesando tu solicitud.</p>
             <div id="thinking-steps-container" class="mt-4 text-left text-sm w-full max-w-md h-24 overflow-y-auto custom-scrollbar border bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
                  <p class="text-slate-500 dark:text-slate-400 animate-pulse">Iniciando análisis...</p>
             </div>
@@ -190,40 +191,54 @@ export function getAIAssistantReviewViewHTML(plan) {
     const { thoughtProcess, executionPlan } = plan;
 
     const renderAction = (action) => {
+        let icon, title, details;
         switch (action.action) {
             case 'CREATE':
-                const dueDate = action.task.dueDate ? new Date(action.task.dueDate + 'T00:00:00').toLocaleDateString('es-AR') : 'N/A';
-                return `
-                    <div class="font-semibold text-green-700 dark:text-green-300">Crear Tarea:</div>
-                    <div class="text-sm pl-4">
-                        <p><strong>Título:</strong> ${action.task.title}</p>
-                        <p><strong>Vence:</strong> ${dueDate}</p>
-                    </div>`;
+                const dueDate = action.task.dueDate ? new Date(action.task.dueDate + 'T00:00:00').toLocaleDateString('es-AR') : 'No especificada';
+                icon = `<div class="w-10 h-10 flex-shrink-0 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                            <i data-lucide="plus-circle" class="w-6 h-6 text-green-600 dark:text-green-400"></i>
+                        </div>`;
+                title = `<p class="font-bold text-slate-800 dark:text-slate-200">Crear Nueva Tarea</p>`;
+                details = `<div class="text-xs text-slate-600 dark:text-slate-400 mt-1 space-y-1">
+                               <p><strong class="font-semibold">Título:</strong> ${action.task.title}</p>
+                               <p><strong class="font-semibold">Vence:</strong> ${dueDate}</p>
+                           </div>`;
+                break;
             case 'UPDATE':
-                let updateDetails = '';
+                let updateText = '';
                 if (action.updates.status === 'done') {
-                    updateDetails = `<span class="font-bold text-blue-600">Marcar como Completada</span>`;
+                    updateText = `<span class="font-bold text-blue-600 dark:text-blue-400">Marcar como Completada</span>`;
                 } else if (action.updates.dueDate) {
                     const newDueDate = new Date(action.updates.dueDate + 'T00:00:00').toLocaleDateString('es-AR');
-                    updateDetails = `<span class="font-bold text-blue-600">Cambiar Fecha a ${newDueDate}</span>`;
+                    updateText = `<span class="font-bold text-blue-600 dark:text-blue-400">Cambiar Fecha a ${newDueDate}</span>`;
                 } else {
-                    updateDetails = `Actualizar campo ${Object.keys(action.updates)[0]}`;
+                     const updatedField = Object.keys(action.updates)[0];
+                     const updatedValue = action.updates[updatedField];
+                     updateText = `<span class="font-bold text-blue-600 dark:text-blue-400">Actualizar</span> ${updatedField} a "${updatedValue}"`;
                 }
-                return `
-                    <div class="font-semibold text-blue-700 dark:text-blue-300">Actualizar Tarea:</div>
-                    <div class="text-sm pl-4">
-                        <p>${updateDetails} para la tarea "${action.originalTitle}"</p>
-                    </div>`;
+                 icon = `<div class="w-10 h-10 flex-shrink-0 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                            <i data-lucide="edit" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i>
+                        </div>`;
+                title = `<p class="font-bold text-slate-800 dark:text-slate-200">Actualizar Tarea</p>`;
+                details = `<div class="text-xs text-slate-600 dark:text-slate-400 mt-1 space-y-1">
+                              <p>${updateText}</p>
+                              <p class="text-slate-500 italic">para la tarea: "${action.originalTitle}"</p>
+                           </div>`;
+                break;
             default:
-                return `<p>Acción desconocida: ${action.action}</p>`;
+                 icon = `<div class="w-10 h-10 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-900/50 flex items-center justify-center">
+                            <i data-lucide="alert-circle" class="w-6 h-6 text-gray-600 dark:text-gray-400"></i>
+                        </div>`;
+                title = `<p class="font-bold text-slate-800 dark:text-slate-200">Acción Desconocida</p>`;
+                details = `<p class="text-xs text-slate-500">${action.action}</p>`;
         }
+         return `<div class="flex items-start gap-3 p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                    ${icon}
+                    <div class="flex-grow">${title}${details}</div>
+                </div>`;
     };
 
-    const actionsHTML = executionPlan.map(action => `
-        <div class="p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
-            ${renderAction(action)}
-        </div>
-    `).join('');
+    const actionsHTML = executionPlan.map(renderAction).join('');
 
     return `
         <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
@@ -235,16 +250,18 @@ export function getAIAssistantReviewViewHTML(plan) {
                 <i data-lucide="x" class="h-6 w-6"></i>
             </button>
         </div>
-        <div class="p-6 flex-grow overflow-y-auto custom-scrollbar grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="p-6 flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
             <!-- Thought Process Column -->
-            <div class="prose prose-sm dark:prose-invert max-w-none">
-                <h4 class="font-bold text-slate-700 dark:text-slate-300">Proceso de Pensamiento:</h4>
-                ${marked.parse(thoughtProcess)}
+            <div class="flex flex-col h-full overflow-hidden bg-white dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                <h4 class="font-bold text-slate-700 dark:text-slate-300 flex-shrink-0 mb-2">Proceso de Pensamiento:</h4>
+                <div class="prose prose-sm dark:prose-invert max-w-none flex-grow overflow-y-auto custom-scrollbar pr-2">
+                    ${marked.parse(thoughtProcess)}
+                </div>
             </div>
             <!-- Execution Plan Column -->
-            <div>
-                <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-2">Plan de Ejecución:</h4>
-                <div class="space-y-3">
+            <div class="flex flex-col h-full overflow-hidden bg-white dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-2 flex-shrink-0">Plan de Ejecución:</h4>
+                <div class="space-y-3 flex-grow overflow-y-auto custom-scrollbar pr-2">
                     ${actionsHTML || '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
                 </div>
             </div>
