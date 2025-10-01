@@ -223,6 +223,11 @@ export async function completeAndArchiveTask(taskId) {
     });
 }
 
+export function updateTaskBlockedStatus(taskId, isBlocked) {
+    const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+    return updateDoc(taskRef, { blocked: isBlocked });
+}
+
 export function subscribeToAllTasks(callback, handleError) {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     // Always order by creation date descending for consistency.
