@@ -2,7 +2,7 @@ import { subscribeToAllTasks, exportTasksToExcel } from './task.service.js';
 import { showToast } from '../../main.js';
 import { getState, setDashboardTasks, resetDashboardState, setDashboardTableFilter, setDashboardTablePage } from './task.state.js';
 import { renderTasksTable, renderPaginationControls, renderTaskTableFilters, showTableLoading, hideTableLoading } from './task.ui.js';
-import { openAIAssistantModal, openWeekOrganizerModal } from './task.modal.js';
+import { openAIAssistantModal } from './task.modal.js';
 import { getDashboardLayoutHTML } from './task.templates.js';
 
 let db;
@@ -62,17 +62,6 @@ function setupEventListeners(container) {
         aiAssistantButton.addEventListener('click', () => openAIAssistantModal());
     }
 
-    const weekOrganizerButton = container.querySelector('#open-week-organizer-btn');
-    if (weekOrganizerButton) {
-        weekOrganizerButton.addEventListener('click', () => {
-            // This function needs to be imported from task.modal.js
-            if (typeof openWeekOrganizerModal === 'function') {
-                openWeekOrganizerModal();
-            } else {
-                console.error('openWeekOrganizerModal function not found. Make sure it is imported.');
-            }
-        });
-    }
 
     // Debounced search
     let searchTimeout;

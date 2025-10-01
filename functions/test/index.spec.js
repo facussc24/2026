@@ -26,7 +26,7 @@ const firebaseTest = require('firebase-functions-test')();
 const { HttpsError } = require('firebase-functions/v1/https');
 
 // Import the functions to be tested AFTER mocking
-const { organizeTaskWithAI, getNextEcrNumber, getAIAssistantPlan } = require('../index');
+const { getNextEcrNumber, getAIAssistantPlan } = require('../index');
 
 describe('getAIAssistantPlan', () => {
     beforeEach(() => {
@@ -34,7 +34,7 @@ describe('getAIAssistantPlan', () => {
         mockGenerateContent.mockResolvedValue({
             response: {
                 candidates: [{
-                    content: { parts: [{ text: JSON.stringify({ thoughtProcess: 'mock', executionPlan: [] }) }] }
+                    content: { parts: [{ text: JSON.stringify({ thoughtProcess: 'mock', executionPlan: [], thinkingSteps: [] }) }] }
                 }]
             }
         });
@@ -81,82 +81,6 @@ describe('getAIAssistantPlan', () => {
     });
 });
 
-describe('organizeTaskWithAI (Vertex AI version)', () => {
-    beforeEach(() => {
-        // Clear mock history before each test
-        mockGenerateContent.mockClear();
-    });
-
-    test('should throw unauthenticated error if user is not logged in', async () => {
-        const wrapped = firebaseTest.wrap(organizeTaskWithAI);
-        await expect(wrapped({ text: 'Some task' }, {})).rejects.toThrow(
-            new HttpsError('unauthenticated', 'The function must be called while authenticated.')
-        );
-    });
-
-    test('should throw invalid-argument error for empty text', async () => {
-        const wrapped = firebaseTest.wrap(organizeTaskWithAI);
-        const context = { auth: { uid: 'test-uid' } };
-        await expect(wrapped({ text: '' }, context)).rejects.toThrow(
-            new HttpsError('invalid-argument', "The function must be called with a non-empty 'text' argument.")
-        );
-    });
-
-    test('should return parsed task data on successful API call', async () => {
-        const wrapped = firebaseTest.wrap(organizeTaskWithAI);
-        const context = { auth: { uid: 'test-uid' } };
-        const mockApiResponse = {
-            tasks: [{
-                title: 'Prepare Client Presentation',
-                description: 'A presentation for the new client.',
-                tags: ['presentation', 'client'],
-            }]
-        };
-
-        // Simulate a valid Vertex AI response
-        mockGenerateContent.mockResolvedValue({
-            response: {
-                candidates: [{
-                    content: { parts: [{ text: JSON.stringify(mockApiResponse) }] }
-                }]
-            }
-        });
-
-        const result = await wrapped({ text: 'Prepare presentation for client' }, context);
-
-        expect(result).toEqual(mockApiResponse);
-        expect(mockGenerateContent).toHaveBeenCalledTimes(1);
-    });
-
-    test('should throw internal error if AI response is not valid JSON', async () => {
-        const wrapped = firebaseTest.wrap(organizeTaskWithAI);
-        const context = { auth: { uid: 'test-uid' } };
-        mockGenerateContent.mockResolvedValue({
-            response: {
-                candidates: [{
-                    content: { parts: [{ text: 'This is not JSON' }] }
-                }]
-            }
-        });
-
-        await expect(wrapped({ text: 'A task with bad response' }, context)).rejects.toThrow(
-            'No se encontró un bloque JSON válido en la respuesta de la IA.'
-        );
-    });
-
-    test('should throw internal error if Vertex AI request fails', async () => {
-        const wrapped = firebaseTest.wrap(organizeTaskWithAI);
-        const context = { auth: { uid: 'test-uid' } };
-        const apiError = new Error('API Error');
-        mockGenerateContent.mockRejectedValue(apiError);
-
-        await expect(wrapped({ text: 'A task that will fail' }, context)).rejects.toThrow(
-            expect.objectContaining({
-                message: expect.stringContaining('Vertex AI Full Error')
-            })
-        );
-    });
-});
 
 describe('getNextEcrNumber', () => {
   let mockGet;
