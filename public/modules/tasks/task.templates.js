@@ -158,7 +158,7 @@ export function getAIAssistantReviewViewHTML(plan) {
         let icon, title, details;
         const actionId = `action_${index}`;
 
-        let content = `<div class="ai-plan-action-item group/action bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm transition-all duration-200 has-[:checked]:bg-slate-100 has-[:checked]:dark:bg-slate-900/50 has-[:not(:checked)]:opacity-50 has-[:not(:checked)]:bg-slate-50 has-[:not(:checked)]:dark:bg-slate-800/20 relative">`;
+        let content = `<div class="ai-plan-action-item group/action bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all duration-200 has-[:checked]:bg-slate-100 has-[:checked]:dark:bg-slate-900 has-[:not(:checked)]:bg-slate-200 has-[:not(:checked)]:dark:bg-slate-800 relative">`;
 
         content += `<input type="hidden" name="${actionId}_type" value="${action.action}">`;
 
@@ -246,7 +246,7 @@ export function getAIAssistantReviewViewHTML(plan) {
             <form id="ai-execution-plan-form">
                 <h4 class="font-bold text-slate-800 dark:text-slate-200 mb-3 text-lg">Plan de Ejecución Propuesto</h4>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Puedes desmarcar o editar cualquier acción antes de confirmar.</p>
-                <div class="space-y-4">
+                <div class="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
                     ${actionsHTML || '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
                 </div>
             </form>
