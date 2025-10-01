@@ -609,7 +609,7 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
     }
 
     const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const today = new Date();
     const currentDate = today.toISOString().split("T")[0];
