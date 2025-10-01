@@ -851,14 +851,24 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
     const db = admin.firestore();
     const batch = db.batch();
     const tasksRef = db.collection('tareas');
+    const userUid = context.auth.uid;
 
     plan.forEach(item => {
-        if (item.docId && item.updates) {
+        if (item.action === 'CREATE') {
+            const newTaskRef = tasksRef.doc();
+            batch.set(newTaskRef, {
+                ...item.task,
+                creatorUid: userUid,
+                assigneeUid: userUid, // Default to self-assigned
+                status: 'todo',
+                priority: 'medium',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            });
+        } else if (item.action === 'UPDATE' && item.docId && item.updates) {
             const taskRef = tasksRef.doc(item.docId);
             batch.update(taskRef, { ...item.updates, updatedAt: new Date() });
         }
-        // Note: The 'reorganize' action is handled client-side if needed,
-        // this function only handles direct data modifications.
     });
 
     try {
@@ -913,10 +923,10 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
     }
 
     const prompt = `
-        Eres un Project Manager experto. Tu única tarea es tomar listas de tareas pre-clasificadas y asignarlas a un calendario de trabajo, generando un plan de sugerencias en formato JSON.
+        Eres un Project Manager experto. Tu única tarea es tomar listas de tareas pre-clasificadas y asignarlas a un calendario de trabajo, respetando la capacidad diaria.
 
         **Contexto Clave:**
-        - Calendario de Días Laborables Disponibles (próximos 60 días): ${workdays.join(', ')}
+        - Calendario de Días Laborables Disponibles: ${workdays.join(', ')}
 
         **Reglas Fundamentales:**
         - **Capacidad Diaria:** Cada día tiene un presupuesto de 8 puntos de esfuerzo. NO se puede exceder.
@@ -947,17 +957,9 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
 
         **Instrucciones de Salida (REGLA CRÍTICA):**
         - Tu respuesta DEBE ser únicamente un objeto JSON.
-        - El objeto debe tener una clave \`suggestions\`, que es un array de objetos.
-        - Cada objeto en el array debe tener esta estructura exacta: \`{ "taskId": "ID_DE_LA_TAREA", "suggestedDate": "YYYY-MM-DD" }\`.
+        - El objeto debe tener una clave \`plan\`, que es un array de objetos.
+        - Cada objeto en el array debe tener esta estructura exacta: \`{ "action": "UPDATE", "docId": "ID_DE_LA_TAREA", "updates": { "plannedDate": "YYYY-MM-DD" }, "originalTitle": "Título de la Tarea" }\`.
         - No incluyas NADA más en tu respuesta.
-
-        **Ejemplo de respuesta VÁLIDA:**
-        {
-          "suggestions": [
-            { "taskId": "task_123", "suggestedDate": "${workdays[0]}" },
-            { "taskId": "task_456", "suggestedDate": "${workdays[1]}" }
-          ]
-        }
     `;
 
     try {
@@ -965,13 +967,13 @@ exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: 
         const responseText = result.response.candidates[0].content.parts[0].text;
         const jsonMatch = responseText.match(/{[\s\S]*}/);
         if (!jsonMatch) {
-            throw new Error("La IA no pudo generar un plan de sugerencias válido.");
+            throw new Error("La IA no pudo generar un plan de reorganización válido.");
         }
-        const suggestionData = JSON.parse(jsonMatch[0]);
-        if (!suggestionData || !Array.isArray(suggestionData.suggestions)) {
-            throw new Error("La respuesta de la IA no es un JSON válido o no contiene un array de sugerencias.");
+        const reorganizationPlan = JSON.parse(jsonMatch[0]);
+        if (!reorganizationPlan.plan) {
+            throw new Error("El plan de reorganización de la IA tiene un formato incorrecto.");
         }
-        return suggestionData;
+        return reorganizationPlan;
     } catch (error) {
         console.error("Error en reorganizeTasksWithAI:", error);
         throw new functions.https.HttpsError("internal", error.message || "Error al procesar la reorganización con la IA.");

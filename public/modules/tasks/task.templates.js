@@ -128,97 +128,141 @@ export function getAIAnalysisModalHTML() {
     `;
 }
 
-export function getAIAssistantModalHTML() {
+export function getAIAssistantBaseHTML() {
     return `
-    <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div id="ai-assistant-modal-content" class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in transition-all duration-300">
-            <div id="ai-assistant-view-container" class="flex flex-col flex-grow">
-                <!-- Dynamic content will be injected here -->
-            </div>
+    <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+        <div id="ai-assistant-content" class="bg-slate-100 dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col m-4 animate-scale-in transition-all duration-300">
+            <!-- Content will be injected here -->
         </div>
     </div>
     `;
 }
 
-export function getAIAssistantPromptViewHTML() {
+export function getAIAssistant_Step1_Prompt_HTML() {
     return `
         <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                <i data-lucide="sparkles" class="w-6 h-6 text-purple-500"></i>
-                Crear Tareas con Gemini
+                <i data-lucide="bot" class="w-6 h-6 text-purple-500"></i> Asistente de IA
             </h3>
-            <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+            <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                 <i data-lucide="x" class="h-6 w-6"></i>
             </button>
         </div>
         <div class="p-6 flex-grow">
             <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                Describe las tareas que necesitas crear. Puedes incluir fechas o pedir varias a la vez.
+                Describe qué necesitas. Puedes pedir crear tareas, modificarlas, o reorganizar tu semana. Sé tan detallado como quieras.
             </p>
-            <textarea id="ai-prompt-textarea" class="w-full h-48 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear tarea para revisar planos del cliente X para la próxima semana. Y otra para llamar al proveedor de acero mañana."></textarea>
+            <textarea id="ai-prompt-textarea" class="w-full h-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md p-4 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Terminé la tarea de los planos. La de llamar al proveedor de acero es para mañana. Además, crea una nueva tarea para preparar la presentación del cliente para el viernes y reorganiza el resto de mis pendientes."></textarea>
         </div>
-        <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
-            <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
+        <div class="p-4 bg-slate-100/70 dark:bg-slate-900/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
+            <button data-action="close" type="button" class="bg-slate-300 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-400 font-semibold transition-colors">Cancelar</button>
             <button id="ai-submit-prompt-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
-                <i data-lucide="brain-circuit" class="w-5 h-5"></i>
-                Generar Tareas
+                <i data-lucide="brain-circuit" class="w-5 h-5"></i> Analizar Petición
             </button>
         </div>
     `;
 }
 
-export function getAILoadingViewHTML() {
+export function getAIAssistant_Step2_Thinking_HTML() {
     return `
         <div class="flex flex-col items-center justify-center h-full p-8 text-center">
             <i data-lucide="loader-circle" class="w-12 h-12 animate-spin text-purple-500"></i>
             <p class="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-200">Analizando tu petición...</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">El asistente está pensando. Esto puede tardar unos segundos.</p>
+            <div id="ai-thought-process" class="mt-4 text-left text-sm text-slate-500 dark:text-slate-400 max-w-md w-full bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                <!-- AI thought process will be streamed here -->
+            </div>
         </div>
     `;
 }
 
-export function getAIReviewViewHTML(plan) {
-    const { tasks, suggestion } = plan;
-
-    const planDescription = `Gemini propone crear ${tasks.length} nueva(s) tarea(s). Revisa el plan y confirma para añadirlas a tu lista.`;
-
-    const tasksHTML = tasks.map(task => {
-        const dueDateString = task.dueDate
-            ? `<strong>Fecha Límite:</strong> ${new Date(task.dueDate + 'T00:00:00').toLocaleDateString('es-AR')}`
-            : `<span class="italic text-slate-500">Sin fecha límite</span>`;
-
-        return `
-            <div class="p-4 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-500 rounded-r-lg">
-                <p class="font-bold text-green-800 dark:text-green-200">${task.title}</p>
-                ${task.description ? `<p class="text-sm text-slate-600 dark:text-slate-300 mt-1">${task.description}</p>` : ''}
-                <p class="text-sm text-slate-700 dark:text-slate-400 mt-2">${dueDateString}</p>
-            </div>`;
-    }).join('');
-
-    const suggestionHTML = suggestion ? `<div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 rounded-md text-sm text-yellow-800 dark:text-yellow-200 flex items-center gap-2"><i data-lucide="lightbulb" class="w-4 h-4"></i>${suggestion}</div>` : '';
+export function getAIAssistant_Step3_Review_HTML(plan, thoughtProcess) {
+    const renderActionItem = (item, index) => {
+        switch (item.action) {
+            case 'CREATE':
+                return `
+                    <div class="action-item p-4 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700" data-action-type="CREATE" data-index="${index}">
+                        <div class="flex items-center gap-3 mb-3">
+                            <i data-lucide="plus-circle" class="w-5 h-5 text-green-500"></i>
+                            <h5 class="font-bold text-slate-800 dark:text-slate-200">Crear Nueva Tarea</h5>
+                        </div>
+                        <div class="space-y-2">
+                            <input type="text" value="${item.task.title}" class="input-field" data-field="title" placeholder="Título de la tarea">
+                            <textarea class="input-field" data-field="description" placeholder="Descripción">${item.task.description || ''}</textarea>
+                            <input type="date" value="${item.task.dueDate || ''}" class="input-field" data-field="dueDate">
+                        </div>
+                    </div>`;
+            case 'UPDATE':
+                 const updateField = Object.keys(item.updates)[0];
+                 const updateValue = item.updates[updateField];
+                 let updateUI = '';
+                 if (updateField === 'status' && updateValue === 'done') {
+                    updateUI = `<p class="p-2 bg-green-200 text-green-800 rounded-md">Marcar como completada</p>`;
+                 } else {
+                    updateUI = `<input type="text" value="${updateValue}" class="input-field" data-field="${updateField}">`;
+                 }
+                return `
+                    <div class="action-item p-4 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700" data-action-type="UPDATE" data-index="${index}" data-doc-id="${item.docId}">
+                         <div class="flex items-center gap-3 mb-3">
+                            <i data-lucide="edit" class="w-5 h-5 text-blue-500"></i>
+                            <h5 class="font-bold text-slate-800 dark:text-slate-200">Actualizar Tarea</h5>
+                        </div>
+                        <p class="text-sm text-slate-500 mb-2">"${item.originalTitle}"</p>
+                        ${updateUI}
+                    </div>`;
+            case 'REORGANIZE':
+                 return `
+                    <div class="action-item p-4 bg-purple-100 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-700" data-action-type="REORGANIZE" data-index="${index}">
+                        <div class="flex items-center gap-3">
+                            <i data-lucide="refresh-cw" class="w-5 h-5 text-purple-500"></i>
+                            <h5 class="font-bold text-purple-800 dark:text-purple-200">Reorganizar Tareas Pendientes</h5>
+                        </div>
+                    </div>`;
+            default:
+                return '';
+        }
+    };
 
     return `
+        <style>
+            .input-field {
+                width: 100%;
+                padding: 8px;
+                border-radius: 4px;
+                border: 1px solid #cbd5e1;
+                background-color: white;
+            }
+            .dark .input-field {
+                border-color: #475569;
+                background-color: #1e293b;
+                color: #e2e8f0;
+            }
+        </style>
         <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
                 <i data-lucide="clipboard-check" class="w-6 h-6 text-purple-500"></i>
-                Revisa el Plan Propuesto
+                Revisa y Edita el Plan Propuesto
             </h3>
             <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
                 <i data-lucide="x" class="h-6 w-6"></i>
             </button>
         </div>
-        <div class="p-6 flex-grow overflow-y-auto custom-scrollbar">
-            <p class="text-sm text-slate-700 dark:text-slate-300 mb-4">${planDescription}</p>
-            <div class="space-y-3">
-                ${tasksHTML}
+        <div class="p-6 flex-grow overflow-y-auto custom-scrollbar grid grid-cols-2 gap-6">
+            <div class="col-span-1 space-y-4">
+                 <h4 class="text-base font-bold text-slate-800 dark:text-slate-200">Proceso de Pensamiento de la IA</h4>
+                 <div id="ai-thought-process-review" class="prose prose-sm dark:prose-invert max-w-none p-4 bg-white dark:bg-slate-800 rounded-lg border">${marked.parse(thoughtProcess)}</div>
             </div>
-            ${suggestionHTML}
+            <div class="col-span-1 space-y-4">
+                <h4 class="text-base font-bold text-slate-800 dark:text-slate-200">Plan de Acción Editable</h4>
+                <div id="ai-plan-actions" class="space-y-3">
+                    ${plan.map(renderActionItem).join('')}
+                </div>
+            </div>
         </div>
         <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
             <button id="ai-reject-plan-btn" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Volver</button>
             <button id="ai-confirm-plan-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
                 <i data-lucide="check-check" class="w-5 h-5"></i>
-                Confirmar y Crear
+                Aplicar Cambios
             </button>
         </div>
     `;
