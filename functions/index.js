@@ -318,6 +318,7 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
         title: t.title,
         status: t.status,
         dueDate: t.dueDate,
+        plannedDate: t.plannedDate,
     }));
 
     const prompt = `
@@ -325,6 +326,10 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
 
       **Contexto:**
       - La fecha de hoy es ${currentDate}. Esta es tu referencia para todas las fechas relativas (ej: "mañana", "próximo lunes").
+      - ¡IMPORTANTE! Las tareas tienen dos fechas:
+        - \`dueDate\`: La fecha LÍMITE final para completar la tarea.
+        - \`plannedDate\`: El día específico en que el usuario (o un asistente previo) ha planeado trabajar en la tarea.
+      - Para cualquier solicitud relacionada con la organización de la semana (ej. "revisa mis tareas del lunes", "mueve lo de mañana al viernes"), DEBES usar la \`plannedDate\`. La \`dueDate\` solo debe considerarse para priorización o si el usuario pregunta explícitamente por "vencimientos".
       - Tareas Actuales del Usuario:
       \`\`\`json
       ${JSON.stringify(tasksForPrompt, null, 2)}
