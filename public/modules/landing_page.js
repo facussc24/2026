@@ -16,7 +16,6 @@ let functions;
 let writeBatch;
 let openTaskFormModal;
 let openAIAssistantModal;
-let openWeekOrganizerModal;
 
 // Functions from main.js to be injected
 let seedDatabase;
@@ -491,7 +490,6 @@ export function initLandingPageModule(dependencies) {
     showToast = dependencies.showToast;
     openTaskFormModal = dependencies.openTaskFormModal;
     openAIAssistantModal = dependencies.openAIAssistantModal;
-    openWeekOrganizerModal = dependencies.openWeekOrganizerModal;
     functions = dependencies.functions;
     writeBatch = dependencies.writeBatch; // Injected dependency
     seedDatabase = dependencies.seedDatabase;

@@ -16,8 +16,7 @@ import {
     renderTasksByProjectChart,
     renderTaskDashboardView,
     openTaskFormModal,
-    openAIAssistantModal,
-    openWeekOrganizerModal
+    openAIAssistantModal
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
@@ -3492,7 +3491,7 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, openWeekOrganizerModal, writeBatch };
+            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
             initTasksModule(appDependencies);
             initLandingPageModule(appDependencies);
 

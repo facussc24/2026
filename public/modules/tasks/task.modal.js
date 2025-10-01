@@ -15,9 +15,7 @@ import {
     getAIAssistantModalHTML,
     getAIAssistantPromptViewHTML,
     getAIAssistantLoadingViewHTML,
-    getAIAssistantReviewViewHTML,
-    getWeekOrganizerModalHTML,
-    getAIModificationPlanHTML
+    getAIAssistantReviewViewHTML
 } from './task.templates.js';
 
 let appState;
@@ -491,7 +489,60 @@ export async function openAIAssistantModal() {
         });
     };
 
-    // --- Step 1: Prompt a.k.a. "The First Screen" ---
+    // --- Step 2: Loading View ---
+    const renderLoadingView = (userPrompt) => {
+        viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Generando plan con IA...');
+        lucide.createIcons();
+        const thinkingStepsContainer = viewContainer.querySelector('#thinking-steps-container');
+
+        // This function will be called to update the thinking steps
+        const updateThinkingSteps = (steps) => {
+            if (steps && steps.length > 0) {
+                thinkingStepsContainer.innerHTML = steps.map(step =>
+                    `<p class="flex items-center gap-2 text-slate-600 dark:text-slate-300 animate-fade-in">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i>
+                        <span>${step}</span>
+                    </p>`
+                ).join('');
+                lucide.createIcons();
+            }
+        };
+
+        // Call the backend function
+        (async () => {
+            try {
+                const getPlanFn = httpsCallable(functions, 'getAIAssistantPlan');
+                const allTasks = await fetchAllTasks();
+                const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
+                const currentDate = new Date().toISOString().split('T')[0];
+
+                const result = await getPlanFn({ userPrompt, tasks: userTasks, currentDate });
+
+                const plan = result.data;
+
+                if (!plan.thoughtProcess || !plan.executionPlan || !plan.thinkingSteps) {
+                    throw new Error("La IA devolvió un plan con un formato inesperado.");
+                }
+
+                // Update thinking steps one last time before switching view
+                updateThinkingSteps(plan.thinkingSteps);
+
+                // Give a brief moment for the user to see the final step
+                setTimeout(() => {
+                    renderReviewView(plan);
+                }, 500);
+
+
+            } catch (error) {
+                console.error("Error calling getAIAssistantPlan:", error);
+                showToast(error.message || 'Ocurrió un error al contactar al Asistente IA.', 'error');
+                renderPromptView(userPrompt); // Go back to prompt on failure
+            }
+        })();
+    };
+
+
+    // --- Step 1: Prompt View ---
     const renderPromptView = (promptText = '') => {
         viewContainer.innerHTML = getAIAssistantPromptViewHTML();
         lucide.createIcons();
@@ -503,192 +554,16 @@ export async function openAIAssistantModal() {
         viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
 
         const generateBtn = viewContainer.querySelector('#ai-generate-plan-btn');
-        generateBtn.addEventListener('click', async () => {
+        generateBtn.addEventListener('click', () => {
             const userPrompt = promptTextarea.value.trim();
             if (!userPrompt) {
                 showToast('Por favor, describe tu petición al asistente.', 'warning');
                 return;
             }
-
-            viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Generando plan con IA...');
-            lucide.createIcons();
-
-            try {
-                // This is a trick to get the result while showing the thinking process
-                // We don't await the result directly, but we will later.
-                const getPlanFn = httpsCallable(functions, 'getAIAssistantPlan');
-                const allTasks = await fetchAllTasks();
-                const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
-                const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-
-                const result = await getPlanFn({ userPrompt, tasks: userTasks, currentDate });
-
-                const plan = { ...result.data, userPrompt };
-
-                if (!plan.thoughtProcess || !plan.executionPlan) {
-                    throw new Error("La IA devolvió un plan con un formato inesperado.");
-                }
-
-                renderReviewView(plan);
-
-            } catch (error) {
-                console.error("Error calling getAIAssistantPlan:", error);
-                showToast(error.message || 'Ocurrió un error al contactar al Asistente IA.', 'error');
-                // Go back to prompt view on failure, preserving the text
-                renderPromptView(userPrompt);
-            }
+            renderLoadingView(userPrompt);
         });
     };
 
     // Initial render
     renderPromptView();
-}
-
-
-export async function openWeekOrganizerModal() {
-    // 1. Render the basic modal structure
-    dom.modalContainer.innerHTML = getWeekOrganizerModalHTML();
-    lucide.createIcons();
-
-    const modalElement = document.getElementById('week-organizer-modal');
-    const planContentEl = document.getElementById('ai-week-plan-content');
-    const promptTextarea = document.getElementById('organizer-prompt-textarea');
-    const submitBtn = document.getElementById('organizer-submit-btn');
-    const applyBtn = document.getElementById('organizer-apply-plan-btn');
-    const functions = getFunctions();
-
-    // Set initial state
-    planContentEl.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
-        <i data-lucide="edit" class="w-10 h-10 mb-2"></i>
-        <p>Escribe tu petición en el cuadro de la derecha para comenzar.</p>
-    </div>`;
-    lucide.createIcons();
-    applyBtn.disabled = true;
-
-    const showLoading = (button, text) => {
-        button.disabled = true;
-        button.innerHTML = `<i data-lucide="loader-circle" class="animate-spin w-5 h-5 mr-2"></i><span>${text}</span>`;
-        lucide.createIcons();
-    };
-
-    const hideLoading = (button, originalHTML) => {
-        button.disabled = false;
-        button.innerHTML = originalHTML;
-        lucide.createIcons();
-    };
-
-    const originalSubmitHTML = submitBtn.innerHTML;
-    const originalApplyHTML = applyBtn.innerHTML;
-
-    const handleModificationRequest = async () => {
-        const userPrompt = promptTextarea.value.trim();
-        if (!userPrompt) {
-            showToast('Por favor, escribe una instrucción para el asistente.', 'warning');
-            return;
-        }
-
-        showLoading(submitBtn, 'Generando...');
-        planContentEl.innerHTML = `<div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
-            <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
-            <p>Analizando tu petición y generando un plan...</p>
-        </div>`;
-        lucide.createIcons();
-        applyBtn.disabled = true;
-
-
-        try {
-            const allTasks = await fetchAllTasks();
-            const getTaskModificationPlan = httpsCallable(functions, 'getTaskModificationPlan');
-            const result = await getTaskModificationPlan({ userPrompt, tasks: allTasks });
-
-            const modificationPlan = result.data.plan;
-            let suggestions = [];
-
-            // --- New Sanity Check Step ---
-            if (modificationPlan && modificationPlan.length > 0) {
-                const analyzePlanSanity = httpsCallable(functions, 'analyzePlanSanity');
-                const sanityResult = await analyzePlanSanity({ plan: modificationPlan, tasks: allTasks });
-                suggestions = sanityResult.data.suggestions;
-            }
-
-            // Store the raw plan and prompt for the apply function
-            planContentEl.dataset.rawPlan = JSON.stringify(modificationPlan);
-            planContentEl.dataset.userPrompt = userPrompt;
-
-            // Render the generated plan and suggestions for user confirmation
-            planContentEl.innerHTML = getAIModificationPlanHTML(modificationPlan, suggestions);
-            lucide.createIcons();
-
-            applyBtn.disabled = false; // Enable apply button now that there's a plan
-
-        } catch (error) {
-            console.error("Error getting modification plan:", error);
-            const errorMessage = error.details?.message || error.message || 'Error al generar el plan de modificación.';
-            showToast(errorMessage, 'error');
-            planContentEl.innerHTML = `<div class="text-center text-red-500"><i data-lucide="alert-triangle" class="mx-auto w-10 h-10 mb-2"></i><p>${errorMessage}</p></div>`;
-            lucide.createIcons();
-        } finally {
-            hideLoading(submitBtn, originalSubmitHTML);
-        }
-    };
-
-    const applyPlan = async () => {
-        const finalPlanJSON = planContentEl.dataset.rawPlan;
-        const userPrompt = planContentEl.dataset.userPrompt;
-
-        if (!finalPlanJSON) {
-            showToast('No hay un plan final para aplicar.', 'error');
-            return;
-        }
-
-        const finalPlan = JSON.parse(finalPlanJSON);
-        const directModifications = finalPlan.filter(item => item.updates);
-        const needsReorganization = finalPlan.some(item => item.action === 'reorganize');
-
-        showLoading(applyBtn, 'Aplicando...');
-        submitBtn.disabled = true;
-
-        try {
-            // --- Phase 1: Apply Direct Edits ---
-            if (directModifications.length > 0) {
-                const executeTaskModificationPlan = httpsCallable(functions, 'executeTaskModificationPlan');
-                await executeTaskModificationPlan({ plan: directModifications });
-            }
-
-            // --- Phase 2: Intelligent Reorganization ---
-            if (needsReorganization) {
-                // Fetch the latest task state *after* direct edits
-                const allTasks = await fetchAllTasks();
-                const pendingTasks = allTasks.filter(task => task.status !== 'done');
-
-                const reorganizeTasksWithAI = httpsCallable(functions, 'reorganizeTasksWithAI');
-                const reorganizationResult = await reorganizeTasksWithAI({
-                    pendingTasks: pendingTasks,
-                    userPriority: userPrompt // Pass the original prompt for context
-                });
-
-                const reorganizationPlan = reorganizationResult.data.plan;
-                if (reorganizationPlan && reorganizationPlan.length > 0) {
-                    const executeTaskModificationPlan = httpsCallable(functions, 'executeTaskModificationPlan');
-                    await executeTaskModificationPlan({ plan: reorganizationPlan });
-                }
-            }
-
-            showToast('¡Plan aplicado con éxito! Tus tareas han sido actualizadas.', 'success');
-            closeModal();
-            location.reload();
-
-        } catch (error) {
-            console.error("Error executing full plan:", error);
-            showToast(error.message || 'Error al aplicar el plan.', 'error');
-            hideLoading(applyBtn, originalApplyHTML);
-            submitBtn.disabled = false;
-        }
-    };
-
-    // Define close action
-    const closeModal = () => modalElement.remove();
-    modalElement.querySelector('[data-action="close"]').addEventListener('click', closeModal);
-    submitBtn.addEventListener('click', handleModificationRequest);
-    applyBtn.addEventListener('click', applyPlan);
 }

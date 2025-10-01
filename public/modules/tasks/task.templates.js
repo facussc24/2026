@@ -95,41 +95,6 @@ export function getKanbanBoardHTML(state, selectedUser) {
     `;
 }
 
-export function getAIAnalysisModalHTML() {
-    return `
-    <div id="ai-analysis-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in relative">
-
-            <div id="ai-applying-plan-overlay" class="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-20 hidden flex-col items-center justify-center text-center p-8">
-                <i data-lucide="loader-circle" class="w-12 h-12 animate-spin text-blue-600"></i>
-                <p class="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-200">Aplicando plan, por favor espere...</p>
-            </div>
-
-            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
-                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-3">
-                    <i data-lucide="brain-circuit" class="text-purple-600 dark:text-purple-400 h-6 w-6"></i>
-                    Análisis del Planificador IA
-                </h3>
-                <button data-action="close" class="text-slate-500 hover:text-slate-800 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><i data-lucide="x" class="h-6 w-6"></i></button>
-            </div>
-            <div id="ai-analysis-content" class="p-6 overflow-y-auto prose dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-1">
-                <div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
-                    <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
-                    <p>Analizando tareas y generando plan...</p>
-                </div>
-            </div>
-            <div class="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 flex justify-end items-center gap-3">
-                 <button data-action="close" class="bg-slate-200 text-slate-800 px-5 py-2 rounded-md hover:bg-slate-300 font-semibold">Cerrar</button>
-                 <button id="apply-ai-plan-btn" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold flex items-center gap-2" disabled>
-                    <i data-lucide="check-check" class="w-5 h-5"></i>
-                    Aplicar Plan Sugerido
-                </button>
-            </div>
-        </div>
-    </div>
-    `;
-}
-
 export function getAIAssistantModalHTML() {
     // This is the main shell for the new multi-step AI assistant modal.
     // Content will be injected into #ai-assistant-view-container.
@@ -1043,114 +1008,6 @@ export function getTasksModalHTML(title) {
     `;
 }
 
-export function getWeekOrganizerModalHTML() {
-    return `
-    <div id="week-organizer-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col m-4 animate-scale-in">
-            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
-                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                    <i data-lucide="wand-2" class="w-6 h-6 text-teal-500"></i>
-                    Asistente de Tareas Inteligente
-                </h3>
-                <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                    <i data-lucide="x" class="h-6 w-6"></i>
-                </button>
-            </div>
-            <div class="p-6 flex-grow grid grid-cols-1 gap-6 overflow-y-auto">
-                <!-- Proposed Plan Section -->
-                <div id="organizer-plan-view" class="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Propuesta de la IA</h4>
-                    <div id="ai-week-plan-content" class="text-sm prose dark:prose-invert max-w-none">
-                        <div class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 text-center">
-                            <i data-lucide="loader-circle" class="w-10 h-10 mb-2 animate-spin"></i>
-                            <p>Analizando tu semana y generando una propuesta...</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- User Feedback Section -->
-                <div id="organizer-feedback-view" class="flex flex-col">
-                    <h4 class="text-lg font-bold text-slate-800 dark:text-slate-200 mb-3">Indica los cambios que quieres hacer</h4>
-                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                        El asistente puede actualizar el estado, fechas o títulos de tus tareas. También puedes pedirle que re-organice lo que queda pendiente.
-                    </p>
-                    <textarea id="organizer-prompt-textarea" class="w-full h-full flex-grow bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-teal-500" placeholder="Ej: Hoy terminé la tarea de 'Revisar Planos'. La de llamar al proveedor de acero es para mañana. Con eso, reorganiza mis tareas pendientes."></textarea>
-                </div>
-            </div>
-            <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
-                <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
-                <button id="organizer-submit-btn" type="button" class="bg-teal-600 text-white px-5 py-2 rounded-md hover:bg-teal-700 font-semibold transition-colors flex items-center gap-2">
-                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-                    Generar Propuesta
-                </button>
-                 <button id="organizer-apply-plan-btn" type="button" class="bg-blue-600 text-white px-5 py-2 rounded-md hover:bg-blue-700 font-semibold transition-colors flex items-center gap-2">
-                    <i data-lucide="check-check" class="w-5 h-5"></i>
-                    Aplicar este Plan
-                </button>
-            </div>
-        </div>
-    </div>
-    `;
-}
-
-export function getAIModificationPlanHTML(plan, suggestions = []) {
-    if (!plan || plan.length === 0) {
-        return '<p class="text-center text-slate-500">La IA no sugirió ninguna acción.</p>';
-    }
-
-    const modificationItems = plan.filter(item => item.updates).map(item => {
-        const { originalTitle, updates } = item;
-        let actionText = '';
-        if (updates.status === 'done') {
-            actionText = `<span class="font-bold text-green-600">Marcar como completada:</span> "${originalTitle}"`;
-        } else if (updates.dueDate) {
-            const date = new Date(updates.dueDate + 'T00:00:00').toLocaleDateString('es-AR');
-            actionText = `<span class="font-bold text-blue-600">Cambiar fecha a ${date}:</span> "${originalTitle}"`;
-        } else if (updates.title) {
-            actionText = `<span class="font-bold text-orange-600">Renombrar:</span> "${originalTitle}" a "${updates.title}"`;
-        } else if (updates.plannedDate) {
-             const date = new Date(updates.plannedDate + 'T00:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' });
-             actionText = `<span class="font-bold text-blue-600">Planificar para el ${date}:</span> "${originalTitle}"`;
-        } else {
-            actionText = `Acción desconocida para: "${originalTitle}"`;
-        }
-        return `<li class="flex items-start gap-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-md">
-                    <i data-lucide="check" class="w-5 h-5 text-green-500 mt-1"></i>
-                    <span class="text-slate-700 dark:text-slate-300">${actionText}</span>
-                </li>`;
-    }).join('');
-
-    const reorganizeItem = plan.find(item => item.action === 'reorganize');
-    const reorganizeHTML = reorganizeItem ? `
-        <li class="flex items-start gap-3 p-3 bg-slate-100 dark:bg-slate-800 rounded-md">
-            <i data-lucide="refresh-cw" class="w-5 h-5 text-purple-500 mt-1"></i>
-            <span class="text-slate-700 dark:text-slate-300"><span class="font-bold text-purple-600">Re-organizar</span> las tareas pendientes restantes.</span>
-        </li>` : '';
-
-    let suggestionsHTML = '';
-    if (suggestions && suggestions.length > 0) {
-        suggestionsHTML = `
-            <div class="mt-6">
-                <h5 class="text-base font-bold text-yellow-600 dark:text-yellow-400 mb-2 flex items-center gap-2">
-                    <i data-lucide="lightbulb" class="w-5 h-5"></i>
-                    Consejos del Asistente
-                </h5>
-                <ul class="space-y-2 text-sm">
-                    ${suggestions.map(s => `<li class="p-3 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 rounded-r-md text-yellow-800 dark:text-yellow-200">${s}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    }
-
-    return `
-        <h4 class="text-base font-bold text-slate-800 dark:text-slate-200 mb-3">Plan de Acción Propuesto</h4>
-        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Revisa las acciones que el asistente propone. Si estás de acuerdo, haz clic en "Aplicar este Plan".</p>
-        <ul class="space-y-3">
-            ${modificationItems}
-            ${reorganizeHTML}
-        </ul>
-        ${suggestionsHTML}
-    `;
-}
 
 export function getDashboardLayoutHTML() {
     return `
@@ -1164,13 +1021,9 @@ export function getDashboardLayoutHTML() {
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <button id="ai-assistant-btn" class="btn btn-secondary flex items-center gap-2">
+                <button id="ai-assistant-btn" class="btn btn-primary flex items-center gap-2">
                     <i data-lucide="sparkles" class="w-4 h-4"></i>
-                    <span>Crear con Gemini</span>
-                </button>
-                <button id="open-week-organizer-btn" class="btn btn-secondary flex items-center gap-2">
-                    <i data-lucide="wand-2" class="w-4 h-4"></i>
-                    <span>✨ Organizar mi Semana</span>
+                    <span>Asistente IA</span>
                 </button>
                 <button id="export-tasks-btn" class="btn btn-primary flex items-center gap-2">
                     <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
