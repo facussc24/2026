@@ -497,10 +497,8 @@ export async function openAIAssistantModal() {
                 return;
             }
 
-            viewContainer.innerHTML = getAIAssistantLoadingViewHTML();
+            viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Generando plan con IA...');
             lucide.createIcons();
-            const thinkingStepsContainer = viewContainer.querySelector('#thinking-steps-container');
-
 
             try {
                 // This is a trick to get the result while showing the thinking process
