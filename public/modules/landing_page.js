@@ -81,14 +81,13 @@ function renderLandingPageHTML() {
                         <div class="flex items-center gap-2">
                              <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
                             <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
-                            <button id="organize-week-btn" class="bg-teal-500 text-white px-5 py-2.5 rounded-full hover:bg-teal-600 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="wand-2" class="mr-2 h-5 w-5"></i>Organizar mi Semana</button>
-                            <button id="gemini-create-task-btn" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
+                            <button id="ai-assistant-btn" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
                                 <span class="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-600 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></span>
                                 <span class="relative flex items-center">
-                                    <i data-lucide="sparkles" class="mr-2 h-5 w-5"></i>Crear con Gemini
+                                    <i data-lucide="bot" class="mr-2 h-5 w-5"></i>Asistente de IA
                                 </span>
                             </button>
-                            <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea</button>
+                            <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea Manual</button>
                         </div>
                     </div>
                      <div id="priority-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
@@ -137,7 +136,7 @@ function getWeekDateRange(returnFullWeek = false) {
     return { start: format(monday), end: format(friday) };
 }
 
-function renderTaskCardsHTML(tasks, isSuggestion = false) {
+function renderTaskCardsHTML(tasks) {
     if (!tasks || tasks.length === 0) {
         return `<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>`;
     }
@@ -148,19 +147,8 @@ function renderTaskCardsHTML(tasks, isSuggestion = false) {
         const style = priorityStyles[task.priority || 'medium'];
         const canDrag = appState.currentUser.role === 'admin' || appState.currentUser.uid === task.assigneeUid;
         const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
-
-        let actionButtonsHTML = '';
-        const suggestionClass = isSuggestion ? 'task-suggested border-dashed' : 'border-solid';
-
-        if (isSuggestion) {
-            actionButtonsHTML = `
-                <button data-action="reject-suggestion" title="Rechazar Sugerencia" class="suggestion-btn p-1 rounded-full bg-red-100 text-red-600 hover:bg-red-200"><i data-lucide="x" class="w-3.5 h-3.5 pointer-events-none"></i></button>
-                <button data-action="accept-suggestion" title="Aceptar Sugerencia" class="suggestion-btn p-1 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><i data-lucide="check" class="w-3.5 h-3.5 pointer-events-none"></i></button>
-            `;
-        } else {
-            const canComplete = canDrag || appState.currentUser.uid === task.creatorUid;
-            actionButtonsHTML = canComplete ? `<button data-action="complete-task" title="Marcar como completada" class="complete-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><i data-lucide="check" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
-        }
+        const canComplete = canDrag || appState.currentUser.uid === task.creatorUid;
+        const completeButton = canComplete ? `<button data-action="complete-task" title="Marcar como completada" class="complete-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><i data-lucide="check" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -182,11 +170,11 @@ function renderTaskCardsHTML(tasks, isSuggestion = false) {
         const effortIcon = effortInfo ? `<span title="Esfuerzo: ${effortInfo.label}"><i data-lucide="${effortInfo.icon}" class="w-4 h-4 text-slate-500 dark:text-slate-400"></i></span>` : '';
 
         return `
-            <div class="task-card-compact group border ${suggestionClass} bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}" data-task-id="${task.docId}" data-assignee-uid="${task.assigneeUid}">
+            <div class="task-card-compact group border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}" data-task-id="${task.docId}" data-assignee-uid="${task.assigneeUid}">
                 <div class="flex items-start justify-between"><p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p><span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style}" title="Prioridad: ${task.priority}"></span></div>
                 ${datesHTML}
                 <div class="flex items-end justify-between mt-1">
-                    <div class="flex items-center gap-2">${actionButtonsHTML}${effortIcon}</div>
+                    <div class="flex items-center gap-2">${completeButton}${effortIcon}</div>
                     <span class="text-right text-[11px] text-slate-500 dark:text-slate-400">${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
                 </div>
             </div>`;
@@ -234,8 +222,8 @@ function renderWeeklyTasks(tasks) {
         const titleWithDate = `${dayName} <span class="text-sm font-normal text-slate-400 dark:text-slate-500">${date.getDate()}/${date.getMonth() + 1}</span>`;
         return renderTaskColumn(titleWithDate, tasksByDay[`day${index}`] || [], { 'data-date': dateForColumn });
     }).join('');
-    dayColumnsHTML += renderTaskColumn('Semana Siguiente', nextWeekTasks, { 'data-column-type': 'next-week' }, true); // Treat as suggestions
-    dayColumnsHTML += renderTaskColumn('Próxima Semana', followingWeekTasks, { 'data-column-type': 'following-week' }, true); // Treat as suggestions
+    dayColumnsHTML += renderTaskColumn('Semana Siguiente', nextWeekTasks, { 'data-column-type': 'next-week' });
+    dayColumnsHTML += renderTaskColumn('Próxima Semana', followingWeekTasks, { 'data-column-type': 'following-week' });
 
     weeklyContainer.innerHTML = dayColumnsHTML;
     overdueContainer.innerHTML = renderTaskCardsHTML(overdueTasks);
@@ -244,7 +232,7 @@ function renderWeeklyTasks(tasks) {
     initWeeklyTasksSortable();
 }
 
-function renderTaskColumn(title, tasks, attributes, isSuggestion = false) {
+function renderTaskColumn(title, tasks, attributes) {
     const TASK_LIMIT = 4;
     const totalTasks = tasks.length;
     let taskCardsHTML;
@@ -258,7 +246,7 @@ function renderTaskColumn(title, tasks, attributes, isSuggestion = false) {
 
     if (totalTasks > TASK_LIMIT) {
         const visibleTasks = tasks.slice(0, TASK_LIMIT);
-        taskCardsHTML = renderTaskCardsHTML(visibleTasks, isSuggestion);
+        taskCardsHTML = renderTaskCardsHTML(visibleTasks);
 
         const remainingCount = totalTasks - TASK_LIMIT;
         viewMoreButtonHTML = `
@@ -268,7 +256,7 @@ function renderTaskColumn(title, tasks, attributes, isSuggestion = false) {
         `;
 
     } else {
-        taskCardsHTML = renderTaskCardsHTML(tasks, isSuggestion);
+        taskCardsHTML = renderTaskCardsHTML(tasks);
     }
 
     const attrs = Object.entries(attributes).map(([key, value]) => `${key}="${value}"`).join(' ');
@@ -377,17 +365,12 @@ function updateKpiCards(kpiData) {
 
 function setupActionButtons() {
     document.getElementById('show-planner-help-btn')?.addEventListener('click', () => showPlannerHelpModal());
-    document.getElementById('gemini-create-task-btn')?.addEventListener('click', () => {
+    document.getElementById('ai-assistant-btn')?.addEventListener('click', () => {
         if (openAIAssistantModal) {
             openAIAssistantModal();
         } else {
             showToast('El Asistente IA no está disponible.', 'error');
         }
-    });
-
-    document.getElementById('organize-week-btn')?.addEventListener('click', () => {
-        showToast('Generando nuevo plan semanal con IA...', 'info');
-        refreshWeeklyTasksView();
     });
 
     document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', () => openTaskFormModal(null, 'todo'));
@@ -423,45 +406,17 @@ async function refreshWeeklyTasksView(direction = 'next') {
     const weekInfo = getWeekInfo(appState.weekOffset);
     const weekDisplay = document.getElementById('week-display');
     if (weekDisplay) weekDisplay.textContent = `Semana ${weekInfo.weekNumber} - ${weekInfo.monthName} ${weekInfo.year}`;
-
     const container = document.getElementById('weekly-tasks-container');
     if (!container) return;
-
     const slideOutClass = direction === 'next' ? 'slide-out-left' : 'slide-out-right';
     const slideInClass = direction === 'next' ? 'slide-in-right' : 'slide-in-left';
-
     container.classList.add(slideOutClass);
-
-    const onAnimationEnd = async () => {
+    container.addEventListener('animationend', async function onAnimationEnd() {
         container.removeEventListener('animationend', onAnimationEnd);
         try {
-            // 1. Fetch all pending tasks
-            const allPendingTasks = await fetchWeeklyTasks();
-
-            // 2. Get AI suggestions for these tasks
-            const reorganizeTasksWithAI = httpsCallable(functions, 'reorganizeTasksWithAI');
-            const result = await reorganizeTasksWithAI({ pendingTasks: allPendingTasks });
-            const suggestions = result.data.suggestions || [];
-
-            const suggestionMap = new Map(suggestions.map(s => [s.taskId, s.suggestedDate]));
-
-            // 3. Merge AI suggestions into task data
-            const tasksToRender = allPendingTasks.map(task => {
-                if (suggestionMap.has(task.docId)) {
-                    // This is a suggestion, not a confirmed plan
-                    return {
-                        ...task,
-                        isSuggestion: true,
-                        plannedDate: suggestionMap.get(task.docId) // Use suggested date for placement
-                    };
-                }
-                // This is a task with a user-confirmed plannedDate
-                return { ...task, isSuggestion: false };
-            });
-
-            weeklyTasksCache = tasksToRender; // Update cache
-            renderWeeklyTasks(tasksToRender);
-
+            const tasks = await fetchWeeklyTasks();
+            weeklyTasksCache = tasks;
+            renderWeeklyTasks(tasks);
             const newContainer = document.getElementById('weekly-tasks-container');
             if (newContainer) {
                 newContainer.classList.remove(slideOutClass);
@@ -470,15 +425,11 @@ async function refreshWeeklyTasksView(direction = 'next') {
             }
         } catch (error) {
             console.error("Error refreshing weekly tasks view:", error);
-            showToast('Error al obtener la planificación de la IA.', 'error');
-            container.innerHTML = `<p class="text-red-500 text-center col-span-7">Error al cargar el planificador.</p>`;
+            showToast('Error al actualizar la vista de tareas.', 'error');
             container.classList.remove(slideOutClass, slideInClass);
         }
-    };
-
-    container.addEventListener('animationend', onAnimationEnd, { once: true });
+    }, { once: true });
 }
-
 
 export async function runLandingPageLogic() {
     appState.weekOffset = 0;
@@ -486,7 +437,7 @@ export async function runLandingPageLogic() {
     try {
         const kpiData = await fetchKpiData();
         updateKpiCards(kpiData);
-        await refreshWeeklyTasksView('next'); // Use 'next' to get the initial slide-in effect
+        await refreshWeeklyTasksView();
     } catch (error) {
         console.error("Error loading landing page data:", error);
         showToast("Error al cargar los datos del dashboard.", "error");
@@ -498,61 +449,35 @@ export async function runLandingPageLogic() {
     if (!landingPageContainer) return;
 
     landingPageContainer.addEventListener('click', async (e) => {
-        const target = e.target;
-        const completeBtn = target.closest('[data-action="complete-task"]');
-        const acceptBtn = target.closest('[data-action="accept-suggestion"]');
-        const rejectBtn = target.closest('[data-action="reject-suggestion"]');
-
+        const completeBtn = e.target.closest('[data-action="complete-task"]');
         if (completeBtn) {
             const taskCard = completeBtn.closest('.task-card-compact');
             if (taskCard) {
-                e.stopPropagation();
+                e.stopPropagation(); // Prevent other listeners from firing (like the one to open the modal)
                 const taskId = taskCard.dataset.taskId;
                 if (taskId) {
                     try {
+                        // Optimistically update the UI
                         taskCard.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
                         taskCard.style.opacity = '0';
                         taskCard.style.transform = 'scale(0.95)';
+
                         await completeAndArchiveTask(taskId);
                         showToast('Tarea completada y archivada.', 'success');
-                        setTimeout(() => refreshWeeklyTasksView(), 300);
+
+                        // Wait for animation to finish before refreshing the data
+                        setTimeout(() => {
+                            refreshWeeklyTasksView();
+                        }, 300);
+
                     } catch (error) {
                         console.error('Error completing task:', error);
                         showToast('Error al completar la tarea.', 'error');
+                        // Restore card if the backend call fails
                         taskCard.style.opacity = '1';
                         taskCard.style.transform = 'scale(1)';
                     }
                 }
-            }
-        } else if (acceptBtn) {
-            const taskCard = acceptBtn.closest('.task-card-compact');
-            const column = taskCard.closest('.task-list');
-            if (taskCard && column && column.dataset.date) {
-                e.stopPropagation();
-                const taskId = taskCard.dataset.taskId;
-                const plannedDate = column.dataset.date;
-                try {
-                    acceptBtn.innerHTML = `<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i>`;
-                    lucide.createIcons();
-                    await updateDoc(doc(db, COLLECTIONS.TAREAS, taskId), { plannedDate });
-                    showToast('Sugerencia aceptada.', 'success');
-                    taskCard.classList.remove('task-suggested', 'border-dashed');
-                    taskCard.classList.add('border-solid');
-                    refreshWeeklyTasksView(); // Refresh to show the task as confirmed
-                } catch (error) {
-                    console.error('Error accepting suggestion:', error);
-                    showToast('Error al aceptar la sugerencia.', 'error');
-                }
-            }
-        } else if (rejectBtn) {
-            const taskCard = rejectBtn.closest('.task-card-compact');
-            if (taskCard) {
-                e.stopPropagation();
-                taskCard.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-                taskCard.style.opacity = '0';
-                taskCard.style.transform = 'scale(0.95)';
-                showToast('Sugerencia rechazada.', 'info');
-                setTimeout(() => taskCard.remove(), 300);
             }
         }
     });
