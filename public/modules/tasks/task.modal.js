@@ -14,8 +14,8 @@ import {
     getMultiTaskConfirmationHTML,
     getAIAssistantModalHTML,
     getAIAssistantPromptViewHTML,
-    getAILoadingViewHTML,
-    getAIReviewViewHTML,
+    getAIAssistantLoadingViewHTML,
+    getAIAssistantReviewViewHTML,
     getWeekOrganizerModalHTML,
     getAIModificationPlanHTML
 } from './task.templates.js';
