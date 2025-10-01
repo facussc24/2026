@@ -250,7 +250,7 @@ export function getAIAssistantReviewViewHTML(plan) {
                 <i data-lucide="x" class="h-6 w-6"></i>
             </button>
         </div>
-        <div class="p-6 flex-grow overflow-y-auto custom-scrollbar">
+        <div class="p-6 flex-grow min-h-0 overflow-y-auto custom-scrollbar">
             <!-- Accordion for Thought Process -->
             <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg mb-6">
                 <button id="thought-process-accordion-btn" class="w-full flex justify-between items-center p-4 font-bold text-slate-700 dark:text-slate-300">

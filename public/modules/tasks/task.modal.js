@@ -519,8 +519,9 @@ export async function openAIAssistantModal() {
                 const getPlanFn = httpsCallable(functions, 'getAIAssistantPlan');
                 const allTasks = await fetchAllTasks();
                 const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
+                const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
-                const result = await getPlanFn({ userPrompt, tasks: userTasks });
+                const result = await getPlanFn({ userPrompt, tasks: userTasks, currentDate });
 
                 const plan = { ...result.data, userPrompt };
 
