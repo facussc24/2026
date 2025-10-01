@@ -194,45 +194,45 @@ export function getAIAssistantReviewViewHTML(plan) {
         let icon, title, details;
         switch (action.action) {
             case 'CREATE':
-                const dueDate = action.task.dueDate ? new Date(action.task.dueDate + 'T00:00:00').toLocaleDateString('es-AR') : 'No especificada';
-                icon = `<div class="w-10 h-10 flex-shrink-0 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
-                            <i data-lucide="plus-circle" class="w-6 h-6 text-green-600 dark:text-green-400"></i>
+                const dueDate = action.task.dueDate ? new Date(action.task.dueDate + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'No especificada';
+                icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center shadow-inner">
+                            <i data-lucide="plus" class="w-7 h-7 text-green-600 dark:text-green-400"></i>
                         </div>`;
-                title = `<p class="font-bold text-slate-800 dark:text-slate-200">Crear Nueva Tarea</p>`;
-                details = `<div class="text-xs text-slate-600 dark:text-slate-400 mt-1 space-y-1">
-                               <p><strong class="font-semibold">Título:</strong> ${action.task.title}</p>
-                               <p><strong class="font-semibold">Vence:</strong> ${dueDate}</p>
+                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Crear Nueva Tarea</p>`;
+                details = `<div class="text-sm text-slate-600 dark:text-slate-300 mt-2">
+                               <p>"${action.task.title}"</p>
+                               <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Vence: ${dueDate}</p>
                            </div>`;
                 break;
             case 'UPDATE':
                 let updateText = '';
                 if (action.updates.status === 'done') {
-                    updateText = `<span class="font-bold text-blue-600 dark:text-blue-400">Marcar como Completada</span>`;
+                    updateText = `Marcar la tarea como <span class="font-bold text-blue-600 dark:text-blue-400">Completada</span>.`;
                 } else if (action.updates.dueDate) {
-                    const newDueDate = new Date(action.updates.dueDate + 'T00:00:00').toLocaleDateString('es-AR');
-                    updateText = `<span class="font-bold text-blue-600 dark:text-blue-400">Cambiar Fecha a ${newDueDate}</span>`;
+                    const newDueDate = new Date(action.updates.dueDate + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    updateText = `Cambiar la fecha de vencimiento a <span class="font-bold text-blue-600 dark:text-blue-400">${newDueDate}</span>.`;
                 } else {
                      const updatedField = Object.keys(action.updates)[0];
                      const updatedValue = action.updates[updatedField];
-                     updateText = `<span class="font-bold text-blue-600 dark:text-blue-400">Actualizar</span> ${updatedField} a "${updatedValue}"`;
+                     updateText = `Actualizar el campo <span class="font-semibold">${updatedField}</span> a "${updatedValue}".`;
                 }
-                 icon = `<div class="w-10 h-10 flex-shrink-0 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
-                            <i data-lucide="edit" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i>
+                 icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shadow-inner">
+                            <i data-lucide="edit-3" class="w-7 h-7 text-blue-600 dark:text-blue-400"></i>
                         </div>`;
-                title = `<p class="font-bold text-slate-800 dark:text-slate-200">Actualizar Tarea</p>`;
-                details = `<div class="text-xs text-slate-600 dark:text-slate-400 mt-1 space-y-1">
+                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Actualizar Tarea</p>`;
+                details = `<div class="text-sm text-slate-600 dark:text-slate-300 mt-2">
                               <p>${updateText}</p>
-                              <p class="text-slate-500 italic">para la tarea: "${action.originalTitle}"</p>
+                              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">Tarea original: "${action.originalTitle}"</p>
                            </div>`;
                 break;
             default:
-                 icon = `<div class="w-10 h-10 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-900/50 flex items-center justify-center">
-                            <i data-lucide="alert-circle" class="w-6 h-6 text-gray-600 dark:text-gray-400"></i>
+                 icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-gray-100 dark:bg-gray-900/50 flex items-center justify-center shadow-inner">
+                            <i data-lucide="alert-circle" class="w-7 h-7 text-gray-600 dark:text-gray-400"></i>
                         </div>`;
-                title = `<p class="font-bold text-slate-800 dark:text-slate-200">Acción Desconocida</p>`;
-                details = `<p class="text-xs text-slate-500">${action.action}</p>`;
+                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Acción Desconocida</p>`;
+                details = `<p class="text-sm text-slate-500">${action.action}</p>`;
         }
-         return `<div class="flex items-start gap-3 p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
+         return `<div class="flex items-center gap-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
                     ${icon}
                     <div class="flex-grow">${title}${details}</div>
                 </div>`;
@@ -250,18 +250,22 @@ export function getAIAssistantReviewViewHTML(plan) {
                 <i data-lucide="x" class="h-6 w-6"></i>
             </button>
         </div>
-        <div class="p-6 flex-grow grid grid-cols-1 md:grid-cols-2 gap-6 overflow-hidden">
-            <!-- Thought Process Column -->
-            <div class="flex flex-col h-full overflow-hidden bg-white dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                <h4 class="font-bold text-slate-700 dark:text-slate-300 flex-shrink-0 mb-2">Proceso de Pensamiento:</h4>
-                <div class="prose prose-sm dark:prose-invert max-w-none flex-grow overflow-y-auto custom-scrollbar pr-2">
+        <div class="p-6 flex-grow overflow-y-auto custom-scrollbar">
+            <!-- Accordion for Thought Process -->
+            <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg mb-6">
+                <button id="thought-process-accordion-btn" class="w-full flex justify-between items-center p-4 font-bold text-slate-700 dark:text-slate-300">
+                    <span>Proceso de Pensamiento de la IA</span>
+                    <i data-lucide="chevron-down" class="transition-transform"></i>
+                </button>
+                <div id="thought-process-content" class="prose prose-sm dark:prose-invert max-w-none p-4 pt-0" style="display: none;">
                     ${marked.parse(thoughtProcess)}
                 </div>
             </div>
-            <!-- Execution Plan Column -->
-            <div class="flex flex-col h-full overflow-hidden bg-white dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-2 flex-shrink-0">Plan de Ejecución:</h4>
-                <div class="space-y-3 flex-grow overflow-y-auto custom-scrollbar pr-2">
+
+            <!-- Execution Plan -->
+            <div>
+                <h4 class="font-bold text-slate-800 dark:text-slate-200 mb-3 text-lg">Plan de Ejecución Propuesto</h4>
+                <div class="space-y-4">
                     ${actionsHTML || '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
                 </div>
             </div>

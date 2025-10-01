@@ -446,6 +446,19 @@ export async function openAIAssistantModal() {
         viewContainer.innerHTML = getAIAssistantReviewViewHTML(plan);
         lucide.createIcons();
 
+        // Set up accordion for thought process
+        const accordionBtn = viewContainer.querySelector('#thought-process-accordion-btn');
+        if (accordionBtn) {
+            accordionBtn.addEventListener('click', function() {
+                const content = viewContainer.querySelector('#thought-process-content');
+                const icon = this.querySelector('i');
+                const isHidden = content.style.display === 'none' || content.style.display === '';
+
+                content.style.display = isHidden ? 'block' : 'none';
+                icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+            });
+        }
+
         viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
         viewContainer.querySelector('#ai-reject-plan-btn').addEventListener('click', () => renderPromptView(plan.userPrompt));
 
