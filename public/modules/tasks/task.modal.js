@@ -430,114 +430,101 @@ export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAs
 }
 
 export async function openAIAssistantModal() {
-    dom.modalContainer.innerHTML = getAIAssistantBaseHTML();
-    const modalContent = document.getElementById('ai-assistant-content');
+    // Render the modal shell
+    dom.modalContainer.innerHTML = getAIAssistantModalHTML();
+    const modalElement = document.getElementById('ai-assistant-modal');
+    const viewContainer = document.getElementById('ai-assistant-view-container');
+    let currentPlan = null; // To store the plan between views
 
-    const closeModal = () => {
-        const modal = document.getElementById('ai-assistant-modal');
-        if (modal) modal.remove();
-    };
+    const closeModal = () => modalElement?.remove();
 
-    const renderStep1_Prompt = () => {
-        modalContent.innerHTML = getAIAssistant_Step1_Prompt_HTML();
-        lucide.createIcons();
-        modalContent.querySelector('[data-action="close"]').addEventListener('click', closeModal);
-        modalContent.querySelector('#ai-submit-prompt-btn').addEventListener('click', handlePromptSubmit);
-        modalContent.querySelector('#ai-prompt-textarea').focus();
-    };
-
-    const handlePromptSubmit = async () => {
-        const promptText = modalContent.querySelector('#ai-prompt-textarea').value.trim();
-        if (!promptText) {
-            showToast('Por favor, describe tu petición.', 'warning');
-            return;
-        }
-        renderStep2_Thinking(promptText);
-    };
-
-    const renderStep2_Thinking = async (promptText) => {
-        modalContent.innerHTML = getAIAssistant_Step2_Thinking_HTML();
+    // --- Step 3: Review and Execute ---
+    const renderReviewView = (plan) => {
+        currentPlan = plan; // Store the plan
+        viewContainer.innerHTML = getAIAssistantReviewViewHTML(plan);
         lucide.createIcons();
 
-        try {
-            const allTasks = await fetchAllTasks();
-            const getAIAssistantPlan = httpsCallable(getFunctions(), 'getAIAssistantPlan');
-            const result = await getAIAssistantPlan({ userPrompt: promptText, tasks: allTasks });
-            const { thoughtProcess, plan } = result.data;
-            renderStep3_Review(plan, thoughtProcess);
-        } catch (error) {
-            console.error("Error calling getAIAssistantPlan:", error);
-            showToast(error.message || 'Error al comunicarse con el asistente de IA.', 'error');
-            renderStep1_Prompt();
-        }
-    };
+        viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+        viewContainer.querySelector('#ai-reject-plan-btn').addEventListener('click', () => renderPromptView(plan.userPrompt));
 
-    const renderStep3_Review = (plan, thoughtProcess) => {
-        modalContent.innerHTML = getAIAssistant_Step3_Review_HTML(plan, thoughtProcess);
-        lucide.createIcons();
+        const confirmBtn = viewContainer.querySelector('#ai-confirm-plan-btn');
+        confirmBtn.addEventListener('click', async () => {
+            if (!currentPlan || !currentPlan.executionPlan) {
+                showToast('No hay un plan válido para ejecutar.', 'error');
+                return;
+            }
 
-        modalContent.querySelector('[data-action="close"]').addEventListener('click', closeModal);
-        modalContent.querySelector('#ai-reject-plan-btn').addEventListener('click', renderStep1_Prompt);
-
-        modalContent.querySelector('#ai-confirm-plan-btn').addEventListener('click', async () => {
-            const confirmBtn = modalContent.querySelector('#ai-confirm-plan-btn');
-            confirmBtn.disabled = true;
-            confirmBtn.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5"></i> Aplicando...';
+            viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Ejecutando el plan...');
             lucide.createIcons();
 
             try {
-                const finalPlan = [];
-                const actionItems = modalContent.querySelectorAll('.action-item');
+                const functions = getFunctions();
+                const executePlanFn = httpsCallable(functions, 'executeTaskModificationPlan');
+                const result = await executePlanFn({ plan: currentPlan.executionPlan });
 
-                actionItems.forEach(item => {
-                    const actionType = item.dataset.actionType;
-                    const originalPlanItem = plan[parseInt(item.dataset.index, 10)];
-
-                    if (actionType === 'CREATE') {
-                        const title = item.querySelector('[data-field="title"]').value;
-                        const description = item.querySelector('[data-field="description"]').value;
-                        const dueDate = item.querySelector('[data-field="dueDate"]').value || null;
-                        if (title) {
-                            finalPlan.push({ action: 'CREATE', task: { title, description, dueDate } });
-                        }
-                    } else if (actionType === 'UPDATE') {
-                        const docId = item.dataset.docId;
-                        const input = item.querySelector('.input-field');
-                        if (input) { // If there's an input, it's an editable field
-                            const field = input.dataset.field;
-                            const value = input.value;
-                            finalPlan.push({ action: 'UPDATE', docId, updates: { [field]: value }, originalTitle: originalPlanItem.originalTitle });
-                        } else { // It's a non-editable action like "mark as done"
-                            finalPlan.push(originalPlanItem);
-                        }
-                    } else if (actionType === 'REORGANIZE') {
-                        finalPlan.push(originalPlanItem);
-                    }
-                });
-
-                if (finalPlan.length > 0) {
-                    const executePlan = httpsCallable(getFunctions(), 'executeTaskModificationPlan');
-                    await executePlan({ plan: finalPlan });
-                    showToast('¡Plan aplicado con éxito!', 'success');
-                } else {
-                    showToast('No hay acciones para aplicar.', 'info');
-                }
-
+                showToast(result.data.message || 'Plan ejecutado con éxito!', 'success');
                 closeModal();
-                location.reload();
+                // A simple reload is sufficient to show the changes in the UI
+                setTimeout(() => location.reload(), 500);
+
             } catch (error) {
                 console.error("Error executing AI plan:", error);
-                showToast(error.message || 'Error al aplicar el plan.', 'error');
-                confirmBtn.disabled = false;
-                confirmBtn.innerHTML = '<i data-lucide="check-check" class="w-5 h-5"></i> Aplicar Cambios';
-                lucide.createIcons();
+                showToast(error.message || 'Error al ejecutar el plan.', 'error');
+                // Go back to the review view on failure
+                renderReviewView(currentPlan);
             }
         });
     };
 
+    // --- Step 1: Prompt a.k.a. "The First Screen" ---
+    const renderPromptView = (promptText = '') => {
+        viewContainer.innerHTML = getAIAssistantPromptViewHTML();
+        lucide.createIcons();
 
-    // Initial Render
-    renderStep1_Prompt();
+        const promptTextarea = viewContainer.querySelector('#ai-assistant-prompt-input');
+        promptTextarea.value = promptText;
+        promptTextarea.focus();
+
+        viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+
+        const generateBtn = viewContainer.querySelector('#ai-generate-plan-btn');
+        generateBtn.addEventListener('click', async () => {
+            const userPrompt = promptTextarea.value.trim();
+            if (!userPrompt) {
+                showToast('Por favor, describe tu petición al asistente.', 'warning');
+                return;
+            }
+
+            viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Generando plan...');
+            lucide.createIcons();
+
+            try {
+                const allTasks = await fetchAllTasks();
+                const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
+
+                const functions = getFunctions();
+                const getPlanFn = httpsCallable(functions, 'getAIAssistantPlan');
+                const result = await getPlanFn({ userPrompt, tasks: userTasks });
+
+                const plan = { ...result.data, userPrompt };
+
+                if (!plan.thoughtProcess || !plan.executionPlan) {
+                    throw new Error("La IA devolvió un plan con un formato inesperado.");
+                }
+
+                renderReviewView(plan);
+
+            } catch (error) {
+                console.error("Error calling getAIAssistantPlan:", error);
+                showToast(error.message || 'Ocurrió un error al contactar al Asistente IA.', 'error');
+                // Go back to prompt view on failure, preserving the text
+                renderPromptView(userPrompt);
+            }
+        });
+    };
+
+    // Initial render
+    renderPromptView();
 }
 
 

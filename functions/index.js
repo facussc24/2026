@@ -591,253 +591,129 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
     // ... function logic
   });
 
-exports.runAIAssistant = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
-    const { text, userTasks } = data;
-    if (!text || typeof text !== "string" || text.trim().length === 0) {
-        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'text' argument.");
-    }
-
-    const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const today = new Date();
-    const currentDate = today.toISOString().split("T")[0];
-    const userTasksString = Array.isArray(userTasks) && userTasks.length > 0
-        ? userTasks.map(task => `- ID: ${task.docId}, Título: "${task.title}", Vence: ${task.dueDate || 'N/A'}`).join('\n')
-        : "El usuario no tiene tareas relevantes en su agenda actual.";
-
-    const prompt = `
-      Actúa como un asistente experto en creación de tareas. Tu única misión es analizar la petición de un usuario y convertirla en una o más tareas en formato JSON.
-
-      **CONTEXTO:**
-      - Fecha de Hoy: ${currentDate}
-
-      **PETICIÓN DEL USUARIO:**
-      "${text}"
-
-      **PROCESO DE ANÁLISIS (SEGUIR ESTRICTAMENTE):**
-
-      **1. Identificar Tareas Individuales:**
-         - Lee la petición y determina si se refiere a una sola tarea o a múltiples tareas. Por ejemplo, "Crear tarea para revisar planos y otra para llamar al proveedor" son DOS tareas. "Hacer la presentación del cliente, que incluye investigar y armar el PowerPoint" es UNA tarea con dos subtareas.
-
-      **2. Extraer Información para CADA Tarea:**
-         - Para cada tarea identificada, extrae la siguiente información:
-           - \`title\`: Un título claro y conciso (máx 10 palabras).
-           - \`description\`: Una descripción breve si se proporciona.
-           - \`dueDate\`: La fecha límite.
-
-      **3. REGLAS DE FECHA (MUY IMPORTANTE):**
-         - **SI** el usuario especifica una fecha (ej: "mañana", "el próximo lunes", "el 15 de agosto"), conviértela a formato 'YYYY-MM-DD' y úsala para \`dueDate\`.
-         - **SI NO** se menciona ninguna fecha, el valor de \`dueDate\` DEBE SER \`null\`. No inventes ni asumas una fecha.
-
-      **4. Formato de Salida JSON (OBLIGATORIO):**
-         - Tu respuesta DEBE ser únicamente un objeto JSON.
-         - El objeto debe tener una clave \`action\` con el valor fijo "CREATE".
-         - El objeto debe tener una clave \`tasks\`, que es un array de los objetos de tarea que creaste. Cada objeto de tarea debe tener las claves: \`title\`, \`description\`, \`dueDate\`.
-         - El objeto puede tener una clave opcional \`suggestion\` con un breve comentario si hiciste alguna interpretación importante (ej: "Interpreté 'la semana que viene' como el próximo lunes.").
-
-      **REGLAS CRÍTICAS DE FORMATO:**
-      - No incluyas explicaciones, saludos, ni bloques de código markdown (\`\`\`json).
-      - La respuesta DEBE empezar con \`{\` y terminar con \`}\`.
-
-      **EJEMPLO 1: Con fecha**
-      - Petición: "crear tarea para la reunión con el cliente X mañana"
-      - Salida Esperada:
-        {
-          "action": "CREATE",
-          "tasks": [
-            {"title": "Reunión con cliente X", "description": "Preparar y asistir a la reunión con el cliente X.", "dueDate": "${new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}"}
-          ],
-          "suggestion": null
-        }
-
-      **EJEMPLO 2: Sin fecha**
-      - Petición: "Necesito revisar los planos del nuevo ensamblaje"
-      - Salida Esperada:
-        {
-          "action": "CREATE",
-          "tasks": [
-            {"title": "Revisar planos del nuevo ensamblaje", "description": "Revisar los planos detallados del nuevo ensamblaje.", "dueDate": null}
-          ],
-          "suggestion": "No se especificó una fecha, por lo que la tarea se creará sin fecha límite."
-        }
-
-      **EJEMPLO 3: Múltiples tareas**
-      - Petición: "recordar llamar a Ana el viernes y preparar el reporte de ventas"
-      - Salida Esperada:
-        {
-          "action": "CREATE",
-          "tasks": [
-            {"title": "Llamar a Ana", "description": "Llamar a Ana.", "dueDate": "YYYY-MM-DD (la fecha del próximo viernes)"},
-            {"title": "Preparar reporte de ventas", "description": "Preparar el reporte de ventas semanal.", "dueDate": null}
-          ],
-          "suggestion": "He creado dos tareas separadas como solicitaste."
-        }
-    `;
-
-    try {
-        const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
-        const responseText = result.response.candidates[0].content.parts[0].text;
-        const jsonMatch = responseText.match(/{[\s\S]*}/);
-        if (!jsonMatch) {
-            throw new Error("La IA no pudo generar un plan de acción válido.");
-        }
-        const plan = JSON.parse(jsonMatch[0]);
-        if (!plan.action || !plan.tasks) {
-            throw new Error("El plan de la IA tiene un formato incorrecto.");
-        }
-        return plan;
-    } catch (error) {
-        console.error("Error en runAIAssistant:", error);
-        throw new functions.https.HttpsError("internal", error.message || "Error al procesar la petición con la IA.");
-    }
-});
-
-exports.executeAIAssistantPlan = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
-    const { plan } = data;
-    if (!plan || !plan.action || !Array.isArray(plan.tasks)) {
-        throw new functions.https.HttpsError("invalid-argument", "El plan proporcionado es inválido.");
-    }
-
-    const db = admin.firestore();
-    const batch = db.batch();
-    const tasksRef = db.collection('tareas');
-    const userUid = context.auth.uid;
-
-    if (plan.action === 'CREATE') {
-        plan.tasks.forEach(task => {
-            const newTaskRef = tasksRef.doc();
-            batch.set(newTaskRef, {
-                title: task.title || "Tarea sin título",
-                description: task.description || "",
-                dueDate: task.dueDate, // Allow null or specific date
-                creatorUid: userUid,
-                assigneeUid: userUid, // Default to self-assigned
-                status: 'todo',
-                priority: 'medium',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            });
-        });
-    } else if (plan.action === 'UPDATE') {
-        plan.tasks.forEach(task => {
-            const taskRef = tasksRef.doc(task.id);
-            const updateData = { [task.field]: task.newValue, updatedAt: new Date() };
-            batch.update(taskRef, updateData);
-        });
-    } else {
-        throw new functions.https.HttpsError("invalid-argument", `Acción desconocida en el plan: ${plan.action}`);
-    }
-
-    try {
-        await batch.commit();
-        return { success: true, message: "Plan ejecutado con éxito." };
-    } catch (error) {
-        console.error("Error ejecutando el plan del asistente IA:", error);
-        throw new functions.https.HttpsError("internal", "No se pudo ejecutar el plan en la base de datos.");
-    }
-});
-
-exports.getTaskModificationPlan = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
+/**
+ * Interprets a user's natural language prompt to generate a structured plan for task modifications.
+ * This function is the "brain" of the AI assistant. It can understand creating, updating, and marking tasks as done.
+ * It also generates a human-readable "thought process" in Markdown.
+ */
+exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
     const { userPrompt, tasks } = data;
-    if (!userPrompt || !tasks || !Array.isArray(tasks)) {
-        throw new functions.https.HttpsError("invalid-argument", "Se requiere 'userPrompt' (string) y 'tasks' (array).");
+    if (!userPrompt || typeof userPrompt !== "string" || userPrompt.trim().length === 0) {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'userPrompt' argument.");
+    }
+    if (!tasks || !Array.isArray(tasks)) {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'tasks' (array) argument.");
     }
 
     const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const today = new Date().toISOString().split('T')[0];
-    const tasksForPrompt = tasks.map(t => ({ docId: t.docId, title: t.title, status: t.status, dueDate: t.dueDate }));
+    const today = new Date();
+    const currentDate = today.toISOString().split("T")[0];
+
+    const tasksForPrompt = tasks.map(t => ({
+        docId: t.docId,
+        title: t.title,
+        status: t.status,
+        dueDate: t.dueDate,
+    }));
 
     const prompt = `
-        Eres un asistente experto en gestión de tareas. Tu misión es analizar una petición de un usuario y un listado de sus tareas actuales para generar un plan de modificación en formato JSON.
+      Eres un asistente experto en gestión de proyectos. Tu misión es analizar la petición de un usuario y su lista de tareas para generar dos cosas:
+      1.  Un "proceso de pensamiento" en formato Markdown que explique tu razonamiento.
+      2.  Un "plan de ejecución" en formato JSON que contenga las acciones concretas a realizar.
 
-        **Contexto:**
-        - Fecha de Hoy: ${today}
-        - Tareas Actuales del Usuario:
-        \`\`\`json
-        ${JSON.stringify(tasksForPrompt, null, 2)}
-        \`\`\`
+      **Contexto:**
+      - Fecha de Hoy: ${currentDate}
+      - Tareas Actuales del Usuario:
+      \`\`\`json
+      ${JSON.stringify(tasksForPrompt, null, 2)}
+      \`\`\`
 
-        **Petición del Usuario:**
-        "${userPrompt}"
+      **Petición del Usuario:**
+      "${userPrompt}"
 
-        **PROCESO DE ANÁLISIS (SEGUIR ESTRICTAMENTE):**
+      **PROCESO DE ANÁLISIS (SEGUIR ESTRICTAMENTE):**
 
-        1.  **Identificar Intenciones:** Lee la petición del usuario para identificar las acciones que desea realizar. Las acciones posibles son:
-            *   **Completar Tarea:** El usuario indica que una tarea ya fue realizada (ej: "terminé", "ya hice", "completé").
-            *   **Cambiar Fecha:** El usuario quiere mover una tarea a una fecha específica (ej: "es para mañana", "pasa al viernes").
-            *   **Actualizar Título:** El usuario quiere renombrar una tarea.
-            *   **Reorganizar:** El usuario pide reorganizar las tareas restantes.
+      **1. Identificar Intenciones Clave:**
+         - Lee la petición para identificar las acciones principales. Las acciones pueden ser:
+           - **CREAR:** El usuario quiere una nueva tarea (ej: "crear tarea para...", "recordar...", "necesito hacer...").
+           - **ACTUALIZAR:** El usuario quiere modificar una tarea existente (ej: "cambiar fecha de...", "renombrar...", "posponer...").
+           - **COMPLETAR:** El usuario indica que una tarea ya está hecha (ej: "ya terminé...", "completé...", "lista la tarea de...").
 
-        2.  **Mapear Tareas:** Para cada intención, identifica la tarea correspondiente del listado de "Tareas Actuales" basándote en su título. Sé flexible con el matching (ej: "revisar planos" debe coincidir con "Revisar los planos del cliente X").
+      **2. Mapear Tareas Existentes:**
+         - Para intenciones de **ACTUALIZAR** o **COMPLETAR**, busca la tarea correspondiente en la lista de "Tareas Actuales". Usa el título para el matching, siendo flexible (ej: "llamar proveedor" debe coincidir con la tarea "Llamar al proveedor de acero").
 
-        3.  **Generar Plan de Modificación (JSON):**
-            *   Para cada tarea a modificar, crea un objeto con:
-                *   \`docId\`: El ID exacto de la tarea.
-                *   \`updates\`: Un objeto con los campos a cambiar (ej: \`{ "status": "done" }\`, \`{ "dueDate": "YYYY-MM-DD" }\`).
-                *   \`originalTitle\`: El título original de la tarea.
+      **3. Generar el Proceso de Pensamiento (Markdown):**
+         - Escribe un resumen en Markdown de lo que entendiste y lo que planeas hacer.
+         - Usa listas con viñetas para cada acción.
+         - Sé claro y conciso. Por ejemplo:
+           *   "Entendido. Voy a crear una nueva tarea para 'Revisar los planos'."
+           *   "Marcaré la tarea 'Llamar al proveedor' como completada."
+           *   "Cambiaré la fecha de vencimiento de 'Preparar reporte' para mañana."
 
-        4.  **Manejar Reorganización:**
-            *   Si el usuario pide explícitamente "reorganizar", "reorganiza", etc., simplemente añade un objeto \`{ "action": "reorganize" }\` al plan. No intentes calcular las fechas aquí.
+      **4. Generar el Plan de Ejecución (JSON):**
+         - Construye un array de objetos, donde cada objeto representa una acción.
+         - **Para CREAR:** \`{ "action": "CREATE", "task": { "title": "...", "description": "...", "dueDate": "YYYY-MM-DD" or null } }\`
+         - **Para ACTUALIZAR:** \`{ "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }\`
+         - **Para COMPLETAR:** \`{ "action": "UPDATE", "docId": "...", "updates": { "status": "done" }, "originalTitle": "..." }\`
 
-        **Formato de Salida JSON (OBLIGATORIO):**
-        - Tu respuesta DEBE ser únicamente un objeto JSON.
-        - El objeto principal debe tener una clave \`plan\`, que es un array.
-        - Este array contendrá los objetos de modificación y, si aplica, el objeto de reorganización.
-        - NO incluyas explicaciones, saludos, ni bloques de código markdown (\`\`\`json).
+      **Formato de Salida (REGLA CRÍTICA):**
+      - Tu respuesta DEBE ser un único bloque de código JSON.
+      - El JSON debe tener dos claves a nivel raíz: \`thoughtProcess\` (string con Markdown) y \`executionPlan\` (array de acciones JSON).
+      - NO incluyas absolutamente NADA más en tu respuesta. La respuesta debe empezar con \`{\` y terminar con \`}\`.
 
-        **EJEMPLO COMPLETO:**
-        - Petición: "Hoy terminé la tarea de 'Revisar Planos'. La de llamar al proveedor de acero es para mañana. Con eso, reorganiza mis tareas pendientes."
-        - Salida Esperada:
-          {
-            "plan": [
-              {
-                "docId": "task_123",
-                "updates": { "status": "done" },
-                "originalTitle": "Revisar Planos del Cliente X"
-              },
-              {
-                "docId": "task_456",
-                "updates": { "dueDate": "${new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}" },
-                "originalTitle": "Llamar al proveedor de acero"
-              },
-              {
-                "action": "reorganize",
-                "excludeIds": ["task_123"]
+      **EJEMPLO COMPLETO:**
+      - **Petición:** "crea una tarea para la reunión con el cliente X mañana y marca como lista la de revisar los planos"
+      - **Salida Esperada:**
+        {
+          "thoughtProcess": "### Plan de Acción\\nOk, entendido. Esto es lo que haré:\\n*   Crearé una nueva tarea: **Reunión con cliente X** para mañana.\\n*   Marcaré la tarea **Revisar planos del nuevo ensamblaje** como completada.",
+          "executionPlan": [
+            {
+              "action": "CREATE",
+              "task": {
+                "title": "Reunión con cliente X",
+                "description": "Preparar y asistir a la reunión con el cliente X.",
+                "dueDate": "${new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0]}"
               }
-            ]
-          }
+            },
+            {
+              "action": "UPDATE",
+              "docId": "ID_DE_LA_TAREA_DE_PLANOS",
+              "updates": { "status": "done" },
+              "originalTitle": "Revisar planos del nuevo ensamblaje"
+            }
+          ]
+        }
     `;
 
     try {
         const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
         const responseText = result.response.candidates[0].content.parts[0].text;
-        const jsonMatch = responseText.match(/{[\s\S]*}/);
-        if (!jsonMatch) {
-            throw new Error("La IA no pudo generar un plan de modificación válido.");
+
+        // Clean the response to ensure it's valid JSON
+        const cleanedText = responseText.replace(/^```json\s*/, '').replace(/\s*```$/, '').trim();
+
+        const plan = JSON.parse(cleanedText);
+
+        if (!plan.thoughtProcess || !plan.executionPlan) {
+            throw new Error("La respuesta de la IA no contiene 'thoughtProcess' o 'executionPlan'.");
         }
-        const modificationPlan = JSON.parse(jsonMatch[0]);
-        if (!modificationPlan.plan) {
-            throw new Error("El plan de la IA tiene un formato incorrecto.");
-        }
-        return modificationPlan;
+        return plan;
     } catch (error) {
-        console.error("Error en getTaskModificationPlan:", error);
-        throw new functions.https.HttpsError("internal", error.message || "Error al procesar la petición con la IA.");
+        console.error("Error en getAIAssistantPlan:", error);
+        throw new functions.https.HttpsError("internal", `Error al procesar la petición con la IA: ${error.message}`);
     }
 });
 
+
+/**
+ * Executes a structured plan from the AI assistant to modify tasks in Firestore.
+ * This function is safer as it only performs actions defined in the pre-approved plan.
+ */
 exports.executeTaskModificationPlan = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
@@ -852,131 +728,57 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
     const batch = db.batch();
     const tasksRef = db.collection('tareas');
     const userUid = context.auth.uid;
+    const summary = { created: 0, updated: 0, failed: 0 };
 
     plan.forEach(item => {
-        if (item.action === 'CREATE') {
-            const newTaskRef = tasksRef.doc();
-            batch.set(newTaskRef, {
-                ...item.task,
-                creatorUid: userUid,
-                assigneeUid: userUid, // Default to self-assigned
-                status: 'todo',
-                priority: 'medium',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            });
-        } else if (item.action === 'UPDATE' && item.docId && item.updates) {
-            const taskRef = tasksRef.doc(item.docId);
-            batch.update(taskRef, { ...item.updates, updatedAt: new Date() });
+        try {
+            if (item.action === 'CREATE' && item.task) {
+                const newTaskRef = tasksRef.doc();
+                batch.set(newTaskRef, {
+                    title: item.task.title || "Tarea sin título",
+                    description: item.task.description || "",
+                    dueDate: item.task.dueDate || null, // Allow null
+                    plannedDate: item.task.dueDate || null, // Default planned to due date
+                    creatorUid: userUid,
+                    assigneeUid: userUid,
+                    status: 'todo',
+                    priority: 'medium',
+                    effort: 'medium',
+                    tags: [],
+                    isArchived: false,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
+                summary.created++;
+            } else if (item.action === 'UPDATE' && item.docId && item.updates) {
+                const taskRef = tasksRef.doc(item.docId);
+                batch.update(taskRef, { ...item.updates, updatedAt: new Date() });
+                summary.updated++;
+            }
+        } catch(e) {
+            console.error("Error processing plan item:", item, e);
+            summary.failed++;
         }
     });
 
+    if (summary.created === 0 && summary.updated === 0) {
+        // If all items failed or the plan was empty, don't commit.
+        if (summary.failed > 0) {
+             throw new functions.https.HttpsError("invalid-argument", "El plan contenía acciones inválidas.");
+        }
+        return { success: false, message: "El plan no contenía acciones para ejecutar." };
+    }
+
+
     try {
         await batch.commit();
-        return { success: true, message: `Plan aplicado con éxito.` };
+        const messageParts = [];
+        if (summary.created > 0) messageParts.push(`${summary.created} tarea(s) creada(s)`);
+        if (summary.updated > 0) messageParts.push(`${summary.updated} tarea(s) actualizada(s)`);
+        return { success: true, message: `Plan aplicado: ${messageParts.join(', ')}.` };
     } catch (error) {
         console.error("Error aplicando el plan de modificación de tareas:", error);
         throw new functions.https.HttpsError("internal", "Ocurrió un error al guardar los cambios en la base de datos.");
-    }
-});
-
-exports.reorganizeTasksWithAI = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
-    const { pendingTasks, userPriority } = data;
-    if (!pendingTasks || !Array.isArray(pendingTasks)) {
-        throw new functions.https.HttpsError("invalid-argument", "Se requiere 'pendingTasks' (array).");
-    }
-
-    const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-
-    const now = new Date(todayStr);
-    const twoWeeksFromNow = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-
-    const classifiedTasks = {
-        OVERDUE: pendingTasks.filter(t => t.dueDate && new Date(t.dueDate) < now),
-        USER_PRIORITY: pendingTasks.filter(t => !(t.dueDate && new Date(t.dueDate) < now) && userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase())),
-        DUE_SOON: pendingTasks.filter(t => {
-            const dueDate = t.dueDate ? new Date(t.dueDate) : null;
-            return dueDate && dueDate >= now && dueDate <= twoWeeksFromNow && !(userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase()));
-        }),
-        DUE_LATER: pendingTasks.filter(t => {
-            const dueDate = t.dueDate ? new Date(t.dueDate) : null;
-            return dueDate && dueDate > twoWeeksFromNow && !(userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase()));
-        }),
-        NO_DUE_DATE: pendingTasks.filter(t => !t.dueDate && !(userPriority && t.title.toLowerCase().includes(userPriority.toLowerCase()))),
-    };
-
-    const workdays = [];
-    let currentDate = new Date(today);
-    while (workdays.length < 60) {
-        const day = currentDate.getDay();
-        if (day > 0 && day < 6) {
-            workdays.push(currentDate.toISOString().split('T')[0]);
-        }
-        currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    const prompt = `
-        Eres un Project Manager experto. Tu única tarea es tomar listas de tareas pre-clasificadas y asignarlas a un calendario de trabajo, respetando la capacidad diaria.
-
-        **Contexto Clave:**
-        - Calendario de Días Laborables Disponibles: ${workdays.join(', ')}
-
-        **Reglas Fundamentales:**
-        - **Capacidad Diaria:** Cada día tiene un presupuesto de 8 puntos de esfuerzo. NO se puede exceder.
-        - **Costo de Esfuerzo:** 'high': 5 puntos, 'medium': 3 puntos, 'low': 1 punto.
-        - **Asignación Secuencial:** Debes llenar el calendario en el orden estricto de las categorías de tareas proporcionadas. Si un día se llena, pasa al siguiente día laborable disponible.
-
-        **Tareas Pre-clasificadas para Planificar:**
-        1.  **URGENTES Y ATRASADAS (Máxima Prioridad):**
-            \`\`\`json
-            ${JSON.stringify(classifiedTasks.OVERDUE.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
-            \`\`\`
-        2.  **PRIORIDAD DEL USUARIO:**
-            \`\`\`json
-            ${JSON.stringify(classifiedTasks.USER_PRIORITY.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
-            \`\`\`
-        3.  **VENCIMIENTO PRÓXIMO (Próximas 2 semanas):**
-            \`\`\`json
-            ${JSON.stringify(classifiedTasks.DUE_SOON.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
-            \`\`\`
-        4.  **VENCIMIENTO LEJANO (Más de 2 semanas):**
-            \`\`\`json
-            ${JSON.stringify(classifiedTasks.DUE_LATER.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
-            \`\`\`
-        5.  **SIN FECHA LÍMITE (Menor Prioridad):**
-            \`\`\`json
-            ${JSON.stringify(classifiedTasks.NO_DUE_DATE.map(t => ({ docId: t.docId, title: t.title, effort: t.effort || 'medium' })))}
-            \`\`\`
-
-        **Instrucciones de Salida (REGLA CRÍTICA):**
-        - Tu respuesta DEBE ser únicamente un objeto JSON.
-        - El objeto debe tener una clave \`plan\`, que es un array de objetos.
-        - Cada objeto en el array debe tener esta estructura exacta: \`{ "action": "UPDATE", "docId": "ID_DE_LA_TAREA", "updates": { "plannedDate": "YYYY-MM-DD" }, "originalTitle": "Título de la Tarea" }\`.
-        - No incluyas NADA más en tu respuesta.
-    `;
-
-    try {
-        const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
-        const responseText = result.response.candidates[0].content.parts[0].text;
-        const jsonMatch = responseText.match(/{[\s\S]*}/);
-        if (!jsonMatch) {
-            throw new Error("La IA no pudo generar un plan de reorganización válido.");
-        }
-        const reorganizationPlan = JSON.parse(jsonMatch[0]);
-        if (!reorganizationPlan.plan) {
-            throw new Error("El plan de reorganización de la IA tiene un formato incorrecto.");
-        }
-        return reorganizationPlan;
-    } catch (error) {
-        console.error("Error en reorganizeTasksWithAI:", error);
-        throw new functions.https.HttpsError("internal", error.message || "Error al procesar la reorganización con la IA.");
     }
 });
 
