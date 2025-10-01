@@ -85,9 +85,9 @@ export function renderTasks(tasks, container) {
                 const template = document.createElement('template');
                 template.innerHTML = taskCardHTML.trim();
                 const cardNode = template.content.firstChild;
-                cardNode.addEventListener('click', (e) => {
+                cardNode.addEventListener('click', async (e) => {
                     if (e.target.closest('.task-actions')) return;
-                    openTaskFormModal(task);
+                    await openTaskFormModal(task);
                 });
                 taskListEl.appendChild(cardNode);
             });
@@ -176,9 +176,9 @@ export function showTasksInModal(title, tasks) {
             const cardNode = template.content.firstChild;
 
             // 3. Add event listener to each card
-            cardNode.addEventListener('click', (e) => {
+            cardNode.addEventListener('click', async (e) => {
                 if (e.target.closest('.task-actions')) return;
-                openTaskFormModal(task);
+                await openTaskFormModal(task);
             });
             tasksContainer.appendChild(cardNode);
         });
@@ -446,11 +446,11 @@ export function renderTasksTable(container, tasks, userMap) {
     }
 
     container.querySelectorAll('tr[data-task-id]').forEach(row => {
-        row.addEventListener('click', () => {
+        row.addEventListener('click', async () => {
             const taskId = row.dataset.taskId;
             const task = tasks.find(t => t.docId === taskId);
             if(task) {
-                openTaskFormModal(task);
+                await openTaskFormModal(task);
             }
         });
     });
@@ -513,7 +513,7 @@ export function renderMyPendingTasksWidget(tasks) {
     container.innerHTML = getMyPendingTasksWidgetHTML(tasks);
 
     // Add event listener to navigate to the task
-    container.addEventListener('click', (e) => {
+    container.addEventListener('click', async (e) => {
         const taskEl = e.target.closest('[data-action="view-task"]');
         if (taskEl) {
             const taskId = taskEl.dataset.taskId;
@@ -521,7 +521,7 @@ export function renderMyPendingTasksWidget(tasks) {
             // In task.ui.js, it is available.
             const task = tasks.find(t => t.docId === taskId);
             if(task) {
-                openTaskFormModal(task);
+                await openTaskFormModal(task);
             }
         }
     });

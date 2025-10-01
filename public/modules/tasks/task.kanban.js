@@ -123,7 +123,7 @@ export function runKanbanBoardLogic(container) {
     setTimeout(() => {
         const addTaskBtn = container.querySelector('#add-new-task-btn');
         if (addTaskBtn) {
-            addTaskBtn.addEventListener('click', () => openTaskFormModal());
+            addTaskBtn.addEventListener('click', async () => await openTaskFormModal());
         }
 
         const toggleArchivedBtn = container.querySelector('#toggle-archived-btn');
