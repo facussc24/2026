@@ -319,6 +319,7 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
         status: t.status,
         dueDate: t.dueDate,
         plannedDate: t.plannedDate,
+        blocked: t.blocked || false,
     }));
 
     const prompt = `
@@ -326,6 +327,7 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
       Contexto:
       - La fecha de hoy es ${currentDate}. Esta es tu referencia para fechas relativas (ej: "mañana").
       - Tareas tienen 'dueDate' (fecha límite) y 'plannedDate' (cuando se planea hacer). Para organizar la semana (ej. "tareas del lunes"), usa 'plannedDate'. Usa 'dueDate' solo si se pide explícitamente por "vencimientos".
+      - Las tareas pueden tener un estado 'blocked' (booleano). Una tarea bloqueada no puede avanzar por motivos externos. Puedes bloquear o desbloquear tareas.
       - REGLA DE REPLANIFICACIÓN CRÍTICA: Si un usuario pide mover tareas de días pasados (ej. "replanifica las tareas de ayer"), NO las acumules todas en el día de hoy. En su lugar, balancea la carga: analiza las 'plannedDate' de los próximos 5 días y distribuye las tareas de manera inteligente para no sobrecargar ningún día. Explica esta estrategia de distribución en tu 'thoughtProcess'.
       - Tareas Actuales del Usuario (JSON):
       ${JSON.stringify(tasksForPrompt, null, 2)}
@@ -334,14 +336,15 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
       "${userPrompt}"
 
       PROCESO DE ANÁLISIS:
-      1. Deconstruir la Petición: Identifica intenciones: CREAR, ACTUALIZAR, COMPLETAR. Si es ambiguo, infiere la acción más lógica y menciónalo.
-      2. Mapeo Inteligente de Tareas: Para ACTUALIZAR/COMPLETAR, busca la tarea correspondiente por semántica, no solo texto exacto.
+      1. Deconstruir la Petición: Identifica intenciones: CREAR, ACTUALIZAR, COMPLETAR, BLOQUEAR, DESBLOQUEAR. Si es ambiguo, infiere la acción más lógica y menciónalo.
+      2. Mapeo Inteligente de Tareas: Para ACTUALIZAR/COMPLETAR/BLOQUEAR/DESBLOQUEAR, busca la tarea correspondiente por semántica, no solo texto exacto.
       3. Generar Pasos de Pensamiento (thinkingSteps): Crea un array de strings concisos narrando tu proceso.
       4. Generar Proceso de Pensamiento (thoughtProcess): Escribe un resumen amigable en Markdown. Explica el porqué de tus acciones y cualquier suposición que hiciste.
       5. Generar Plan de Ejecución (executionPlan): Construye un array de objetos de acción.
          - Para CREAR: { "action": "CREATE", "task": { "title": "...", "description": "...", "dueDate": "YYYY-MM-DD" or null } }
          - Para ACTUALIZAR: { "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }
          - Para COMPLETAR: { "action": "UPDATE", "docId": "...", "updates": { "status": "done" }, "originalTitle": "..." }
+         - Para BLOQUEAR/DESBLOQUEAR: { "action": "UPDATE", "docId": "...", "updates": { "blocked": true/false }, "originalTitle": "..." }
 
       Formato de Salida (REGLA CRÍTICA):
       - Tu respuesta DEBE ser un único bloque de código JSON válido.

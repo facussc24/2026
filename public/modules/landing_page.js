@@ -2,7 +2,7 @@ import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, 
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
 import { showPlannerHelpModal, showAIAnalysisModal, showTasksInModal } from './tasks/task.ui.js';
-import { completeAndArchiveTask } from './tasks/task.service.js';
+import { completeAndArchiveTask, updateTaskBlockedStatus } from './tasks/task.service.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -99,15 +99,19 @@ function renderLandingPageHTML() {
                     <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-7 gap-6 min-h-[400px]"></div>
                 </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                  <div id="overdue-tasks-container" class="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
                     <h4 class="font-bold text-red-700 dark:text-red-300 mb-3 flex items-center gap-2"><i data-lucide="alert-triangle"></i>Tareas Vencidas</h4>
                     <div class="task-list space-y-1 h-64 overflow-y-auto custom-scrollbar" data-column-type="overdue"></div>
                  </div>
                  <div id="unscheduled-tasks-container" class="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
-                    <h4 class="font-bold text-amber-700 dark:text-amber-300 mb-3 flex items-center gap-2"><i data-lucide="calendar-x"></i>Tareas sin Fecha</h4>
+                    <h4 class="font-bold text-amber-700 dark:text-amber-300 mb-3 flex items-center gap-2"><i data-lucide="calendar-x"></i>Tareas sin fecha programada</h4>
                     <div class="task-list space-y-1 h-64 overflow-y-auto custom-scrollbar" data-column-type="unscheduled"></div>
                  </div>
+                 <div id="blocked-tasks-container" class="bg-slate-50 dark:bg-slate-900/20 p-4 rounded-lg">
+                    <h4 class="font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2"><i data-lucide="lock"></i>Tareas Bloqueadas</h4>
+                    <div class="task-list space-y-1 h-64 overflow-y-auto custom-scrollbar" data-column-type="blocked"></div>
+                </div>
             </div>
         </div>
     `;
@@ -149,6 +153,7 @@ function renderTaskCardsHTML(tasks) {
         const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
         const canComplete = canDrag || appState.currentUser.uid === task.creatorUid;
         const completeButton = canComplete ? `<button data-action="complete-task" title="Marcar como completada" class="complete-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><i data-lucide="check" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
+        const blockButton = canComplete ? `<button data-action="block-task" title="Bloquear Tarea" class="block-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-orange-100 text-orange-600 hover:bg-orange-200"><i data-lucide="lock" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -174,7 +179,7 @@ function renderTaskCardsHTML(tasks) {
                 <div class="flex items-start justify-between"><p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p><span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style}" title="Prioridad: ${task.priority}"></span></div>
                 ${datesHTML}
                 <div class="flex items-end justify-between mt-1">
-                    <div class="flex items-center gap-2">${completeButton}${effortIcon}</div>
+                    <div class="flex items-center gap-2">${completeButton}${blockButton}${effortIcon}</div>
                     <span class="text-right text-[11px] text-slate-500 dark:text-slate-400">${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
                 </div>
             </div>`;
@@ -186,7 +191,8 @@ function renderWeeklyTasks(tasks) {
     const weeklyContainer = document.getElementById('weekly-tasks-container');
     const overdueContainer = document.querySelector('#overdue-tasks-container .task-list');
     const unscheduledContainer = document.querySelector('#unscheduled-tasks-container .task-list');
-    if (!weeklyContainer || !overdueContainer || !unscheduledContainer) return;
+    const blockedContainer = document.querySelector('#blocked-tasks-container .task-list');
+    if (!weeklyContainer || !overdueContainer || !unscheduledContainer || !blockedContainer) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
     const weekDates = getWeekDateRange(true);
@@ -198,9 +204,10 @@ function renderWeeklyTasks(tasks) {
     const followingWeekEnd = new Date(followingWeekStart); followingWeekEnd.setDate(followingWeekEnd.getDate() + 4);
 
     const tasksByDay = { day0: [], day1: [], day2: [], day3: [], day4: [] };
-    const nextWeekTasks = [], followingWeekTasks = [], overdueTasks = [], unscheduledTasks = [];
+    const nextWeekTasks = [], followingWeekTasks = [], overdueTasks = [], unscheduledTasks = [], blockedTasks = [];
 
     tasks.forEach(task => {
+        if (task.blocked) { blockedTasks.push(task); return; }
         if (task.dueDate && task.dueDate < todayStr) { overdueTasks.push(task); return; }
         if (!task.plannedDate) { unscheduledTasks.push(task); return; }
         const plannedDate = new Date(task.plannedDate + 'T00:00:00Z');
@@ -222,15 +229,16 @@ function renderWeeklyTasks(tasks) {
         const isToday = dateForColumn === todayStr;
         const tasksForDay = tasksByDay[`day${index}`] || [];
         const taskCount = tasksForDay.length;
-        const titleWithDate = `${dayName} <span class="text-sm font-normal text-slate-400 dark:text-slate-500">${date.getDate()}/${date.getMonth() + 1}</span>`;
+        const titleWithDate = `${dayName} <span class="text-sm font-normal text-slate-400 dark:text-slate-500 ml-1">${date.getDate()}/${date.getMonth() + 1}</span>`;
         return renderTaskColumn(titleWithDate, tasksForDay, { 'data-date': dateForColumn }, isToday, taskCount);
     }).join('');
-    dayColumnsHTML += renderTaskColumn('Semana Siguiente', nextWeekTasks, { 'data-column-type': 'next-week' }, false, nextWeekTasks.length);
-    dayColumnsHTML += renderTaskColumn('Próxima Semana', followingWeekTasks, { 'data-column-type': 'following-week' }, false, followingWeekTasks.length);
+    dayColumnsHTML += renderTaskColumn('semana +1', nextWeekTasks, { 'data-column-type': 'next-week' }, false, nextWeekTasks.length);
+    dayColumnsHTML += renderTaskColumn('semana +2', followingWeekTasks, { 'data-column-type': 'following-week' }, false, followingWeekTasks.length);
 
     weeklyContainer.innerHTML = dayColumnsHTML;
     overdueContainer.innerHTML = renderTaskCardsHTML(overdueTasks);
     unscheduledContainer.innerHTML = renderTaskCardsHTML(unscheduledTasks);
+    blockedContainer.innerHTML = renderTaskCardsHTML(blockedTasks);
     lucide.createIcons();
     initWeeklyTasksSortable();
 }
@@ -396,7 +404,6 @@ function setupActionButtons() {
     const weeklyContainer = document.getElementById('weekly-tasks-container');
     weeklyContainer?.addEventListener('click', async (e) => {
         const target = e.target;
-        const taskCard = target.closest('.task-card-compact');
         const viewMoreBtn = target.closest('[data-action="show-all-tasks-modal"]');
 
         if (viewMoreBtn) {
@@ -410,11 +417,6 @@ function setupActionButtons() {
                 showTasksInModal(title, tasks);
             }
             return;
-        }
-
-        if (taskCard && !target.closest('[data-action="complete-task"]')) {
-            const task = weeklyTasksCache.find(t => t.docId === taskCard.dataset.taskId);
-            if (task) openTaskFormModal(task);
         }
     });
 }
@@ -467,6 +469,9 @@ export async function runLandingPageLogic() {
 
     landingPageContainer.addEventListener('click', async (e) => {
         const completeBtn = e.target.closest('[data-action="complete-task"]');
+        const blockBtn = e.target.closest('[data-action="block-task"]');
+        const taskCard = e.target.closest('.task-card-compact');
+
         if (completeBtn) {
             const taskCard = completeBtn.closest('.task-card-compact');
             if (taskCard) {
@@ -495,6 +500,30 @@ export async function runLandingPageLogic() {
                         taskCard.style.transform = 'scale(1)';
                     }
                 }
+            }
+        } else if (blockBtn) {
+            const taskCard = blockBtn.closest('.task-card-compact');
+            if (taskCard) {
+                e.stopPropagation();
+                const taskId = taskCard.dataset.taskId;
+                const task = weeklyTasksCache.find(t => t.docId === taskId);
+                if (task) {
+                    const isBlocked = !task.blocked;
+                    try {
+                        await updateTaskBlockedStatus(taskId, isBlocked);
+                        showToast(isBlocked ? 'Tarea bloqueada.' : 'Tarea desbloqueada.', 'success');
+                        refreshWeeklyTasksView();
+                    } catch (error) {
+                        console.error('Error updating task blocked status:', error);
+                        showToast('Error al actualizar la tarea.', 'error');
+                    }
+                }
+            }
+        } else if (taskCard) {
+            const taskId = taskCard.dataset.taskId;
+            const task = weeklyTasksCache.find(t => t.docId === taskId);
+            if (task) {
+                openTaskFormModal(task);
             }
         }
     });
