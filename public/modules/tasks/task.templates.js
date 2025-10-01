@@ -222,7 +222,7 @@ export function getAIAssistantReviewViewHTML(plan) {
                     <span>Proceso de Pensamiento de la IA</span>
                     <i data-lucide="chevron-down" class="transition-transform"></i>
                 </button>
-                <div id="thought-process-content" class="prose prose-sm dark:prose-invert max-w-none p-4 pt-0" style="display: none;">
+                <div id="thought-process-content" class="prose prose-sm dark:prose-invert max-w-none p-4 pt-0 custom-scrollbar" style="display: none; max-height: 200px; overflow-y: auto;">
                     ${marked.parse(thoughtProcess)}
                 </div>
             </div>
