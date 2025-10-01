@@ -813,6 +813,46 @@ export function getSubtaskHTML(subtask) {
 export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDate, isAdmin) {
     const isEditing = task !== null;
 
+    let dependenciesSectionHTML = '';
+    // This assumes the calling function provides `dependsOnDetails` and `blocksDetails` arrays with {docId, title} objects
+    if (isEditing && ((task.dependsOnDetails && task.dependsOnDetails.length > 0) || (task.blocksDetails && task.blocksDetails.length > 0))) {
+        const dependsOnList = (task.dependsOnDetails || []).map(t =>
+            `<span class="cursor-pointer bg-yellow-100 text-yellow-800 text-sm font-medium px-3 py-1 rounded-full hover:bg-yellow-200 transition-colors" data-action="view-task" data-task-id="${t.docId}" title="Ver tarea '${t.title}'">${t.title}</span>`
+        ).join('');
+
+        const blocksList = (task.blocksDetails || []).map(t =>
+            `<span class="cursor-pointer bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full hover:bg-blue-200 transition-colors" data-action="view-task" data-task-id="${t.docId}" title="Ver tarea '${t.title}'">${t.title}</span>`
+        ).join('');
+
+        dependenciesSectionHTML = `
+            <!-- Dependencies Section -->
+            <div class="task-form-section">
+                 <div class="form-section-header">
+                    <i data-lucide="git-merge" class="w-5 h-5"></i>
+                    <h4>Dependencias</h4>
+                </div>
+                <div class="p-4 space-y-4">
+                    ${dependsOnList ? `
+                        <div>
+                            <h5 class="text-sm font-semibold text-slate-600 mb-2">Esta tarea depende de (prerrequisitos):</h5>
+                            <div class="flex flex-wrap gap-2">
+                                ${dependsOnList}
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${blocksList ? `
+                        <div>
+                            <h5 class="text-sm font-semibold text-slate-600 mb-2">Esta tarea bloquea a:</h5>
+                            <div class="flex flex-wrap gap-2">
+                                ${blocksList}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
     let tagsSectionHTML = '';
     if (isEditing && task.tags && task.tags.length > 0) {
         tagsSectionHTML = `
@@ -860,6 +900,8 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                         </div>
                     </div>
                 </div>
+
+                ${dependenciesSectionHTML}
 
                 ${tagsSectionHTML}
 

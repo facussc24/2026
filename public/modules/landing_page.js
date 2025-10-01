@@ -389,7 +389,7 @@ function setupActionButtons() {
         }
     });
 
-    document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', () => openTaskFormModal(null, 'todo'));
+    document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', async () => await openTaskFormModal(null, 'todo'));
     document.getElementById('prev-week-btn')?.addEventListener('click', () => { appState.weekOffset--; refreshWeeklyTasksView('prev'); });
     document.getElementById('today-btn')?.addEventListener('click', () => {
         if (appState.weekOffset === 0) {
@@ -523,7 +523,7 @@ export async function runLandingPageLogic() {
             const taskId = taskCard.dataset.taskId;
             const task = weeklyTasksCache.find(t => t.docId === taskId);
             if (task) {
-                openTaskFormModal(task);
+                await openTaskFormModal(task);
             }
         }
     });

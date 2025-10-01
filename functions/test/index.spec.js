@@ -10,14 +10,33 @@ jest.mock('@google-cloud/vertexai', () => ({
 }));
 
 // Mock firebase-admin
-jest.mock('firebase-admin', () => ({
-    apps: [],
-    initializeApp: jest.fn(),
-    firestore: jest.fn(),
-    auth: () => ({
-        getUser: jest.fn().mockResolvedValue({ email: 'test@test.com', displayName: 'Test User' })
-    })
-}));
+jest.mock('firebase-admin', () => {
+    const firestoreInstance = {
+        runTransaction: jest.fn(),
+        collection: jest.fn(() => ({
+            doc: jest.fn((docId) => ({
+                id: docId,
+                path: `mockCollection/${docId}`
+            }))
+        }))
+    };
+
+    const firestore = jest.fn(() => firestoreInstance);
+
+    firestore.FieldValue = {
+        arrayUnion: (...args) => ({ _type: 'arrayUnion', values: args }),
+        arrayRemove: (...args) => ({ _type: 'arrayRemove', values: args }),
+    };
+
+    return {
+        apps: [],
+        initializeApp: jest.fn(),
+        firestore: firestore,
+        auth: () => ({
+            getUser: jest.fn().mockResolvedValue({ email: 'test@test.com', displayName: 'Test User' })
+        })
+    };
+});
 // --- END MOCKING ---
 
 const { describe, beforeEach, test, expect } = require('@jest/globals');
@@ -26,7 +45,7 @@ const firebaseTest = require('firebase-functions-test')();
 const { HttpsError } = require('firebase-functions/v1/https');
 
 // Import the functions to be tested AFTER mocking
-const { getNextEcrNumber, getAIAssistantPlan } = require('../index');
+const { getNextEcrNumber, getAIAssistantPlan, executeTaskModificationPlan } = require('../index');
 
 describe('getAIAssistantPlan', () => {
     beforeEach(() => {
@@ -39,6 +58,50 @@ describe('getAIAssistantPlan', () => {
             }
         });
     });
+
+    test('should create a dependency link between two tasks', async () => {
+        const plan = {
+            thoughtProcess: "Understood. Creating dependency.",
+            thinkingSteps: ["Identified Task A", "Identified Task B", "Creating dependency link"],
+            executionPlan: [
+                {
+                    action: "UPDATE",
+                    docId: "taskA_id",
+                    updates: { dependsOn: ["taskB_id"], blocked: true },
+                    originalTitle: "Task A"
+                },
+                {
+                    action: "UPDATE",
+                    docId: "taskB_id",
+                    updates: { blocks: ["taskA_id"] },
+                    originalTitle: "Task B"
+                }
+            ]
+        };
+
+        mockGenerateContent.mockResolvedValue({
+            response: {
+                candidates: [{
+                    content: { parts: [{ text: JSON.stringify(plan) }] }
+                }]
+            }
+        });
+
+        const wrapped = firebaseTest.wrap(getAIAssistantPlan);
+        const result = await wrapped({
+            userPrompt: 'Task A depends on Task B',
+            tasks: [
+                { docId: 'taskA_id', title: 'Task A' },
+                { docId: 'taskB_id', title: 'Task B' }
+            ],
+            currentDate: '2025-10-01'
+        }, { auth: { uid: 'test-uid' } });
+
+        expect(result.executionPlan).toHaveLength(2);
+        expect(result.executionPlan[0]).toEqual(plan.executionPlan[0]);
+        expect(result.executionPlan[1]).toEqual(plan.executionPlan[1]);
+    });
+
 
     test('should throw unauthenticated error if user is not logged in', async () => {
         const wrapped = firebaseTest.wrap(getAIAssistantPlan);
@@ -78,6 +141,94 @@ describe('getAIAssistantPlan', () => {
         const promptSentToAI = mockGenerateContent.mock.calls[0][0].contents[0].parts[0].text;
 
         expect(promptSentToAI).toContain(`La fecha de hoy es ${testDate}.`);
+    });
+});
+
+describe('executeTaskModificationPlan', () => {
+    let mockGet, mockUpdate, mockTransaction;
+
+    beforeEach(() => {
+        mockGet = jest.fn();
+        mockUpdate = jest.fn();
+
+        mockTransaction = {
+            get: mockGet,
+            update: mockUpdate,
+            set: jest.fn(),
+            delete: jest.fn()
+        };
+
+        admin.firestore.mockReturnValue({
+            runTransaction: async (updateFunction) => {
+                await updateFunction(mockTransaction);
+            },
+            collection: () => ({
+                doc: (docId) => ({ id: docId, path: `tareas/${docId}` })
+            }),
+            FieldValue: {
+                arrayUnion: (...args) => ({ _type: 'arrayUnion', values: args }),
+                arrayRemove: (...args) => ({ _type: 'arrayRemove', values: args }),
+            }
+        });
+    });
+
+    test('should unblock a dependent task when its only dependency is completed', async () => {
+        const plan = [
+            {
+                action: "UPDATE",
+                docId: "taskB_id",
+                updates: { status: "done" },
+                originalTitle: "Task B (Prerequisite)"
+            }
+        ];
+
+        // Mock the state of the tasks in the database
+        mockGet.mockImplementation(ref => {
+            if (ref.path === 'tareas/taskB_id') {
+                return Promise.resolve({
+                    exists: true,
+                    data: () => ({
+                        title: 'Task B (Prerequisite)',
+                        status: 'inprogress',
+                        blocks: ['taskA_id']
+                    })
+                });
+            }
+            if (ref.path === 'tareas/taskA_id') {
+                return Promise.resolve({
+                    exists: true,
+                    data: () => ({
+                        title: 'Task A (Dependent)',
+                        status: 'todo',
+                        blocked: true,
+                        dependsOn: ['taskB_id']
+                    })
+                });
+            }
+            return Promise.resolve({ exists: false });
+        });
+
+        const wrapped = firebaseTest.wrap(executeTaskModificationPlan);
+        await wrapped({ plan }, { auth: { uid: 'test-uid' } });
+
+        // Verify that Task B was marked as done and its 'blocks' array was cleared
+        expect(mockUpdate).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'taskB_id' }),
+            expect.objectContaining({ status: 'done' })
+        );
+         expect(mockUpdate).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'taskB_id' }),
+            expect.objectContaining({ blocks: [] })
+        );
+
+        // Verify that Task A was unblocked and its dependency was removed
+        expect(mockUpdate).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'taskA_id' }),
+            expect.objectContaining({
+                blocked: false,
+                dependsOn: { _type: 'arrayRemove', values: ['taskB_id'] }
+            })
+        );
     });
 });
 

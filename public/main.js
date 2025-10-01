@@ -3015,9 +3015,9 @@ function renderTasks(tasks) {
                 const template = document.createElement('template');
                 template.innerHTML = taskCardHTML.trim();
                 const cardNode = template.content.firstChild;
-                cardNode.addEventListener('click', (e) => {
+                cardNode.addEventListener('click', async (e) => {
                     if (e.target.closest('.task-actions')) return;
-                    openTaskFormModal(task);
+                    await openTaskFormModal(task);
                 });
                 taskListEl.appendChild(cardNode);
             });

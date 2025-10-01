@@ -155,8 +155,8 @@ function displayTasksOnCalendar(container, tasks) {
                 taskElement.title = task.title;
                 taskElement.dataset.taskId = task.docId;
 
-                taskElement.addEventListener('click', () => {
-                    openTaskFormModal(task);
+                taskElement.addEventListener('click', async () => {
+                    await openTaskFormModal(task);
                 });
 
                 dayCell.appendChild(taskElement);

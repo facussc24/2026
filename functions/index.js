@@ -320,14 +320,22 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
         dueDate: t.dueDate,
         plannedDate: t.plannedDate,
         blocked: t.blocked || false,
+        dependsOn: t.dependsOn || [], // Array of docIds
+        blocks: t.blocks || [],       // Array of docIds
     }));
 
     const prompt = `
-      Eres un asistente de gestión de proyectos. Tu misión es analizar la petición de un usuario y su lista de tareas para generar un plan de acción claro y un JSON con los cambios.
+      Eres un asistente de gestión de proyectos experto. Tu misión es analizar la petición de un usuario y su lista de tareas para generar un plan de acción claro y un JSON con los cambios.
+
       Contexto:
       - La fecha de hoy es ${currentDate}. Esta es tu referencia para fechas relativas (ej: "mañana").
       - Tareas tienen 'dueDate' (fecha límite) y 'plannedDate' (cuando se planea hacer). Para organizar la semana (ej. "tareas del lunes"), usa 'plannedDate'. Usa 'dueDate' solo si se pide explícitamente por "vencimientos".
-      - Las tareas pueden tener un estado 'blocked' (booleano). Una tarea bloqueada no puede avanzar por motivos externos. Puedes bloquear o desbloquear tareas.
+      - Las tareas pueden tener un estado 'blocked' (booleano). Una tarea bloqueada no puede avanzar.
+      - GESTIÓN DE DEPENDENCIAS (NUEVA CAPACIDAD): Las tareas pueden depender de otras. Si un usuario dice "La tarea A depende de la tarea B", esto significa que A no puede comenzar hasta que B se complete.
+        - Para establecer una dependencia, DEBES identificar los 'docId' de ambas tareas. Luego, genera DOS acciones 'UPDATE' separadas.
+        - 1. Para la tarea dependiente (Tarea A): En sus 'updates', añade '"dependsOn": ["<ID_de_Tarea_B>"]' y establece '"blocked": true'.
+        - 2. Para la tarea prerrequisito (Tarea B): En sus 'updates', añade '"blocks": ["<ID_de_Tarea_A>"]'.
+        - IMPORTANTE: Los campos 'dependsOn' y 'blocks' deben ser tratados como arrays de IDs. Tu instrucción debe ser añadir un ID a estos arrays. El backend se encargará de la lógica de añadir sin duplicar.
       - REGLA DE REPLANIFICACIÓN CRÍTICA: Si un usuario pide mover tareas de días pasados (ej. "replanifica las tareas de ayer"), NO las acumules todas en el día de hoy. En su lugar, balancea la carga: analiza las 'plannedDate' de los próximos 5 días y distribuye las tareas de manera inteligente para no sobrecargar ningún día. Explica esta estrategia de distribución en tu 'thoughtProcess'.
       - Tareas Actuales del Usuario (JSON):
       ${JSON.stringify(tasksForPrompt, null, 2)}
@@ -336,15 +344,19 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
       "${userPrompt}"
 
       PROCESO DE ANÁLISIS:
-      1. Deconstruir la Petición: Identifica intenciones: CREAR, ACTUALIZAR, COMPLETAR, BLOQUEAR, DESBLOQUEAR. Si es ambiguo, infiere la acción más lógica y menciónalo.
-      2. Mapeo Inteligente de Tareas: Para ACTUALIZAR/COMPLETAR/BLOQUEAR/DESBLOQUEAR, busca la tarea correspondiente por semántica, no solo texto exacto.
-      3. Generar Pasos de Pensamiento (thinkingSteps): Crea un array de strings concisos narrando tu proceso.
-      4. Generar Proceso de Pensamiento (thoughtProcess): Escribe un resumen amigable en Markdown. Explica el porqué de tus acciones y cualquier suposición que hiciste.
+      1. Deconstruir la Petición: Identifica intenciones: CREAR, ACTUALIZAR, COMPLETAR, BLOQUEAR, DESBLOQUEAR, y ahora también CREAR/ELIMINAR DEPENDENCIA. Si es ambiguo, infiere la acción más lógica y menciónalo.
+      2. Mapeo Inteligente de Tareas: Para cualquier acción que no sea CREAR, busca la tarea correspondiente por semántica, no solo texto exacto. Es crucial que encuentres los 'docId' correctos.
+      3. Generar Pasos de Pensamiento (thinkingSteps): Crea un array de strings concisos narrando tu proceso. Debes mencionar explícitamente la creación de dependencias.
+      4. Generar Proceso de Pensamiento (thoughtProcess): Escribe un resumen amigable en Markdown. Explica el porqué de tus acciones, especialmente las dependencias creadas y por qué una tarea se bloquea.
       5. Generar Plan de Ejecución (executionPlan): Construye un array de objetos de acción.
          - Para CREAR: { "action": "CREATE", "task": { "title": "...", "description": "...", "dueDate": "YYYY-MM-DD" or null } }
-         - Para ACTUALIZAR: { "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }
+         - Para ACTUALIZAR (genérico): { "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }
          - Para COMPLETAR: { "action": "UPDATE", "docId": "...", "updates": { "status": "done" }, "originalTitle": "..." }
          - Para BLOQUEAR/DESBLOQUEAR: { "action": "UPDATE", "docId": "...", "updates": { "blocked": true/false }, "originalTitle": "..." }
+         - Para CREAR DEPENDENCIA (Ejemplo):
+           // Tarea A depende de Tarea B
+           { "action": "UPDATE", "docId": "<ID_Tarea_A>", "updates": { "dependsOn": ["<ID_Tarea_B>"], "blocked": true }, "originalTitle": "..." },
+           { "action": "UPDATE", "docId": "<ID_Tarea_B>", "updates": { "blocks": ["<ID_Tarea_A>"] }, "originalTitle": "..." }
 
       Formato de Salida (REGLA CRÍTICA):
       - Tu respuesta DEBE ser un único bloque de código JSON válido.
@@ -397,60 +409,130 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
     }
 
     const db = admin.firestore();
-    const batch = db.batch();
     const tasksRef = db.collection('tareas');
     const userUid = context.auth.uid;
-    const summary = { created: 0, updated: 0, failed: 0 };
-
-    plan.forEach(item => {
-        try {
-            if (item.action === 'CREATE' && item.task) {
-                const newTaskRef = tasksRef.doc();
-                batch.set(newTaskRef, {
-                    title: item.task.title || "Tarea sin título",
-                    description: item.task.description || "",
-                    dueDate: item.task.dueDate || null, // Allow null
-                    plannedDate: item.task.dueDate || null, // Default planned to due date
-                    creatorUid: userUid,
-                    assigneeUid: userUid,
-                    status: 'todo',
-                    priority: 'medium',
-                    effort: 'medium',
-                    tags: [],
-                    isArchived: false,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                });
-                summary.created++;
-            } else if (item.action === 'UPDATE' && item.docId && item.updates) {
-                const taskRef = tasksRef.doc(item.docId);
-                batch.update(taskRef, { ...item.updates, updatedAt: new Date() });
-                summary.updated++;
-            }
-        } catch(e) {
-            console.error("Error processing plan item:", item, e);
-            summary.failed++;
-        }
-    });
-
-    if (summary.created === 0 && summary.updated === 0) {
-        // If all items failed or the plan was empty, don't commit.
-        if (summary.failed > 0) {
-             throw new functions.https.HttpsError("invalid-argument", "El plan contenía acciones inválidas.");
-        }
-        return { success: false, message: "El plan no contenía acciones para ejecutar." };
-    }
-
+    const summary = { created: 0, updated: 0, failed: 0, unblocked: 0 };
 
     try {
-        await batch.commit();
+        await db.runTransaction(async (transaction) => {
+            const tasksToUnblockCheck = new Map(); // Map<docId, originalTitle>
+
+            // Step 1: Iterate through the plan and apply changes.
+            for (const item of plan) {
+                try {
+                    if (item.action === 'CREATE' && item.task) {
+                        const newTaskRef = tasksRef.doc();
+                        transaction.set(newTaskRef, {
+                            title: item.task.title || "Tarea sin título",
+                            description: item.task.description || "",
+                            dueDate: item.task.dueDate || null,
+                            plannedDate: item.task.dueDate || null,
+                            creatorUid: userUid,
+                            assigneeUid: userUid,
+                            status: 'todo',
+                            priority: 'medium',
+                            effort: 'medium',
+                            tags: [],
+                            isArchived: false,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                            dependsOn: [],
+                            blocks: [],
+                            blocked: false,
+                        });
+                        summary.created++;
+                    } else if (item.action === 'UPDATE' && item.docId && item.updates) {
+                        const taskRef = tasksRef.doc(item.docId);
+                        const updates = { ...item.updates, updatedAt: new Date() };
+                        const arrayUpdates = {};
+
+                        // Handle array updates for dependencies using FieldValue.arrayUnion
+                        if (updates.dependsOn) {
+                            arrayUpdates.dependsOn = admin.firestore.FieldValue.arrayUnion(...updates.dependsOn);
+                            delete updates.dependsOn;
+                        }
+                        if (updates.blocks) {
+                            arrayUpdates.blocks = admin.firestore.FieldValue.arrayUnion(...updates.blocks);
+                            delete updates.blocks;
+                        }
+
+                        transaction.update(taskRef, { ...updates, ...arrayUpdates });
+                        summary.updated++;
+
+                        // If a task is marked as done, queue it for the unblocking logic check.
+                        if (updates.status === 'done') {
+                            tasksToUnblockCheck.set(item.docId, item.originalTitle);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error processing plan item:", item, e);
+                    summary.failed++;
+                }
+            }
+
+            // Step 2: Handle the cascading unblock logic for completed tasks.
+            if (tasksToUnblockCheck.size > 0) {
+                for (const [completedTaskId, originalTitle] of tasksToUnblockCheck) {
+                    const completedTaskRef = tasksRef.doc(completedTaskId);
+                    const completedTaskSnap = await transaction.get(completedTaskRef);
+
+                    if (!completedTaskSnap.exists) continue;
+                    const completedTaskData = completedTaskSnap.data();
+                    const tasksItBlocks = completedTaskData.blocks;
+
+                    if (tasksItBlocks && tasksItBlocks.length > 0) {
+                        for (const blockedTaskId of tasksItBlocks) {
+                            const blockedTaskRef = tasksRef.doc(blockedTaskId);
+                            const blockedTaskSnap = await transaction.get(blockedTaskRef);
+
+                            if (!blockedTaskSnap.exists) continue;
+                            const blockedTaskData = blockedTaskSnap.data();
+
+                            // Unblock the task only if this was its last dependency.
+                            if (blockedTaskData.dependsOn && blockedTaskData.dependsOn.length === 1 && blockedTaskData.dependsOn[0] === completedTaskId) {
+                                transaction.update(blockedTaskRef, {
+                                    dependsOn: admin.firestore.FieldValue.arrayRemove(completedTaskId),
+                                    blocked: false,
+                                    updatedAt: new Date()
+                                });
+                                summary.unblocked++;
+                            } else if (blockedTaskData.dependsOn) {
+                                // Otherwise, just remove the dependency.
+                                transaction.update(blockedTaskRef, {
+                                    dependsOn: admin.firestore.FieldValue.arrayRemove(completedTaskId),
+                                    updatedAt: new Date()
+                                });
+                            }
+                        }
+                    }
+
+                    // Clear the 'blocks' array of the now-completed task for data hygiene.
+                    transaction.update(completedTaskRef, { blocks: [], updatedAt: new Date() });
+                }
+            }
+        });
+
+        // Step 3: Return a comprehensive success message.
         const messageParts = [];
         if (summary.created > 0) messageParts.push(`${summary.created} tarea(s) creada(s)`);
         if (summary.updated > 0) messageParts.push(`${summary.updated} tarea(s) actualizada(s)`);
+        if (summary.unblocked > 0) messageParts.push(`${summary.unblocked} tarea(s) desbloqueada(s) automáticamente`);
+
+        if (messageParts.length === 0) {
+            if (summary.failed > 0) {
+                throw new functions.https.HttpsError("invalid-argument", "El plan contenía acciones inválidas.");
+            }
+            return { success: true, message: "El plan no contenía acciones para ejecutar." };
+        }
+
         return { success: true, message: `Plan aplicado: ${messageParts.join(', ')}.` };
+
     } catch (error) {
-        console.error("Error aplicando el plan de modificación de tareas:", error);
-        throw new functions.https.HttpsError("internal", "Ocurrió un error al guardar los cambios en la base de datos.");
+        console.error("Error en la transacción de modificación de tareas:", error);
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        throw new functions.https.HttpsError("internal", "Ocurrió un error al aplicar el plan de modificación. La operación fue revertida.");
     }
 });
 

@@ -257,9 +257,33 @@ function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
     });
 }
 
-export function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
+export async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
     const isEditing = task !== null;
     const isAdmin = appState.currentUser.role === 'admin';
+
+    // Enrich task object with dependency details for the modal view
+    if (isEditing && (task.dependsOn?.length > 0 || task.blocks?.length > 0)) {
+        const allTasks = await fetchAllTasks(true); // Force refresh to get latest dependency info
+        const tasksById = new Map(allTasks.map(t => [t.docId, t]));
+
+        if (task.dependsOn?.length > 0) {
+            task.dependsOnDetails = task.dependsOn
+                .map(id => {
+                    const dependentTask = tasksById.get(id);
+                    return dependentTask ? { docId: id, title: dependentTask.title } : null;
+                })
+                .filter(Boolean); // Remove nulls if a referenced task was deleted
+        }
+
+        if (task.blocks?.length > 0) {
+            task.blocksDetails = task.blocks
+                .map(id => {
+                    const blockingTask = tasksById.get(id);
+                    return blockingTask ? { docId: id, title: blockingTask.title } : null;
+                })
+                .filter(Boolean); // Remove nulls if a referenced task was deleted
+        }
+    }
 
     let selectedUid = defaultAssigneeUid || '';
     if (!selectedUid) {
