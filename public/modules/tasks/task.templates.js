@@ -152,55 +152,72 @@ export function getAIAssistantLoadingViewHTML(title = 'Analizando tu petición..
 }
 
 export function getAIAssistantReviewViewHTML(plan) {
-    // Step 3: Display the AI's thought process and execution plan for review.
     const { thoughtProcess, executionPlan } = plan;
 
-    const renderAction = (action) => {
+    const renderAction = (action, index) => {
         let icon, title, details;
+        const actionId = `action_${index}`;
+
+        let content = `<div class="ai-plan-action-item group/action bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm transition-all duration-200 has-[:checked]:bg-slate-100 has-[:checked]:dark:bg-slate-900/50 has-[:not(:checked)]:opacity-50 has-[:not(:checked)]:bg-slate-50 has-[:not(:checked)]:dark:bg-slate-800/20 relative">`;
+
+        content += `<input type="hidden" name="${actionId}_type" value="${action.action}">`;
+
+        content += `<div class="absolute top-3 right-3 z-10"><input type="checkbox" name="${actionId}_enabled" checked class="h-5 w-5 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer" title="Incluir esta acción"></div>`;
+
         switch (action.action) {
             case 'CREATE':
-                const dueDate = action.task.dueDate ? new Date(action.task.dueDate + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'No especificada';
-                icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center shadow-inner">
-                            <i data-lucide="plus" class="w-7 h-7 text-green-600 dark:text-green-400"></i>
-                        </div>`;
+                icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center shadow-inner"><i data-lucide="plus" class="w-7 h-7 text-green-600 dark:text-green-400"></i></div>`;
                 title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Crear Nueva Tarea</p>`;
-                details = `<div class="text-sm text-slate-600 dark:text-slate-300 mt-2">
-                               <p>"${action.task.title}"</p>
-                               <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Vence: ${dueDate}</p>
+                details = `<div class="space-y-2 mt-2">
+                               <div>
+                                   <label for="${actionId}_title" class="text-xs font-semibold text-slate-500">TÍTULO</label>
+                                   <input type="text" id="${actionId}_title" name="${actionId}_title" value="${action.task.title || ''}" class="editable-ai-input">
+                               </div>
+                               <div>
+                                   <label for="${actionId}_dueDate" class="text-xs font-semibold text-slate-500">FECHA LÍMITE</label>
+                                   <input type="date" id="${actionId}_dueDate" name="${actionId}_dueDate" value="${action.task.dueDate || ''}" class="editable-ai-input">
+                               </div>
                            </div>`;
                 break;
             case 'UPDATE':
-                let updateText = '';
-                if (action.updates.status === 'done') {
-                    updateText = `Marcar la tarea como <span class="font-bold text-blue-600 dark:text-blue-400">Completada</span>.`;
-                } else if (action.updates.dueDate) {
-                    const newDueDate = new Date(action.updates.dueDate + 'T00:00:00').toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                    updateText = `Cambiar la fecha de vencimiento a <span class="font-bold text-blue-600 dark:text-blue-400">${newDueDate}</span>.`;
+                icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shadow-inner"><i data-lucide="edit-3" class="w-7 h-7 text-blue-600 dark:text-blue-400"></i></div>`;
+                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Actualizar Tarea</p>
+                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">Tarea original: "${action.originalTitle}"</p>`;
+
+                content += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
+
+                const updateField = Object.keys(action.updates)[0];
+                const updateValue = action.updates[updateField];
+                content += `<input type="hidden" name="${actionId}_update_field_0" value="${updateField}">`;
+
+                let updateInput = '';
+                if (updateField === 'status' && updateValue === 'done') {
+                    updateInput = `<p class="text-sm font-medium p-3 bg-white dark:bg-slate-800 rounded-md">Marcar como <span class="font-bold text-blue-600 dark:text-blue-400">Completada</span>.</p>
+                                   <input type="hidden" name="${actionId}_update_value_0" value="done">`;
+                } else if (updateField === 'dueDate' || updateField === 'plannedDate') {
+                    const label = updateField === 'dueDate' ? 'NUEVA FECHA LÍMITE' : 'NUEVA FECHA PLANIFICADA';
+                    updateInput = `<div>
+                                       <label for="${actionId}_update_value_0" class="text-xs font-semibold text-slate-500">${label}</label>
+                                       <input type="date" id="${actionId}_update_value_0" name="${actionId}_update_value_0" value="${updateValue || ''}" class="editable-ai-input">
+                                   </div>`;
                 } else {
-                     const updatedField = Object.keys(action.updates)[0];
-                     const updatedValue = action.updates[updatedField];
-                     updateText = `Actualizar el campo <span class="font-semibold">${updatedField}</span> a "${updatedValue}".`;
+                    updateInput = `<div>
+                                       <label for="${actionId}_update_value_0" class="text-xs font-semibold text-slate-500">${updateField.toUpperCase()}</label>
+                                       <input type="text" id="${actionId}_update_value_0" name="${actionId}_update_value_0" value="${updateValue || ''}" class="editable-ai-input">
+                                   </div>`;
                 }
-                 icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shadow-inner">
-                            <i data-lucide="edit-3" class="w-7 h-7 text-blue-600 dark:text-blue-400"></i>
-                        </div>`;
-                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Actualizar Tarea</p>`;
-                details = `<div class="text-sm text-slate-600 dark:text-slate-300 mt-2">
-                              <p>${updateText}</p>
-                              <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">Tarea original: "${action.originalTitle}"</p>
-                           </div>`;
+                details = `<div class="space-y-2 mt-2">${updateInput}</div>`;
                 break;
             default:
-                 icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-gray-100 dark:bg-gray-900/50 flex items-center justify-center shadow-inner">
-                            <i data-lucide="alert-circle" class="w-7 h-7 text-gray-600 dark:text-gray-400"></i>
-                        </div>`;
+                icon = `<div class="w-12 h-12 flex-shrink-0 rounded-full bg-gray-100 dark:bg-gray-900/50 flex items-center justify-center shadow-inner"><i data-lucide="alert-circle" class="w-7 h-7 text-gray-600 dark:text-gray-400"></i></div>`;
                 title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Acción Desconocida</p>`;
                 details = `<p class="text-sm text-slate-500">${action.action}</p>`;
         }
-         return `<div class="flex items-center gap-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700/50 shadow-sm">
-                    ${icon}
-                    <div class="flex-grow">${title}${details}</div>
-                </div>`;
+        content += `<div class="flex items-start gap-4 p-4">
+                        ${icon}
+                        <div class="flex-grow">${title}${details}</div>
+                    </div></div>`;
+        return content;
     };
 
     const actionsHTML = executionPlan.map(renderAction).join('');
@@ -216,7 +233,6 @@ export function getAIAssistantReviewViewHTML(plan) {
             </button>
         </div>
         <div class="p-6 flex-grow min-h-0 overflow-y-auto custom-scrollbar">
-            <!-- Accordion for Thought Process -->
             <div class="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg mb-6">
                 <button id="thought-process-accordion-btn" class="w-full flex justify-between items-center p-4 font-bold text-slate-700 dark:text-slate-300">
                     <span>Proceso de Pensamiento de la IA</span>
@@ -227,17 +243,17 @@ export function getAIAssistantReviewViewHTML(plan) {
                 </div>
             </div>
 
-            <!-- Execution Plan -->
-            <div>
+            <form id="ai-execution-plan-form">
                 <h4 class="font-bold text-slate-800 dark:text-slate-200 mb-3 text-lg">Plan de Ejecución Propuesto</h4>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Puedes desmarcar o editar cualquier acción antes de confirmar.</p>
                 <div class="space-y-4">
                     ${actionsHTML || '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
                 </div>
-            </div>
+            </form>
         </div>
         <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
             <button id="ai-reject-plan-btn" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Volver a Editar</button>
-            <button id="ai-confirm-plan-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
+            <button id="ai-confirm-plan-btn" type="submit" form="ai-execution-plan-form" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
                 <i data-lucide="check-check" class="w-5 h-5"></i>
                 Confirmar y Ejecutar
             </button>

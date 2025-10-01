@@ -460,10 +460,45 @@ export async function openAIAssistantModal() {
         viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
         viewContainer.querySelector('#ai-reject-plan-btn').addEventListener('click', () => renderPromptView(plan.userPrompt));
 
-        const confirmBtn = viewContainer.querySelector('#ai-confirm-plan-btn');
-        confirmBtn.addEventListener('click', async () => {
-            if (!currentPlan || !currentPlan.executionPlan) {
-                showToast('No hay un plan válido para ejecutar.', 'error');
+        const form = viewContainer.querySelector('#ai-execution-plan-form');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+            const modifiedExecutionPlan = [];
+            const originalPlanLength = currentPlan.executionPlan.length;
+
+            for (let i = 0; i < originalPlanLength; i++) {
+                const actionId = `action_${i}`;
+                if (!formData.get(`${actionId}_enabled`)) {
+                    continue; // Skip disabled actions
+                }
+
+                const actionType = formData.get(`${actionId}_type`);
+                const originalAction = currentPlan.executionPlan[i];
+                const newAction = {
+                    action: actionType,
+                    originalTitle: originalAction.originalTitle
+                };
+
+                if (actionType === 'CREATE') {
+                    newAction.task = {
+                        title: formData.get(`${actionId}_title`),
+                        dueDate: formData.get(`${actionId}_dueDate`) || null
+                    };
+                } else if (actionType === 'UPDATE') {
+                    newAction.docId = formData.get(`${actionId}_docId`);
+                    newAction.updates = {};
+                    const updateField = formData.get(`${actionId}_update_field_0`);
+                    const updateValue = formData.get(`${actionId}_update_value_0`);
+                    newAction.updates[updateField] = updateValue;
+                }
+
+                modifiedExecutionPlan.push(newAction);
+            }
+
+            if (modifiedExecutionPlan.length === 0) {
+                showToast('No hay acciones seleccionadas para ejecutar.', 'warning');
                 return;
             }
 
@@ -473,18 +508,17 @@ export async function openAIAssistantModal() {
             try {
                 const functions = getFunctions();
                 const executePlanFn = httpsCallable(functions, 'executeTaskModificationPlan');
-                const result = await executePlanFn({ plan: currentPlan.executionPlan });
+                const result = await executePlanFn({ plan: modifiedExecutionPlan });
 
                 showToast(result.data.message || 'Plan ejecutado con éxito!', 'success');
                 closeModal();
-                // A simple reload is sufficient to show the changes in the UI
                 setTimeout(() => location.reload(), 500);
 
             } catch (error) {
                 console.error("Error executing AI plan:", error);
                 showToast(error.message || 'Error al ejecutar el plan.', 'error');
-                // Go back to the review view on failure
-                renderReviewView(currentPlan);
+                const modifiedPlanForReview = { ...currentPlan, executionPlan: modifiedExecutionPlan };
+                renderReviewView(modifiedPlanForReview);
             }
         });
     };
