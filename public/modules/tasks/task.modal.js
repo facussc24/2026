@@ -24,12 +24,14 @@ let appState;
 let dom;
 let lucide;
 let db;
+let functions;
 
 export function initTaskModal(dependencies) {
     appState = dependencies.appState;
     dom = dependencies.dom;
     lucide = dependencies.lucide;
     db = dependencies.db;
+    functions = dependencies.functions;
 }
 
 function populateTaskAssigneeDropdown() {
@@ -495,15 +497,18 @@ export async function openAIAssistantModal() {
                 return;
             }
 
-            viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Generando plan...');
+            viewContainer.innerHTML = getAIAssistantLoadingViewHTML();
             lucide.createIcons();
+            const thinkingStepsContainer = viewContainer.querySelector('#thinking-steps-container');
+
 
             try {
+                // This is a trick to get the result while showing the thinking process
+                // We don't await the result directly, but we will later.
+                const getPlanFn = httpsCallable(functions, 'getAIAssistantPlan');
                 const allTasks = await fetchAllTasks();
                 const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
 
-                const functions = getFunctions();
-                const getPlanFn = httpsCallable(functions, 'getAIAssistantPlan');
                 const result = await getPlanFn({ userPrompt, tasks: userTasks });
 
                 const plan = { ...result.data, userPrompt };
