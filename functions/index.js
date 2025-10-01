@@ -330,6 +330,7 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
         - \`dueDate\`: La fecha LÍMITE final para completar la tarea.
         - \`plannedDate\`: El día específico en que el usuario (o un asistente previo) ha planeado trabajar en la tarea.
       - Para cualquier solicitud relacionada con la organización de la semana (ej. "revisa mis tareas del lunes", "mueve lo de mañana al viernes"), DEBES usar la \`plannedDate\`. La \`dueDate\` solo debe considerarse para priorización o si el usuario pregunta explícitamente por "vencimientos".
+      - **REGLA DE REPLANIFICACIÓN CRÍTICA:** Si el usuario pide mover tareas de días pasados (ej. "replanifica las tareas de ayer"), NO las acumules todas en el día de hoy. En su lugar, **balancea la carga**: analiza las \\\`plannedDate\\\` de los próximos 5 días y distribuye las tareas de manera inteligente para no sobrecargar ningún día. Explica esta estrategia de distribución en tu \\\`thoughtProcess\\\`.
       - Tareas Actuales del Usuario:
       \`\`\`json
       ${JSON.stringify(tasksForPrompt, null, 2)}
