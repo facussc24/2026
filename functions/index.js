@@ -600,19 +600,19 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    const { userPrompt, tasks } = data;
+    const { userPrompt, tasks, currentDate } = data;
     if (!userPrompt || typeof userPrompt !== "string" || userPrompt.trim().length === 0) {
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'userPrompt' argument.");
     }
     if (!tasks || !Array.isArray(tasks)) {
         throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'tasks' (array) argument.");
     }
+    if (!currentDate || !/^\d{4}-\d{2}-\d{2}$/.test(currentDate)) {
+        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a valid 'currentDate' (YYYY-MM-DD).");
+    }
 
     const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const today = new Date();
-    const currentDate = today.toISOString().split("T")[0];
+    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const tasksForPrompt = tasks.map(t => ({
         docId: t.docId,
@@ -627,7 +627,7 @@ exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1G
       2.  Un "plan de ejecución" en formato JSON que contenga las acciones concretas a realizar.
 
       **Contexto:**
-      - Fecha de Hoy: ${currentDate}
+      - La fecha de hoy es ${currentDate}. Utiliza esta fecha como referencia para cualquier cálculo de fechas relativas (ej: "mañana", "ayer", "próximo lunes").
       - Tareas Actuales del Usuario:
       \`\`\`json
       ${JSON.stringify(tasksForPrompt, null, 2)}
