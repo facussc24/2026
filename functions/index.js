@@ -318,11 +318,6 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
             }
         },
         {
-            id: 'find_task',
-            description: 'Finds an existing task by its title or keywords to get its ID.',
-            parameters: { query: 'string' }
-        },
-        {
             id: 'create_dependency',
             description: 'Creates a dependency between two tasks. The first task will be blocked until the second one is complete.',
             parameters: {
@@ -359,6 +354,13 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                 summary: 'string'
             }
         },
+        {
+            id: 'find_tasks',
+            description: 'Finds a list of tasks based on a property filter. Use this to find all tasks that are unscheduled (`"plannedDate": null`), have a specific status, or match a title.',
+            parameters: {
+                filter: 'object'
+            }
+        },
          {
             id: 'finish',
             description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
@@ -372,7 +374,7 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
         **CRITICAL RULES:**
         1.  Your entire thought process (the "thought" field) MUST be in Spanish.
         2.  **Task Creation:** Use the \`create_task\` tool to create new tasks. The system will automatically handle scheduling.
-        3.  **Task Updates:** To modify an existing task, such as adding a \`plannedDate\`, use the \`find_task\` and \`update_task\` tools.
+        3.  **Task Updates:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), first use the \`find_tasks\` tool with a filter like \`{"plannedDate": null}\`. Then, for each task found, use the \`update_task\` tool to apply the change.
         4.  **Completing a Task:** When the user asks to complete, finish, or mark a task as done, you MUST use the \`complete_task\` tool.
 
         **Cycle:**
@@ -461,26 +463,11 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                     const tempId = `temp_${Date.now()}`;
                     const taskPayload = tool_code.parameters;
 
-                    // --- Unconditional Intelligent Scheduling ---
-                    // This logic now runs every time, overriding any date the AI might hallucinate.
-                    const dayCounts = {};
-                    for (let i = 0; i < 7; i++) {
-                        const d = new Date(currentDate);
-                        d.setDate(d.getDate() + i);
-                        dayCounts[d.toISOString().split('T')[0]] = 0;
+                    // This tool is now simple. The complex scheduling is handled by `schedule_all_unscheduled_tasks`.
+                    // We still add a default date if one isn't provided to prevent errors.
+                    if (!taskPayload.plannedDate) {
+                        taskPayload.plannedDate = currentDate;
                     }
-
-                    tasks.forEach(t => {
-                        if (t.plannedDate && dayCounts.hasOwnProperty(t.plannedDate)) {
-                            dayCounts[t.plannedDate]++;
-                        }
-                    });
-
-                    // Find the day with the minimum tasks
-                    let bestDate = Object.keys(dayCounts).reduce((a, b) => dayCounts[a] < dayCounts[b] ? a : b);
-                    taskPayload.plannedDate = bestDate; // Force override
-                    toolResult = `OK. Task created with temporary ID: ${tempId} and intelligently scheduled for ${bestDate}.`;
-                    // --- End of Scheduling Logic ---
 
                     executionPlan.push({ action: "CREATE", docId: tempId, task: taskPayload });
                     tasks.push({
@@ -489,13 +476,7 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                         status: 'todo',
                         plannedDate: taskPayload.plannedDate
                     });
-                    break;
-                case 'find_task':
-                    const query = tool_code.parameters.query.toLowerCase();
-                    // Search in reverse to find the most recently created task first.
-                    const reversedTasks = [...tasks].reverse();
-                    const foundTask = reversedTasks.find(t => t.title.toLowerCase().includes(query));
-                    toolResult = foundTask ? `OK. Found task with ID: ${foundTask.docId}` : `Error: Task not found for query: "${tool_code.parameters.query}"`;
+                    toolResult = `OK. Task created with temporary ID: ${tempId}.`;
                     break;
                 case 'create_dependency':
                     const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
@@ -534,10 +515,32 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                     const { task_id: complete_task_id } = tool_code.parameters;
                     const taskToComplete = tasks.find(t => t.docId === complete_task_id);
                     if (taskToComplete) {
-                        executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates: { status: 'done' } });
+                        executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates: { status: 'done' }, originalTitle: taskToComplete.title });
                         toolResult = `OK. Task "${taskToComplete.title}" marked as complete.`;
                     } else {
                         toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
+                    }
+                    break;
+                case 'find_tasks':
+                    const { filter } = tool_code.parameters;
+                    const filterKeys = Object.keys(filter);
+                    const foundTasks = tasks.filter(t => {
+                        return filterKeys.every(key => {
+                            if (key === 'title') {
+                                return t.title.toLowerCase().includes(filter[key].toLowerCase());
+                            }
+                            // Handle null for plannedDate
+                            if (key === 'plannedDate' && filter[key] === null) {
+                                return !t.plannedDate;
+                            }
+                            return t[key] === filter[key];
+                        });
+                    });
+                    const foundIds = foundTasks.map(t => t.docId);
+                    if (foundTasks.length > 0) {
+                        toolResult = `OK. Found ${foundTasks.length} tasks with IDs: ${foundIds.join(', ')}. The titles are: ${foundTasks.map(t => t.title).join(', ')}`;
+                    } else {
+                        toolResult = `Error: No tasks found for the given filter.`;
                     }
                     break;
                 default:
