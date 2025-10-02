@@ -339,12 +339,13 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
             const toolDefinitions = [
                 // Tool definitions remain the same
                  {
-                    id: 'create_task',
-                    description: "Creates a new task with a title, description, and optional due date. The system will automatically assign the best planned date if one isn't specified by the user.",
-                    parameters: {
-                        title: 'string',
-                        description: 'string (optional)',
-                        dueDate: 'string (YYYY-MM-DD, optional)'
+                    "id": "create_task",
+                    "description": "Creates a new task. You MUST determine the best `plannedDate` by analyzing the user's current schedule. Only set a `dueDate` if a specific deadline is mentioned.",
+                    "parameters": {
+                        "title": "string",
+                        "description": "string (optional)",
+                        "plannedDate": "string (YYYY-MM-DD)",
+                        "dueDate": "string (YYYY-MM-DD, optional)"
                     }
                 },
                 {
@@ -410,20 +411,15 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
 
                 **CRITICAL RULES:**
                 1.  Your entire thought process (the "thought" field) MUST be in Spanish.
-        2.  **Self-Correction:** If a tool returns an error, you MUST NOT stop. In your next "Thought", you must acknowledge the error and decide on a new course of action. For example, if \`find_tasks\` returns an error that a task was not found, you should use your next turn to inform the user and ask if they want to create it instead.
-        3.  **Task Creation:** Use the \`create_task\` tool to create new tasks.
-        4.  **Task Updates:** To modify a single task, use \`update_task\`. To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), you MUST use the more efficient \`bulk_update_tasks\` tool.
-        5.  **Completing a Task:** When the user asks to complete a task, you MUST use the \`complete_task\` tool.
-        6.  **Intelligent Scheduling:** When asked to schedule multiple tasks (like assigning dates to all unscheduled items), you MUST NOT assign them all to the same day. Instead, you must perform load-balancing. Analyze the user's workload for the current week and the next two weeks (a total of 3 weeks) and distribute the new tasks intelligently to avoid overloading any single day. You MUST explain this distribution strategy in your 'thought' process.
-        7.  **Intelligent Rescheduling:** When asked to reschedule or rebalance a specific day, you must identify all tasks planned for that day. Then, analyze the user's workload for the next 3 weeks to find less busy days. Finally, use the \`update_task\` tool to move some tasks from the overloaded day to the less busy days. You MUST explain your reasoning for moving each task in your 'thought' process.
-
-                **User Request Handling:**
-                - **Assigning Dates to Unscheduled Tasks:** If the user asks to schedule tasks without a date, you MUST follow this sequence:
-                    1. Use the \`find_tasks\` tool with the filter \`{ "plannedDate": null }\` to get a list of unscheduled tasks.
-                    2. Use the \`bulk_update_tasks\` tool to assign a \`plannedDate\` to all found tasks in a single action. Use today's date, \`${currentDate}\`, unless specified otherwise.
+                2.  **\`plannedDate\` vs. \`dueDate\`:** You MUST understand the difference. \`plannedDate\` is the date you schedule the task on. \`dueDate\` is a final deadline. You are responsible for setting a \`plannedDate\` for ALL tasks. Only set a \`dueDate\` if the user explicitly mentions a deadline.
+                3.  **Proactive Scheduling (Default Behavior):** For ANY new task or any existing task that needs a date, you MUST proactively find the best day to schedule it. NEVER assign tasks without a \`plannedDate\`. Your primary goal is to intelligently place tasks on the user's calendar.
+                4.  **Workload Balancing:** When scheduling, you MUST analyze the user's workload for the current week and the next two (3 weeks total). Distribute new tasks to avoid overloading any single day. You MUST explain your distribution strategy in your 'thought' process.
+                5.  **Self-Correction:** If a tool returns an error, you MUST NOT stop. In your next "Thought", acknowledge the error and decide on a new course of action.
+                6.  **Tool Efficiency:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), you MUST use the more efficient \`bulk_update_tasks\` tool.
+                7.  **Intelligent Rescheduling:** When asked to reschedule a specific day, identify all tasks planned for that day. Then, analyze the user's workload for the next 3 weeks to find less busy days. Finally, use \`update_task\` to move tasks from the overloaded day to less busy ones, explaining your reasoning in your 'thought' process.
 
                 **Cycle:**
-                1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take. Your thoughts must be in Spanish.
+                1. **Thought:** Analyze the user's request, the current task list, and your conversation history. Decide on the next immediate action to take based on your scheduling strategy. Your thoughts must be in Spanish.
                 2. **Action:** Choose a tool from the available tools list and provide the necessary parameters in JSON format.
                 3. **Observation:** You will be given the result of your action.
                 4. **Repeat:** Continue this cycle until the user's request is fully completed.
@@ -539,9 +535,10 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                             const tempId = `temp_${Date.now()}`;
                             const taskPayload = tool_code.parameters;
 
-                            if (!taskPayload.plannedDate) {
-                                taskPayload.plannedDate = currentDate;
-                            }
+                            // The AI is now responsible for providing this, so we don't default it here.
+                            // if (!taskPayload.plannedDate) {
+                            //     taskPayload.plannedDate = currentDate;
+                            // }
 
                             executionPlan.push({ action: "CREATE", docId: tempId, task: taskPayload });
                             tasks.push({
