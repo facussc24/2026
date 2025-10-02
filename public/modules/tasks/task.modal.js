@@ -553,19 +553,6 @@ export async function openAIAssistantModal() {
         lucide.createIcons();
         const thinkingStepsContainer = viewContainer.querySelector('#thinking-steps-container');
 
-        // This function will be called to update the thinking steps
-        const updateThinkingSteps = (steps) => {
-            if (steps && steps.length > 0) {
-                thinkingStepsContainer.innerHTML = steps.map(step =>
-                    `<p class="flex items-center gap-2 text-slate-600 dark:text-slate-300 animate-fade-in">
-                        <i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i>
-                        <span>${step}</span>
-                    </p>`
-                ).join('');
-                lucide.createIcons();
-            }
-        };
-
         // Call the backend function
         (async () => {
             try {
@@ -575,21 +562,45 @@ export async function openAIAssistantModal() {
                 const currentDate = new Date().toISOString().split('T')[0];
 
                 const result = await agentFn({ userPrompt, tasks: userTasks, currentDate });
-
                 const plan = result.data;
 
                 if (!plan.thoughtProcess || !plan.executionPlan || !plan.thinkingSteps) {
                     throw new Error("La IA devolvió un plan con un formato inesperado.");
                 }
 
-                // Update thinking steps one last time before switching view
-                updateThinkingSteps(plan.thinkingSteps);
+                // --- Enrich Plan with Original Titles (Fix for "undefined" task bug) ---
+                const taskTitleMap = new Map();
+                allTasks.forEach(t => taskTitleMap.set(t.docId, t.title));
+                plan.executionPlan.forEach(action => {
+                    if (action.action === 'CREATE') taskTitleMap.set(action.docId, action.task.title);
+                });
+                plan.executionPlan.forEach(action => {
+                    if (action.action === 'UPDATE') action.originalTitle = taskTitleMap.get(action.docId) || 'Tarea no encontrada';
+                });
+                // --- End of Enrichment ---
 
-                // Give a brief moment for the user to see the final step
-                setTimeout(() => {
-                    renderReviewView(plan);
-                }, 500);
+                // --- Animate Thinking Steps ---
+                thinkingStepsContainer.innerHTML = ''; // Clear initial message
+                const steps = plan.thinkingSteps;
+                let currentStep = 0;
 
+                function showNextStep() {
+                    if (currentStep < steps.length) {
+                        const step = steps[currentStep];
+                        const p = document.createElement('p');
+                        p.className = 'flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in';
+                        p.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span>${step}</span>`;
+                        thinkingStepsContainer.appendChild(p);
+                        lucide.createIcons({ nodes: [p.querySelector('i')] });
+                        thinkingStepsContainer.scrollTop = thinkingStepsContainer.scrollHeight;
+                        currentStep++;
+                        setTimeout(showNextStep, 750); // Delay for the next step
+                    } else {
+                        // All steps shown, move to review view after a short delay
+                        setTimeout(() => renderReviewView(plan), 500);
+                    }
+                }
+                showNextStep(); // Start the animation
 
             } catch (error) {
                 console.error("Error calling getAIAssistantPlan:", error);
@@ -625,8 +636,8 @@ export async function openAIAssistantModal() {
             const templateButton = e.target.closest('[data-action="ai-template"]');
             if (templateButton) {
                 const templateId = templateButton.dataset.templateId;
-                if (templateId === 'new-blog-post') {
-                    promptTextarea.value = 'Iniciar nuevo post para el blog sobre...';
+                if (templateId === 'new-amfe-process') {
+                    promptTextarea.value = 'Iniciar un nuevo proceso de AMFE para...';
                     promptTextarea.focus();
                     // Move cursor to the end
                     promptTextarea.setSelectionRange(promptTextarea.value.length, promptTextarea.value.length);
