@@ -257,5 +257,15 @@ service cloud.firestore {
       // Cualquier usuario autenticado puede crear una notificación (la lógica de la app determina para quién es).
       allow create: if request.auth != null;
     }
+
+    // --- AI AGENT JOBS ---
+    match /ai_agent_jobs/{jobId} {
+      // A user can read a job document if they are the one who created it.
+      // This allows the frontend to listen for real-time progress updates.
+      allow read: if request.auth != null && request.auth.uid == resource.data.creatorUid;
+
+      // No other client-side operations are permitted.
+      allow create, update, delete: if false;
+    }
   }
 }
