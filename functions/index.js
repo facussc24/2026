@@ -310,10 +310,11 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
     const toolDefinitions = [
         {
             id: 'create_task',
-            description: 'Creates a new task with a title, description, and due date.',
+            description: 'Creates a new task with a title, description, planned date, and due date.',
             parameters: {
                 title: 'string',
                 description: 'string (optional)',
+                plannedDate: 'string (YYYY-MM-DD)',
                 dueDate: 'string (YYYY-MM-DD, optional)'
             }
         },
@@ -354,7 +355,9 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
     const systemPrompt = `
         You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step and using the tools at your disposal.
 
-        **CRITICAL RULE:** Your entire thought process (the "thought" field) MUST be in Spanish.
+        **CRITICAL RULES:**
+        1. Your entire thought process (the "thought" field) MUST be in Spanish.
+        2. When creating a task (\`create_task\`), you MUST provide a \`plannedDate\`. If the user does not specify a date, you MUST use today's date as the default.
 
         **Cycle:**
         1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take. Your thoughts must be in Spanish.
@@ -364,7 +367,7 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
 
         **Context:**
         - Today's Date: ${currentDate}
-        - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status})), null, 2)}
+        - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate})), null, 2)}
 
         **Company Glossary:**
         - **AMFE (Análisis de Modo y Efecto de Falla):** A systematic, proactive method for evaluating a process to identify where and how it might fail and to assess the relative impact of different failures, in order to identify the parts of the process that are most in need of change. When a user asks to start an AMFE process, it implies a series of structured tasks: analysis, team formation, documentation, review, and implementation of countermeasures.
@@ -440,9 +443,15 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                     break;
                 case 'create_task':
                     const tempId = `temp_${Date.now()}`;
-                    executionPlan.push({ action: "CREATE", docId: tempId, task: tool_code.parameters });
-                    // Add the new task to the context for the next turn
-                    tasks.push({ docId: tempId, title: tool_code.parameters.title, status: 'todo' });
+                    const taskPayload = tool_code.parameters;
+                    executionPlan.push({ action: "CREATE", docId: tempId, task: taskPayload });
+                    // Add the new task to the context for the next turn, ensuring plannedDate is included
+                    tasks.push({
+                        docId: tempId,
+                        title: taskPayload.title,
+                        status: 'todo',
+                        plannedDate: taskPayload.plannedDate
+                    });
                     toolResult = `OK. Task created with temporary ID: ${tempId}.`;
                     break;
                 case 'find_task':
