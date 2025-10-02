@@ -569,12 +569,12 @@ export async function openAIAssistantModal() {
         // Call the backend function
         (async () => {
             try {
-                const getPlanFn = httpsCallable(functions, 'getAIAssistantPlan');
+                const agentFn = httpsCallable(functions, 'aiProjectAgent');
                 const allTasks = await fetchAllTasks();
                 const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
                 const currentDate = new Date().toISOString().split('T')[0];
 
-                const result = await getPlanFn({ userPrompt, tasks: userTasks, currentDate });
+                const result = await agentFn({ userPrompt, tasks: userTasks, currentDate });
 
                 const plan = result.data;
 
@@ -619,6 +619,19 @@ export async function openAIAssistantModal() {
                 return;
             }
             renderLoadingView(userPrompt);
+        });
+
+        viewContainer.addEventListener('click', (e) => {
+            const templateButton = e.target.closest('[data-action="ai-template"]');
+            if (templateButton) {
+                const templateId = templateButton.dataset.templateId;
+                if (templateId === 'new-blog-post') {
+                    promptTextarea.value = 'Iniciar nuevo post para el blog sobre...';
+                    promptTextarea.focus();
+                    // Move cursor to the end
+                    promptTextarea.setSelectionRange(promptTextarea.value.length, promptTextarea.value.length);
+                }
+            }
         });
     };
 

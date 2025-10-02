@@ -125,7 +125,16 @@ export function getAIAssistantPromptViewHTML() {
             <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
                 Describe qué necesitas. Puedes crear tareas, marcarlas como completadas, cambiar fechas y más.
             </p>
-            <textarea id="ai-assistant-prompt-input" class="w-full h-48 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear tarea para revisar los planos y marcar como hecha la de llamar al proveedor..."></textarea>
+            <textarea id="ai-assistant-prompt-input" class="w-full h-32 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear tarea para revisar los planos y marcar como hecha la de llamar al proveedor..."></textarea>
+
+            <div class="mt-4">
+                <h4 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">O prueba una acción rápida:</h4>
+                <div class="flex flex-wrap gap-2">
+                    <button data-action="ai-template" data-template-id="new-blog-post" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-sm py-1.5 px-3 rounded-full flex items-center transition-colors">
+                        <i data-lucide="file-plus-2" class="mr-1.5 h-4 w-4"></i>Iniciar nuevo post para el blog
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
             <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
