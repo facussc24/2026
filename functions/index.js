@@ -377,6 +377,13 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                         updates: 'object'
                     }
                 },
+                {
+                    id: 'bulk_update_tasks',
+                    description: 'Updates multiple tasks in a single operation. Provide a list of task IDs and the corresponding updates for each.',
+                    parameters: {
+                        updates: 'array' // e.g., [{ task_id: "id1", updates: { plannedDate: "2025-10-03" } }]
+                    }
+                },
                  {
                     id: 'review_and_summarize_plan',
                     description: 'Review the created tasks and dependencies and provide a brief, high-level summary in Spanish of the plan you have constructed. This should be your final step before using the "finish" tool.',
@@ -405,7 +412,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 1.  Your entire thought process (the "thought" field) MUST be in Spanish.
         2.  **Self-Correction:** If a tool returns an error, you MUST NOT stop. In your next "Thought", you must acknowledge the error and decide on a new course of action. For example, if \`find_tasks\` returns an error that a task was not found, you should use your next turn to inform the user and ask if they want to create it instead.
         3.  **Task Creation:** Use the \`create_task\` tool to create new tasks.
-        4.  **Task Updates:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), first use the \`find_tasks\` tool. Then, for each task found, use the \`update_task\` tool.
+        4.  **Task Updates:** To modify a single task, use `update_task`. To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), you MUST use the more efficient `bulk_update_tasks` tool.
         5.  **Completing a Task:** When the user asks to complete a task, you MUST use the \`complete_task\` tool.
         6.  **Intelligent Scheduling:** When asked to schedule multiple tasks (like assigning dates to all unscheduled items), you MUST NOT assign them all to the same day. Instead, you must perform load-balancing. Analyze the user's workload for the current week and the next two weeks (a total of 3 weeks) and distribute the new tasks intelligently to avoid overloading any single day. You MUST explain this distribution strategy in your 'thought' process.
         7.  **Intelligent Rescheduling:** When asked to reschedule or rebalance a specific day, you must identify all tasks planned for that day. Then, analyze the user's workload for the next 3 weeks to find less busy days. Finally, use the \`update_task\` tool to move some tasks from the overloaded day to the less busy days. You MUST explain your reasoning for moving each task in your 'thought' process.
@@ -413,8 +420,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 **User Request Handling:**
                 - **Assigning Dates to Unscheduled Tasks:** If the user asks to schedule tasks without a date, you MUST follow this sequence:
                     1. Use the \`find_tasks\` tool with the filter \`{ "plannedDate": null }\` to get a list of unscheduled tasks.
-                    2. For EACH task ID returned by \`find_tasks\`, you MUST use the \`update_task\` tool to assign a \`plannedDate\`. Use today's date, \`${currentDate}\`, unless specified otherwise.
-                    3. Do not try to update all tasks in a single action. You must call \`update_task\` once for each task.
+                    2. Use the \`bulk_update_tasks\` tool to assign a \`plannedDate\` to all found tasks in a single action. Use today's date, \`${currentDate}\`, unless specified otherwise.
 
                 **Cycle:**
                 1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take. Your thoughts must be in Spanish.
@@ -547,6 +553,24 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                                 toolResult = `OK. Task "${taskToUpdate.title}" marked for update.`;
                             } else {
                                 toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
+                            }
+                            break;
+                        case 'bulk_update_tasks':
+                            const { updates: bulk_updates } = tool_code.parameters;
+                            let updated_count = 0;
+                            let not_found_ids = [];
+                            for (const item of bulk_updates) {
+                                const taskToUpdate = tasks.find(t => t.docId === item.task_id);
+                                if (taskToUpdate) {
+                                    executionPlan.push({ action: "UPDATE", docId: item.task_id, updates: item.updates });
+                                    updated_count++;
+                                } else {
+                                    not_found_ids.push(item.task_id);
+                                }
+                            }
+                            toolResult = `OK. Marked ${updated_count} tasks for update.`;
+                            if(not_found_ids.length > 0) {
+                                toolResult += ` Could not find tasks with IDs: ${not_found_ids.join(', ')}.`;
                             }
                             break;
                         case 'complete_task':
