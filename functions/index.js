@@ -381,7 +381,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     id: 'bulk_update_tasks',
                     description: 'Updates multiple tasks in a single operation. Provide a list of task IDs and the corresponding updates for each.',
                     parameters: {
-                        updates: 'array' // e.g., [{ task_id: "id1", updates: { plannedDate: "2025-10-03" } }]
+                        updates: 'array'
                     }
                 },
                  {
