@@ -386,7 +386,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 },
                 {
                     id: 'find_tasks',
-                    description: 'Finds a list of tasks based on a property filter. Use this to find all tasks that are unscheduled (`"plannedDate": null`), have a specific status, or match a title.',
+                    description: 'Finds a list of tasks based on a property filter. Use this to find all tasks that are unscheduled (\\`"plannedDate\\": null\\`), have a specific status, or match a title.',
                     parameters: {
                         filter: 'object'
                     }
@@ -408,6 +408,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         4.  **Task Updates:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), first use the \`find_tasks\` tool. Then, for each task found, use the \`update_task\` tool.
         5.  **Completing a Task:** When the user asks to complete a task, you MUST use the \`complete_task\` tool.
         6.  **Intelligent Scheduling:** When asked to schedule multiple tasks (like assigning dates to all unscheduled items), you MUST NOT assign them all to the same day. Instead, you must perform load-balancing. Analyze the user's workload for the current week and the next two weeks (a total of 3 weeks) and distribute the new tasks intelligently to avoid overloading any single day. You MUST explain this distribution strategy in your 'thought' process.
+        7.  **Intelligent Rescheduling:** When asked to reschedule or rebalance a specific day, you must identify all tasks planned for that day. Then, analyze the user's workload for the next 3 weeks to find less busy days. Finally, use the \`update_task\` tool to move some tasks from the overloaded day to the less busy days. You MUST explain your reasoning for moving each task in your 'thought' process.
 
                 **User Request Handling:**
                 - **Assigning Dates to Unscheduled Tasks:** If the user asks to schedule tasks without a date, you MUST follow this sequence:
