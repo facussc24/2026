@@ -488,7 +488,15 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 }
 
                 const agentResponse = JSON.parse(jsonMatch[0]);
-                const { thought, tool_code } = agentResponse;
+                const { thought: rawThought, tool_code: rawToolCode } = agentResponse;
+
+                // Default to 'finish' to ensure the loop terminates gracefully on malformed responses.
+                const tool_code = rawToolCode || { tool_id: 'finish', parameters: {} };
+
+                // Provide a more contextual default thought if it's missing.
+                const thought = rawThought || (tool_code.tool_id === 'finish'
+                    ? 'Plan execution has been completed.'
+                    : `Preparing to execute tool: ${tool_code.tool_id}.`);
 
                 thinkingSteps.push({ thought, tool_code: tool_code.tool_id });
                 await jobRef.update({ thinkingSteps: admin.firestore.FieldValue.arrayUnion({ thought, tool_code: tool_code.tool_id, timestamp: new Date() }) });
