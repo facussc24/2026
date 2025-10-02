@@ -39,51 +39,7 @@ const admin = require('firebase-admin');
 const firebaseTest = require('firebase-functions-test')();
 
 // Import the functions to be tested AFTER mocking
-const { aiProjectAgent, executeTaskModificationPlan } = require('../index');
-
-describe('aiProjectAgent', () => {
-    beforeEach(() => {
-        mockGenerateContent.mockClear();
-        if (jest.isMockFunction(Date.now)) {
-            Date.now.mockRestore();
-        }
-    });
-
-    test('should use the review_and_summarize_plan tool as a final step', async () => {
-        mockGenerateContent
-            // 1. Create a task
-            .mockResolvedValueOnce({ response: { candidates: [{ content: { parts: [{ text: JSON.stringify({
-                thought: "Voy a crear la primera tarea.",
-                tool_code: { tool_id: 'create_task', parameters: { title: 'Tarea Única' } }
-            }) }] } }] } })
-            // 2. Review and Summarize
-            .mockResolvedValueOnce({ response: { candidates: [{ content: { parts: [{ text: JSON.stringify({
-                thought: "He creado la tarea. Ahora voy a resumir el plan.",
-                tool_code: { tool_id: 'review_and_summarize_plan', parameters: { summary: "He creado una única tarea para empezar." } }
-            }) }] } }] } })
-            // 3. Finish
-            .mockResolvedValueOnce({ response: { candidates: [{ content: { parts: [{ text: JSON.stringify({
-                thought: "He resumido el plan. Mi trabajo está completo.",
-                tool_code: { tool_id: 'finish', parameters: {} }
-            }) }] } }] } });
-
-        const wrapped = firebaseTest.wrap(aiProjectAgent);
-        const result = await wrapped({
-            userPrompt: 'Crea una tarea simple',
-            tasks: [],
-            currentDate: '2025-10-01'
-        }, { auth: { uid: 'test-uid' } });
-
-        // --- ASSERTIONS ---
-        expect(mockGenerateContent).toHaveBeenCalledTimes(3);
-        // Check that the summary is prioritized in the final output
-        expect(result.thoughtProcess).toContain('Resumen del Plan de la IA');
-        expect(result.thoughtProcess).toContain('He creado una única tarea para empezar.');
-        // Check that the execution plan is still correct
-        expect(result.executionPlan).toHaveLength(1);
-        expect(result.executionPlan[0].action).toBe('CREATE');
-    });
-});
+const { executeTaskModificationPlan } = require('../index');
 
 describe('executeTaskModificationPlan', () => {
     let mockBatch;

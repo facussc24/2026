@@ -293,282 +293,324 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
 // =================================================================================
 // --- AI AGENT ARCHITECTURE ---
 // =================================================================================
-
-/**
- * A stateful, multi-turn AI agent that can reason and use tools to accomplish complex project management goals.
- * It uses a ReAct (Reasoning and Acting) loop to iteratively think, act, and observe until the user's request is fulfilled.
- */
-exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
+exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    const { userPrompt, tasks, currentDate } = data;
-
-    const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const toolDefinitions = [
-        {
-            id: 'create_task',
-            description: "Creates a new task with a title, description, and optional due date. The system will automatically assign the best planned date if one isn't specified by the user.",
-            parameters: {
-                title: 'string',
-                description: 'string (optional)',
-                dueDate: 'string (YYYY-MM-DD, optional)'
-            }
-        },
-        {
-            id: 'create_dependency',
-            description: 'Creates a dependency between two tasks. The first task will be blocked until the second one is complete.',
-            parameters: {
-                dependent_task_id: 'string',
-                prerequisite_task_id: 'string'
-            }
-        },
-        {
-            id: 'delete_task',
-            description: 'Deletes an existing task using its ID.',
-            parameters: {
-                task_id: 'string'
-            }
-        },
-        {
-            id: 'complete_task',
-            description: "Marks an existing task as 'done' using its ID.",
-            parameters: {
-                task_id: 'string'
-            }
-        },
-        {
-            id: 'update_task',
-            description: 'Updates an existing task with new properties, such as plannedDate, title, or description.',
-            parameters: {
-                task_id: 'string',
-                updates: 'object'
-            }
-        },
-         {
-            id: 'review_and_summarize_plan',
-            description: 'Review the created tasks and dependencies and provide a brief, high-level summary in Spanish of the plan you have constructed. This should be your final step before using the "finish" tool.',
-            parameters: {
-                summary: 'string'
-            }
-        },
-        {
-            id: 'find_tasks',
-            description: 'Finds a list of tasks based on a property filter. Use this to find all tasks that are unscheduled (`"plannedDate": null`), have a specific status, or match a title.',
-            parameters: {
-                filter: 'object'
-            }
-        },
-         {
-            id: 'finish',
-            description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
-            parameters: {}
-        }
-    ];
-
-    const systemPrompt = `
-        You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step and using the tools at your disposal.
-
-        **CRITICAL RULES:**
-        1.  Your entire thought process (the "thought" field) MUST be in Spanish.
-        2.  **Task Creation:** Use the \`create_task\` tool to create new tasks. The system will automatically handle scheduling.
-        3.  **Task Updates:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), first use the \`find_tasks\` tool with a filter like \`{"plannedDate": null}\`. Then, for each task found, use the \`update_task\` tool to apply the change.
-        4.  **Completing a Task:** When the user asks to complete, finish, or mark a task as done, you MUST use the \`complete_task\` tool.
-
-        **Cycle:**
-        1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take. Your thoughts must be in Spanish.
-        2. **Action:** Choose a tool from the available tools list and provide the necessary parameters in JSON format.
-        3. **Observation:** You will be given the result of your action.
-        4. **Repeat:** Continue this cycle until the user's request is fully completed.
-
-        **Context:**
-        - Today's Date: ${currentDate}
-        - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate})), null, 2)}
-
-        **Company Glossary:**
-        - **AMFE (Análisis de Modo y Efecto de Falla):** A systematic, proactive method for evaluating a process to identify where and how it might fail and to assess the relative impact of different failures, in order to identify the parts of the process that are most in need of change. When a user asks to start an AMFE process, it implies a series of structured tasks: analysis, team formation, documentation, review, and implementation of countermeasures.
-
-        **Available Tools:**
-        ${JSON.stringify(toolDefinitions, null, 2)}
-
-        **Output Format:**
-        Your response MUST be a single, valid JSON object containing two keys: "thought" and "tool_code".
-        "tool_code" must be a JSON object with "tool_id" and "parameters".
-        Example:
-        {
-          "thought": "I need to create the first task for the user.",
-          "tool_code": {
-            "tool_id": "create_task",
-            "parameters": {
-              "title": "Investigar sobre marketing"
-            }
-          }
-        }
-
-        **Final Step:**
-        Before you use the "finish" tool, you MUST use the "review_and_summarize_plan" tool. Provide a concise, natural language summary in Spanish of the plan you've created.
-
-        Example of final steps:
-        {
-          "thought": "He creado todas las tareas y dependencias. Ahora voy a revisar y resumir el plan.",
-          "tool_code": {
-            "tool_id": "review_and_summarize_plan",
-            "parameters": {
-              "summary": "He creado un plan de 3 pasos para lanzar la campaña, comenzando por la investigación, seguido por la redacción del contenido y finalizando con la publicación."
-            }
-          }
-        }
-        // Then, on the next turn:
-        {
-          "thought": "He resumido el plan. Mi trabajo está completo.",
-          "tool_code": { "tool_id": "finish", "parameters": {} }
-        }
-    `;
-
-    let conversationHistory = [{ role: 'user', parts: [{ text: `User Request: "${userPrompt}"` }] }];
-    let executionPlan = [];
-    let thinkingSteps = [];
-    let summary = '';
-
-    for (let i = 0; i < 10; i++) { // Max 10 turns to prevent infinite loops
-        const prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
-        const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
-        const responseText = result.response.candidates[0].content.parts[0].text;
-        const jsonMatch = responseText.match(/{[\s\S]*}/);
-
-        if (!jsonMatch) {
-            throw new Error("Agent did not return valid JSON.");
-        }
-
-        const agentResponse = JSON.parse(jsonMatch[0]);
-        const { thought, tool_code } = agentResponse;
-
-        thinkingSteps.push({ thought, tool_code: tool_code.tool_id });
-
-        if (tool_code.tool_id === 'finish') {
-            break; // Agent has finished its work
-        }
-
-        // --- Tool Execution ---
-        let toolResult = '';
-        try {
-            switch (tool_code.tool_id) {
-                case 'review_and_summarize_plan':
-                    summary = tool_code.parameters.summary;
-                    toolResult = `OK. Plan summarized.`;
-                    break;
-                case 'create_task':
-                    const tempId = `temp_${Date.now()}`;
-                    const taskPayload = tool_code.parameters;
-
-                    // This tool is now simple. The complex scheduling is handled by `schedule_all_unscheduled_tasks`.
-                    // We still add a default date if one isn't provided to prevent errors.
-                    if (!taskPayload.plannedDate) {
-                        taskPayload.plannedDate = currentDate;
-                    }
-
-                    executionPlan.push({ action: "CREATE", docId: tempId, task: taskPayload });
-                    tasks.push({
-                        docId: tempId,
-                        title: taskPayload.title,
-                        status: 'todo',
-                        plannedDate: taskPayload.plannedDate
-                    });
-                    toolResult = `OK. Task created with temporary ID: ${tempId}.`;
-                    break;
-                case 'create_dependency':
-                    const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
-                    executionPlan.push({ action: "UPDATE", docId: dependent_task_id, updates: { dependsOn: [prerequisite_task_id], blocked: true } });
-                    executionPlan.push({ action: "UPDATE", docId: prerequisite_task_id, updates: { blocks: [dependent_task_id] } });
-                    toolResult = `OK. Dependency created: ${dependent_task_id} now depends on ${prerequisite_task_id}.`;
-                    break;
-                case 'delete_task':
-                    const { task_id } = tool_code.parameters;
-                    const taskIndexToDelete = tasks.findIndex(t => t.docId === task_id);
-                    if (taskIndexToDelete > -1) {
-                        const taskToDelete = tasks[taskIndexToDelete];
-                        executionPlan.push({
-                            action: "DELETE",
-                            docId: task_id,
-                            originalTitle: taskToDelete.title
-                        });
-                        // Remove the task from the context to prevent loops
-                        tasks.splice(taskIndexToDelete, 1);
-                        toolResult = `OK. Task "${taskToDelete.title}" marked for deletion and removed from context.`;
-                    } else {
-                        toolResult = `Error: Task with ID "${task_id}" not found.`;
-                    }
-                    break;
-                case 'update_task':
-                    const { task_id: update_task_id, updates } = tool_code.parameters;
-                    const taskToUpdate = tasks.find(t => t.docId === update_task_id);
-                    if (taskToUpdate) {
-                        executionPlan.push({ action: "UPDATE", docId: update_task_id, updates: updates });
-                        toolResult = `OK. Task "${taskToUpdate.title}" marked for update.`;
-                    } else {
-                        toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
-                    }
-                    break;
-                case 'complete_task':
-                    const { task_id: complete_task_id } = tool_code.parameters;
-                    const taskToComplete = tasks.find(t => t.docId === complete_task_id);
-                    if (taskToComplete) {
-                        executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates: { status: 'done' }, originalTitle: taskToComplete.title });
-                        toolResult = `OK. Task "${taskToComplete.title}" marked as complete.`;
-                    } else {
-                        toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
-                    }
-                    break;
-                case 'find_tasks':
-                    const { filter } = tool_code.parameters;
-                    const filterKeys = Object.keys(filter);
-                    const foundTasks = tasks.filter(t => {
-                        return filterKeys.every(key => {
-                            if (key === 'title') {
-                                return t.title.toLowerCase().includes(filter[key].toLowerCase());
-                            }
-                            // Handle null for plannedDate
-                            if (key === 'plannedDate' && filter[key] === null) {
-                                return !t.plannedDate;
-                            }
-                            return t[key] === filter[key];
-                        });
-                    });
-                    const foundIds = foundTasks.map(t => t.docId);
-                    if (foundTasks.length > 0) {
-                        toolResult = `OK. Found ${foundTasks.length} tasks with IDs: ${foundIds.join(', ')}. The titles are: ${foundTasks.map(t => t.title).join(', ')}`;
-                    } else {
-                        toolResult = `Error: No tasks found for the given filter.`;
-                    }
-                    break;
-                default:
-                    toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
-            }
-        } catch (e) {
-            toolResult = `Error executing tool: ${e.message}`;
-        }
-
-        conversationHistory.push({ role: 'model', parts: [{ text: JSON.stringify(agentResponse, null, 2) }] });
-        conversationHistory.push({ role: 'user', parts: [{ text: `Observation: ${toolResult}` }] });
+    const { userPrompt, tasks } = data;
+    if (!userPrompt || !tasks) {
+        throw new functions.https.HttpsError("invalid-argument", "The 'userPrompt' and 'tasks' are required.");
     }
 
-    const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
+    const db = admin.firestore();
+    const jobRef = db.collection('ai_agent_jobs').doc();
 
-    // If a summary was generated, prioritize it for the final 'thoughtProcess' display.
-    const finalThoughtProcessDisplay = summary ?
-        `### Resumen del Plan de la IA:\n\n${summary}` :
-        `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
-
-
-    return {
-        thinkingSteps: thinkingSteps.map(s => s.thought),
-        thoughtProcess: finalThoughtProcessDisplay,
-        executionPlan,
-        userPrompt
+    const jobData = {
+        status: 'PENDING',
+        userPrompt,
+        tasks,
+        creatorUid: context.auth.uid,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        currentDate: new Date().toISOString().split('T')[0],
+        conversationHistory: [],
+        thinkingSteps: [],
+        executionPlan: [],
+        summary: ''
     };
+
+    await jobRef.set(jobData);
+
+    return { jobId: jobRef.id };
 });
+
+
+exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.document('ai_agent_jobs/{jobId}')
+    .onCreate(async (snap, context) => {
+        const jobRef = snap.ref;
+        const jobData = snap.data();
+        let { userPrompt, tasks, currentDate, conversationHistory, executionPlan, thinkingSteps, summary } = jobData;
+
+        try {
+            await jobRef.update({ status: 'RUNNING' });
+
+            const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
+            const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+            const toolDefinitions = [
+                // Tool definitions remain the same
+                 {
+                    id: 'create_task',
+                    description: "Creates a new task with a title, description, and optional due date. The system will automatically assign the best planned date if one isn't specified by the user.",
+                    parameters: {
+                        title: 'string',
+                        description: 'string (optional)',
+                        dueDate: 'string (YYYY-MM-DD, optional)'
+                    }
+                },
+                {
+                    id: 'create_dependency',
+                    description: 'Creates a dependency between two tasks. The first task will be blocked until the second one is complete.',
+                    parameters: {
+                        dependent_task_id: 'string',
+                        prerequisite_task_id: 'string'
+                    }
+                },
+                {
+                    id: 'delete_task',
+                    description: 'Deletes an existing task using its ID.',
+                    parameters: {
+                        task_id: 'string'
+                    }
+                },
+                {
+                    id: 'complete_task',
+                    description: "Marks an existing task as 'done' using its ID.",
+                    parameters: {
+                        task_id: 'string'
+                    }
+                },
+                {
+                    id: 'update_task',
+                    description: 'Updates properties of an existing task. Use this to change the plannedDate, title, description, or other attributes.',
+                    parameters: {
+                        task_id: 'string',
+                        updates: 'object'
+                    }
+                },
+                 {
+                    id: 'review_and_summarize_plan',
+                    description: 'Review the created tasks and dependencies and provide a brief, high-level summary in Spanish of the plan you have constructed. This should be your final step before using the "finish" tool.',
+                    parameters: {
+                        summary: 'string'
+                    }
+                },
+                {
+                    id: 'find_tasks',
+                    description: 'Finds a list of tasks based on a property filter. Use this to find all tasks that are unscheduled (`"plannedDate": null`), have a specific status, or match a title.',
+                    parameters: {
+                        filter: 'object'
+                    }
+                },
+                 {
+                    id: 'finish',
+                    description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
+                    parameters: {}
+                }
+            ];
+
+            const systemPrompt = `
+                You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step and using the tools at your disposal.
+
+                **CRITICAL RULES:**
+                1.  Your entire thought process (the "thought" field) MUST be in Spanish.
+        2.  **Self-Correction:** If a tool returns an error, you MUST NOT stop. In your next "Thought", you must acknowledge the error and decide on a new course of action. For example, if \`find_tasks\` returns an error that a task was not found, you should use your next turn to inform the user and ask if they want to create it instead.
+        3.  **Task Creation:** Use the \`create_task\` tool to create new tasks.
+        4.  **Task Updates:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), first use the \`find_tasks\` tool. Then, for each task found, use the \`update_task\` tool.
+        5.  **Completing a Task:** When the user asks to complete a task, you MUST use the \`complete_task\` tool.
+
+                **User Request Handling:**
+                - **Assigning Dates to Unscheduled Tasks:** If the user asks to schedule tasks without a date, you MUST follow this sequence:
+                    1. Use the \`find_tasks\` tool with the filter \`{ "plannedDate": null }\` to get a list of unscheduled tasks.
+                    2. For EACH task ID returned by \`find_tasks\`, you MUST use the \`update_task\` tool to assign a \`plannedDate\`. Use today's date, \`${currentDate}\`, unless specified otherwise.
+                    3. Do not try to update all tasks in a single action. You must call \`update_task\` once for each task.
+
+                **Cycle:**
+                1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take. Your thoughts must be in Spanish.
+                2. **Action:** Choose a tool from the available tools list and provide the necessary parameters in JSON format.
+                3. **Observation:** You will be given the result of your action.
+                4. **Repeat:** Continue this cycle until the user's request is fully completed.
+
+                **Context:**
+                - Today's Date: ${currentDate}
+                - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate})), null, 2)}
+
+                **Company Glossary:**
+                - **AMFE (Análisis de Modo y Efecto de Falla):** A systematic, proactive method for evaluating a process to identify where and how it might fail and to assess the relative impact of different failures, in order to identify the parts of the process that are most in need of change. When a user asks to start an AMFE process, it implies a series of structured tasks: analysis, team formation, documentation, review, and implementation of countermeasures.
+
+                **Available Tools:**
+                ${JSON.stringify(toolDefinitions, null, 2)}
+
+                **Output Format:**
+                Your response MUST be a single, valid JSON object containing two keys: "thought" and "tool_code".
+                "tool_code" must be a JSON object with "tool_id" and "parameters".
+                Example:
+                {
+                  "thought": "I need to create the first task for the user.",
+                  "tool_code": {
+                    "tool_id": "create_task",
+                    "parameters": {
+                      "title": "Investigar sobre marketing"
+                    }
+                  }
+                }
+
+                **Final Step:**
+                Before you use the "finish" tool, you MUST use the "review_and_summarize_plan" tool. Provide a concise, natural language summary in Spanish of the plan you've created.
+
+                Example of final steps:
+                {
+                  "thought": "He creado todas las tareas y dependencias. Ahora voy a revisar y resumir el plan.",
+                  "tool_code": {
+                    "tool_id": "review_and_summarize_plan",
+                    "parameters": {
+                      "summary": "He creado un plan de 3 pasos para lanzar la campaña, comenzando por la investigación, seguido por la redacción del contenido y finalizando con la publicación."
+                    }
+                  }
+                }
+                // Then, on the next turn:
+                {
+                  "thought": "He resumido el plan. Mi trabajo está completo.",
+                  "tool_code": { "tool_id": "finish", "parameters": {} }
+                }
+            `;
+
+            if (conversationHistory.length === 0) {
+                 conversationHistory.push({ role: 'user', parts: [{ text: `User Request: "${userPrompt}"` }] });
+            }
+
+
+            for (let i = 0; i < 10; i++) {
+                const prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
+                const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+                const responseText = result.response.candidates[0].content.parts[0].text;
+                const jsonMatch = responseText.match(/{[\s\S]*}/);
+
+                if (!jsonMatch) {
+                    throw new Error("Agent did not return valid JSON.");
+                }
+
+                const agentResponse = JSON.parse(jsonMatch[0]);
+                const { thought, tool_code } = agentResponse;
+
+                thinkingSteps.push({ thought, tool_code: tool_code.tool_id });
+                await jobRef.update({ thinkingSteps: admin.firestore.FieldValue.arrayUnion({ thought, tool_code: tool_code.tool_id, timestamp: new Date() }) });
+
+
+                if (tool_code.tool_id === 'finish') {
+                    break;
+                }
+
+                let toolResult = '';
+                try {
+                    // Tool execution logic remains the same
+                    switch (tool_code.tool_id) {
+                        case 'review_and_summarize_plan':
+                            summary = tool_code.parameters.summary;
+                            toolResult = `OK. Plan summarized.`;
+                            break;
+                        case 'create_task':
+                            const tempId = `temp_${Date.now()}`;
+                            const taskPayload = tool_code.parameters;
+
+                            if (!taskPayload.plannedDate) {
+                                taskPayload.plannedDate = currentDate;
+                            }
+
+                            executionPlan.push({ action: "CREATE", docId: tempId, task: taskPayload });
+                            tasks.push({
+                                docId: tempId,
+                                title: taskPayload.title,
+                                status: 'todo',
+                                plannedDate: taskPayload.plannedDate
+                            });
+                            toolResult = `OK. Task created with temporary ID: ${tempId}.`;
+                            break;
+                        case 'create_dependency':
+                            const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
+                            executionPlan.push({ action: "UPDATE", docId: dependent_task_id, updates: { dependsOn: [prerequisite_task_id], blocked: true } });
+                            executionPlan.push({ action: "UPDATE", docId: prerequisite_task_id, updates: { blocks: [dependent_task_id] } });
+                            toolResult = `OK. Dependency created: ${dependent_task_id} now depends on ${prerequisite_task_id}.`;
+                            break;
+                        case 'delete_task':
+                            const { task_id } = tool_code.parameters;
+                            const taskIndexToDelete = tasks.findIndex(t => t.docId === task_id);
+                            if (taskIndexToDelete > -1) {
+                                const taskToDelete = tasks[taskIndexToDelete];
+                                executionPlan.push({
+                                    action: "DELETE",
+                                    docId: task_id,
+                                    originalTitle: taskToDelete.title
+                                });
+                                tasks.splice(taskIndexToDelete, 1);
+                                toolResult = `OK. Task "${taskToDelete.title}" marked for deletion and removed from context.`;
+                            } else {
+                                toolResult = `Error: Task with ID "${task_id}" not found.`;
+                            }
+                            break;
+                        case 'update_task':
+                            const { task_id: update_task_id, updates } = tool_code.parameters;
+                            const taskToUpdate = tasks.find(t => t.docId === update_task_id);
+                            if (taskToUpdate) {
+                                executionPlan.push({ action: "UPDATE", docId: update_task_id, updates: updates });
+                                toolResult = `OK. Task "${taskToUpdate.title}" marked for update.`;
+                            } else {
+                                toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
+                            }
+                            break;
+                        case 'complete_task':
+                            const { task_id: complete_task_id } = tool_code.parameters;
+                            const taskToComplete = tasks.find(t => t.docId === complete_task_id);
+                            if (taskToComplete) {
+                                executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates: { status: 'done' }, originalTitle: taskToComplete.title });
+                                toolResult = `OK. Task "${taskToComplete.title}" marked as complete.`;
+                            } else {
+                                toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
+                            }
+                            break;
+                        case 'find_tasks':
+                            const { filter } = tool_code.parameters;
+                            const filterKeys = Object.keys(filter);
+                            const foundTasks = tasks.filter(t => {
+                                return filterKeys.every(key => {
+                                    if (key === 'title') {
+                                        return t.title.toLowerCase().includes(filter[key].toLowerCase());
+                                    }
+                                    if (key === 'plannedDate' && filter[key] === null) {
+                                        return !t.plannedDate;
+                                    }
+                                    return t[key] === filter[key];
+                                });
+                            });
+                            const foundIds = foundTasks.map(t => t.docId);
+                            if (foundTasks.length > 0) {
+                                toolResult = `OK. Found ${foundTasks.length} tasks with IDs: ${foundIds.join(', ')}. The titles are: ${foundTasks.map(t => t.title).join(', ')}`;
+                            } else {
+                                toolResult = `Error: No tasks found for the given filter.`;
+                            }
+                            break;
+                        default:
+                            toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
+                    }
+                } catch (e) {
+                    toolResult = `Error executing tool: ${e.message}`;
+                }
+
+                conversationHistory.push({ role: 'model', parts: [{ text: JSON.stringify(agentResponse, null, 2) }] });
+                conversationHistory.push({ role: 'user', parts: [{ text: `Observation: ${toolResult}` }] });
+            }
+
+            const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
+            const finalThoughtProcessDisplay = summary ?
+                `### Resumen del Plan de la IA:\n\n${summary}` :
+                `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
+
+            await jobRef.update({
+                status: 'COMPLETED',
+                thoughtProcess: finalThoughtProcessDisplay,
+                executionPlan,
+                summary,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+        } catch (error) {
+            console.error("Error running AI agent job:", error);
+            await jobRef.update({
+                status: 'ERROR',
+                error: error.message,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    });
 
 exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
