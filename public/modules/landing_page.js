@@ -306,22 +306,75 @@ function initWeeklyTasksSortable() {
     taskLists.forEach(list => {
         if (list.sortable) list.sortable.destroy();
         new Sortable(list, {
-            group: 'weekly-planning', animation: 150, filter: '.no-drag',
-            onStart: () => document.querySelectorAll('.task-list').forEach(el => el.closest('.bg-slate-50, .bg-red-50, .bg-amber-50')?.classList.add('drop-target-highlight')),
+            group: 'weekly-planning',
+            animation: 150,
+            filter: '.no-drag',
+            preventOnFilter: true,
+            ghostClass: 'sortable-ghost-custom',
+            onMove: function(evt) {
+                const fromColumnType = evt.from.dataset.columnType;
+                const toColumnType = evt.to.dataset.columnType;
+
+                // Rule 1: Prevent dragging FROM "Blocked" column to any other column.
+                if (fromColumnType === 'blocked' && fromColumnType !== toColumnType) {
+                    return false; // Disallow the move
+                }
+
+                // Rule 2: Prevent dragging TO "Overdue" column from any other column.
+                if (toColumnType === 'overdue') {
+                    return false; // Disallow the move
+                }
+
+                // Rule 3: Allow dragging from "Overdue" to other valid columns (except "Blocked").
+                if (fromColumnType === 'overdue' && toColumnType !== 'blocked') {
+                    return true;
+                }
+
+                return true; // Allow all other moves
+            },
+            onStart: () => {
+                document.querySelectorAll('.task-list').forEach(el => {
+                    const columnType = el.dataset.columnType;
+                    // Highlight valid drop targets
+                    if (columnType !== 'overdue' && columnType !== 'blocked') {
+                        el.closest('.task-column-container, .bg-red-50, .bg-amber-50, .bg-slate-50')?.classList.add('drop-target-highlight');
+                    }
+                });
+            },
             onEnd: async (evt) => {
                 document.querySelectorAll('.drop-target-highlight').forEach(el => el.classList.remove('drop-target-highlight'));
                 const taskId = evt.item.dataset.taskId;
+                const fromColumnType = evt.from.dataset.columnType;
                 const newColumn = evt.to;
                 const columnType = newColumn.dataset.columnType;
+
+                // Final check: Do not update if the task was from the blocked column
+                if (fromColumnType === 'blocked' && evt.from !== evt.to) {
+                    showToast('Las tareas bloqueadas no se pueden mover.', 'error');
+                    refreshWeeklyTasksView();
+                    return;
+                }
+                if (columnType === 'overdue') {
+                    showToast('No se puede arrastrar una tarea a la columna "Vencidas".', 'error');
+                    refreshWeeklyTasksView();
+                    return;
+                }
+                if (!taskId) {
+                    console.error("Task ID is missing.");
+                    refreshWeeklyTasksView();
+                    return;
+                }
+
                 let newDate;
                 if (newColumn.dataset.date) newDate = newColumn.dataset.date;
                 else if (columnType === 'unscheduled') newDate = null;
                 else if (columnType === 'next-week') { const d = new Date(monday); d.setDate(monday.getDate() + 7); newDate = format(d); }
                 else if (columnType === 'following-week') { const d = new Date(monday); d.setDate(monday.getDate() + 14); newDate = format(d); }
-                else if (columnType === 'overdue') { showToast('No se puede arrastrar una tarea a la columna "Vencidas".', 'error'); refreshWeeklyTasksView(); return; }
-                if (!taskId) { console.error("Task ID is missing."); refreshWeeklyTasksView(); return; }
+
                 try {
-                    await updateDoc(doc(db, COLLECTIONS.TAREAS, taskId), { plannedDate: newDate });
+                    await updateDoc(doc(db, COLLECTIONS.TAREAS, taskId), {
+                        plannedDate: newDate
+                    });
                     showToast('Fecha de tarea planificada actualizada.', 'success');
                     refreshWeeklyTasksView();
                 } catch (error) {
