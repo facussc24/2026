@@ -130,8 +130,8 @@ export function getAIAssistantPromptViewHTML() {
             <div class="mt-4">
                 <h4 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">O prueba una acción rápida:</h4>
                 <div class="flex flex-wrap gap-2">
-                    <button data-action="ai-template" data-template-id="new-blog-post" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-sm py-1.5 px-3 rounded-full flex items-center transition-colors">
-                        <i data-lucide="file-plus-2" class="mr-1.5 h-4 w-4"></i>Iniciar nuevo post para el blog
+                    <button data-action="ai-template" data-template-id="new-amfe-process" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-sm py-1.5 px-3 rounded-full flex items-center transition-colors">
+                        <i data-lucide="workflow" class="mr-1.5 h-4 w-4"></i>Iniciar Proceso AMFE
                     </button>
                 </div>
             </div>
