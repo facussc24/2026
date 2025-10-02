@@ -516,6 +516,12 @@ export async function runLandingPageLogic() {
     }
     setupActionButtons();
 
+    // Listen for the custom event dispatched when the AI finishes its work
+    document.addEventListener('ai-tasks-updated', () => {
+        showToast('El planificador se está actualizando...', 'info');
+        refreshWeeklyTasksView();
+    });
+
     // This listener handles clicks on the entire view, specifically for the complete task button
     const landingPageContainer = dom.viewContent.querySelector('#landing-page-container');
     if (!landingPageContainer) return;
