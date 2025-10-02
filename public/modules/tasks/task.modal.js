@@ -388,6 +388,8 @@ export async function openAIAssistantModal() {
                     const updateField = formData.get(`${actionId}_update_field_0`);
                     const updateValue = formData.get(`${actionId}_update_value_0`);
                     newAction.updates[updateField] = updateValue;
+                } else if (actionType === 'DELETE') {
+                    newAction.docId = originalAction.docId;
                 }
 
                 modifiedExecutionPlan.push(newAction);
