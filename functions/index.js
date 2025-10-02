@@ -477,17 +477,38 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
             }
 
 
-            for (let i = 0; i < 10; i++) {
-                const prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
-                const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
-                const responseText = result.response.candidates[0].content.parts[0].text;
-                const jsonMatch = responseText.match(/{[\s\S]*}/);
+            for (let i = 0; i < 10; i++) { // Main agent loop
+                let agentResponse;
+                let lastError = null;
 
-                if (!jsonMatch) {
-                    throw new Error("Agent did not return valid JSON.");
+                // Inner loop for retrying the model call on JSON parsing errors
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        let prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
+                        if (attempt > 0) {
+                            prompt += `\n\n**Previous Attempt Failed:** Your last response was not valid JSON. Please ensure your entire response is a single, valid JSON object as requested in the system prompt.`;
+                        }
+
+                        const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+                        const responseText = result.response.candidates[0].content.parts[0].text;
+                        const jsonMatch = responseText.match(/{[\s\S]*}/);
+
+                        if (!jsonMatch) {
+                            throw new Error("Response did not contain a JSON object.");
+                        }
+
+                        agentResponse = JSON.parse(jsonMatch[0]);
+                        lastError = null; // Clear error on success
+                        break; // Exit retry loop on success
+                    } catch (e) {
+                        lastError = e;
+                        console.warn(`Attempt ${attempt + 1} failed: ${e.message}`);
+                        if (attempt === 2) {
+                             throw new Error(`Agent did not return valid JSON after 3 attempts. Last error: ${lastError.message}`);
+                        }
+                    }
                 }
 
-                const agentResponse = JSON.parse(jsonMatch[0]);
                 const { thought: rawThought, tool_code: rawToolCode } = agentResponse;
 
                 // Default to 'finish' to ensure the loop terminates gracefully on malformed responses.
