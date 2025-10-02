@@ -410,7 +410,8 @@ export async function openAIAssistantModal() {
 
                 showToast(result.data.message || 'Plan ejecutado con éxito!', 'success');
                 closeModal();
-                setTimeout(() => location.reload(), 500);
+                // Instead of reloading, dispatch a custom event that the landing page can listen for.
+                document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
 
             } catch (error) {
                 console.error("Error executing AI plan:", error);
