@@ -290,250 +290,151 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
     // ... function logic
   });
 
+// =================================================================================
+// --- AI AGENT ARCHITECTURE ---
+// =================================================================================
+
 /**
- * Interprets a user's natural language prompt to generate a structured plan for task modifications.
- * This function is the "brain" of the AI assistant. It can understand creating, updating, and marking tasks as done.
- * It also generates a human-readable "thought process" in Markdown.
+ * A stateful, multi-turn AI agent that can reason and use tools to accomplish complex project management goals.
+ * It uses a ReAct (Reasoning and Acting) loop to iteratively think, act, and observe until the user's request is fulfilled.
  */
-exports.getAIAssistantPlan = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
+exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
     const { userPrompt, tasks, currentDate } = data;
-    if (!userPrompt || typeof userPrompt !== "string" || userPrompt.trim().length === 0) {
-        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a non-empty 'userPrompt' argument.");
-    }
-    if (!tasks || !Array.isArray(tasks)) {
-        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a 'tasks' (array) argument.");
-    }
-    if (!currentDate || !/^\d{4}-\d{2}-\d{2}$/.test(currentDate)) {
-        throw new functions.https.HttpsError("invalid-argument", "The function must be called with a valid 'currentDate' (YYYY-MM-DD).");
-    }
 
     const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
     const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const tasksForPrompt = tasks.map(t => ({
-        docId: t.docId,
-        title: t.title,
-        status: t.status,
-        dueDate: t.dueDate,
-        plannedDate: t.plannedDate,
-        blocked: t.blocked || false,
-        dependsOn: t.dependsOn || [], // Array of docIds
-        blocks: t.blocks || [],       // Array of docIds
-    }));
+    const toolDefinitions = [
+        {
+            id: 'create_task',
+            description: 'Creates a new task with a title, description, and due date.',
+            parameters: {
+                title: 'string',
+                description: 'string (optional)',
+                dueDate: 'string (YYYY-MM-DD, optional)'
+            }
+        },
+        {
+            id: 'find_task',
+            description: 'Finds an existing task by its title or keywords to get its ID.',
+            parameters: { query: 'string' }
+        },
+        {
+            id: 'create_dependency',
+            description: 'Creates a dependency between two tasks. The first task will be blocked until the second one is complete.',
+            parameters: {
+                dependent_task_id: 'string',
+                prerequisite_task_id: 'string'
+            }
+        },
+         {
+            id: 'finish',
+            description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
+            parameters: {}
+        }
+    ];
 
-    const prompt = `
-      Eres un asistente de gestión de proyectos experto. Tu misión es analizar la petición de un usuario y su lista de tareas para generar un plan de acción claro y un JSON con los cambios.
+    const systemPrompt = `
+        You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step and using the tools at your disposal.
 
-      Contexto:
-      - La fecha de hoy es ${currentDate}. Esta es tu referencia para fechas relativas (ej: "mañana").
-      - Tareas tienen 'dueDate' (fecha límite) y 'plannedDate' (cuando se planea hacer). Para organizar la semana (ej. "tareas del lunes"), usa 'plannedDate'. Usa 'dueDate' solo si se pide explícitamente por "vencimientos".
-      - Las tareas pueden tener un estado 'blocked' (booleano). Una tarea bloqueada no puede avanzar.
-      - GESTIÓN DE DEPENDENCIAS (NUEVA CAPACIDAD): Las tareas pueden depender de otras. Si un usuario dice "La tarea A depende de la tarea B", esto significa que A no puede comenzar hasta que B se complete.
-        - Para establecer una dependencia, DEBES identificar los 'docId' de ambas tareas. Luego, genera DOS acciones 'UPDATE' separadas.
-        - 1. Para la tarea dependiente (Tarea A): En sus 'updates', añade '"dependsOn": ["<ID_de_Tarea_B>"]' y establece '"blocked": true'.
-        - 2. Para la tarea prerrequisito (Tarea B): En sus 'updates', añade '"blocks": ["<ID_de_Tarea_A>"]'.
-        - IMPORTANTE: Los campos 'dependsOn' y 'blocks' deben ser tratados como arrays de IDs. Tu instrucción debe ser añadir un ID a estos arrays. El backend se encargará de la lógica de añadir sin duplicar.
-      - REGLA DE REPLANIFICACIÓN CRÍTICA: Si un usuario pide mover tareas de días pasados (ej. "replanifica las tareas de ayer"), NO las acumules todas en el día de hoy. En su lugar, balancea la carga: analiza las 'plannedDate' de los próximos 5 días y distribuye las tareas de manera inteligente para no sobrecargar ningún día. Explica esta estrategia de distribución en tu 'thoughtProcess'.
-      - Tareas Actuales del Usuario (JSON):
-      ${JSON.stringify(tasksForPrompt, null, 2)}
+        **Cycle:**
+        1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take.
+        2. **Action:** Choose a tool from the available tools list and provide the necessary parameters in JSON format.
+        3. **Observation:** You will be given the result of your action.
+        4. **Repeat:** Continue this cycle until the user's request is fully completed.
 
-      Petición del Usuario:
-      "${userPrompt}"
+        **Context:**
+        - Today's Date: ${currentDate}
+        - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status})), null, 2)}
 
-      PROCESO DE ANÁLISIS:
-      1. Deconstruir la Petición: Identifica intenciones: CREAR, ACTUALIZAR, COMPLETAR, BLOQUEAR, DESBLOQUEAR, y ahora también CREAR/ELIMINAR DEPENDENCIA. Si es ambiguo, infiere la acción más lógica y menciónalo.
-      2. Mapeo Inteligente de Tareas: Para cualquier acción que no sea CREAR, busca la tarea correspondiente por semántica, no solo texto exacto. Es crucial que encuentres los 'docId' correctos.
-      3. Generar Pasos de Pensamiento (thinkingSteps): Crea un array de strings concisos narrando tu proceso. Debes mencionar explícitamente la creación de dependencias.
-      4. Generar Proceso de Pensamiento (thoughtProcess): Escribe un resumen amigable en Markdown. Explica el porqué de tus acciones, especialmente las dependencias creadas y por qué una tarea se bloquea.
-      5. Generar Plan de Ejecución (executionPlan): Construye un array de objetos de acción.
-         - Para CREAR: { "action": "CREATE", "task": { "title": "...", "description": "...", "dueDate": "YYYY-MM-DD" or null } }
-         - Para ACTUALIZAR (genérico): { "action": "UPDATE", "docId": "...", "updates": { "fieldName": "newValue" }, "originalTitle": "..." }
-         - Para COMPLETAR: { "action": "UPDATE", "docId": "...", "updates": { "status": "done" }, "originalTitle": "..." }
-         - Para BLOQUEAR/DESBLOQUEAR: { "action": "UPDATE", "docId": "...", "updates": { "blocked": true/false }, "originalTitle": "..." }
-         - Para CREAR DEPENDENCIA (Ejemplo):
-           // Tarea A depende de Tarea B
-           { "action": "UPDATE", "docId": "<ID_Tarea_A>", "updates": { "dependsOn": ["<ID_Tarea_B>"], "blocked": true }, "originalTitle": "..." },
-           { "action": "UPDATE", "docId": "<ID_Tarea_B>", "updates": { "blocks": ["<ID_Tarea_A>"] }, "originalTitle": "..." }
+        **Available Tools:**
+        ${JSON.stringify(toolDefinitions, null, 2)}
 
-      Formato de Salida (REGLA CRÍTICA):
-      - Tu respuesta DEBE ser un único bloque de código JSON válido.
-      - NO incluyas NINGÚN texto antes de la llave de apertura '{' o después de la llave de cierre '}'.
-      - NO uses bloques de código markdown como \`\`\`json. La respuesta debe ser JSON puro.
-      - El JSON debe tener TRES claves: 'thinkingSteps', 'thoughtProcess', y 'executionPlan'.
+        **Output Format:**
+        Your response MUST be a single, valid JSON object containing two keys: "thought" and "tool_code".
+        "tool_code" must be a JSON object with "tool_id" and "parameters".
+        Example:
+        {
+          "thought": "I need to create the first task for the user.",
+          "tool_code": {
+            "tool_id": "create_task",
+            "parameters": {
+              "title": "Investigar sobre marketing"
+            }
+          }
+        }
+
+        When you are completely finished, use the "finish" tool.
+        {
+          "thought": "I have created all the necessary tasks and their dependencies. My work is done.",
+          "tool_code": { "tool_id": "finish", "parameters": {} }
+        }
     `;
 
-    try {
-        const result = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+    let conversationHistory = [{ role: 'user', parts: [{ text: `User Request: "${userPrompt}"` }] }];
+    let executionPlan = [];
+    let thinkingSteps = [];
+
+    for (let i = 0; i < 10; i++) { // Max 10 turns to prevent infinite loops
+        const prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
+        const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
         const responseText = result.response.candidates[0].content.parts[0].text;
+        const jsonMatch = responseText.match(/{[\s\S]*}/);
 
-        // More robust JSON extraction: handles optional markdown code blocks and leading/trailing whitespace.
-        const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
         if (!jsonMatch) {
-            console.error("No valid JSON block found in AI response. Raw response:", responseText);
-            throw new Error("No se encontró un bloque JSON válido en la respuesta de la IA.");
+            throw new Error("Agent did not return valid JSON.");
         }
-        // The actual JSON content is in capture group 1 (for ```json) or 2 (for raw {}).
-        const cleanedText = jsonMatch[1] || jsonMatch[2];
 
-        const plan = JSON.parse(cleanedText);
+        const agentResponse = JSON.parse(jsonMatch[0]);
+        const { thought, tool_code } = agentResponse;
 
-        // Add userPrompt to the plan for the frontend to use
-        plan.userPrompt = userPrompt;
+        thinkingSteps.push({ thought, tool_code: tool_code.tool_id });
 
-        if (!plan.thoughtProcess || !plan.executionPlan || !plan.thinkingSteps) {
-            throw new Error("La respuesta de la IA no contiene 'thoughtProcess', 'executionPlan' o 'thinkingSteps'.");
+        if (tool_code.tool_id === 'finish') {
+            break; // Agent has finished its work
         }
-        return plan;
-    } catch (error) {
-        console.error("Error en getAIAssistantPlan:", error, "Raw response:", error.responseText);
-        throw new functions.https.HttpsError("internal", `Error al procesar la petición con la IA: ${error.message}`);
-    }
-});
 
-
-/**
- * Executes a structured plan from the AI assistant to modify tasks in Firestore.
- * This function is safer as it only performs actions defined in the pre-approved plan.
- */
-exports.executeTaskModificationPlan = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
-
-    const { plan } = data;
-    if (!plan || !Array.isArray(plan)) {
-        throw new functions.https.HttpsError("invalid-argument", "Se requiere un 'plan' (array) no vacío.");
-    }
-
-    const db = admin.firestore();
-    const tasksRef = db.collection('tareas');
-    const userUid = context.auth.uid;
-    const summary = { created: 0, updated: 0, failed: 0, unblocked: 0 };
-
-    try {
-        await db.runTransaction(async (transaction) => {
-            const tasksToUnblockCheck = new Map(); // Map<docId, originalTitle>
-
-            // Step 1: Iterate through the plan and apply changes.
-            for (const item of plan) {
-                try {
-                    if (item.action === 'CREATE' && item.task) {
-                        const newTaskRef = tasksRef.doc();
-                        transaction.set(newTaskRef, {
-                            title: item.task.title || "Tarea sin título",
-                            description: item.task.description || "",
-                            dueDate: item.task.dueDate || null,
-                            plannedDate: item.task.dueDate || null,
-                            creatorUid: userUid,
-                            assigneeUid: userUid,
-                            status: 'todo',
-                            priority: 'medium',
-                            effort: 'medium',
-                            tags: [],
-                            isArchived: false,
-                            createdAt: new Date(),
-                            updatedAt: new Date(),
-                            dependsOn: [],
-                            blocks: [],
-                            blocked: false,
-                        });
-                        summary.created++;
-                    } else if (item.action === 'UPDATE' && item.docId && item.updates) {
-                        const taskRef = tasksRef.doc(item.docId);
-                        const updates = { ...item.updates, updatedAt: new Date() };
-                        const arrayUpdates = {};
-
-                        // Handle array updates for dependencies using FieldValue.arrayUnion
-                        if (updates.dependsOn) {
-                            arrayUpdates.dependsOn = admin.firestore.FieldValue.arrayUnion(...updates.dependsOn);
-                            delete updates.dependsOn;
-                        }
-                        if (updates.blocks) {
-                            arrayUpdates.blocks = admin.firestore.FieldValue.arrayUnion(...updates.blocks);
-                            delete updates.blocks;
-                        }
-
-                        transaction.update(taskRef, { ...updates, ...arrayUpdates });
-                        summary.updated++;
-
-                        // If a task is marked as done, queue it for the unblocking logic check.
-                        if (updates.status === 'done') {
-                            tasksToUnblockCheck.set(item.docId, item.originalTitle);
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error processing plan item:", item, e);
-                    summary.failed++;
-                }
+        // --- Tool Execution ---
+        let toolResult = '';
+        try {
+            switch (tool_code.tool_id) {
+                case 'create_task':
+                    const tempId = `temp_${Date.now()}`;
+                    executionPlan.push({ action: "CREATE", docId: tempId, task: tool_code.parameters });
+                    toolResult = `OK. Task created with temporary ID: ${tempId}`;
+                    break;
+                case 'find_task':
+                    const foundTask = tasks.find(t => t.title.toLowerCase().includes(tool_code.parameters.query.toLowerCase()));
+                    toolResult = foundTask ? `OK. Found task with ID: ${foundTask.docId}` : `Error: Task not found for query: "${tool_code.parameters.query}"`;
+                    break;
+                case 'create_dependency':
+                    const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
+                    executionPlan.push({ action: "UPDATE", docId: dependent_task_id, updates: { dependsOn: [prerequisite_task_id], blocked: true } });
+                    executionPlan.push({ action: "UPDATE", docId: prerequisite_task_id, updates: { blocks: [dependent_task_id] } });
+                    toolResult = `OK. Dependency created: ${dependent_task_id} now depends on ${prerequisite_task_id}.`;
+                    break;
+                default:
+                    toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
             }
-
-            // Step 2: Handle the cascading unblock logic for completed tasks.
-            if (tasksToUnblockCheck.size > 0) {
-                for (const [completedTaskId, originalTitle] of tasksToUnblockCheck) {
-                    const completedTaskRef = tasksRef.doc(completedTaskId);
-                    const completedTaskSnap = await transaction.get(completedTaskRef);
-
-                    if (!completedTaskSnap.exists) continue;
-                    const completedTaskData = completedTaskSnap.data();
-                    const tasksItBlocks = completedTaskData.blocks;
-
-                    if (tasksItBlocks && tasksItBlocks.length > 0) {
-                        for (const blockedTaskId of tasksItBlocks) {
-                            const blockedTaskRef = tasksRef.doc(blockedTaskId);
-                            const blockedTaskSnap = await transaction.get(blockedTaskRef);
-
-                            if (!blockedTaskSnap.exists) continue;
-                            const blockedTaskData = blockedTaskSnap.data();
-
-                            // Unblock the task only if this was its last dependency.
-                            if (blockedTaskData.dependsOn && blockedTaskData.dependsOn.length === 1 && blockedTaskData.dependsOn[0] === completedTaskId) {
-                                transaction.update(blockedTaskRef, {
-                                    dependsOn: admin.firestore.FieldValue.arrayRemove(completedTaskId),
-                                    blocked: false,
-                                    updatedAt: new Date()
-                                });
-                                summary.unblocked++;
-                            } else if (blockedTaskData.dependsOn) {
-                                // Otherwise, just remove the dependency.
-                                transaction.update(blockedTaskRef, {
-                                    dependsOn: admin.firestore.FieldValue.arrayRemove(completedTaskId),
-                                    updatedAt: new Date()
-                                });
-                            }
-                        }
-                    }
-
-                    // Clear the 'blocks' array of the now-completed task for data hygiene.
-                    transaction.update(completedTaskRef, { blocks: [], updatedAt: new Date() });
-                }
-            }
-        });
-
-        // Step 3: Return a comprehensive success message.
-        const messageParts = [];
-        if (summary.created > 0) messageParts.push(`${summary.created} tarea(s) creada(s)`);
-        if (summary.updated > 0) messageParts.push(`${summary.updated} tarea(s) actualizada(s)`);
-        if (summary.unblocked > 0) messageParts.push(`${summary.unblocked} tarea(s) desbloqueada(s) automáticamente`);
-
-        if (messageParts.length === 0) {
-            if (summary.failed > 0) {
-                throw new functions.https.HttpsError("invalid-argument", "El plan contenía acciones inválidas.");
-            }
-            return { success: true, message: "El plan no contenía acciones para ejecutar." };
+        } catch (e) {
+            toolResult = `Error executing tool: ${e.message}`;
         }
 
-        return { success: true, message: `Plan aplicado: ${messageParts.join(', ')}.` };
-
-    } catch (error) {
-        console.error("Error en la transacción de modificación de tareas:", error);
-        if (error instanceof functions.https.HttpsError) {
-            throw error;
-        }
-        throw new functions.https.HttpsError("internal", "Ocurrió un error al aplicar el plan de modificación. La operación fue revertida.");
+        conversationHistory.push({ role: 'model', parts: [{ text: JSON.stringify(agentResponse, null, 2) }] });
+        conversationHistory.push({ role: 'user', parts: [{ text: `Observation: ${toolResult}` }] });
     }
+
+    const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
+
+    return {
+        thinkingSteps: thinkingSteps.map(s => s.thought),
+        thoughtProcess: `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`,
+        executionPlan,
+        userPrompt
+    };
 });
 
 exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
