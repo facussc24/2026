@@ -464,8 +464,15 @@ export async function openAIAssistantModal() {
 
     // --- Step 3: Review and Execute ---
     const renderReviewView = (plan) => {
-        currentPlan = plan; // Store the plan
-        viewContainer.innerHTML = getAIAssistantReviewViewHTML(plan);
+        currentPlan = plan; // Store the full plan for submission
+
+        // Create a filtered version of the plan to only show user-facing actions
+        const displayPlan = {
+            ...plan,
+            executionPlan: plan.executionPlan.filter(action => action.action === 'CREATE')
+        };
+
+        viewContainer.innerHTML = getAIAssistantReviewViewHTML(displayPlan);
         lucide.createIcons();
 
         // Set up accordion for thought process
@@ -579,28 +586,41 @@ export async function openAIAssistantModal() {
                 });
                 // --- End of Enrichment ---
 
-                // --- Animate Thinking Steps ---
+                // --- Animate Loading Messages ---
                 thinkingStepsContainer.innerHTML = ''; // Clear initial message
-                const steps = plan.thinkingSteps;
-                let currentStep = 0;
+                const loadingMessages = [
+                    "Analizando la petición inicial...",
+                    "Consultando la base de conocimientos...",
+                    "Esbozando un plan de acción...",
+                    "Definiendo los pasos principales...",
+                    "Añadiendo detalles y dependencias...",
+                    "Finalizando y preparando la revisión..."
+                ];
+                let messageIndex = 0;
 
-                function showNextStep() {
-                    if (currentStep < steps.length) {
-                        const step = steps[currentStep];
+                function showNextMessage() {
+                    if (messageIndex < loadingMessages.length) {
+                        const message = loadingMessages[messageIndex];
                         const p = document.createElement('p');
                         p.className = 'flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in';
-                        p.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span>${step}</span>`;
+                        p.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span>${message}</span>`;
                         thinkingStepsContainer.appendChild(p);
                         lucide.createIcons({ nodes: [p.querySelector('i')] });
                         thinkingStepsContainer.scrollTop = thinkingStepsContainer.scrollHeight;
-                        currentStep++;
-                        setTimeout(showNextStep, 750); // Delay for the next step
-                    } else {
-                        // All steps shown, move to review view after a short delay
-                        setTimeout(() => renderReviewView(plan), 500);
+                        messageIndex++;
+                        // This timeout is just for the animation effect.
+                        // The actual backend call is running in parallel.
+                        setTimeout(showNextMessage, 750);
                     }
                 }
-                showNextStep(); // Start the animation
+                showNextMessage(); // Start the animation
+
+                // The backend call has already finished, so we just wait a bit for the animation to "catch up"
+                // before showing the final plan. This creates a better perceived performance.
+                const totalAnimationTime = loadingMessages.length * 750;
+                setTimeout(() => {
+                    renderReviewView(plan);
+                }, totalAnimationTime);
 
             } catch (error) {
                 console.error("Error calling getAIAssistantPlan:", error);
