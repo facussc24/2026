@@ -434,7 +434,12 @@ export async function openAIAssistantModal() {
             try {
                 const startJobFn = httpsCallable(functions, 'startAIAgentJob');
                 const allTasks = await fetchAllTasks();
-                const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
+                // Provide the AI with a more complete context of tasks the user can see.
+                const userTasks = allTasks.filter(task =>
+                    task.assigneeUid === appState.currentUser.uid ||
+                    task.creatorUid === appState.currentUser.uid ||
+                    task.isPublic
+                );
 
                 const result = await startJobFn({ userPrompt, tasks: userTasks });
                 const { jobId } = result.data;
