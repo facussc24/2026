@@ -331,6 +331,13 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
             }
         },
          {
+            id: 'review_and_summarize_plan',
+            description: 'Review the created tasks and dependencies and provide a brief, high-level summary in Spanish of the plan you have constructed. This should be your final step before using the "finish" tool.',
+            parameters: {
+                summary: 'string'
+            }
+        },
+         {
             id: 'finish',
             description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
             parameters: {}
@@ -352,6 +359,9 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
         - Today's Date: ${currentDate}
         - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status})), null, 2)}
 
+        **Company Glossary:**
+        - **AMFE (Análisis de Modo y Efecto de Falla):** A systematic, proactive method for evaluating a process to identify where and how it might fail and to assess the relative impact of different failures, in order to identify the parts of the process that are most in need of change. When a user asks to start an AMFE process, it implies a series of structured tasks: analysis, team formation, documentation, review, and implementation of countermeasures.
+
         **Available Tools:**
         ${JSON.stringify(toolDefinitions, null, 2)}
 
@@ -369,9 +379,22 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
           }
         }
 
-        When you are completely finished, use the "finish" tool.
+        **Final Step:**
+        Before you use the "finish" tool, you MUST use the "review_and_summarize_plan" tool. Provide a concise, natural language summary in Spanish of the plan you've created.
+
+        Example of final steps:
         {
-          "thought": "I have created all the necessary tasks and their dependencies. My work is done.",
+          "thought": "He creado todas las tareas y dependencias. Ahora voy a revisar y resumir el plan.",
+          "tool_code": {
+            "tool_id": "review_and_summarize_plan",
+            "parameters": {
+              "summary": "He creado un plan de 3 pasos para lanzar la campaña, comenzando por la investigación, seguido por la redacción del contenido y finalizando con la publicación."
+            }
+          }
+        }
+        // Then, on the next turn:
+        {
+          "thought": "He resumido el plan. Mi trabajo está completo.",
           "tool_code": { "tool_id": "finish", "parameters": {} }
         }
     `;
@@ -379,6 +402,7 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
     let conversationHistory = [{ role: 'user', parts: [{ text: `User Request: "${userPrompt}"` }] }];
     let executionPlan = [];
     let thinkingSteps = [];
+    let summary = '';
 
     for (let i = 0; i < 10; i++) { // Max 10 turns to prevent infinite loops
         const prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
@@ -403,6 +427,10 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
         let toolResult = '';
         try {
             switch (tool_code.tool_id) {
+                case 'review_and_summarize_plan':
+                    summary = tool_code.parameters.summary;
+                    toolResult = `OK. Plan summarized.`;
+                    break;
                 case 'create_task':
                     const tempId = `temp_${Date.now()}`;
                     executionPlan.push({ action: "CREATE", docId: tempId, task: tool_code.parameters });
@@ -436,9 +464,15 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
 
     const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
 
+    // If a summary was generated, prioritize it for the final 'thoughtProcess' display.
+    const finalThoughtProcessDisplay = summary ?
+        `### Resumen del Plan de la IA:\n\n${summary}` :
+        `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
+
+
     return {
         thinkingSteps: thinkingSteps.map(s => s.thought),
-        thoughtProcess: `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`,
+        thoughtProcess: finalThoughtProcessDisplay,
         executionPlan,
         userPrompt
     };
