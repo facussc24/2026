@@ -31,7 +31,8 @@ module.exports = {
   // An array of regexp pattern strings that are matched against all test paths, matched tests are skipped
   testPathIgnorePatterns: [
     "/node_modules/",
-    "tests/verify_.*\\.spec\\.js$"
+    "tests/verify_.*\\.spec\\.js$",
+    "/tests/e2e/"
   ],
 
   // A map from regular expressions to module names or to arrays of module names that allow to stub out resources with a single module
