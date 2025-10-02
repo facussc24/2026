@@ -440,6 +440,16 @@ export async function openAIAssistantModal() {
                     throw new Error("La IA devolvió un plan con un formato inesperado.");
                 }
 
+                // --- Sanity Check ---
+                const analyzePlanFn = httpsCallable(functions, 'analyzePlanSanity');
+                const sanityResult = await analyzePlanFn({ plan: plan.executionPlan, tasks: allTasks });
+                const suggestions = sanityResult.data.suggestions;
+
+                if (suggestions && suggestions.length > 0) {
+                    plan.sanitySuggestions = suggestions;
+                }
+                // --- End Sanity Check ---
+
                 // --- Enrich Plan with Original Titles (Fix for "undefined" task bug) ---
                 const taskTitleMap = new Map();
                 allTasks.forEach(t => taskTitleMap.set(t.docId, t.title));

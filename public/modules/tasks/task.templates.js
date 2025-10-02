@@ -264,6 +264,18 @@ export function getAIAssistantReviewViewHTML(plan) {
                     </div>
                 </div>
 
+                ${plan.sanitySuggestions && plan.sanitySuggestions.length > 0 ? `
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg mb-6 p-4">
+                    <h4 class="font-bold text-yellow-800 dark:text-yellow-200 mb-2 flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                        Sugerencias de Planificación
+                    </h4>
+                    <ul class="list-disc list-inside space-y-1 text-sm text-yellow-700 dark:text-yellow-300">
+                        ${plan.sanitySuggestions.map(s => `<li>${s}</li>`).join('')}
+                    </ul>
+                </div>
+                ` : ''}
+
                 <form id="ai-execution-plan-form">
                     <h4 class="font-bold text-slate-800 dark:text-slate-200 mb-3 text-lg">Plan de Ejecución Propuesto</h4>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Puedes desmarcar o editar cualquier acción antes de confirmar.</p>
