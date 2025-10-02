@@ -425,81 +425,74 @@ export async function openAIAssistantModal() {
         lucide.createIcons();
         const thinkingStepsContainer = viewContainer.querySelector('#thinking-steps-container');
 
-        // Call the backend function
+        // Call the backend function to START the job
         (async () => {
+            let unsubscribe; // To store the Firestore listener unsubscribe function
+
             try {
-                const agentFn = httpsCallable(functions, 'aiProjectAgent');
+                const startJobFn = httpsCallable(functions, 'startAIAgentJob');
                 const allTasks = await fetchAllTasks();
                 const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid);
-                const currentDate = new Date().toISOString().split('T')[0];
 
-                const result = await agentFn({ userPrompt, tasks: userTasks, currentDate });
-                const plan = result.data;
+                const result = await startJobFn({ userPrompt, tasks: userTasks });
+                const { jobId } = result.data;
 
-                if (!plan.thoughtProcess || !plan.executionPlan || !plan.thinkingSteps) {
-                    throw new Error("La IA devolvió un plan con un formato inesperado.");
+                if (!jobId) {
+                    throw new Error("La función no devolvió un ID de trabajo.");
                 }
 
-                // --- Sanity Check ---
-                const analyzePlanFn = httpsCallable(functions, 'analyzePlanSanity');
-                const sanityResult = await analyzePlanFn({ plan: plan.executionPlan, tasks: allTasks });
-                const suggestions = sanityResult.data.suggestions;
+                // Now, listen for real-time updates on the job document
+                const jobRef = doc(db, 'ai_agent_jobs', jobId);
+                unsubscribe = onSnapshot(jobRef, (doc) => {
+                    const jobData = doc.data();
+                    if (!jobData) return;
 
-                if (suggestions && suggestions.length > 0) {
-                    plan.sanitySuggestions = suggestions;
-                }
-                // --- End Sanity Check ---
-
-                // --- Enrich Plan with Original Titles (Fix for "undefined" task bug) ---
-                const taskTitleMap = new Map();
-                allTasks.forEach(t => taskTitleMap.set(t.docId, t.title));
-                plan.executionPlan.forEach(action => {
-                    if (action.action === 'CREATE') taskTitleMap.set(action.docId, action.task.title);
-                });
-                plan.executionPlan.forEach(action => {
-                    if (action.action === 'UPDATE') action.originalTitle = taskTitleMap.get(action.docId) || 'Tarea no encontrada';
-                });
-                // --- End of Enrichment ---
-
-                // --- Animate Loading Messages ---
-                thinkingStepsContainer.innerHTML = ''; // Clear initial message
-                const loadingMessages = [
-                    "Analizando la petición inicial...",
-                    "Consultando la base de conocimientos...",
-                    "Esbozando un plan de acción...",
-                    "Definiendo los pasos principales...",
-                    "Añadiendo detalles y dependencias...",
-                    "Finalizando y preparando la revisión..."
-                ];
-                let messageIndex = 0;
-
-                function showNextMessage() {
-                    if (messageIndex < loadingMessages.length) {
-                        const message = loadingMessages[messageIndex];
-                        const p = document.createElement('p');
-                        p.className = 'flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in';
-                        p.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span>${message}</span>`;
-                        thinkingStepsContainer.appendChild(p);
-                        lucide.createIcons({ nodes: [p.querySelector('i')] });
+                    // Update the thinking steps in real-time
+                    if (jobData.thinkingSteps && thinkingStepsContainer) {
+                        thinkingStepsContainer.innerHTML = jobData.thinkingSteps.map(step => `
+                            <p class="flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in">
+                                <i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i>
+                                <span>${step.thought}</span>
+                            </p>
+                        `).join('');
+                        lucide.createIcons();
                         thinkingStepsContainer.scrollTop = thinkingStepsContainer.scrollHeight;
-                        messageIndex++;
-                        // This timeout is just for the animation effect.
-                        // The actual backend call is running in parallel.
-                        setTimeout(showNextMessage, 750);
                     }
-                }
-                showNextMessage(); // Start the animation
 
-                // The backend call has already finished, so we just wait a bit for the animation to "catch up"
-                // before showing the final plan. This creates a better perceived performance.
-                const totalAnimationTime = loadingMessages.length * 750;
-                setTimeout(() => {
-                    renderReviewView(plan);
-                }, totalAnimationTime);
+                    if (jobData.status === 'COMPLETED') {
+                        if (unsubscribe) unsubscribe();
+
+                        // Enrich plan with original titles before rendering the review view
+                        const finalPlan = { ...jobData };
+                        const taskTitleMap = new Map();
+                        allTasks.forEach(t => taskTitleMap.set(t.docId, t.title));
+                        finalPlan.executionPlan.forEach(action => {
+                             if (action.action === 'CREATE') taskTitleMap.set(action.docId, action.task.title);
+                        });
+                        finalPlan.executionPlan.forEach(action => {
+                            if (action.action === 'UPDATE' || action.action === 'DELETE' || action.action === 'COMPLETE') {
+                                action.originalTitle = taskTitleMap.get(action.docId) || 'Tarea no encontrada';
+                            }
+                        });
+
+                        renderReviewView(finalPlan);
+
+                    } else if (jobData.status === 'ERROR') {
+                        if (unsubscribe) unsubscribe();
+                        throw new Error(jobData.error || "El agente de IA encontró un error desconocido.");
+                    }
+                });
+
+                 // Clean up the listener when the modal is closed manually
+                modalElement.addEventListener('close-modal', () => {
+                    if (unsubscribe) unsubscribe();
+                }, { once: true });
+
 
             } catch (error) {
-                console.error("Error calling getAIAssistantPlan:", error);
+                console.error("Error starting or monitoring AI agent job:", error);
                 showToast(error.message || 'Ocurrió un error al contactar al Asistente IA.', 'error');
+                if (unsubscribe) unsubscribe();
                 renderPromptView(userPrompt); // Go back to prompt on failure
             }
         })();
