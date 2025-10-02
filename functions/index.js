@@ -338,6 +338,13 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
             }
         },
         {
+            id: 'complete_task',
+            description: "Marks an existing task as 'done' using its ID.",
+            parameters: {
+                task_id: 'string'
+            }
+        },
+        {
             id: 'update_task',
             description: 'Updates an existing task with new properties, such as plannedDate, title, or description.',
             parameters: {
@@ -364,8 +371,9 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
 
         **CRITICAL RULES:**
         1.  Your entire thought process (the "thought" field) MUST be in Spanish.
-        2.  **Task Creation:** Use the `create_task` tool to create new tasks. The system will automatically handle scheduling.
-        3.  **Task Updates:** To modify an existing task, such as adding a `plannedDate` to an unscheduled task, you MUST use the `find_task` and `update_task` tools.
+        2.  **Task Creation:** Use the \`create_task\` tool to create new tasks. The system will automatically handle scheduling.
+        3.  **Task Updates:** To modify an existing task, such as adding a \`plannedDate\`, use the \`find_task\` and \`update_task\` tools.
+        4.  **Completing a Task:** When the user asks to complete, finish, or mark a task as done, you MUST use the \`complete_task\` tool.
 
         **Cycle:**
         1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take. Your thoughts must be in Spanish.
@@ -497,14 +505,17 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                     break;
                 case 'delete_task':
                     const { task_id } = tool_code.parameters;
-                    const taskToDelete = tasks.find(t => t.docId === task_id);
-                    if (taskToDelete) {
+                    const taskIndexToDelete = tasks.findIndex(t => t.docId === task_id);
+                    if (taskIndexToDelete > -1) {
+                        const taskToDelete = tasks[taskIndexToDelete];
                         executionPlan.push({
                             action: "DELETE",
                             docId: task_id,
-                            originalTitle: taskToDelete.title // Pass title for frontend display
+                            originalTitle: taskToDelete.title
                         });
-                        toolResult = `OK. Task "${taskToDelete.title}" marked for deletion.`;
+                        // Remove the task from the context to prevent loops
+                        tasks.splice(taskIndexToDelete, 1);
+                        toolResult = `OK. Task "${taskToDelete.title}" marked for deletion and removed from context.`;
                     } else {
                         toolResult = `Error: Task with ID "${task_id}" not found.`;
                     }
@@ -517,6 +528,16 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                         toolResult = `OK. Task "${taskToUpdate.title}" marked for update.`;
                     } else {
                         toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
+                    }
+                    break;
+                case 'complete_task':
+                    const { task_id: complete_task_id } = tool_code.parameters;
+                    const taskToComplete = tasks.find(t => t.docId === complete_task_id);
+                    if (taskToComplete) {
+                        executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates: { status: 'done' } });
+                        toolResult = `OK. Task "${taskToComplete.title}" marked as complete.`;
+                    } else {
+                        toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
                     }
                     break;
                 default:
