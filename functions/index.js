@@ -310,11 +310,10 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
     const toolDefinitions = [
         {
             id: 'create_task',
-            description: 'Creates a new task with a title, description, planned date, and due date.',
+            description: "Creates a new task with a title, description, and optional due date. The system will automatically assign the best planned date if one isn't specified by the user.",
             parameters: {
                 title: 'string',
                 description: 'string (optional)',
-                plannedDate: 'string (YYYY-MM-DD)',
                 dueDate: 'string (YYYY-MM-DD, optional)'
             }
         },
@@ -338,6 +337,14 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                 task_id: 'string'
             }
         },
+        {
+            id: 'update_task',
+            description: 'Updates an existing task with new properties, such as plannedDate, title, or description.',
+            parameters: {
+                task_id: 'string',
+                updates: 'object'
+            }
+        },
          {
             id: 'review_and_summarize_plan',
             description: 'Review the created tasks and dependencies and provide a brief, high-level summary in Spanish of the plan you have constructed. This should be your final step before using the "finish" tool.',
@@ -356,8 +363,9 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
         You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step and using the tools at your disposal.
 
         **CRITICAL RULES:**
-        1. Your entire thought process (the "thought" field) MUST be in Spanish.
-        2. When creating a task (\`create_task\`), you MUST provide a \`plannedDate\`. If the user does not specify a date, you MUST use today's date as the default.
+        1.  Your entire thought process (the "thought" field) MUST be in Spanish.
+        2.  **Task Creation:** Use the `create_task` tool to create new tasks. The system will automatically handle scheduling.
+        3.  **Task Updates:** To modify an existing task, such as adding a `plannedDate` to an unscheduled task, you MUST use the `find_task` and `update_task` tools.
 
         **Cycle:**
         1. **Thought:** Analyze the user's request and your conversation history. Decide on the next immediate action to take. Your thoughts must be in Spanish.
@@ -444,15 +452,35 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                 case 'create_task':
                     const tempId = `temp_${Date.now()}`;
                     const taskPayload = tool_code.parameters;
+
+                    // --- Unconditional Intelligent Scheduling ---
+                    // This logic now runs every time, overriding any date the AI might hallucinate.
+                    const dayCounts = {};
+                    for (let i = 0; i < 7; i++) {
+                        const d = new Date(currentDate);
+                        d.setDate(d.getDate() + i);
+                        dayCounts[d.toISOString().split('T')[0]] = 0;
+                    }
+
+                    tasks.forEach(t => {
+                        if (t.plannedDate && dayCounts.hasOwnProperty(t.plannedDate)) {
+                            dayCounts[t.plannedDate]++;
+                        }
+                    });
+
+                    // Find the day with the minimum tasks
+                    let bestDate = Object.keys(dayCounts).reduce((a, b) => dayCounts[a] < dayCounts[b] ? a : b);
+                    taskPayload.plannedDate = bestDate; // Force override
+                    toolResult = `OK. Task created with temporary ID: ${tempId} and intelligently scheduled for ${bestDate}.`;
+                    // --- End of Scheduling Logic ---
+
                     executionPlan.push({ action: "CREATE", docId: tempId, task: taskPayload });
-                    // Add the new task to the context for the next turn, ensuring plannedDate is included
                     tasks.push({
                         docId: tempId,
                         title: taskPayload.title,
                         status: 'todo',
                         plannedDate: taskPayload.plannedDate
                     });
-                    toolResult = `OK. Task created with temporary ID: ${tempId}.`;
                     break;
                 case 'find_task':
                     const query = tool_code.parameters.query.toLowerCase();
@@ -479,6 +507,16 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                         toolResult = `OK. Task "${taskToDelete.title}" marked for deletion.`;
                     } else {
                         toolResult = `Error: Task with ID "${task_id}" not found.`;
+                    }
+                    break;
+                case 'update_task':
+                    const { task_id: update_task_id, updates } = tool_code.parameters;
+                    const taskToUpdate = tasks.find(t => t.docId === update_task_id);
+                    if (taskToUpdate) {
+                        executionPlan.push({ action: "UPDATE", docId: update_task_id, updates: updates });
+                        toolResult = `OK. Task "${taskToUpdate.title}" marked for update.`;
+                    } else {
+                        toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
                     }
                     break;
                 default:
