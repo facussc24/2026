@@ -480,11 +480,15 @@ export async function openAIAssistantModal() {
         if (accordionBtn) {
             accordionBtn.addEventListener('click', function() {
                 const content = viewContainer.querySelector('#thought-process-content');
-                const icon = this.querySelector('i');
+                // The icon is initially an <i>, but lucide replaces it with an <svg>.
+                // We query for the svg to ensure we're manipulating the correct element post-rendering.
+                const icon = this.querySelector('svg');
                 const isHidden = content.style.display === 'none' || content.style.display === '';
 
                 content.style.display = isHidden ? 'block' : 'none';
-                icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                if (icon) {
+                    icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                }
             });
         }
 
