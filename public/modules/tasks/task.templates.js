@@ -220,6 +220,14 @@ export function getAIAssistantReviewViewHTML(plan) {
                 }
                 details = `<div class="space-y-3 mt-3">${updateInput}</div>`;
                 break;
+            case 'DELETE':
+                icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-red-100 dark:bg-red-900/50 flex items-center justify-center shadow-inner border border-red-200 dark:border-red-800"><i data-lucide="trash-2" class="w-6 h-6 text-red-600 dark:text-red-400"></i></div>`;
+                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Eliminar Tarea</p>`;
+                details = `<div class="mt-2 text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">
+                               Se eliminará la tarea: <strong class="text-red-600 dark:text-red-400">"${action.originalTitle}"</strong>.
+                           </div>`;
+                content += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
+                break;
             default:
                 icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-900/50 flex items-center justify-center shadow-inner border border-gray-200 dark:border-gray-800"><i data-lucide="alert-circle" class="w-6 h-6 text-gray-600 dark:text-gray-400"></i></div>`;
                 title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Acción Desconocida</p>`;

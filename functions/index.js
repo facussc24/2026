@@ -330,6 +330,13 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                 prerequisite_task_id: 'string'
             }
         },
+        {
+            id: 'delete_task',
+            description: 'Deletes an existing task using its ID.',
+            parameters: {
+                task_id: 'string'
+            }
+        },
          {
             id: 'review_and_summarize_plan',
             description: 'Review the created tasks and dependencies and provide a brief, high-level summary in Spanish of the plan you have constructed. This should be your final step before using the "finish" tool.',
@@ -451,6 +458,20 @@ exports.aiProjectAgent = functions.runWith({timeoutSeconds: 540, memory: '1GB'})
                     executionPlan.push({ action: "UPDATE", docId: prerequisite_task_id, updates: { blocks: [dependent_task_id] } });
                     toolResult = `OK. Dependency created: ${dependent_task_id} now depends on ${prerequisite_task_id}.`;
                     break;
+                case 'delete_task':
+                    const { task_id } = tool_code.parameters;
+                    const taskToDelete = tasks.find(t => t.docId === task_id);
+                    if (taskToDelete) {
+                        executionPlan.push({
+                            action: "DELETE",
+                            docId: task_id,
+                            originalTitle: taskToDelete.title // Pass title for frontend display
+                        });
+                        toolResult = `OK. Task "${taskToDelete.title}" marked for deletion.`;
+                    } else {
+                        toolResult = `Error: Task with ID "${task_id}" not found.`;
+                    }
+                    break;
                 default:
                     toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
             }
@@ -566,7 +587,7 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
         }
     }
 
-    // --- Second Pass: Apply updates and dependencies ---
+    // --- Second Pass: Apply updates, deletions, and dependencies ---
     for (const action of plan) {
         if (action.action === 'UPDATE') {
             // Resolve the temporary ID to a real ID
@@ -585,8 +606,11 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
                     resolvedUpdates[key] = value;
                 }
             }
-
             batch.update(taskRef, resolvedUpdates);
+        } else if (action.action === 'DELETE') {
+            // Deletions use real IDs, no need for temp ID mapping.
+            const taskRef = db.collection('tareas').doc(action.docId);
+            batch.delete(taskRef);
         }
     }
 
