@@ -356,9 +356,11 @@ export function setSunIntensity(intensity) {
 export function setEnvironment(hdrFile) {
     if (!renderer || !scene) return;
 
+    // Use the full, public URL for the HDR files to avoid 404 errors.
+    const hdrUrl = `https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/equirectangular/${hdrFile}`;
+
     new RGBELoader()
-        .setPath('modulos/visor3d/imagenes/')
-        .load(hdrFile, (texture) => {
+        .load(hdrUrl, (texture) => {
             const pmremGenerator = new THREE.PMREMGenerator(renderer);
             pmremGenerator.compileEquirectangularShader();
 
