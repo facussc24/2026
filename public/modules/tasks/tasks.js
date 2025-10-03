@@ -126,6 +126,34 @@ export function runTasksLogic(initialView = 'kanban') {
     renderView(initialView);
     lucide.createIcons();
 
+    // Connect the main dashboard filter dropdown to the dashboard's internal event system
+    const viewSelect = dom.viewContent.querySelector('#view-select');
+    const taskFiltersContainer = dom.viewContent.querySelector('#task-filters-container');
+
+    if (viewSelect && taskFiltersContainer) {
+        viewSelect.addEventListener('change', (e) => {
+            const value = e.target.value;
+            let filterValue = 'all';
+            // Map the user-facing text to the filter value ('all' or a user UID)
+            if (value === 'Mis Tareas' || value === 'Tareas Asignadas') {
+                filterValue = dependencies.appState.currentUser.uid;
+            }
+
+            // Dispatch a custom event that the dashboard module's filter container listens for.
+            // This decouples the modules nicely.
+            taskFiltersContainer.dispatchEvent(new CustomEvent('filterchange', {
+                detail: { filterType: 'user', filterValue: filterValue }
+            }));
+
+            // Also visually update the user filter dropdown inside the dashboard if it exists
+            const userFilterSelect = dom.viewContent.querySelector('#user-filter-select');
+            if (userFilterSelect) {
+                userFilterSelect.value = filterValue;
+            }
+        });
+    }
+
+
     const taskMainContainer = dom.viewContent.querySelector('#task-main-container');
     if (taskMainContainer) {
         taskMainContainer.addEventListener('click', (e) => {
