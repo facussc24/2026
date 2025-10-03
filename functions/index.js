@@ -418,8 +418,15 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 6.  **Tool Efficiency:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), you MUST use the more efficient \`bulk_update_tasks\` tool.
                 7.  **Intelligent Rescheduling:** When asked to reschedule a specific day, identify all tasks planned for that day. Then, analyze the user's workload for the next 3 weeks to find less busy days. Finally, use \`update_task\` to move tasks from the overloaded day to less busy ones, explaining your reasoning in your 'thought' process.
 
+                **Project Breakdown Strategy:**
+                1.  **Identify High-Level Goals:** If a user request sounds like a multi-step project (e.g., "Launch new feature," "Organize event," "Prepare quarterly report"), you MUST NOT create a single task for it.
+                2.  **Deconstruct into Sub-Tasks:** Your primary responsibility is to break down that project into smaller, concrete, actionable sub-tasks. Think about what steps are logically required. For example, "Launch new feature" could become "1. Design UI mockups," "2. Develop backend logic," "3. Write unit tests," "4. Deploy to staging," "5. Final user testing."
+                3.  **Sequential Creation:** Use the \\\`create_task\\\` tool repeatedly for each sub-task you've identified.
+                4.  **Smart Scheduling:** As you create sub-tasks, intelligently schedule them by distributing them over appropriate \\\`plannedDate\\\`s.
+                5.  **Summarize:** Once all sub-tasks for the project are created, use the \\\`review_and_summarize_plan\\\` tool to present the complete, broken-down plan to the user.
+
                 **Cycle:**
-                1. **Thought:** Analyze the user's request, the current task list, and your conversation history. Decide on the next immediate action to take based on your scheduling strategy. Your thoughts must be in Spanish.
+                1. **Thought:** Analyze the user's request, the current task list, and your conversation history. Decide on the next immediate action to take based on your scheduling and project breakdown strategies. Your thoughts must be in Spanish.
                 2. **Action:** Choose a tool from the available tools list and provide the necessary parameters in JSON format.
                 3. **Observation:** You will be given the result of your action.
                 4. **Repeat:** Continue this cycle until the user's request is fully completed.
@@ -724,12 +731,29 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
  * 1. First Pass: Creates all new tasks and maps their temporary IDs to real Firestore document IDs.
  * 2. Second Pass: Applies all updates (like dependencies) using the ID map to reference the correct documents.
  */
+// Helper function to create the initial progress document for a plan execution
+const createExecutionProgressDocument = async (db, jobId, plan) => {
+    const progressRef = db.collection('plan_executions').doc(jobId);
+    const progressSteps = plan.map((action, index) => ({
+        id: index,
+        description: `Executing: ${action.action} on ${action.originalTitle || action.docId || ''}`,
+        status: 'PENDING'
+    }));
+
+    await progressRef.set({
+        status: 'RUNNING',
+        steps: progressSteps,
+        startedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    return progressRef;
+};
+
 exports.executeTaskModificationPlan = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
-    const { plan } = data;
+    const { plan, jobId } = data; // Expect an optional jobId
     if (!plan || !Array.isArray(plan)) {
         throw new functions.https.HttpsError("invalid-argument", "The 'plan' must be an array of actions.");
     }
@@ -737,54 +761,103 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
     const db = admin.firestore();
     const batch = db.batch();
     const tempIdToRealIdMap = new Map();
+    let progressRef = null;
+    let progressSteps = [];
 
-    // --- First Pass: Create new tasks and map IDs ---
-    for (const action of plan) {
-        if (action.action === 'CREATE') {
-            const newTaskRef = db.collection('tareas').doc(); // Auto-generate new ID
-            const taskData = {
-                ...action.task,
-                creatorUid: context.auth.uid,
-                createdAt: new Date(),
-                status: 'todo' // Default status
-            };
-            batch.set(newTaskRef, taskData);
-            tempIdToRealIdMap.set(action.docId, newTaskRef.id);
-        }
-    }
-
-    // --- Second Pass: Apply updates, deletions, and dependencies ---
-    for (const action of plan) {
-        if (action.action === 'UPDATE') {
-            // Resolve the temporary ID to a real ID
-            const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
-            const taskRef = db.collection('tareas').doc(realDocId);
-
-            // Resolve any temporary IDs within the update payload
-            const resolvedUpdates = {};
-            for (const key in action.updates) {
-                const value = action.updates[key];
-                if (key === 'dependsOn' || key === 'blocks') {
-                    // Use arrayUnion for dependency fields to prevent overwriting existing arrays
-                    const resolvedIds = value.map(id => tempIdToRealIdMap.get(id) || id);
-                    resolvedUpdates[key] = admin.firestore.FieldValue.arrayUnion(...resolvedIds);
-                } else {
-                    resolvedUpdates[key] = value;
-                }
+    // If a jobId is provided, set up the progress tracking document.
+    if (jobId) {
+        progressSteps = plan.map((action, index) => {
+            let description = `Acción: ${action.action}`;
+            if (action.originalTitle) {
+                description = `"${action.originalTitle}"`;
+            } else if (action.task && action.task.title) {
+                description = `"${action.task.title}"`;
             }
-            batch.update(taskRef, resolvedUpdates);
-        } else if (action.action === 'DELETE') {
-            // Deletions use real IDs, no need for temp ID mapping.
-            const taskRef = db.collection('tareas').doc(action.docId);
-            batch.delete(taskRef);
-        }
+            return { id: index, description, status: 'PENDING', action: action.action };
+        });
+
+        progressRef = db.collection('plan_executions').doc(jobId);
+        await progressRef.set({
+            status: 'RUNNING',
+            steps: progressSteps,
+            startedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
     }
+
+    const updateProgress = async (index, status, error = null) => {
+        if (!progressRef) return;
+        const updatePayload = {
+            [`steps.${index}.status`]: status
+        };
+        if (error) {
+            updatePayload[`steps.${index}.error`] = error;
+        }
+        await progressRef.update(updatePayload);
+    };
 
     try {
+        // --- First Pass: Create new tasks and map IDs ---
+        for (let i = 0; i < plan.length; i++) {
+            const action = plan[i];
+            if (action.action === 'CREATE') {
+                const newTaskRef = db.collection('tareas').doc();
+                const taskData = {
+                    ...action.task,
+                    creatorUid: context.auth.uid,
+                    createdAt: new Date(),
+                    status: 'todo'
+                };
+                batch.set(newTaskRef, taskData);
+                tempIdToRealIdMap.set(action.docId, newTaskRef.id);
+                await updateProgress(i, 'COMPLETED');
+            }
+        }
+
+        // --- Second Pass: Apply updates, deletions, and dependencies ---
+        for (let i = 0; i < plan.length; i++) {
+            const action = plan[i];
+            if (action.action === 'UPDATE') {
+                const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
+                const taskRef = db.collection('tareas').doc(realDocId);
+                const resolvedUpdates = {};
+                for (const key in action.updates) {
+                    const value = action.updates[key];
+                    if (key === 'dependsOn' || key === 'blocks') {
+                        const resolvedIds = value.map(id => tempIdToRealIdMap.get(id) || id);
+                        resolvedUpdates[key] = admin.firestore.FieldValue.arrayUnion(...resolvedIds);
+                    } else {
+                        resolvedUpdates[key] = value;
+                    }
+                }
+                batch.update(taskRef, resolvedUpdates);
+                await updateProgress(i, 'COMPLETED');
+            } else if (action.action === 'DELETE') {
+                const taskRef = db.collection('tareas').doc(action.docId);
+                batch.delete(taskRef);
+                await updateProgress(i, 'COMPLETED');
+            }
+        }
+
         await batch.commit();
+
+        if (progressRef) {
+            await progressRef.update({
+                status: 'COMPLETED',
+                finishedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
         return { success: true, message: "Plan ejecutado con éxito." };
+
     } catch (error) {
         console.error("Error executing task modification plan:", error);
+        if (progressRef) {
+            await progressRef.update({
+                status: 'ERROR',
+                error: error.message,
+                finishedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        }
         throw new functions.https.HttpsError("internal", "Ocurrió un error al ejecutar el plan.", error.message);
     }
 });

@@ -15,7 +15,8 @@ import {
     getAIAssistantModalHTML,
     getAIAssistantPromptViewHTML,
     getAIAssistantLoadingViewHTML,
-    getAIAssistantReviewViewHTML
+    getAIAssistantReviewViewHTML,
+    getAIAssistantExecutionProgressViewHTML
 } from './task.templates.js';
 
 let appState;
@@ -327,31 +328,115 @@ export async function openAIAssistantModal() {
     const viewContainer = document.getElementById('ai-assistant-view-container');
     let currentPlan = null; // To store the plan between views
 
-    const closeModal = () => modalElement?.remove();
+    const closeModal = () => {
+        // Dispatch a custom event to clean up any listeners
+        modalElement.dispatchEvent(new CustomEvent('close-modal'));
+        modalElement?.remove();
+    };
+
+    // --- Step 4: Execution Progress View ---
+    const renderExecutionProgressView = (jobId, plan) => {
+        let unsubscribe;
+        const steps = plan.map((action, index) => {
+            let description = `Acción: ${action.action}`;
+            if (action.originalTitle) {
+                description = `Ejecutar en: "${action.originalTitle}"`;
+            } else if (action.task && action.task.title) {
+                description = `Crear: "${action.task.title}"`;
+            }
+            return { id: index, description, status: 'PENDING' };
+        });
+
+        viewContainer.innerHTML = getAIAssistantExecutionProgressViewHTML(steps);
+        lucide.createIcons();
+
+        const executionStepsList = viewContainer.querySelector('#execution-steps-list');
+        const closeBtn = viewContainer.querySelector('#execution-close-btn');
+        const completeBtn = viewContainer.querySelector('#execution-complete-close-btn');
+
+        closeBtn.addEventListener('click', closeModal);
+
+        const executionRef = doc(db, 'plan_executions', jobId);
+        unsubscribe = onSnapshot(executionRef, (doc) => {
+            const executionData = doc.data();
+            if (!executionData || !executionData.steps) return;
+
+            executionData.steps.forEach((step, index) => {
+                const stepElement = executionStepsList.querySelector(`#execution-step-${index}`);
+                if (!stepElement) return;
+
+                const iconContainer = stepElement.querySelector('.status-icon');
+                const currentStatus = iconContainer.dataset.status;
+
+                if (step.status !== currentStatus) {
+                    iconContainer.dataset.status = step.status;
+                    let iconHTML = '';
+                    switch (step.status) {
+                        case 'COMPLETED':
+                            iconHTML = '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
+                            stepElement.classList.remove('bg-slate-100', 'dark:bg-slate-700/50');
+                            stepElement.classList.add('bg-green-50', 'dark:bg-green-900/20');
+                            break;
+                        case 'ERROR':
+                            iconHTML = `<i data-lucide="x-circle" class="w-5 h-5 text-red-500" title="${step.error || 'Error'}"></i>`;
+                            stepElement.classList.remove('bg-slate-100', 'dark:bg-slate-700/50');
+                            stepElement.classList.add('bg-red-50', 'dark:bg-red-900/20');
+                            break;
+                        default: // PENDING
+                            iconHTML = '<i data-lucide="loader-circle" class="w-5 h-5 animate-spin text-slate-400"></i>';
+                    }
+                    iconContainer.innerHTML = iconHTML;
+                    lucide.createIcons();
+                }
+            });
+
+            if (executionData.status === 'COMPLETED' || executionData.status === 'ERROR') {
+                if (unsubscribe) unsubscribe();
+
+                completeBtn.disabled = false;
+                const icon = completeBtn.querySelector('i');
+                const span = completeBtn.querySelector('span');
+
+                if (executionData.status === 'COMPLETED') {
+                    completeBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                    completeBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                    icon.setAttribute('data-lucide', 'party-popper');
+                    span.textContent = '¡Hecho! Cerrar';
+                    document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
+                } else { // ERROR
+                    completeBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+                    completeBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+                    icon.setAttribute('data-lucide', 'alert-triangle');
+                    span.textContent = 'Error. Cerrar';
+                }
+
+                lucide.createIcons({ nodes: [icon] });
+                completeBtn.addEventListener('click', closeModal);
+                closeBtn.classList.remove('hidden');
+            }
+        });
+
+        modalElement.addEventListener('close-modal', () => {
+            if (unsubscribe) unsubscribe();
+        }, { once: true });
+    };
+
 
     // --- Step 3: Review and Execute ---
     const renderReviewView = (plan) => {
-        currentPlan = plan; // Store the full plan for submission
+        currentPlan = plan;
 
         viewContainer.innerHTML = getAIAssistantReviewViewHTML(plan);
         lucide.createIcons();
 
-        // Set up accordion for thought process
         const accordionBtn = viewContainer.querySelector('#thought-process-accordion-btn');
-        if (accordionBtn) {
-            accordionBtn.addEventListener('click', function() {
-                const content = viewContainer.querySelector('#thought-process-content');
-                // The icon is initially an <i>, but lucide replaces it with an <svg>.
-                // We query for the svg to ensure we're manipulating the correct element post-rendering.
-                const icon = this.querySelector('svg');
-                const isHidden = content.style.display === 'none' || content.style.display === '';
-
-                content.style.display = isHidden ? 'block' : 'none';
-                if (icon) {
-                    icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-                }
-            });
-        }
+        accordionBtn.addEventListener('click', function() {
+            const content = viewContainer.querySelector('#thought-process-content');
+            const icon = this.querySelector('svg');
+            const isHidden = content.style.display === 'none' || content.style.display === '';
+            content.style.display = isHidden ? 'block' : 'none';
+            if (icon) icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+        });
 
         viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
         viewContainer.querySelector('#ai-reject-plan-btn').addEventListener('click', () => renderPromptView(plan.userPrompt));
@@ -366,22 +451,15 @@ export async function openAIAssistantModal() {
 
             for (let i = 0; i < originalPlanLength; i++) {
                 const actionId = `action_${i}`;
-                if (!formData.get(`${actionId}_enabled`)) {
-                    continue; // Skip disabled actions
-                }
+                if (!formData.get(`${actionId}_enabled`)) continue;
 
                 const actionType = formData.get(`${actionId}_type`);
                 const originalAction = currentPlan.executionPlan[i];
-                const newAction = {
-                    action: actionType,
-                    originalTitle: originalAction.originalTitle
-                };
+                const newAction = { action: actionType, originalTitle: originalAction.originalTitle };
 
                 if (actionType === 'CREATE') {
-                    newAction.task = {
-                        title: formData.get(`${actionId}_title`),
-                        dueDate: formData.get(`${actionId}_dueDate`) || null
-                    };
+                    newAction.task = { title: formData.get(`${actionId}_title`), dueDate: formData.get(`${actionId}_dueDate`) || null };
+                    newAction.docId = originalAction.docId; // Keep temp ID for mapping
                 } else if (actionType === 'UPDATE') {
                     newAction.docId = formData.get(`${actionId}_docId`);
                     newAction.updates = {};
@@ -391,7 +469,6 @@ export async function openAIAssistantModal() {
                 } else if (actionType === 'DELETE') {
                     newAction.docId = originalAction.docId;
                 }
-
                 modifiedExecutionPlan.push(newAction);
             }
 
@@ -400,24 +477,15 @@ export async function openAIAssistantModal() {
                 return;
             }
 
-            viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Ejecutando el plan...');
-            lucide.createIcons();
+            const jobId = currentPlan.jobId;
+            renderExecutionProgressView(jobId, modifiedExecutionPlan);
 
             try {
-                const functions = getFunctions();
                 const executePlanFn = httpsCallable(functions, 'executeTaskModificationPlan');
-                const result = await executePlanFn({ plan: modifiedExecutionPlan });
-
-                showToast(result.data.message || 'Plan ejecutado con éxito!', 'success');
-                closeModal();
-                // Instead of reloading, dispatch a custom event that the landing page can listen for.
-                document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
-
+                await executePlanFn({ plan: modifiedExecutionPlan, jobId });
             } catch (error) {
-                console.error("Error executing AI plan:", error);
-                showToast(error.message || 'Error al ejecutar el plan.', 'error');
-                const modifiedPlanForReview = { ...currentPlan, executionPlan: modifiedExecutionPlan };
-                renderReviewView(modifiedPlanForReview);
+                console.error("Error triggering plan execution:", error);
+                showToast(error.message || 'Error al iniciar la ejecución del plan.', 'error');
             }
         });
     };
@@ -427,41 +495,26 @@ export async function openAIAssistantModal() {
         viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Generando plan con IA...');
         lucide.createIcons();
         const thinkingStepsContainer = viewContainer.querySelector('#thinking-steps-container');
+        let unsubscribe;
 
-        // Call the backend function to START the job
         (async () => {
-            let unsubscribe; // To store the Firestore listener unsubscribe function
-
             try {
                 const startJobFn = httpsCallable(functions, 'startAIAgentJob');
                 const allTasks = await fetchAllTasks();
-                // Provide the AI with a more complete context of tasks the user can see.
-                const userTasks = allTasks.filter(task =>
-                    task.assigneeUid === appState.currentUser.uid ||
-                    task.creatorUid === appState.currentUser.uid ||
-                    task.isPublic
-                );
+                const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid || task.creatorUid === appState.currentUser.uid || task.isPublic);
 
                 const result = await startJobFn({ userPrompt, tasks: userTasks });
                 const { jobId } = result.data;
+                if (!jobId) throw new Error("La función no devolvió un ID de trabajo.");
 
-                if (!jobId) {
-                    throw new Error("La función no devolvió un ID de trabajo.");
-                }
-
-                // Now, listen for real-time updates on the job document
                 const jobRef = doc(db, 'ai_agent_jobs', jobId);
                 unsubscribe = onSnapshot(jobRef, (doc) => {
                     const jobData = doc.data();
                     if (!jobData) return;
 
-                    // Update the thinking steps in real-time
                     if (jobData.thinkingSteps && thinkingStepsContainer) {
                         thinkingStepsContainer.innerHTML = jobData.thinkingSteps.map(step => `
-                            <p class="flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in">
-                                <i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i>
-                                <span>${step.thought}</span>
-                            </p>
+                            <p class="flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in"><i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span>${step.thought}</span></p>
                         `).join('');
                         lucide.createIcons();
                         thinkingStepsContainer.scrollTop = thinkingStepsContainer.scrollHeight;
@@ -469,43 +522,33 @@ export async function openAIAssistantModal() {
 
                     if (jobData.status === 'COMPLETED') {
                         if (unsubscribe) unsubscribe();
-
-                        // Enrich plan with original titles before rendering the review view
-                        const finalPlan = { ...jobData };
-                        const taskTitleMap = new Map();
-                        allTasks.forEach(t => taskTitleMap.set(t.docId, t.title));
+                        const finalPlan = { ...jobData, jobId: doc.id };
+                        const taskTitleMap = new Map(allTasks.map(t => [t.docId, t.title]));
                         finalPlan.executionPlan.forEach(action => {
-                             if (action.action === 'CREATE') taskTitleMap.set(action.docId, action.task.title);
+                            if (action.action === 'CREATE') taskTitleMap.set(action.docId, action.task.title);
                         });
                         finalPlan.executionPlan.forEach(action => {
-                            if (action.action === 'UPDATE' || action.action === 'DELETE' || action.action === 'COMPLETE') {
-                                action.originalTitle = taskTitleMap.get(action.docId) || 'Tarea no encontrada';
-                            }
+                            if (action.action !== 'CREATE') action.originalTitle = taskTitleMap.get(action.docId) || 'Tarea no encontrada';
                         });
-
                         renderReviewView(finalPlan);
-
                     } else if (jobData.status === 'ERROR') {
                         if (unsubscribe) unsubscribe();
                         throw new Error(jobData.error || "El agente de IA encontró un error desconocido.");
                     }
                 });
 
-                 // Clean up the listener when the modal is closed manually
                 modalElement.addEventListener('close-modal', () => {
                     if (unsubscribe) unsubscribe();
                 }, { once: true });
-
 
             } catch (error) {
                 console.error("Error starting or monitoring AI agent job:", error);
                 showToast(error.message || 'Ocurrió un error al contactar al Asistente IA.', 'error');
                 if (unsubscribe) unsubscribe();
-                renderPromptView(userPrompt); // Go back to prompt on failure
+                renderPromptView(userPrompt);
             }
         })();
     };
-
 
     // --- Step 1: Prompt View ---
     const renderPromptView = (promptText = '') => {
@@ -535,7 +578,6 @@ export async function openAIAssistantModal() {
                 if (templateId === 'new-amfe-process') {
                     promptTextarea.value = 'Iniciar un nuevo proceso de AMFE para...';
                     promptTextarea.focus();
-                    // Move cursor to the end
                     promptTextarea.setSelectionRange(promptTextarea.value.length, promptTextarea.value.length);
                 }
             }
