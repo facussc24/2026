@@ -489,7 +489,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 3.  **If it's a Command:**
                     *   Proceed with the project management workflow below.
                     *   **Assign Tasks:** If the user specifies an assignee, use their email in the \`assigneeEmail\` parameter. If no user is mentioned, do not assign it.
-                    *   **Create Descriptive Tasks:** When creating dependent tasks, ensure the context is clear. For example, if Task A is "Create Report", a dependent Task B should be "Send **Report** to Manager", not just "Send to Manager".
+                    *   **Create Descriptive Tasks (MANDATORY):** You **MUST** ensure context is not lost between dependent tasks. When creating a task that follows another, transfer key nouns or identifiers. Example: If Task A is "Create **Annual Financial Report**", a dependent Task B **MUST** be "Send **Annual Financial Report** to management", not a generic "Send report". This is critical.
                     *   **Always Think in Spanish:** The "thought" field MUST be in Spanish.
                     *   **Schedule Everything:** Proactively assign a \`plannedDate\` to ALL new tasks. Only use \`dueDate\` for explicit deadlines.
                     *   **Balance Workload:** Analyze the user's schedule (3-week view) and distribute tasks to avoid overloading any day.
@@ -1038,11 +1038,13 @@ exports.sendTaskNotification = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }
             const batch = db.batch();
             const completedTaskId = context.params.taskId;
 
-            for (const blockedTaskId of blockedTaskIds) {
+            const unblockPromises = blockedTaskIds.map(async (blockedTaskId) => {
                 const blockedTaskRef = db.collection('tareas').doc(blockedTaskId);
                 try {
-                    const blockedTaskDoc = await blockedTaskRef.get();
-                    if (blockedTaskDoc.exists) {
+                    await db.runTransaction(async (transaction) => {
+                        const blockedTaskDoc = await transaction.get(blockedTaskRef);
+                        if (!blockedTaskDoc.exists) return;
+
                         const blockedTaskData = blockedTaskDoc.data();
                         const dependsOn = (blockedTaskData.dependsOn || []).filter(id => id !== completedTaskId);
                         const updates = { dependsOn };
@@ -1061,16 +1063,17 @@ exports.sendTaskNotification = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] }
                                     isRead: false,
                                 };
                                 const notificationRef = db.collection('notifications').doc();
-                                batch.set(notificationRef, notification);
+                                // Set notification in the same transaction to ensure atomicity
+                                transaction.set(notificationRef, notification);
                             }
                         }
-                        batch.update(blockedTaskRef, updates);
-                    }
+                        transaction.update(blockedTaskRef, updates);
+                    });
                 } catch (error) {
-                    console.error(`Error processing unblocking for task ${blockedTaskId}:`, error);
+                    console.error(`Error in transaction for unblocking task ${blockedTaskId}:`, error);
                 }
-            }
-            await batch.commit().catch(err => console.error('Error committing unblock batch:', err));
+            });
+            await Promise.all(unblockPromises);
         }
     }
 

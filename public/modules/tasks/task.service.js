@@ -169,7 +169,10 @@ export async function handleTaskFormSubmit(e) {
             showToast('Tarea creada con éxito.', 'success');
         }
         success = true;
-        document.getElementById('task-form-modal').remove();
+        // Use the already-found modalElement reference and add a null check for safety.
+        if (modalElement) {
+            modalElement.remove();
+        }
     } catch (error) {
         console.error('Error saving task:', error);
         showToast('Error al guardar la tarea.', 'error');
