@@ -1,0 +1,11 @@
+{
+  "chasis": {
+    "ID de Pieza": "FR-CH-001",
+    "Material": "Acero de alta resistencia"
+  },
+  "motor": {
+    "ID de Pieza": "FR-EN-V8-5L",
+    "Tipo": "V8 de 5.0L",
+    "Potencia": "450 hp"
+  }
+}

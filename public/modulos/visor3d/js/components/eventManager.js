@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, clippingPlanes, partCharacteristics, measurementState } from '../visor3d.js';
-import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene, composer } from './sceneManager.js';
+import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene, composer, toggleWireframe } from './sceneManager.js';
 import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton, createReportModal } from './uiManager.js';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
@@ -339,6 +339,11 @@ export function setupVisor3dEventListeners() {
 
     const ambientLight = document.getElementById('ambient-light');
     if (ambientLight) ambientLight.addEventListener('input', (e) => setAmbientLightIntensity(e.target.value));
+
+    const wireframeToggle = document.getElementById('wireframe-toggle');
+    if (wireframeToggle) wireframeToggle.addEventListener('change', (e) => {
+        toggleWireframe(e.target.checked);
+    });
 
     const searchInput = document.getElementById('visor3d-search');
     if (searchInput) searchInput.addEventListener('keyup', (e) => {

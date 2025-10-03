@@ -95,7 +95,9 @@ export function initThreeScene(modelUrl, onPointerDown) {
     const loader = new GLTFLoader();
     loader.load(modelUrl,
     (gltf) => {
-        updateStatus('Procesando modelo...');
+        const progressBar = document.getElementById('visor3d-progress-bar');
+        if (progressBar) progressBar.style.width = '100%';
+        updateStatus('Procesando modelo...', false, true);
         const model = gltf.scene;
 
         const modelCamera = model.getObjectByProperty('type', 'PerspectiveCamera');
@@ -112,7 +114,7 @@ export function initThreeScene(modelUrl, onPointerDown) {
         // Set a proper HDR environment map for realistic lighting and reflections.
         new RGBELoader()
             .setDataType(THREE.FloatType) // Required for recent three.js versions
-            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
+            .load('modulos/visor3d/assets/studio_small_01_1k.hdr', (texture) => {
                 const pmremGenerator = new THREE.PMREMGenerator(renderer);
                 pmremGenerator.compileEquirectangularShader();
 
@@ -124,9 +126,15 @@ export function initThreeScene(modelUrl, onPointerDown) {
                 texture.dispose();
                 pmremGenerator.dispose();
             }, undefined, (error) => {
-                console.error('An error occurred while loading the HDR environment map.', error);
+                console.error('An error occurred while loading the HDR environment map. Reverting to basic lighting.', error);
                 // Fallback to a simple color background if HDR fails to load
-                scene.background = new THREE.Color(0x333333);
+                scene.background = new THREE.Color(0x404040); // Use original scene background
+                scene.environment = null; // Ensure no broken environment map is used
+                 if (!scene.getObjectByName('fallback_ambient_light')) {
+                    const fallbackLight = new THREE.AmbientLight(0xffffff, 4.0); // Much stronger
+                    fallbackLight.name = 'fallback_ambient_light';
+                    scene.add(fallbackLight);
+                }
             });
 
         const centeredBox = new THREE.Box3().setFromObject(model);
@@ -350,6 +358,20 @@ export function setAmbientLightIntensity(intensity) {
     if (ambientLight) {
         ambientLight.intensity = parseFloat(intensity);
     }
+}
+
+export function toggleWireframe(isActive) {
+    modelParts.forEach(part => {
+        const applyWireframe = (material) => {
+            material.wireframe = isActive;
+        };
+
+        if (Array.isArray(part.material)) {
+            part.material.forEach(applyWireframe);
+        } else if (part.material) {
+            applyWireframe(part.material);
+        }
+    });
 }
 
 function initAxisGizmo() {
