@@ -411,11 +411,13 @@ export function openAIAssistantModal() {
         chatInput.style.height = `${chatInput.scrollHeight}px`;
     });
 
+    // A single, delegated event listener for all actions within the modal.
     modalElement.addEventListener('click', async (e) => {
         const button = e.target.closest('button[data-action]');
         if (!button) return;
 
         const action = button.dataset.action;
+
         if (action === 'close') {
             closeModal();
         } else if (action === 'confirm-ai-plan') {
