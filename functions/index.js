@@ -325,7 +325,9 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     // Fetch all users to provide as context to the AI for assignments.
     const usersSnapshot = await db.collection('usuarios').get();
     const allUsers = usersSnapshot.docs.map(doc => {
-        const { nombre, email } = doc.data();
+        const data = doc.data() || {}; // Handle cases where data might be missing
+        const nombre = data.nombre || ''; // Default to empty string if missing
+        const email = data.email || '';   // Default to empty string if missing
         return { id: doc.id, nombre, email };
     });
     const requestHash = generateRequestHash(userPrompt, tasks);
