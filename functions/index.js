@@ -506,7 +506,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step (in Spanish) and using tools.
 
                 **Core Directives:**
-                1.  **Analyze User Intent & History:** First, review the entire `conversationHistory` to understand the full context. Then, determine if the user's latest prompt is a question or a command. Use the history to resolve ambiguous references like "that task" or "the previous plan".
+                1.  **Analyze User Intent & History:** First, review the entire \`conversationHistory\` to understand the full context. Then, determine if the user's latest prompt is a question or a command. Use the history to resolve ambiguous references like "that task" or "the previous plan".
                 2.  **If it's a Question:**
                     *   Think about the question, using the conversation history and task data to find the answer.
                     *   Use the \`answer_question\` tool to provide a direct, concise answer in Spanish.
