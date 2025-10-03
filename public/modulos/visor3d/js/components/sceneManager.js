@@ -13,7 +13,7 @@ import { state, modelParts, partCharacteristics, selectedObjects, clippingPlanes
 import { renderPartsList, updateStatus } from './uiManager.js';
 
 export let scene, camera, renderer, controls, labelRenderer, composer;
-let ambientLight, directionalLight;
+let ambientLight, directionalLight, hemisphereLight;
 let fxaaPass;
 let gizmoScene, gizmoCamera;
 
@@ -45,10 +45,12 @@ function setupControls(camera, renderer) {
 }
 
 function setupLights(scene) {
-    ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    // Increased intensity for a brighter default scene
+    ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
     scene.add(ambientLight);
 
-    directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    // Increased intensity for a stronger key light
+    directionalLight = new THREE.DirectionalLight(0xffffff, 3.5);
     directionalLight.position.set(5, 10, 7.5);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
@@ -67,7 +69,8 @@ function setupLights(scene) {
     fillLight.position.set(-5, -5, -7.5);
     scene.add(fillLight);
 
-    const hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x444488, 0.4);
+    // Increased intensity for a softer fill light from below
+    hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x444488, 1.0);
     hemisphereLight.position.set(0, 20, 0);
     scene.add(hemisphereLight);
 }
@@ -127,14 +130,12 @@ export function initThreeScene(modelUrl, onPointerDown) {
                 pmremGenerator.dispose();
             }, undefined, (error) => {
                 console.error('An error occurred while loading the HDR environment map. Reverting to basic lighting.', error);
-                // Fallback to a simple color background if HDR fails to load
-                scene.background = new THREE.Color(0x404040); // Use original scene background
-                scene.environment = null; // Ensure no broken environment map is used
-                 if (!scene.getObjectByName('fallback_ambient_light')) {
-                    const fallbackLight = new THREE.AmbientLight(0xffffff, 4.0); // Much stronger
-                    fallbackLight.name = 'fallback_ambient_light';
-                    scene.add(fallbackLight);
-                }
+                scene.background = new THREE.Color(0x404040);
+                scene.environment = null;
+                // Boost existing lights as a fallback
+                ambientLight.intensity = 2.5;
+                directionalLight.intensity = 4.0;
+                hemisphereLight.intensity = 1.5;
             });
 
         const centeredBox = new THREE.Box3().setFromObject(model);
