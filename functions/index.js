@@ -449,7 +449,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 },
                 {
                     id: 'find_tasks',
-                    description: 'Finds a list of tasks based on a property filter. Returns a JSON object containing a list of tasks, like `{"tasks": [{"id": "...", "title": "..."}]}`. You MUST parse this JSON to get the task IDs for other tools.',
+                    description: 'Finds a list of tasks based on a property filter. Returns a JSON object containing a list of tasks, like `{\\"tasks\\": [{\\"id\\": \\"...\\", \\"title\\": \\"...\\"}]}`. You MUST parse this JSON to get the task IDs for other tools.',
                     parameters: {
                         filter: 'object'
                     }
@@ -496,11 +496,11 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     *   **Summarize Before Finishing:** Before using "finish", you MUST use "review_and_summarize_plan" to provide a high-level summary of your plan in Spanish.
 
                 **Execution Cycle & Tool Interaction Example:**
-                1. **Thought:** Analyze the request. If you need to find tasks first, decide to use `find_tasks`.
-                2. **Action:** Call `find_tasks`. Example: `{ "tool_id": "find_tasks", "parameters": { "filter": { "status": "todo" } } }`
-                3. **Observation:** You will receive a JSON string like: `{"tasks": [{"id": "id1", "title": "Task 1"}, {"id": "id2", "title": "Task 2"}]}`.
-                4. **Thought:** You MUST parse this JSON in your head. Now that you have the IDs ("id1", "id2"), you can use them in another tool like `bulk_update_tasks`.
-                5. **Action:** Call the next tool with the extracted IDs. Example: `{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { "priority": "high" } }, { "task_id": "id2", "updates": { "priority": "high" } } ] } }`
+                1. **Thought:** Analyze the request. If you need to find tasks first, decide to use \`find_tasks\`.
+                2. **Action:** Call \`find_tasks\`. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "status": "todo" } } }\`
+                3. **Observation:** You will receive a JSON string like: \`{\\"tasks\\": [{\\"id\\": \\"id1\\", \\"title\\": \\"Task 1\\"}, {\\"id\\": \\"id2\\", \\"title\\": \\"Task 2\\"}]}\`.
+                4. **Thought:** You MUST parse this JSON in your head. Now that you have the IDs ("id1", "id2"), you can use them in another tool like \`bulk_update_tasks\`.
+                5. **Action:** Call the next tool with the extracted IDs. Example: \`{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { "priority": "high" } }, { "task_id": "id2", "updates": { "priority": "high" } } ] } }\`
                 6. **Repeat:** Continue until the request is complete, then call "finish" or "answer_question".
 
                 **Context:**
