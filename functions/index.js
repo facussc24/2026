@@ -497,7 +497,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
 
                 **Execution Cycle & Tool Interaction Example:**
                 1. **Thought:** The user wants to find all overdue tasks that are not yet done. I will use the \`find_tasks\` tool with advanced filters. Today's date is ${currentDate}.
-                2. **Action:** Call \`find_tasks\` with `dueDate_lte` for "less than or equal to" today, and `status_ne` for "not equal to" done. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "dueDate_lte": "${currentDate}", "status_ne": "done" } } }\`
+                2. **Action:** Call \`find_tasks\` with \`dueDate_lte\` for "less than or equal to" today, and \`status_ne\` for "not equal to" done. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "dueDate_lte": "${currentDate}", "status_ne": "done" } } }\`
                 3. **Observation:** You will receive a JSON string like: \`{\\"tasks\\": [{\\"id\\": \\"id1\\", \\"title\\": \\"Task 1\\"}, {\\"id\\": \\"id2\\", \\"title\\": \\"Task 2\\"}]}\`.
                 4. **Thought:** I have the IDs of the overdue tasks. Now I will use \`bulk_update_tasks\` to reschedule them.
                 5. **Action:** Call the next tool with the extracted IDs. Example: \`{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { "plannedDate": "..." } }, { "task_id": "id2", "updates": { "plannedDate": "..." } } ] } }\`
