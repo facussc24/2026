@@ -29,7 +29,6 @@ export async function initAnnotations(modelName, scene, firestoreDb) {
  */
 async function loadAnnotationsFromFirestore(modelName) {
     console.log(`Loading annotations for ${modelName}...`);
-    const db = getDb();
     const docRef = doc(db, "annotations", modelName);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
@@ -45,9 +44,8 @@ async function loadAnnotationsFromFirestore(modelName) {
  * @param {object} annotation - The annotation object to save.
  */
 export async function saveAnnotation(annotation) {
-    if (!currentModelName) return;
+    if (!currentModelName || !db) return;
     console.log(`Saving annotation for ${currentModelName}:`, annotation);
-    const db = getDb();
     const docRef = doc(db, "annotations", currentModelName);
     try {
         // Use setDoc with merge: true to create the document if it doesn't exist
@@ -67,9 +65,8 @@ export async function saveAnnotation(annotation) {
  * @param {object} comment - The comment object.
  */
 export async function addCommentToAnnotation(annotationId, comment) {
-    if (!currentModelName) return;
+    if (!currentModelName || !db) return;
 
-    const db = getDb();
     const docRef = doc(db, "annotations", currentModelName);
 
     try {
