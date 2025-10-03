@@ -411,7 +411,69 @@ export function openAIAssistantModal() {
         chatInput.style.height = `${chatInput.scrollHeight}px`;
     });
 
-    modalElement.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+    modalElement.addEventListener('click', async (e) => {
+        const button = e.target.closest('button[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        if (action === 'close') {
+            closeModal();
+        } else if (action === 'confirm-ai-plan') {
+            button.disabled = true;
+            button.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Ejecutando...';
+            lucide.createIcons();
+
+            const planData = JSON.parse(button.dataset.plan);
+            const executePlanFn = httpsCallable(functions, 'executeTaskModificationPlan');
+
+            try {
+                await executePlanFn({ plan: planData.executionPlan, jobId: planData.jobId });
+
+                const modalContent = document.getElementById('ai-modal-content');
+                modalContent.innerHTML = getAIAssistantExecutionProgressViewHTML(planData);
+                lucide.createIcons();
+
+                const executionUnsubscribe = onSnapshot(doc(db, "plan_executions", planData.jobId), (doc) => {
+                    const executionData = doc.data();
+                    if (!executionData) return;
+
+                    // FIX: Ensure executionData.steps is an array before calling forEach
+                    const steps = executionData.steps || [];
+                    steps.forEach((step, index) => {
+                        const stepEl = document.getElementById(`exec-step-${index + 1}`);
+                        if (!stepEl) return;
+                        const statusIcon = stepEl.querySelector('.status-icon');
+                        const statusText = stepEl.querySelector('.status-text');
+
+                        if (step.status === 'completed') {
+                            statusIcon.innerHTML = '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
+                            statusText.textContent = 'Completado';
+                            stepEl.classList.add('opacity-70');
+                        } else if (step.status === 'error') {
+                            statusIcon.innerHTML = '<i data-lucide="x-circle" class="w-5 h-5 text-red-500"></i>';
+                            statusText.textContent = `Error: ${step.error || 'Desconocido'}`;
+                            stepEl.classList.add('bg-red-50');
+                        }
+                    });
+
+                    if (executionData.status === 'completed' || executionData.status === 'error') {
+                        if (executionUnsubscribe) executionUnsubscribe();
+                        const finalThought = document.getElementById('execution-final-thought');
+                        if (finalThought) {
+                           finalThought.innerHTML = `<p class="text-sm text-slate-600 dark:text-slate-400 mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg"><strong>Resumen final:</strong> ${executionData.summary || 'El plan ha finalizado.'}</p>`;
+                        }
+                        document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error executing plan:", error);
+                showToast(`Error al ejecutar el plan: ${error.message}`, 'error');
+                button.disabled = false;
+                button.innerHTML = 'Confirmar y Ejecutar Plan';
+            }
+        }
+    });
 
     // Initial greeting from AI
     addMessage('ai', 'Hola, soy tu asistente de IA. ¿Cómo puedo ayudarte a organizar tus tareas hoy?');

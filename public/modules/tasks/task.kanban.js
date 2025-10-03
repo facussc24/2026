@@ -39,9 +39,7 @@ export function initTasksSortable(container) {
                     showToast('Tarea actualizada.', 'success');
                 } catch (error) {
                     console.error("Error updating task status:", error);
-                    showToast('Error al mover la tarea. Revirtiendo cambio.', 'error');
-                    // Re-fetch and re-render to ensure UI consistency on failure
-                    fetchAndRenderTasks(container);
+                    showToast('Error al mover la tarea.', 'error');
                 }
             }
         });
@@ -122,72 +120,72 @@ export function runKanbanBoardLogic(container) {
     container.innerHTML = getKanbanBoardHTML(state, selectedUser);
     lucide.createIcons();
 
-    // Removed setTimeout to prevent race conditions on view cleanup
-    const addTaskBtn = container.querySelector('#add-new-task-btn');
-    if (addTaskBtn) {
-        addTaskBtn.addEventListener('click', async () => await openTaskFormModal());
-    }
+    setTimeout(() => {
+        const addTaskBtn = container.querySelector('#add-new-task-btn');
+        if (addTaskBtn) {
+            addTaskBtn.addEventListener('click', async () => await openTaskFormModal());
+        }
 
-    const toggleArchivedBtn = container.querySelector('#toggle-archived-btn');
-    if (toggleArchivedBtn) {
-        toggleArchivedBtn.addEventListener('click', () => {
-            const state = getState();
-            const newShowArchived = !state.kanban.showArchived;
-            setShowArchived(newShowArchived);
+        const toggleArchivedBtn = container.querySelector('#toggle-archived-btn');
+        if (toggleArchivedBtn) {
+            toggleArchivedBtn.addEventListener('click', () => {
+                const state = getState();
+                const newShowArchived = !state.kanban.showArchived;
+                setShowArchived(newShowArchived);
 
-            const archivedColumn = container.querySelector('.task-column[data-status="done"]');
-            const taskBoard = container.querySelector('#task-board');
-            const toggleText = container.querySelector('#toggle-archived-text');
+                const archivedColumn = container.querySelector('.task-column[data-status="done"]');
+                const taskBoard = container.querySelector('#task-board');
+                const toggleText = container.querySelector('#toggle-archived-text');
 
-            if (newShowArchived) {
-                archivedColumn.classList.remove('hidden');
-                taskBoard.classList.remove('md:grid-cols-2');
-                taskBoard.classList.add('md:grid-cols-3');
-                toggleText.textContent = 'Ocultar Archivadas';
-            } else {
-                archivedColumn.classList.add('hidden');
-                taskBoard.classList.remove('md:grid-cols-3');
-                taskBoard.classList.add('md:grid-cols-2');
-                toggleText.textContent = 'Mostrar Archivadas';
-            }
-        });
-    }
+                if (newShowArchived) {
+                    archivedColumn.classList.remove('hidden');
+                    taskBoard.classList.remove('md:grid-cols-2');
+                    taskBoard.classList.add('md:grid-cols-3');
+                    toggleText.textContent = 'Ocultar Archivadas';
+                } else {
+                    archivedColumn.classList.add('hidden');
+                    taskBoard.classList.remove('md:grid-cols-3');
+                    taskBoard.classList.add('md:grid-cols-2');
+                    toggleText.textContent = 'Mostrar Archivadas';
+                }
+            });
+        }
 
-    const taskBoard = container.querySelector('#task-board');
-    if(taskBoard) {
-        taskBoard.addEventListener('click', e => {
-            const header = e.target.closest('.kanban-column-header');
-            if (header) {
-                header.parentElement.classList.toggle('collapsed');
-            }
-        });
-    }
+        const taskBoard = container.querySelector('#task-board');
+        if(taskBoard) {
+            taskBoard.addEventListener('click', e => {
+                const header = e.target.closest('.kanban-column-header');
+                if (header) {
+                    header.parentElement.classList.toggle('collapsed');
+                }
+            });
+        }
 
-    const searchInput = container.querySelector('#task-search-input');
-    if(searchInput) {
-        searchInput.addEventListener('input', e => {
-            setKanbanSearchTerm(e.target.value.toLowerCase());
-            fetchAndRenderTasks(container);
-        });
-    }
+        const searchInput = container.querySelector('#task-search-input');
+        if(searchInput) {
+            searchInput.addEventListener('input', e => {
+                setKanbanSearchTerm(e.target.value.toLowerCase());
+                fetchAndRenderTasks(container);
+            });
+        }
 
-    const priorityFilter = container.querySelector('#task-priority-filter');
-    if(priorityFilter) {
-        priorityFilter.addEventListener('change', e => {
-            setKanbanPriorityFilter(e.target.value);
-            fetchAndRenderTasks(container);
-        });
-    }
+        const priorityFilter = container.querySelector('#task-priority-filter');
+        if(priorityFilter) {
+            priorityFilter.addEventListener('change', e => {
+                setKanbanPriorityFilter(e.target.value);
+                fetchAndRenderTasks(container);
+            });
+        }
 
-    setupTaskFilters(container);
-    renderTaskFilters(container);
-    fetchAndRenderTasks(container);
+        setupTaskFilters(container);
+        renderTaskFilters(container);
+        fetchAndRenderTasks(container);
 
-    // Assign cleanup function synchronously
-    appState.currentViewCleanup = () => {
-        clearUnsubscribers();
-        setKanbanSearchTerm('');
-        setKanbanPriorityFilter('all');
-        setKanbanSelectedUser(null);
-    };
+        appState.currentViewCleanup = () => {
+            clearUnsubscribers();
+            setKanbanSearchTerm('');
+            setKanbanPriorityFilter('all');
+            setKanbanSelectedUser(null);
+        };
+    }, 0);
 }
