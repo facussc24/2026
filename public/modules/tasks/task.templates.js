@@ -195,7 +195,7 @@ export function getAIAssistantLoadingViewHTML(title = 'Analizando tu petición..
     `;
 }
 
-export function getAIAssistantReviewViewHTML(plan) {
+export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
     const { thoughtProcess, executionPlan } = plan;
 
     const renderAction = (action, index) => {
@@ -241,9 +241,23 @@ export function getAIAssistantReviewViewHTML(plan) {
                         content += `<input type="hidden" name="${actionId}_update_field_${updateIndex}" value="${updateField}">`;
                         let updateInput = '';
 
-                        if (updateField === 'status' && updateValue === 'done') {
-                            updateInput = `<div class="text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">Marcar como <span class="font-bold text-blue-600 dark:text-blue-400">Completada</span>.</div>
-                                           <input type="hidden" name="${actionId}_update_value_${updateIndex}" value="done">`;
+                        const renderReadOnlyInfo = (label, value) => `
+                            <div class="ai-input-group">
+                                <label class="ai-input-label">${label}</label>
+                                <div class="text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">${value}</div>
+                            </div>`;
+
+                        if (updateField === 'dependsOn' || updateField === 'blocks') {
+                            const label = updateField === 'dependsOn' ? 'DEPENDE DE (PRERREQUISITO)' : 'BLOQUEA A';
+                            const taskTitles = (updateValue || []).map(taskId => taskTitleMap.get(taskId) || taskId).join(', ');
+                            updateInput = renderReadOnlyInfo(label, taskTitles);
+                            content += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value='${JSON.stringify(updateValue)}'>`;
+                        } else if (updateField === 'blocked') {
+                            updateInput = renderReadOnlyInfo('ESTADO', updateValue ? 'Se marcará como Bloqueada' : 'Se desbloqueará');
+                            content += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="${updateValue}">`;
+                        } else if (updateField === 'status' && updateValue === 'done') {
+                            updateInput = renderReadOnlyInfo('ESTADO', 'Marcar como Completada');
+                            content += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="done">`;
                         } else if (updateField === 'dueDate' || updateField === 'plannedDate') {
                             const label = updateField === 'dueDate' ? 'NUEVA FECHA LÍMITE' : 'NUEVA FECHA PLANIFICADA';
                             updateInput = `<div class="ai-input-group">

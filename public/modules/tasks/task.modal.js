@@ -427,10 +427,10 @@ export async function openAIAssistantModal() {
 
 
     // --- Step 3: Review and Execute ---
-    const renderReviewView = (plan) => {
+    const renderReviewView = (plan, taskTitleMap) => {
         currentPlan = plan;
 
-        viewContainer.innerHTML = getAIAssistantReviewViewHTML(plan);
+        viewContainer.innerHTML = getAIAssistantReviewViewHTML(plan, taskTitleMap);
         lucide.createIcons();
 
         const accordionBtn = viewContainer.querySelector('#thought-process-accordion-btn');
@@ -472,9 +472,15 @@ export async function openAIAssistantModal() {
                         const updateField = formData.get(`${actionId}_update_field_${updateIndex}`);
                         if (!updateField) break; // No more update fields for this action
 
-                        const updateValue = formData.get(`${actionId}_update_value_${updateIndex}`);
+                        let updateValue = formData.get(`${actionId}_update_value_${updateIndex}`);
                         if (updateValue !== null) {
-                            newAction.updates[updateField] = updateValue;
+                            try {
+                                // Attempt to parse if it's a JSON string (for arrays like dependsOn)
+                                newAction.updates[updateField] = JSON.parse(updateValue);
+                            } catch (e) {
+                                // Otherwise, use the raw value
+                                newAction.updates[updateField] = updateValue;
+                            }
                         }
                         updateIndex++;
                     }
@@ -542,7 +548,7 @@ export async function openAIAssistantModal() {
                         finalPlan.executionPlan.forEach(action => {
                             if (action.action !== 'CREATE') action.originalTitle = taskTitleMap.get(action.docId) || 'Tarea no encontrada';
                         });
-                        renderReviewView(finalPlan);
+                        renderReviewView(finalPlan, taskTitleMap);
                     } else if (jobData.status === 'ERROR') {
                         if (unsubscribe) unsubscribe();
                         throw new Error(jobData.error || "El agente de IA encontró un error desconocido.");
