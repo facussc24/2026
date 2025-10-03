@@ -361,7 +361,11 @@ export async function openAIAssistantModal() {
             const executionData = doc.data();
             if (!executionData || !executionData.steps) return;
 
-            executionData.steps.forEach((step, index) => {
+            // BUG FIX: Firestore can return array-like objects as actual objects.
+            // Convert to an array before iterating to prevent "forEach is not a function" error.
+            const stepsArray = Array.isArray(executionData.steps) ? executionData.steps : Object.values(executionData.steps);
+
+            stepsArray.forEach((step, index) => {
                 const stepElement = executionStepsList.querySelector(`#execution-step-${index}`);
                 if (!stepElement) return;
 
@@ -463,9 +467,17 @@ export async function openAIAssistantModal() {
                 } else if (actionType === 'UPDATE') {
                     newAction.docId = formData.get(`${actionId}_docId`);
                     newAction.updates = {};
-                    const updateField = formData.get(`${actionId}_update_field_0`);
-                    const updateValue = formData.get(`${actionId}_update_value_0`);
-                    newAction.updates[updateField] = updateValue;
+                    let updateIndex = 0;
+                    while (true) {
+                        const updateField = formData.get(`${actionId}_update_field_${updateIndex}`);
+                        if (!updateField) break; // No more update fields for this action
+
+                        const updateValue = formData.get(`${actionId}_update_value_${updateIndex}`);
+                        if (updateValue !== null) {
+                            newAction.updates[updateField] = updateValue;
+                        }
+                        updateIndex++;
+                    }
                 } else if (actionType === 'DELETE') {
                     newAction.docId = originalAction.docId;
                 }

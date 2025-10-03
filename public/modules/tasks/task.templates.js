@@ -233,27 +233,35 @@ export function getAIAssistantReviewViewHTML(plan) {
 
                 content += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
 
-                const updateField = Object.keys(action.updates)[0];
-                const updateValue = action.updates[updateField];
-                content += `<input type="hidden" name="${actionId}_update_field_0" value="${updateField}">`;
+                details = '<div class="space-y-3 mt-3">';
+                let updateIndex = 0;
+                for (const updateField in action.updates) {
+                    if (Object.prototype.hasOwnProperty.call(action.updates, updateField)) {
+                        const updateValue = action.updates[updateField];
+                        content += `<input type="hidden" name="${actionId}_update_field_${updateIndex}" value="${updateField}">`;
+                        let updateInput = '';
 
-                let updateInput = '';
-                if (updateField === 'status' && updateValue === 'done') {
-                    updateInput = `<div class="text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">Marcar como <span class="font-bold text-blue-600 dark:text-blue-400">Completada</span>.</div>
-                                   <input type="hidden" name="${actionId}_update_value_0" value="done">`;
-                } else if (updateField === 'dueDate' || updateField === 'plannedDate') {
-                    const label = updateField === 'dueDate' ? 'NUEVA FECHA LÍMITE' : 'NUEVA FECHA PLANIFICADA';
-                    updateInput = `<div class="ai-input-group">
-                                       <label for="${actionId}_update_value_0" class="ai-input-label">${label}</label>
-                                       <input type="date" id="${actionId}_update_value_0" name="${actionId}_update_value_0" value="${updateValue || ''}" class="editable-ai-input">
-                                   </div>`;
-                } else {
-                    updateInput = `<div class="ai-input-group">
-                                       <label for="${actionId}_update_value_0" class="ai-input-label">${updateField.toUpperCase()}</label>
-                                       <input type="text" id="${actionId}_update_value_0" name="${actionId}_update_value_0" value="${updateValue || ''}" class="editable-ai-input">
-                                   </div>`;
+                        if (updateField === 'status' && updateValue === 'done') {
+                            updateInput = `<div class="text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">Marcar como <span class="font-bold text-blue-600 dark:text-blue-400">Completada</span>.</div>
+                                           <input type="hidden" name="${actionId}_update_value_${updateIndex}" value="done">`;
+                        } else if (updateField === 'dueDate' || updateField === 'plannedDate') {
+                            const label = updateField === 'dueDate' ? 'NUEVA FECHA LÍMITE' : 'NUEVA FECHA PLANIFICADA';
+                            updateInput = `<div class="ai-input-group">
+                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">${label}</label>
+                                               <input type="date" id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" value="${updateValue || ''}" class="editable-ai-input">
+                                           </div>`;
+                        } else {
+                            const label = updateField.replace(/([A-Z])/g, ' $1').toUpperCase();
+                            updateInput = `<div class="ai-input-group">
+                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">${label}</label>
+                                               <input type="text" id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" value="${updateValue || ''}" class="editable-ai-input">
+                                           </div>`;
+                        }
+                        details += updateInput;
+                        updateIndex++;
+                    }
                 }
-                details = `<div class="space-y-3 mt-3">${updateInput}</div>`;
+                details += '</div>';
                 break;
             case 'DELETE':
                 icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-red-100 dark:bg-red-900/50 flex items-center justify-center shadow-inner border border-red-200 dark:border-red-800"><i data-lucide="trash-2" class="w-6 h-6 text-red-600 dark:text-red-400"></i></div>`;
