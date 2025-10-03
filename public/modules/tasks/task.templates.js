@@ -130,70 +130,79 @@ export function getKanbanBoardHTML(state, selectedUser) {
     `;
 }
 
-export function getAIAssistantModalHTML() {
-    // This is the main shell for the new multi-step AI assistant modal.
-    // Content will be injected into #ai-assistant-view-container.
+export function getAIChatModalHTML() {
     return `
     <div id="ai-assistant-modal" class="fixed inset-0 z-[1050] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-        <div id="ai-assistant-modal-content" class="bg-slate-50 dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in transition-all duration-300">
-            <div id="ai-assistant-view-container" class="flex flex-col flex-grow overflow-hidden">
-                <!-- Dynamic content (prompt, loading, review) will be injected here -->
+        <div id="ai-assistant-modal-content" class="bg-slate-100 dark:bg-slate-900 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 animate-scale-in transition-all duration-300">
+            <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-t-lg">
+                <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                    <i data-lucide="bot" class="w-6 h-6 text-purple-500"></i>
+                    Asistente de IA
+                </h3>
+                <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                    <i data-lucide="x" class="h-6 w-6"></i>
+                </button>
+            </div>
+            <div id="ai-chat-messages" class="flex-grow p-6 overflow-y-auto custom-scrollbar">
+                <!-- Chat messages will be rendered here -->
+            </div>
+            <div class="p-4 bg-white/80 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm">
+                <form id="ai-chat-form" class="flex items-center gap-3">
+                    <textarea id="ai-chat-input" class="flex-grow bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none" placeholder="Escribe tu petición..." rows="1"></textarea>
+                    <button type="submit" id="ai-chat-send-btn" class="bg-purple-600 text-white rounded-full w-12 h-12 flex items-center justify-center flex-shrink-0 hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="send" class="w-6 h-6"></i>
+                    </button>
+                </form>
             </div>
         </div>
     </div>
     `;
 }
 
-export function getAIAssistantPromptViewHTML() {
-    // Step 1: User enters their request.
-    return `
-        <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
-            <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                <i data-lucide="wand-2" class="w-6 h-6 text-purple-500"></i>
-                Asistente de IA
-            </h3>
-            <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
-                <i data-lucide="x" class="h-6 w-6"></i>
-            </button>
-        </div>
-        <div class="p-6 flex-grow">
-            <p class="text-sm text-slate-600 dark:text-slate-300 mb-3">
-                Describe qué necesitas. Puedes crear tareas, marcarlas como completadas, cambiar fechas y más.
-            </p>
-            <textarea id="ai-assistant-prompt-input" class="w-full h-32 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md p-3 text-base focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Ej: Crear tarea para revisar los planos y marcar como hecha la de llamar al proveedor..."></textarea>
+export function getAIChatMessageHTML(sender, content, type = 'text') {
+    const isUser = sender === 'user';
+    const alignClass = isUser ? 'justify-end' : 'justify-start';
+    const bubbleClass = isUser
+        ? 'bg-blue-600 text-white rounded-br-none'
+        : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-bl-none';
 
-            <div class="mt-4">
-                <h4 class="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">O prueba una acción rápida:</h4>
-                <div class="flex flex-wrap gap-2">
-                    <button data-action="ai-template" data-template-id="new-amfe-process" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-sm py-1.5 px-3 rounded-full flex items-center transition-colors">
-                        <i data-lucide="workflow" class="mr-1.5 h-4 w-4"></i>Iniciar Proceso AMFE
-                    </button>
+    let messageContent = '';
+    if (type === 'plan') {
+        // Render the plan review view inside the AI message bubble
+        messageContent = getAIAssistantReviewViewHTML(content.plan, content.taskTitleMap);
+    } else {
+        // Render simple text or markdown
+        messageContent = `<div class="prose prose-sm dark:prose-invert max-w-none">${marked.parse(content)}</div>`;
+    }
+
+    return `
+        <div class="flex items-start gap-3 my-4 animate-fade-in-up ${alignClass}">
+            ${!isUser ? '<i data-lucide="bot" class="w-8 h-8 text-purple-500 flex-shrink-0"></i>' : ''}
+            <div class="max-w-2xl">
+                <div class="p-4 rounded-xl shadow-md ${bubbleClass}">
+                    ${messageContent}
                 </div>
             </div>
         </div>
-        <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm flex justify-end items-center gap-3">
-            <button data-action="close" type="button" class="bg-slate-200 text-slate-800 px-4 py-2 rounded-md hover:bg-slate-300 font-semibold transition-colors">Cancelar</button>
-            <button id="ai-generate-plan-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2">
-                <i data-lucide="brain-circuit" class="w-5 h-5"></i>
-                Generar Plan
-            </button>
-        </div>
     `;
 }
 
-export function getAIAssistantLoadingViewHTML(title = 'Analizando tu petición...') {
-    // Step 2: Show a loading/thinking state with a container for dynamic steps.
+export function getAILoadingMessageHTML() {
     return `
-        <div class="flex flex-col items-center justify-center h-full p-8 text-center">
-            <i data-lucide="loader-circle" class="w-12 h-12 animate-spin text-purple-500"></i>
-            <p class="mt-4 text-lg font-semibold text-slate-700 dark:text-slate-200">${title}</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Esto puede tomar unos segundos. La IA está procesando tu solicitud.</p>
-            <div id="thinking-steps-container" class="mt-4 text-left text-sm w-full max-w-md h-24 overflow-y-auto custom-scrollbar border bg-slate-100 dark:bg-slate-700/50 p-3 rounded-lg">
-                 <p class="text-slate-500 dark:text-slate-400 animate-pulse">Iniciando análisis...</p>
+        <div class="flex items-start gap-3 my-4 animate-fade-in-up justify-start" id="ai-loading-bubble">
+            <i data-lucide="bot" class="w-8 h-8 text-purple-500 flex-shrink-0"></i>
+            <div class="max-w-2xl">
+                <div class="p-4 rounded-xl shadow-md bg-white dark:bg-slate-700">
+                    <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                        <i data-lucide="loader-circle" class="w-5 h-5 animate-spin"></i>
+                        <span class="font-medium text-sm">Pensando...</span>
+                    </div>
+                </div>
             </div>
         </div>
     `;
 }
+
 
 export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
     const { thoughtProcess, executionPlan } = plan;

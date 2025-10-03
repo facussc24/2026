@@ -315,12 +315,35 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    const { userPrompt, tasks } = data;
+    let { userPrompt, tasks, conversationId } = data; // Now accepts an optional conversationId
     if (!userPrompt || !tasks) {
         throw new functions.https.HttpsError("invalid-argument", "The 'userPrompt' and 'tasks' are required.");
     }
 
     const db = admin.firestore();
+    const conversationsRef = db.collection('ai_conversations');
+    let conversationHistory = [];
+
+    if (conversationId) {
+        const conversationSnap = await conversationsRef.doc(conversationId).get();
+        if (conversationSnap.exists) {
+            conversationHistory = conversationSnap.data().history || [];
+        } else {
+            console.warn(`Conversation ID "${conversationId}" provided but not found. Starting new conversation.`);
+            conversationId = null; // Reset to create a new one
+        }
+    }
+
+    if (!conversationId) {
+        const newConversationRef = conversationsRef.doc();
+        await newConversationRef.set({
+            creatorUid: context.auth.uid,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            history: []
+        });
+        conversationId = newConversationRef.id;
+    }
+
 
     // Fetch all users to provide as context to the AI for assignments.
     const usersSnapshot = await db.collection('usuarios').get();
@@ -350,9 +373,10 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
             summary,
             thoughtProcess: `### Plan de la IA (desde caché)\n\n${summary}`,
             isFromCache: true,
+            conversationId: conversationId, // Pass conversation ID along
         };
         await jobRef.set(jobData);
-        return { jobId: jobRef.id, isFromCache: true };
+        return { jobId: jobRef.id, conversationId: conversationId, isFromCache: true };
     }
 
     // Cache Miss: Create a pending job to be processed by the AI.
@@ -364,16 +388,17 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         creatorUid: context.auth.uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         currentDate: new Date().toISOString().split('T')[0],
-        conversationHistory: [],
+        conversationHistory, // Use existing or new history
         thinkingSteps: [],
         executionPlan: [],
         summary: '',
         requestHash, // Store hash for later caching
+        conversationId: conversationId, // Pass conversation ID along
     };
 
     await jobRef.set(jobData);
 
-    return { jobId: jobRef.id, isFromCache: false };
+    return { jobId: jobRef.id, conversationId: conversationId, isFromCache: false };
 });
 
 
@@ -381,7 +406,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
     .onCreate(async (snap, context) => {
         const jobRef = snap.ref;
         const jobData = snap.data();
-        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary } = jobData;
+        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId } = jobData;
 
         try {
             await jobRef.update({ status: 'RUNNING' });
@@ -481,9 +506,9 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step (in Spanish) and using tools.
 
                 **Core Directives:**
-                1.  **Analyze User Intent:** First, determine if the user is asking a question (e.g., "how many tasks...", "which tasks are...") or issuing a command (e.g., "create a task...", "reorganize my week").
+                1.  **Analyze User Intent & History:** First, review the entire `conversationHistory` to understand the full context. Then, determine if the user's latest prompt is a question or a command. Use the history to resolve ambiguous references like "that task" or "the previous plan".
                 2.  **If it's a Question:**
-                    *   Think about the question and analyze the provided task data to find the answer.
+                    *   Think about the question, using the conversation history and task data to find the answer.
                     *   Use the \`answer_question\` tool to provide a direct, concise answer in Spanish.
                     *   Do not use any other tools. Your job is to answer, then finish.
                 3.  **If it's a Command:**
@@ -739,6 +764,16 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     executionPlan,
                     summary,
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            // Save the final conversation history back to its document
+            if (conversationId) {
+                const db = admin.firestore();
+                const conversationRef = db.collection('ai_conversations').doc(conversationId);
+                await conversationRef.update({
+                    history: conversationHistory,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             }
 
