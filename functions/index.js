@@ -394,6 +394,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         summary: '',
         requestHash, // Store hash for later caching
         conversationId: conversationId, // Pass conversation ID along
+        foundTasksContext: [], // Initialize the new memory field
     };
 
     await jobRef.set(jobData);
@@ -406,7 +407,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
     .onCreate(async (snap, context) => {
         const jobRef = snap.ref;
         const jobData = snap.data();
-        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId } = jobData;
+        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext } = jobData;
 
         try {
             await jobRef.update({ status: 'RUNNING' });
@@ -467,10 +468,8 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 },
                  {
                     id: 'review_and_summarize_plan',
-                    description: 'Review the created tasks and dependencies and provide a brief, high-level summary in Spanish of the plan you have constructed. This should be your final step before using the "finish" tool.',
-                    parameters: {
-                        summary: 'string'
-                    }
+                    description: 'Call this as your final step before using "finish". It reviews the execution plan you have constructed and generates an accurate, bulleted-point summary for the user. It takes no parameters.',
+                    parameters: {}
                 },
                 {
                     id: 'find_tasks',
@@ -522,16 +521,17 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     *   **Summarize Before Finishing (MANDATORY FORMAT):** Before using "finish", you MUST use "review_and_summarize_plan". The summary **MUST** be a simple bulleted list (using '*') of the actions taken. Do not add conversational text.
 
                 **Execution Cycle & Tool Interaction Example:**
-                1. **Thought:** The user wants to find all overdue tasks that are not yet done. I will use the \`find_tasks\` tool with advanced filters. Today's date is ${currentDate}.
-                2. **Action:** Call \`find_tasks\` with \`dueDate_lte\` for "less than or equal to" today, and \`status_ne\` for "not equal to" done. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "dueDate_lte": "${currentDate}", "status_ne": "done" } } }\`
-                3. **Observation:** You will receive a JSON string like: \`{\\"tasks\\": [{\\"id\\": \\"id1\\", \\"title\\": \\"Task 1\\"}, {\\"id\\": \\"id2\\", \\"title\\": \\"Task 2\\"}]}\`.
-                4. **Thought:** I have the IDs of the overdue tasks. Now I will use \`bulk_update_tasks\` to reschedule them.
-                5. **Action:** Call the next tool with the extracted IDs. Example: \`{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { "plannedDate": "..." } }, { "task_id": "id2", "updates": { "plannedDate": "..." } } ] } }\`
-                6. **Repeat:** Continue until the request is complete, then call "finish" or "answer_question".
+                1. **Thought:** The user wants to find all overdue tasks. I will use \`find_tasks\`. Today's date is ${currentDate}.
+                2. **Action:** Call \`find_tasks\` with `dueDate_lte` for "less than or equal to" today. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "dueDate_lte": "${currentDate}" } } }\`
+                3. **Observation:** You will receive: "OK. Found 5 tasks and saved them to the context."
+                4. **Thought:** The tasks are now in my short-term memory (`foundTasksContext`). I must use this context to get the task IDs for my next action. I will now use \`bulk_update_tasks\` to reschedule them.
+                5. **Action:** Call the next tool with the IDs from the context. Example: \`{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { ... } }, ... ] } }\`
+                6. **Repeat:** Continue until the request is complete, then call \`review_and_summarize_plan\` and finally "finish".
 
                 **Context:**
                 - Today's Date: ${currentDate}
-                - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate})), null, 2)}
+                - Existing Tasks (Initial View): ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate})), null, 2)}
+                - Found Tasks (Short-term memory): ${JSON.stringify(foundTasksContext, null, 2)}
                 - Available Users for Assignment: ${JSON.stringify(allUsers, null, 2)}
                 - Company Glossary: AMFE implies a multi-step process (analysis, team, docs, review, implementation).
 
@@ -605,8 +605,24 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     // Tool execution logic remains the same
                     switch (tool_code.tool_id) {
                         case 'review_and_summarize_plan':
-                            summary = tool_code.parameters.summary;
-                            toolResult = `OK. Plan summarized.`;
+                            if (executionPlan.length === 0) {
+                                summary = "No se realizaron cambios.";
+                            } else {
+                                const summaryPoints = executionPlan.map(action => {
+                                    if (action.action === 'CREATE') {
+                                        return `* Crear la tarea: "${action.task.title}"`;
+                                    }
+                                    if (action.action === 'UPDATE') {
+                                        return `* Actualizar la tarea: "${action.originalTitle}"`;
+                                    }
+                                    if (action.action === 'DELETE') {
+                                        return `* Eliminar la tarea: "${action.originalTitle}"`;
+                                    }
+                                    return '* Realizar una acción desconocida.';
+                                });
+                                summary = summaryPoints.join('\n');
+                            }
+                            toolResult = `OK. Plan summarized accurately from execution plan.`;
                             break;
                         case 'create_task':
                             const tempId = `temp_${Date.now()}`;
@@ -720,9 +736,10 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                             });
 
                             if (foundTasks.length > 0) {
-                                const taskInfo = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate }));
-                                toolResult = JSON.stringify({ tasks: taskInfo });
+                                foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate }));
+                                toolResult = `OK. Found ${foundTasks.length} tasks and saved them to the context.`;
                             } else {
+                                foundTasksContext = []; // Clear context if no tasks are found
                                 toolResult = `Error: No tasks found for the given filter.`;
                             }
                             break;
