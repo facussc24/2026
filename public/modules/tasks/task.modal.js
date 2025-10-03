@@ -514,7 +514,7 @@ export async function openAIAssistantModal() {
 
                     if (jobData.thinkingSteps && thinkingStepsContainer) {
                         thinkingStepsContainer.innerHTML = jobData.thinkingSteps.map(step => `
-                            <p class="flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in"><i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span>${step.thought}</span></p>
+                            <p class="flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in"><i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span class="truncate" title="${step.thought}">${step.thought}</span></p>
                         `).join('');
                         lucide.createIcons();
                         thinkingStepsContainer.scrollTop = thinkingStepsContainer.scrollHeight;
