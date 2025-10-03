@@ -46,7 +46,7 @@ function setupControls(camera, renderer) {
 
 function setupLights(scene) {
     // Increased intensity for a brighter default scene
-    ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+    ambientLight = new THREE.AmbientLight(0xffffff, 1.8);
     scene.add(ambientLight);
 
     // Increased intensity for a stronger key light
@@ -70,7 +70,7 @@ function setupLights(scene) {
     scene.add(fillLight);
 
     // Increased intensity for a softer fill light from below
-    hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x444488, 1.0);
+    hemisphereLight = new THREE.HemisphereLight(0xeeeeff, 0x444488, 1.5);
     hemisphereLight.position.set(0, 20, 0);
     scene.add(hemisphereLight);
 }
@@ -117,7 +117,7 @@ export function initThreeScene(modelUrl, onPointerDown) {
         // Set a proper HDR environment map for realistic lighting and reflections.
         new RGBELoader()
             .setDataType(THREE.FloatType) // Required for recent three.js versions
-            .load('modulos/visor3d/assets/studio_small_01_1k.hdr', (texture) => {
+            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
                 const pmremGenerator = new THREE.PMREMGenerator(renderer);
                 pmremGenerator.compileEquirectangularShader();
 
