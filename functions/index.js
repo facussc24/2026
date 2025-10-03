@@ -4,6 +4,7 @@ const {VertexAI} = require("@google-cloud/vertexai");
 const cors = require('cors')({origin: true});
 const axios = require("axios");
 const nodemailer = require('nodemailer');
+const crypto = require("crypto");
 
 if (admin.apps.length === 0) {
     admin.initializeApp();
@@ -293,6 +294,23 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
 // =================================================================================
 // --- AI AGENT ARCHITECTURE ---
 // =================================================================================
+
+/**
+ * Generates a consistent SHA-256 hash for a given user prompt and task list.
+ * This is used as a key for caching AI-generated plans to reduce costs and improve latency.
+ * @param {string} userPrompt The user's text prompt.
+ * @param {Array<object>} tasks The user's list of tasks.
+ * @returns {string} A SHA-256 hash string.
+ */
+const generateRequestHash = (userPrompt, tasks) => {
+    const taskSignature = tasks
+        .map(t => `${t.docId}:${t.status}:${t.plannedDate}`)
+        .sort()
+        .join(',');
+    const data = `${userPrompt}|${taskSignature}`;
+    return crypto.createHash('sha256').update(data).digest('hex');
+};
+
 exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
@@ -303,8 +321,32 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     }
 
     const db = admin.firestore();
+    const requestHash = generateRequestHash(userPrompt, tasks);
+    const cacheRef = db.collection('ai_plan_cache').doc(requestHash);
+    const cachedPlan = await cacheRef.get();
+
     const jobRef = db.collection('ai_agent_jobs').doc();
 
+    // Cache Hit: If a plan exists, create a pre-completed job.
+    if (cachedPlan.exists) {
+        const { executionPlan, summary } = cachedPlan.data();
+        const jobData = {
+            status: 'COMPLETED', // Instantly completed
+            userPrompt,
+            tasks,
+            creatorUid: context.auth.uid,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            executionPlan,
+            summary,
+            thoughtProcess: `### Plan de la IA (desde caché)\n\n${summary}`,
+            isFromCache: true,
+        };
+        await jobRef.set(jobData);
+        return { jobId: jobRef.id, isFromCache: true };
+    }
+
+    // Cache Miss: Create a pending job to be processed by the AI.
     const jobData = {
         status: 'PENDING',
         userPrompt,
@@ -315,12 +357,13 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         conversationHistory: [],
         thinkingSteps: [],
         executionPlan: [],
-        summary: ''
+        summary: '',
+        requestHash, // Store hash for later caching
     };
 
     await jobRef.set(jobData);
 
-    return { jobId: jobRef.id };
+    return { jobId: jobRef.id, isFromCache: false };
 });
 
 
@@ -333,8 +376,9 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         try {
             await jobRef.update({ status: 'RUNNING' });
 
+            // AI Model Configuration: Using gemini-2.5-flash-lite for cost-efficiency.
             const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-            const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+            const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
             const toolDefinitions = [
                 // Tool definitions remain the same
@@ -406,73 +450,42 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 }
             ];
 
+            /*
+             * AI System Prompt (Cost-Optimized)
+             * This prompt is designed to be efficient, reducing token count while maintaining core functionality.
+             * Key principles:
+             * - Autonomous project management: Deconstructs complex requests into actionable steps.
+             * - Proactive & intelligent scheduling: Assigns `plannedDate` to all tasks, balancing workload over 3 weeks.
+             * - Efficient tool usage: Employs `bulk_update_tasks` for multiple updates.
+             * - Strict output format: Enforces JSON output with "thought" (in Spanish) and "tool_code".
+             */
             const systemPrompt = `
-                You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step and using the tools at your disposal.
+                You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step (in Spanish) and using tools.
 
-                **CRITICAL RULES:**
-                1.  Your entire thought process (the "thought" field) MUST be in Spanish.
-                2.  **\`plannedDate\` vs. \`dueDate\`:** You MUST understand the difference. \`plannedDate\` is the date you schedule the task on. \`dueDate\` is a final deadline. You are responsible for setting a \`plannedDate\` for ALL tasks. Only set a \`dueDate\` if the user explicitly mentions a deadline.
-                3.  **Proactive Scheduling (Default Behavior):** For ANY new task or any existing task that needs a date, you MUST proactively find the best day to schedule it. NEVER assign tasks without a \`plannedDate\`. Your primary goal is to intelligently place tasks on the user's calendar.
-                4.  **Workload Balancing:** When scheduling, you MUST analyze the user's workload for the current week and the next two (3 weeks total). Distribute new tasks to avoid overloading any single day. You MUST explain your distribution strategy in your 'thought' process.
-                5.  **Self-Correction:** If a tool returns an error, you MUST NOT stop. In your next "Thought", acknowledge the error and decide on a new course of action.
-                6.  **Tool Efficiency:** To modify multiple tasks at once (e.g., assigning dates to all unscheduled tasks), you MUST use the more efficient \`bulk_update_tasks\` tool.
-                7.  **Intelligent Rescheduling:** When asked to reschedule a specific day, identify all tasks planned for that day. Then, analyze the user's workload for the next 3 weeks to find less busy days. Finally, use \`update_task\` to move tasks from the overloaded day to less busy ones, explaining your reasoning in your 'thought' process.
+                **Core Directives:**
+                1.  **Always Think in Spanish:** The "thought" field MUST be in Spanish.
+                2.  **Schedule Everything:** Proactively assign a \`plannedDate\` to ALL tasks. Only use \`dueDate\` for explicit deadlines.
+                3.  **Balance Workload:** Analyze the user's schedule (3-week view) and distribute tasks to avoid overloading any day. Justify your scheduling in the 'thought' process.
+                4.  **Break Down Projects:** Deconstruct large requests (e.g., "Launch feature") into smaller, concrete sub-tasks.
+                5.  **Use Tools Efficiently:** Use \`bulk_update_tasks\` for modifying multiple tasks. Handle errors by thinking of a new action.
+                6.  **Summarize Before Finishing:** Before using the "finish" tool, you MUST use "review_and_summarize_plan" to provide a high-level summary of your plan in Spanish.
 
-                **Project Breakdown Strategy:**
-                1.  **Identify High-Level Goals:** If a user request sounds like a multi-step project (e.g., "Launch new feature," "Organize event," "Prepare quarterly report"), you MUST NOT create a single task for it.
-                2.  **Deconstruct into Sub-Tasks:** Your primary responsibility is to break down that project into smaller, concrete, actionable sub-tasks. Think about what steps are logically required. For example, "Launch new feature" could become "1. Design UI mockups," "2. Develop backend logic," "3. Write unit tests," "4. Deploy to staging," "5. Final user testing."
-                3.  **Sequential Creation:** Use the \\\`create_task\\\` tool repeatedly for each sub-task you've identified.
-                4.  **Smart Scheduling:** As you create sub-tasks, intelligently schedule them by distributing them over appropriate \\\`plannedDate\\\`s.
-                5.  **Summarize:** Once all sub-tasks for the project are created, use the \\\`review_and_summarize_plan\\\` tool to present the complete, broken-down plan to the user.
-
-                **Cycle:**
-                1. **Thought:** Analyze the user's request, the current task list, and your conversation history. Decide on the next immediate action to take based on your scheduling and project breakdown strategies. Your thoughts must be in Spanish.
-                2. **Action:** Choose a tool from the available tools list and provide the necessary parameters in JSON format.
-                3. **Observation:** You will be given the result of your action.
-                4. **Repeat:** Continue this cycle until the user's request is fully completed.
+                **Execution Cycle:**
+                1. **Thought:** Analyze request, context, and history. Decide the next action.
+                2. **Action:** Select a tool and provide parameters.
+                3. **Observation:** Receive the tool's result.
+                4. **Repeat:** Continue until the request is complete, then call "finish".
 
                 **Context:**
                 - Today's Date: ${currentDate}
                 - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate})), null, 2)}
-
-                **Company Glossary:**
-                - **AMFE (Análisis de Modo y Efecto de Falla):** A systematic, proactive method for evaluating a process to identify where and how it might fail and to assess the relative impact of different failures, in order to identify the parts of the process that are most in need of change. When a user asks to start an AMFE process, it implies a series of structured tasks: analysis, team formation, documentation, review, and implementation of countermeasures.
+                - Company Glossary: AMFE implies a multi-step process (analysis, team, docs, review, implementation).
 
                 **Available Tools:**
                 ${JSON.stringify(toolDefinitions, null, 2)}
 
                 **Output Format:**
-                Your response MUST be a single, valid JSON object containing two keys: "thought" and "tool_code".
-                "tool_code" must be a JSON object with "tool_id" and "parameters".
-                Example:
-                {
-                  "thought": "I need to create the first task for the user.",
-                  "tool_code": {
-                    "tool_id": "create_task",
-                    "parameters": {
-                      "title": "Investigar sobre marketing"
-                    }
-                  }
-                }
-
-                **Final Step:**
-                Before you use the "finish" tool, you MUST use the "review_and_summarize_plan" tool. Provide a concise, natural language summary in Spanish of the plan you've created.
-
-                Example of final steps:
-                {
-                  "thought": "He creado todas las tareas y dependencias. Ahora voy a revisar y resumir el plan.",
-                  "tool_code": {
-                    "tool_id": "review_and_summarize_plan",
-                    "parameters": {
-                      "summary": "He creado un plan de 3 pasos para lanzar la campaña, comenzando por la investigación, seguido por la redacción del contenido y finalizando con la publicación."
-                    }
-                  }
-                }
-                // Then, on the next turn:
-                {
-                  "thought": "He resumido el plan. Mi trabajo está completo.",
-                  "tool_code": { "tool_id": "finish", "parameters": {} }
-                }
+                Respond with a single, valid JSON object: { "thought": "...", "tool_code": { "tool_id": "...", "parameters": {...} } }
             `;
 
             if (conversationHistory.length === 0) {
@@ -660,6 +673,17 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 summary,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
+
+            // After a successful run, save the plan to the cache if it's not from there already.
+            if (jobData.requestHash) {
+                const db = admin.firestore();
+                const cacheRef = db.collection('ai_plan_cache').doc(jobData.requestHash);
+                await cacheRef.set({
+                    executionPlan,
+                    summary,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
 
         } catch (error) {
             console.error("Error running AI agent job:", error);
