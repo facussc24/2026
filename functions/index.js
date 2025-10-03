@@ -473,7 +473,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 },
                 {
                     id: 'find_tasks',
-                    description: 'Finds tasks based on a property filter. Supports suffixes for advanced queries: `_lte` (less/equal), `_gte` (greater/equal), `_ne` (not equal). Example: `{"dueDate_lte": "2024-10-03", "status_ne": "done"}` finds all overdue, unfinished tasks. Returns a JSON object like `{\\"tasks\\": [...]}`.',
+                    description: 'Finds tasks based on a property filter. Supports searching by `title` for partial matches, and suffixes for advanced queries: `_lte` (less/equal), `_gte` (greater/equal), `_ne` (not equal). Example: `{"title": "PWA", "status_ne": "done"}` finds all unfinished tasks containing "PWA". Returns a JSON object like `{\\"tasks\\": [...]}`.',
                     parameters: {
                         filter: 'object'
                     }
@@ -517,13 +517,8 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     *   **Break Down Projects:** Deconstruct large requests into smaller, concrete sub-tasks.
                     *   **Summarize Before Finishing (MANDATORY FORMAT):** Before using "finish", you MUST use "review_and_summarize_plan". The summary **MUST** be a simple bulleted list (using '*') of the actions taken. Do not add conversational text.
 
-                **Execution Cycle & Tool Interaction Example:**
-                1. **Thought:** The user wants to find all overdue tasks. I will use 'find_tasks'. Today's date is ${currentDate}.
-                2. **Action:** Call 'find_tasks' with \`dueDate_lte\` for "less than or equal to" today. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "dueDate_lte": "${currentDate}" } } }\`
-                3. **Observation:** You will receive: "OK. Found 5 tasks and saved them to the context."
-                4. **Thought:** The tasks are now in my short-term memory ('foundTasksContext'). I must use this context to get the task IDs for my next action. I will now use 'bulk_update_tasks' to reschedule them.
-                5. **Action:** Call the next tool with the IDs from the context. Example: \`{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { ... } }, ... ] } }\`
-                6. **Repeat:** Continue until the request is complete, then call \`review_and_summarize_plan\` and finally "finish".
+                **Mandatory Workflow for Existing Tasks:**
+                When the user asks to modify an existing task (e.g., "complete the report task"), you **MUST** first use the 'find_tasks' tool to locate it by its title. Once you receive the task ID in the 'foundTasksContext', you **MUST** use that ID for the subsequent 'update_task' or 'complete_task' action. DO NOT ask the user for the ID if you can find it yourself.
 
                 **Context:**
                 - Today's Date: ${currentDate}
