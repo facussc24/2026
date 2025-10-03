@@ -12,11 +12,10 @@ import {
     getTaskFormModalHTML,
     getSubtaskHTML,
     getMultiTaskConfirmationHTML,
-    getAIAssistantModalHTML,
-    getAIAssistantPromptViewHTML,
-    getAIAssistantLoadingViewHTML,
-    getAIAssistantReviewViewHTML,
-    getAIAssistantExecutionProgressViewHTML
+    getAIChatModalHTML,
+    getAIChatMessageHTML,
+    getAILoadingMessageHTML,
+    getAIAssistantReviewViewHTML
 } from './task.templates.js';
 
 let appState;
