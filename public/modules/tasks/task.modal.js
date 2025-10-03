@@ -467,9 +467,17 @@ export async function openAIAssistantModal() {
                 } else if (actionType === 'UPDATE') {
                     newAction.docId = formData.get(`${actionId}_docId`);
                     newAction.updates = {};
-                    const updateField = formData.get(`${actionId}_update_field_0`);
-                    const updateValue = formData.get(`${actionId}_update_value_0`);
-                    newAction.updates[updateField] = updateValue;
+                    let updateIndex = 0;
+                    while (true) {
+                        const updateField = formData.get(`${actionId}_update_field_${updateIndex}`);
+                        if (!updateField) break; // No more update fields for this action
+
+                        const updateValue = formData.get(`${actionId}_update_value_${updateIndex}`);
+                        if (updateValue !== null) {
+                            newAction.updates[updateField] = updateValue;
+                        }
+                        updateIndex++;
+                    }
                 } else if (actionType === 'DELETE') {
                     newAction.docId = originalAction.docId;
                 }
