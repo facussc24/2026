@@ -361,7 +361,11 @@ export async function openAIAssistantModal() {
             const executionData = doc.data();
             if (!executionData || !executionData.steps) return;
 
-            executionData.steps.forEach((step, index) => {
+            // BUG FIX: Firestore can return array-like objects as actual objects.
+            // Convert to an array before iterating to prevent "forEach is not a function" error.
+            const stepsArray = Array.isArray(executionData.steps) ? executionData.steps : Object.values(executionData.steps);
+
+            stepsArray.forEach((step, index) => {
                 const stepElement = executionStepsList.querySelector(`#execution-step-${index}`);
                 if (!stepElement) return;
 
