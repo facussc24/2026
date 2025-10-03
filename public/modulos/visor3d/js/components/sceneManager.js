@@ -11,7 +11,7 @@ import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-import TWEEN from '@tweenjs/tween.js';
+import TWEEN from 'https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@25.0.0/dist/tween.esm.js';
 import { state, modelParts, partCharacteristics, selectedObjects, clippingPlanes } from '../visor3d.js';
 import { renderPartsList, updateStatus } from './uiManager.js';
 import { initGizmo } from './navigationGizmo.js';
