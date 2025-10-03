@@ -321,6 +321,13 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     }
 
     const db = admin.firestore();
+
+    // Fetch all users to provide as context to the AI for assignments.
+    const usersSnapshot = await db.collection('usuarios').get();
+    const allUsers = usersSnapshot.docs.map(doc => {
+        const { nombre, email } = doc.data();
+        return { id: doc.id, nombre, email };
+    });
     const requestHash = generateRequestHash(userPrompt, tasks);
     const cacheRef = db.collection('ai_plan_cache').doc(requestHash);
     const cachedPlan = await cacheRef.get();
@@ -351,6 +358,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         status: 'PENDING',
         userPrompt,
         tasks,
+        allUsers,
         creatorUid: context.auth.uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         currentDate: new Date().toISOString().split('T')[0],
@@ -371,7 +379,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
     .onCreate(async (snap, context) => {
         const jobRef = snap.ref;
         const jobData = snap.data();
-        let { userPrompt, tasks, currentDate, conversationHistory, executionPlan, thinkingSteps, summary } = jobData;
+        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary } = jobData;
 
         try {
             await jobRef.update({ status: 'RUNNING' });
@@ -384,12 +392,13 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 // Tool definitions remain the same
                  {
                     "id": "create_task",
-                    "description": "Creates a new task. You MUST determine the best `plannedDate` by analyzing the user's current schedule. Only set a `dueDate` if a specific deadline is mentioned.",
+                    "description": "Creates a new task. You MUST determine the best `plannedDate` by analyzing the user's current schedule. Only set a `dueDate` if a specific deadline is mentioned. Can be assigned to a user by providing their email.",
                     "parameters": {
                         "title": "string",
                         "description": "string (optional)",
                         "plannedDate": "string (YYYY-MM-DD)",
-                        "dueDate": "string (YYYY-MM-DD, optional)"
+                        "dueDate": "string (YYYY-MM-DD, optional)",
+                        "assigneeEmail": "string (optional)"
                     }
                 },
                 {
@@ -416,10 +425,10 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 },
                 {
                     id: 'update_task',
-                    description: 'Updates properties of an existing task. Use this to change the plannedDate, title, description, or other attributes.',
+                    description: 'Updates properties of an existing task. Use this to change the plannedDate, title, description, assignee, or other attributes.',
                     parameters: {
                         task_id: 'string',
-                        updates: 'object'
+                        updates: 'object' // Can include assigneeEmail
                     }
                 },
                 {
@@ -477,6 +486,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     *   Do not use any other tools. Your job is to answer, then finish.
                 3.  **If it's a Command:**
                     *   Proceed with the project management workflow below.
+                    *   **Assign Tasks:** If the user specifies an assignee, use their email in the \`assigneeEmail\` parameter. If no user is mentioned, do not assign it.
                     *   **Always Think in Spanish:** The "thought" field MUST be in Spanish.
                     *   **Schedule Everything:** Proactively assign a \`plannedDate\` to ALL new tasks. Only use \`dueDate\` for explicit deadlines.
                     *   **Balance Workload:** Analyze the user's schedule (3-week view) and distribute tasks to avoid overloading any day.
@@ -492,6 +502,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 **Context:**
                 - Today's Date: ${currentDate}
                 - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate})), null, 2)}
+                - Available Users for Assignment: ${JSON.stringify(allUsers, null, 2)}
                 - Company Glossary: AMFE implies a multi-step process (analysis, team, docs, review, implementation).
 
                 **Available Tools:**
@@ -846,6 +857,24 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
     };
 
     try {
+        // --- Pre-process plan to resolve assignee emails to UIDs ---
+        const emailToUidCache = new Map();
+        const emailsToFetch = new Set();
+        plan.forEach(action => {
+            if (action.action === 'CREATE' && action.task.assigneeEmail) {
+                emailsToFetch.add(action.task.assigneeEmail);
+            } else if (action.action === 'UPDATE' && action.updates.assigneeEmail) {
+                emailsToFetch.add(action.updates.assigneeEmail);
+            }
+        });
+
+        if (emailsToFetch.size > 0) {
+            const usersQuery = await db.collection('usuarios').where('email', 'in', Array.from(emailsToFetch)).get();
+            usersQuery.forEach(doc => {
+                emailToUidCache.set(doc.data().email, doc.id);
+            });
+        }
+
         // --- First Pass: Create new tasks and map IDs ---
         for (let i = 0; i < plan.length; i++) {
             const action = plan[i];
@@ -857,6 +886,15 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
                     createdAt: new Date(),
                     status: 'todo'
                 };
+
+                if (taskData.assigneeEmail) {
+                    const assigneeUid = emailToUidCache.get(taskData.assigneeEmail);
+                    if (assigneeUid) {
+                        taskData.assigneeUid = assigneeUid;
+                    }
+                    delete taskData.assigneeEmail; // Clean up property
+                }
+
                 batch.set(newTaskRef, taskData);
                 tempIdToRealIdMap.set(action.docId, newTaskRef.id);
                 await updateProgress(i, 'COMPLETED');
@@ -869,17 +907,27 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
             if (action.action === 'UPDATE') {
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
-                const resolvedUpdates = {};
-                for (const key in action.updates) {
-                    const value = action.updates[key];
+                const resolvedUpdates = {...action.updates}; // Make a copy to modify
+
+                if (resolvedUpdates.assigneeEmail) {
+                    const assigneeUid = emailToUidCache.get(resolvedUpdates.assigneeEmail);
+                    if (assigneeUid) {
+                        resolvedUpdates.assigneeUid = assigneeUid;
+                    }
+                    delete resolvedUpdates.assigneeEmail; // Clean up property
+                }
+
+                const finalUpdates = {};
+                for (const key in resolvedUpdates) {
+                    const value = resolvedUpdates[key];
                     if (key === 'dependsOn' || key === 'blocks') {
                         const resolvedIds = value.map(id => tempIdToRealIdMap.get(id) || id);
-                        resolvedUpdates[key] = admin.firestore.FieldValue.arrayUnion(...resolvedIds);
+                        finalUpdates[key] = admin.firestore.FieldValue.arrayUnion(...resolvedIds);
                     } else {
-                        resolvedUpdates[key] = value;
+                        finalUpdates[key] = value;
                     }
                 }
-                batch.update(taskRef, resolvedUpdates);
+                batch.update(taskRef, finalUpdates);
                 await updateProgress(i, 'COMPLETED');
             } else if (action.action === 'DELETE') {
                 const taskRef = db.collection('tareas').doc(action.docId);
