@@ -444,6 +444,13 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     }
                 },
                  {
+                    id: 'answer_question',
+                    description: 'Use this tool to provide a direct, final answer to a user\'s question. This should be used when the user is asking for information, not for creating or modifying tasks. The provided answer will be shown directly to the user.',
+                    parameters: {
+                        answer: 'string'
+                    }
+                },
+                {
                     id: 'finish',
                     description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
                     parameters: {}
@@ -463,22 +470,28 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step (in Spanish) and using tools.
 
                 **Core Directives:**
-                1.  **Always Think in Spanish:** The "thought" field MUST be in Spanish.
-                2.  **Schedule Everything:** Proactively assign a \`plannedDate\` to ALL tasks. Only use \`dueDate\` for explicit deadlines.
-                3.  **Balance Workload:** Analyze the user's schedule (3-week view) and distribute tasks to avoid overloading any day. Justify your scheduling in the 'thought' process.
-                4.  **Break Down Projects:** Deconstruct large requests (e.g., "Launch feature") into smaller, concrete sub-tasks.
-                5.  **Use Tools Efficiently:** Use \`bulk_update_tasks\` for modifying multiple tasks. Handle errors by thinking of a new action.
-                6.  **Summarize Before Finishing:** Before using the "finish" tool, you MUST use "review_and_summarize_plan" to provide a high-level summary of your plan in Spanish.
+                1.  **Analyze User Intent:** First, determine if the user is asking a question (e.g., "how many tasks...", "which tasks are...") or issuing a command (e.g., "create a task...", "reorganize my week").
+                2.  **If it's a Question:**
+                    *   Think about the question and analyze the provided task data to find the answer.
+                    *   Use the \`answer_question\` tool to provide a direct, concise answer in Spanish.
+                    *   Do not use any other tools. Your job is to answer, then finish.
+                3.  **If it's a Command:**
+                    *   Proceed with the project management workflow below.
+                    *   **Always Think in Spanish:** The "thought" field MUST be in Spanish.
+                    *   **Schedule Everything:** Proactively assign a \`plannedDate\` to ALL new tasks. Only use \`dueDate\` for explicit deadlines.
+                    *   **Balance Workload:** Analyze the user's schedule (3-week view) and distribute tasks to avoid overloading any day.
+                    *   **Break Down Projects:** Deconstruct large requests (e.g., "Launch feature") into smaller, concrete sub-tasks.
+                    *   **Summarize Before Finishing:** Before using "finish", you MUST use "review_and_summarize_plan" to provide a high-level summary of your plan in Spanish.
 
                 **Execution Cycle:**
-                1. **Thought:** Analyze request, context, and history. Decide the next action.
+                1. **Thought:** Analyze request, context, and history. Decide the next action based on the user's intent.
                 2. **Action:** Select a tool and provide parameters.
                 3. **Observation:** Receive the tool's result.
-                4. **Repeat:** Continue until the request is complete, then call "finish".
+                4. **Repeat:** Continue until the request is complete, then call "finish" or "answer_question".
 
                 **Context:**
                 - Today's Date: ${currentDate}
-                - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate})), null, 2)}
+                - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate})), null, 2)}
                 - Company Glossary: AMFE implies a multi-step process (analysis, team, docs, review, implementation).
 
                 **Available Tools:**
@@ -539,7 +552,10 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 await jobRef.update({ thinkingSteps: admin.firestore.FieldValue.arrayUnion({ thought, tool_code: tool_code.tool_id, timestamp: new Date() }) });
 
 
-                if (tool_code.tool_id === 'finish') {
+                if (tool_code.tool_id === 'finish' || tool_code.tool_id === 'answer_question') {
+                    if (tool_code.tool_id === 'answer_question') {
+                        summary = tool_code.parameters.answer; // Capture the answer
+                    }
                     break;
                 }
 
@@ -662,9 +678,19 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
             }
 
             const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
-            const finalThoughtProcessDisplay = summary ?
-                `### Resumen del Plan de la IA:\n\n${summary}` :
-                `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
+
+            let finalThoughtProcessDisplay;
+            if (summary) {
+                // If a summary exists, check if it came from an answer or a plan summary.
+                const lastTool = thinkingSteps[thinkingSteps.length - 1]?.tool_code;
+                if (lastTool === 'answer_question') {
+                    finalThoughtProcessDisplay = `### Respuesta de la IA:\n\n${summary}`;
+                } else {
+                    finalThoughtProcessDisplay = `### Resumen del Plan de la IA:\n\n${summary}`;
+                }
+            } else {
+                finalThoughtProcessDisplay = `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
+            }
 
             await jobRef.update({
                 status: 'COMPLETED',

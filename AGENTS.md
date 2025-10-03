@@ -6,7 +6,7 @@
 
 ### 1. AI Model Selection
 
-*   **Directive:** The official and required AI model for all generative tasks in this project is **`gemini-2.0-flash`**, accessed via the Google Cloud Vertex AI SDK.
+*   **Directive:** The official and required AI model for all generative tasks in this project is **`gemini-2.5-flash-lite`**, accessed via the Google Cloud Vertex AI SDK.
 *   **Reasoning:** This decision has been made to ensure consistency, predictable performance, and to avoid errors that could arise from switching between different models.
 *   **Action:** Do not change this model or implement logic that uses other models (e.g., GPT, Claude, other Gemini versions) without explicit, multi-step confirmation from the user. This is a fixed technical requirement.
 
@@ -52,6 +52,9 @@ This file contains guidelines and lessons learned for AI agents working on this 
     *   **Problem:** To fetch tasks that were either *created by* or *assigned to* a user, the code set up two independent `onSnapshot` listeners and then attempted to merge the results in the client. This pattern is complex, inefficient, and prone to race conditions, leading to an unstable application state that affected other components, like the dashboard.
     *   **Solution:** The two listeners were replaced with a single, modern Firestore query using the native `or` operator: `query(tasksRef, or(where('assigneeUid', '==', user.uid), where('creatorUid', '==', user.uid)))`. This simplifies the code, improves performance, and eliminates the entire class of bugs related to client-side state merging.
     *   **Guideline:** Always prefer using native Firestore operators like `or` over complex client-side workarounds. If a query seems overly complicated to write or requires merging data from multiple listeners on the same collection, first check the latest Firestore documentation to see if a simpler, native solution exists.
+20. **Differentiating AI Actions from Questions:** The AI assistant was initially designed only to execute task-modification commands. It now has the ability to differentiate between a command and a question.
+    *   **Problem:** The user might ask "Which tasks are overdue?" expecting a simple answer, but the AI would try to interpret this as a command to modify tasks, leading to incorrect behavior.
+    *   **Solution:** The AI's system prompt has been updated to recognize interrogative language. A new tool, `answer_question`, was introduced. When the AI determines the user's prompt is a question, it uses this tool to provide a direct textual answer and then finishes its execution, rather than attempting to build a task modification plan. This makes the assistant more versatile and user-friendly.
 
 ## Best Practices & Lessons Learned
 
