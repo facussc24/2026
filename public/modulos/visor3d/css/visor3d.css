@@ -1,203 +1,77 @@
-/* Visor3D Styles */
-body.visor3d-active {
-    /* No special overflow handling needed, allow scrolling */
+/* --- Estilos para el Layout Principal del Visor --- */
+#view-content {
+    /* Asegura que el contenedor de la vista pueda ser un padre flex */
+    display: flex;
+    flex-direction: column;
+    /* Usa el 100% de la altura disponible del viewport menos la altura del header/nav */
+    height: calc(100vh - 100px);
 }
 
 #visor3d-container {
-    position: relative;
-    width: 100%;
-    height: calc(100vh - 12rem); /* Full viewport height minus header/padding */
-    min-height: 600px; /* A reasonable minimum height */
-    background-color: var(--color-bg-tertiary);
     display: flex;
-    border: var(--border-width) solid var(--color-border-primary);
-    border-radius: var(--border-radius-xl);
-    overflow: hidden; /* To contain the rounded corners */
-    box-shadow: var(--box-shadow-md); /* A bit more polish */
+    flex-direction: row;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
 }
 
 #visor3d-scene-container {
     flex-grow: 1;
-    height: 100%;
     position: relative;
+    min-width: 0;
+}
+
+#visor3d-scene-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
 }
 
 #visor3d-panel {
     width: 350px;
     flex-shrink: 0;
-    background-color: var(--color-bg-primary);
-    border-left: var(--border-width) solid var(--color-border-primary);
-    display: flex;
-    flex-direction: column;
-    box-shadow: var(--box-shadow-lg);
-}
-
-#visor3d-panel-header {
-    padding: var(--spacing-4);
-    border-bottom: var(--border-width) solid var(--color-border-primary);
-}
-
-#visor3d-search {
-    width: 100%;
-    padding: var(--spacing-3) var(--spacing-4);
-    border: var(--border-width) solid var(--color-border-secondary);
-    border-radius: var(--border-radius-lg);
-}
-
-#visor3d-parts-list {
-    flex-grow: 1;
     overflow-y: auto;
-    padding: var(--spacing-4);
+    background-color: #ffffff;
+    border-left: 1px solid #e2e8f0;
 }
 
-.visor3d-part-item {
-    padding: var(--spacing-3);
-    border-radius: var(--border-radius-lg);
+
+/* --- Estilos para el Indicador de Carga --- */
+#visor3d-status {
+    transition: opacity 0.5s ease-in-out;
+    background-color: rgba(241, 245, 249, 0.8); /* bg-slate-100/80 */
+}
+
+#visor3d-status.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+#visor3d-progress-bar-container {
+    width: 50%;
+    background-color: #cbd5e1; /* bg-slate-300 */
+    border-radius: 9999px; /* rounded-full */
+    height: 1rem; /* h-4 */
+    overflow: hidden;
+    transition: opacity 0.3s ease-in-out;
+}
+
+#visor3d-progress-bar {
+    background-color: #3b82f6; /* bg-blue-500 */
+    height: 100%;
+    border-radius: 9999px; /* rounded-full */
+    transition: width 0.2s ease-out;
+}
+
+/* --- Estilos para el Panel de Control --- */
+.visor-section summary {
     cursor: pointer;
-    transition: var(--transition-fast);
+    font-weight: 600;
+    padding: 0.5rem;
+    background-color: #f8fafc; /* bg-slate-50 */
+    border-bottom: 1px solid #e2e8f0; /* border-slate-200 */
 }
 
-.visor3d-part-item:hover {
-    background-color: var(--color-bg-tertiary);
-}
-
-.visor3d-part-item.selected {
-    background-color: var(--color-primary-light);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-primary-text);
-}
-
-/* Styles for the new controls location inside the panel header */
-#visor3d-controls {
-    display: flex;
-    gap: var(--spacing-2); /* 8px */
-}
-
-.visor3d-control-btn {
-    background-color: var(--color-bg-secondary); /* bg-slate-50 */
-    border: var(--border-width) solid var(--color-border-primary); /* border-slate-200 */
-    border-radius: var(--border-radius-md); /* rounded-md */
-    padding: var(--spacing-2); /* p-2 */
-    cursor: pointer;
-    transition: var(--transition-fast);
-    color: var(--color-text-secondary); /* text-slate-600 */
-}
-
-.visor3d-control-btn:hover {
-    background-color: var(--color-bg-primary);
-    transform: translateY(-1px);
-    box-shadow: var(--box-shadow-md);
-}
-
-.visor3d-control-btn.active {
-    background-color: var(--color-primary-light); /* A light blue, like selected items */
-    color: var(--color-primary-text); /* A dark blue text */
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.06); /* Inner shadow for a "pressed" look */
-}
-
-#visor3d-piece-card {
-    /* Now a static block within the panel */
-    width: 100%;
-    background-color: var(--color-bg-secondary); /* A slightly different background to distinguish it */
-    display: block; /* Shown by default, will be hidden via JS */
-}
-
-#visor3d-piece-card.hidden {
-    display: none;
-}
-
-.custom-card-layout {
-    display: flex;
-    gap: var(--spacing-4); /* Space between image and text */
-    align-items: flex-start; /* Align items to the top */
-}
-
-.custom-card-image {
-    width: 120px; /* Larger image */
-    height: 120px;
-    object-fit: cover;
-    border-radius: var(--border-radius-lg);
-    flex-shrink: 0; /* Prevent image from shrinking */
-    border: var(--border-width) solid var(--color-border-primary);
-}
-
-.custom-card-details {
-    flex-grow: 1; /* Allow details to take up remaining space */
-}
-
-/* Styling for the lil-gui container to integrate it smoothly */
-#lil-gui-container .lil-gui {
-    /* Override default lil-gui styles that make it a floating panel */
-    box-shadow: none;
-    border: none;
-    width: 100% !important; /* Force it to take the full width of the container */
-    --widget-padding: 0; /* Adjust padding if necessary */
-    --title-background-color: transparent;
-    --title-text-color: var(--color-text-primary); /* A darker text color for the title */
-    --background-color: transparent; /* Make the GUI background transparent */
-}
-
-#lil-gui-container .lil-gui .title {
-    font-size: var(--font-size-lg); /* text-lg */
-    font-weight: var(--font-weight-bold); /* font-bold */
-    padding-left: 0;
-    padding-right: 0;
-}
-
-#lil-gui-container .lil-gui .children {
-    /* The container for the actual controls */
-    background-color: transparent;
-    border: none;
-}
-
-/* Ensure the controller labels are readable on a white background */
-#lil-gui-container .lil-gui .name {
-    color: #374151 !important; /* text-gray-700, use important to override inline styles */
-}
-
-/* General lil-gui text color */
-#lil-gui-container .lil-gui, #lil-gui-container .lil-gui .widget input, #lil-gui-container .lil-gui .widget select {
-    color: var(--color-text-primary); /* A dark color for all text */
-}
-
-/* Specifically target number inputs and text inputs to ensure they are dark */
-#lil-gui-container .lil-gui input[type="number"],
-#lil-gui-container .lil-gui input[type="text"] {
-    color: #111827; /* Even darker for input fields */
-    background-color: var(--color-bg-secondary); /* A very light gray background to distinguish them */
-    border: var(--border-width) solid var(--color-border-secondary);
-    border-radius: var(--border-radius-sm);
-    padding: 2px 4px;
-}
-
-/* Style for the selected part in the list */
-#visor3d-parts-list li.selected-part {
-    background-color: var(--color-primary-light); /* A light blue, like selected items */
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-primary-text); /* A dark blue text */
-    border-radius: var(--border-radius-md); /* rounded-md */
-}
-
-/* Axis Gizmo Styles */
-#axis-gizmo-container {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    width: 100px;
-    height: 100px;
-    z-index: 2; /* Ensure it's above the main scene but below other UI */
-    border: 1px solid #555;
-    background-color: rgba(0, 0, 0, 0.2);
-}
-
-/* Measurement Label Styles */
-.visor3d-measurement-label {
-    color: #ffffff;
-    background-color: rgba(0, 0, 0, 0.7);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-family: sans-serif;
-    font-size: 14px;
-    pointer-events: none; /* Avoid blocking mouse events */
-    white-space: nowrap; /* Prevent wrapping */
+.visor-section-content {
+    padding: 1rem;
 }

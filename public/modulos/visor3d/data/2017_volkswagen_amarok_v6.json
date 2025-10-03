@@ -1,71 +1,33 @@
 {
-    "chassis": {
-        "ID de Pieza": "VW-AMAROK-CH-001",
-        "Material": "Acero",
-        "Peso (kg)": 900,
-        "Comentario": "Datos de ejemplo. Rellenar con información real."
-    },
-    "body": {
-        "ID de Pieza": "VW-AMAROK-BD-001",
-        "Material": "Acero",
-        "Peso (kg)": 600,
-        "Comentario": "Datos de ejemplo. Rellenar con información real."
-    },
-    "wheel_front_right": {
-        "explosionVector": [1, 0, 0]
-    },
-    "wheel_front_left": {
-        "explosionVector": [-1, 0, 0]
-    },
-    "wheel_rear_right": {
-        "explosionVector": [1, 0, 0]
-    },
-    "wheel_rear_left": {
-        "explosionVector": [-1, 0, 0]
-    },
-    "door_front_right": {
-        "explosionVector": [0.8, 0.2, 0]
-    },
-    "door_front_left": {
-        "explosionVector": [-0.8, 0.2, 0]
-    },
-    "door_rear_right": {
-        "explosionVector": [0.8, 0.2, 0]
-    },
-    "door_rear_left": {
-        "explosionVector": [-0.8, 0.2, 0]
-    },
-    "hood": {
-        "explosionVector": [0, 0.5, -1]
-    },
-    "bonnet": {
-        "explosionVector": [0, 0.5, -1]
-    },
-    "trunk": {
-        "explosionVector": [0, 0.5, 1]
-    },
-    "boot": {
-        "explosionVector": [0, 0.5, 1]
-    },
-    "roof": {
-        "explosionVector": [0, 2, 0]
-    },
-    "glass_windshield": {
-        "explosionVector": [0, 0.7, -0.5]
-    },
-    "glass_rear": {
-        "explosionVector": [0, 0.7, 0.5]
-    },
-    "glass_door_front_right": {
-        "explosionVector": [0.5, 0.7, 0]
-    },
-    "glass_door_front_left": {
-        "explosionVector": [-0.5, 0.7, 0]
-    },
-    "glass_door_rear_right": {
-        "explosionVector": [0.5, 0.7, 0]
-    },
-    "glass_door_rear_left": {
-        "explosionVector": [-0.5, 0.7, 0]
-    }
+  "chassis": {
+    "ID de Pieza": "VW-AMK-CHS-001",
+    "Material": "Acero de alta resistencia",
+    "Peso (kg)": "850"
+  },
+  "engine_v6": {
+    "ID de Pieza": "VW-AMK-ENG-V6",
+    "Tipo": "3.0L V6 TDI",
+    "Potencia": "224 hp",
+    "Torque": "550 Nm"
+  },
+  "wheel_front_left": {
+    "ID de Pieza": "VW-AMK-WHL-FL",
+    "Tamaño": "18 pulgadas",
+    "Material": "Aleación de aluminio"
+  },
+  "wheel_front_right": {
+    "ID de Pieza": "VW-AMK-WHL-FR",
+    "Tamaño": "18 pulgadas",
+    "Material": "Aleación de aluminio"
+  },
+  "wheel_rear_left": {
+    "ID de Pieza": "VW-AMK-WHL-RL",
+    "Tamaño": "18 pulgadas",
+    "Material": "Aleación de aluminio"
+  },
+  "wheel_rear_right": {
+    "ID de Pieza": "VW-AMK-WHL-RR",
+    "Tamaño": "18 pulgadas",
+    "Material": "Aleación de aluminio"
+  }
 }
