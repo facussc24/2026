@@ -752,85 +752,6 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         }
     });
 
-exports.handleTaskUnblocking = functions.firestore.document('tareas/{taskId}')
-    .onWrite(async (change, context) => {
-        const beforeData = change.before.data();
-        const afterData = change.after.data();
-
-        // Exit if the task status hasn't changed to 'done' or if it's a new task
-        if (!beforeData || beforeData.status === 'done' || afterData.status !== 'done') {
-            return null;
-        }
-
-        // Exit if the completed task wasn't blocking any other tasks
-        const blockedTaskIds = afterData.blocks;
-        if (!blockedTaskIds || blockedTaskIds.length === 0) {
-            return null;
-        }
-
-        console.log(`Task ${context.params.taskId} completed. Checking for tasks to unblock.`);
-
-        const db = admin.firestore();
-        const batch = db.batch();
-        const completedTaskId = context.params.taskId;
-        const notificationPromises = [];
-
-        for (const blockedTaskId of blockedTaskIds) {
-            const blockedTaskRef = db.collection('tareas').doc(blockedTaskId);
-
-            try {
-                await db.runTransaction(async (transaction) => {
-                    const blockedTaskDoc = await transaction.get(blockedTaskRef);
-                    if (!blockedTaskDoc.exists) return;
-
-                    const blockedTaskData = blockedTaskDoc.data();
-                    const dependsOn = blockedTaskData.dependsOn || [];
-
-                    // Remove the completed task from the dependency list
-                    const newDependsOn = dependsOn.filter(id => id !== completedTaskId);
-
-                    const updates = { dependsOn: newDependsOn };
-
-                    // If there are no more dependencies, unblock the task
-                    if (newDependsOn.length === 0) {
-                        updates.blocked = false;
-                        console.log(`Unblocking task ${blockedTaskId}.`);
-
-                        // Prepare a notification for the unblocked task's assignee
-                        if (blockedTaskData.assigneeUid) {
-                            const message = `La tarea "${blockedTaskData.title}" ha sido desbloqueada y ya está lista para empezar.`;
-                            const notification = {
-                                userId: blockedTaskData.assigneeUid,
-                                message: message,
-                                view: 'tareas', // Navigate to the tasks view
-                                params: { taskId: blockedTaskId },
-                                createdAt: new Date(),
-                                isRead: false,
-                            };
-                            const notificationRef = db.collection('notifications').doc();
-                            batch.set(notificationRef, notification);
-                        }
-                    }
-
-                    transaction.update(blockedTaskRef, updates);
-                });
-
-            } catch (error) {
-                console.error(`Error processing unblocking for task ${blockedTaskId}:`, error);
-            }
-        }
-
-        try {
-            await batch.commit();
-            console.log(`Successfully processed unblocking for tasks blocked by ${completedTaskId}.`);
-        } catch (error) {
-            console.error('Error committing unblock batch:', error);
-        }
-
-        return null;
-    });
-
-
 exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
@@ -1104,7 +1025,58 @@ exports.deleteOldArchivedTasks = functions.pubsub.schedule("every day 03:00")
 exports.sendTaskNotification = functions.runWith({ secrets: ["TELEGRAM_TOKEN"] })
   .firestore.document('tareas/{taskId}')
   .onWrite(async (change, context) => {
-    // ... function logic
+    const beforeData = change.before.data();
+    const afterData = change.after.data();
+
+    // --- Task Unblocking Logic ---
+    // Exit if the task status hasn't changed to 'done' or if it's a new task
+    if (beforeData && beforeData.status !== 'done' && afterData.status === 'done') {
+        const blockedTaskIds = afterData.blocks;
+        if (blockedTaskIds && blockedTaskIds.length > 0) {
+            console.log(`Task ${context.params.taskId} completed. Checking for tasks to unblock.`);
+            const db = admin.firestore();
+            const batch = db.batch();
+            const completedTaskId = context.params.taskId;
+
+            for (const blockedTaskId of blockedTaskIds) {
+                const blockedTaskRef = db.collection('tareas').doc(blockedTaskId);
+                try {
+                    const blockedTaskDoc = await blockedTaskRef.get();
+                    if (blockedTaskDoc.exists) {
+                        const blockedTaskData = blockedTaskDoc.data();
+                        const dependsOn = (blockedTaskData.dependsOn || []).filter(id => id !== completedTaskId);
+                        const updates = { dependsOn };
+
+                        if (dependsOn.length === 0) {
+                            updates.blocked = false;
+                            console.log(`Unblocking task ${blockedTaskId}.`);
+                            if (blockedTaskData.assigneeUid) {
+                                const message = `La tarea "${blockedTaskData.title}" ha sido desbloqueada y ya está lista para empezar.`;
+                                const notification = {
+                                    userId: blockedTaskData.assigneeUid,
+                                    message,
+                                    view: 'tareas',
+                                    params: { taskId: blockedTaskId },
+                                    createdAt: new Date(),
+                                    isRead: false,
+                                };
+                                const notificationRef = db.collection('notifications').doc();
+                                batch.set(notificationRef, notification);
+                            }
+                        }
+                        batch.update(blockedTaskRef, updates);
+                    }
+                } catch (error) {
+                    console.error(`Error processing unblocking for task ${blockedTaskId}:`, error);
+                }
+            }
+            await batch.commit().catch(err => console.error('Error committing unblock batch:', err));
+        }
+    }
+
+    // ... other onWrite logic can go here ...
+
+    return null;
   });
 
 // CORRECTED SYNTAX
