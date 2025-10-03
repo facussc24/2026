@@ -81,6 +81,15 @@ export function createVisorUI() {
                                 <label for="explode-factor" class="font-semibold text-sm text-slate-600">Distancia de Explosión</label>
                                 <input type="range" id="explode-factor" min="0" max="5" step="0.1" value="1.5" class="w-full mt-1">
                             </div>
+
+                            <div class="mt-4">
+                                <label for="environment-select" class="font-semibold text-sm text-slate-600">Entorno de Iluminación</label>
+                                <select id="environment-select" class="w-full mt-1 bg-white border border-slate-300 rounded-md text-sm p-2">
+                                    <option value="royal_esplanade_1k.hdr" selected>Royal Esplanade</option>
+                                    <option value="studio_small_01_1k.hdr">Estudio</option>
+                                    <option value="venice_sunset_1k.hdr">Atardecer</option>
+                                </select>
+                            </div>
                         </div>
                     </details>
                     <details id="clipping-controls-details" class="visor-section">

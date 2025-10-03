@@ -7,15 +7,32 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
+import { GammaCorrectionShader } from 'three/examples/jsm/shaders/GammaCorrectionShader.js';
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
+import TWEEN from '@tweenjs/tween.js';
 import { state, modelParts, partCharacteristics, selectedObjects, clippingPlanes } from '../visor3d.js';
 import { renderPartsList, updateStatus } from './uiManager.js';
+import { initGizmo } from './navigationGizmo.js';
 
 export let scene, camera, renderer, controls, labelRenderer, composer;
 let ambientLight, directionalLight, hemisphereLight;
 let fxaaPass;
-let gizmoScene, gizmoCamera;
+let gizmoUpdater;
+let planeObjects;
+
+const capMaterial = new THREE.MeshStandardMaterial({
+    color: 0x444444,
+    metalness: 0.1,
+    roughness: 0.75,
+});
+
+const backFaceMaterial = new THREE.MeshBasicMaterial({
+    colorWrite: false,
+    depthWrite: false,
+    side: THREE.BackSide,
+});
 
 function setupScene() {
     scene = new THREE.Scene();
@@ -88,6 +105,9 @@ export function initThreeScene(modelUrl, onPointerDown) {
     setupControls(camera, renderer);
     setupLights(scene);
 
+    planeObjects = new THREE.Group();
+    scene.add(planeObjects);
+
     labelRenderer = new CSS2DRenderer();
     labelRenderer.setSize(container.offsetWidth, container.offsetHeight);
     labelRenderer.domElement.style.position = 'absolute';
@@ -114,29 +134,8 @@ export function initThreeScene(modelUrl, onPointerDown) {
         const center = box.getCenter(new THREE.Vector3());
         model.position.sub(center);
 
-        // Set a proper HDR environment map for realistic lighting and reflections.
-        new RGBELoader()
-            .setDataType(THREE.FloatType) // Required for recent three.js versions
-            .load('https://threejs.org/examples/textures/equirectangular/royal_esplanade_1k.hdr', (texture) => {
-                const pmremGenerator = new THREE.PMREMGenerator(renderer);
-                pmremGenerator.compileEquirectangularShader();
-
-                const envMap = pmremGenerator.fromEquirectangular(texture).texture;
-
-                scene.background = envMap;
-                scene.environment = envMap;
-
-                texture.dispose();
-                pmremGenerator.dispose();
-            }, undefined, (error) => {
-                console.error('An error occurred while loading the HDR environment map. Reverting to basic lighting.', error);
-                scene.background = new THREE.Color(0x404040);
-                scene.environment = null;
-                // Boost existing lights as a fallback
-                ambientLight.intensity = 2.5;
-                directionalLight.intensity = 4.0;
-                hemisphereLight.intensity = 1.5;
-            });
+        // Set the default environment
+        setEnvironment('royal_esplanade_1k.hdr');
 
         const centeredBox = new THREE.Box3().setFromObject(model);
         const groundY = centeredBox.min.y;
@@ -208,6 +207,7 @@ export function initThreeScene(modelUrl, onPointerDown) {
 
     composer = new EffectComposer(renderer);
     const renderPass = new RenderPass(scene, camera);
+    renderPass.clear = false; // We will handle clearing manually for the stencil effect.
     composer.addPass(renderPass);
 
     state.outlinePass = new OutlinePass(new THREE.Vector2(container.offsetWidth, container.offsetHeight), scene, camera);
@@ -218,56 +218,50 @@ export function initThreeScene(modelUrl, onPointerDown) {
     state.outlinePass.hiddenEdgeColor.set('#007bff');
     composer.addPass(state.outlinePass);
 
+    // Add SSAO Pass for ambient occlusion
+    const ssaoPass = new SSAOPass(scene, camera, container.offsetWidth, container.offsetHeight);
+    ssaoPass.kernelRadius = 16;
+    ssaoPass.minDistance = 0.005;
+    ssaoPass.maxDistance = 0.1;
+    composer.addPass(ssaoPass);
+
+    // Add Gamma Correction Pass
+    const gammaCorrectionPass = new ShaderPass(GammaCorrectionShader);
+    composer.addPass(gammaCorrectionPass);
+
     fxaaPass = new ShaderPass(FXAAShader);
     const pixelRatio = renderer.getPixelRatio();
     fxaaPass.material.uniforms['resolution'].value.x = 1 / (container.offsetWidth * pixelRatio);
     fxaaPass.material.uniforms['resolution'].value.y = 1 / (container.offsetHeight * pixelRatio);
     composer.addPass(fxaaPass);
 
-    initAxisGizmo();
+    gizmoUpdater = initGizmo(renderer, camera, controls);
+
+    // Add a big plane to represent the cap
+    const planeGeom = new THREE.PlaneGeometry(100, 100);
+    const capPlane = new THREE.Mesh(planeGeom, capMaterial);
+    capPlane.rotation.x = -Math.PI / 2; // Start it flat
+    planeObjects.add(capPlane);
+
 
     function animate() {
         requestAnimationFrame(animate);
         controls.update();
         TWEEN.update();
 
-        if (state.isIsolated) {
-            const isolatedUuids = new Set(state.isolatedObjects.map(obj => obj.uuid));
-            modelParts.forEach(part => {
-                const shouldBeVisible = isolatedUuids.has(part.uuid);
-                if (part.visible !== shouldBeVisible) {
-                    part.visible = shouldBeVisible;
-                }
-            });
-        }
+        // This ensures the main scene is always rendered correctly before the gizmo.
+        renderer.setScissorTest(false);
 
-        // render main scene
-        // It's crucial to reset the viewport and scissor before rendering the main scene.
-        // The gizmo render in the previous frame modifies these, and if not reset,
-        // the main scene will be rendered into the tiny gizmo viewport.
-        const container = document.getElementById('visor3d-scene-container');
-        if (container) {
-            const width = container.offsetWidth;
-            const height = container.offsetHeight;
-            renderer.setViewport(0, 0, width, height);
-            renderer.setScissor(0, 0, width, height);
-        }
-        renderer.setScissorTest(true); // Ensure scissor is on for both composer and gizmo
+        // Handle simple clipping without stencils
+        renderer.localClippingEnabled = state.isClipping;
 
         composer.render();
         if (labelRenderer) labelRenderer.render(scene, camera);
 
-        // render gizmo
-        if (gizmoCamera) {
-            const gizmoContainer = document.getElementById('axis-gizmo-container');
-            const { left, bottom, width, height } = gizmoContainer.getBoundingClientRect();
-            const { innerWidth, innerHeight } = window;
-            renderer.setScissor(left, innerHeight - bottom, width, height);
-            renderer.setViewport(left, innerHeight - bottom, width, height);
-
-            gizmoCamera.position.copy(camera.position);
-            gizmoCamera.quaternion.copy(camera.quaternion);
-            renderer.render(gizmoScene, gizmoCamera);
+        // Enable scissor test only for the gizmo rendering part.
+        renderer.setScissorTest(true);
+        if (gizmoUpdater) {
+            gizmoUpdater.update();
         }
     }
     animate();
@@ -333,13 +327,17 @@ export function updateClippingPlane(activeClipAxis, clipPosition) {
         z: new THREE.Vector3(0, 0, -1)
     };
 
-    clippingPlanes[0].normal.copy(normals[activeClipAxis]);
+    const normal = normals[activeClipAxis];
+    clippingPlanes[0].normal.copy(normal);
     clippingPlanes[0].constant = parseFloat(clipPosition);
 
-    const helper = scene.getObjectByName('clipping-plane-helper');
-    if (helper) {
-        helper.plane = clippingPlanes[0];
-        helper.updateMatrixWorld(true);
+    const capPlane = planeObjects.children[0];
+    if (capPlane) {
+        // Position the cap plane at the clipping plane's position
+        capPlane.position.copy(normal).multiplyScalar(-clippingPlanes[0].constant);
+        // Align the cap plane with the clipping plane's normal
+        capPlane.lookAt(capPlane.position.clone().add(normal));
+        capPlane.updateMatrixWorld(true);
     }
 }
 
@@ -353,6 +351,34 @@ export function setSunIntensity(intensity) {
     if (directionalLight) {
         directionalLight.intensity = parseFloat(intensity);
     }
+}
+
+export function setEnvironment(hdrFile) {
+    if (!renderer || !scene) return;
+
+    new RGBELoader()
+        .setPath('modulos/visor3d/imagenes/')
+        .load(hdrFile, (texture) => {
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+
+            const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+            scene.background = envMap;
+            scene.environment = envMap;
+
+            texture.dispose();
+            pmremGenerator.dispose();
+            console.log(`Environment changed to ${hdrFile}`);
+        }, undefined, (error) => {
+            console.error(`An error occurred while loading the HDR environment map: ${hdrFile}`, error);
+            scene.background = new THREE.Color(0x404040);
+            scene.environment = null;
+            // Boost existing lights as a fallback
+            if (ambientLight) ambientLight.intensity = 2.5;
+            if (directionalLight) directionalLight.intensity = 4.0;
+            if (hemisphereLight) hemisphereLight.intensity = 1.5;
+        });
 }
 
 export function setAmbientLightIntensity(intensity) {
@@ -375,12 +401,3 @@ export function toggleWireframe(isActive) {
     });
 }
 
-function initAxisGizmo() {
-    gizmoScene = new THREE.Scene();
-    const gizmoContainer = document.getElementById('axis-gizmo-container');
-    gizmoCamera = new THREE.PerspectiveCamera(75, gizmoContainer.offsetWidth / gizmoContainer.offsetHeight, 0.1, 50);
-    gizmoCamera.position.set(0, 0, 5);
-
-    const axesHelper = new THREE.AxesHelper(5);
-    gizmoScene.add(axesHelper);
-}
