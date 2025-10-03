@@ -489,6 +489,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 3.  **If it's a Command:**
                     *   Proceed with the project management workflow below.
                     *   **Assign Tasks:** If the user specifies an assignee, use their email in the \`assigneeEmail\` parameter. If no user is mentioned, do not assign it.
+                    *   **Create Descriptive Tasks:** When creating dependent tasks, ensure the context is clear. For example, if Task A is "Create Report", a dependent Task B should be "Send **Report** to Manager", not just "Send to Manager".
                     *   **Always Think in Spanish:** The "thought" field MUST be in Spanish.
                     *   **Schedule Everything:** Proactively assign a \`plannedDate\` to ALL new tasks. Only use \`dueDate\` for explicit deadlines.
                     *   **Balance Workload:** Analyze the user's schedule (3-week view) and distribute tasks to avoid overloading any day.
@@ -750,6 +751,85 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
             });
         }
     });
+
+exports.handleTaskUnblocking = functions.firestore.document('tareas/{taskId}')
+    .onWrite(async (change, context) => {
+        const beforeData = change.before.data();
+        const afterData = change.after.data();
+
+        // Exit if the task status hasn't changed to 'done' or if it's a new task
+        if (!beforeData || beforeData.status === 'done' || afterData.status !== 'done') {
+            return null;
+        }
+
+        // Exit if the completed task wasn't blocking any other tasks
+        const blockedTaskIds = afterData.blocks;
+        if (!blockedTaskIds || blockedTaskIds.length === 0) {
+            return null;
+        }
+
+        console.log(`Task ${context.params.taskId} completed. Checking for tasks to unblock.`);
+
+        const db = admin.firestore();
+        const batch = db.batch();
+        const completedTaskId = context.params.taskId;
+        const notificationPromises = [];
+
+        for (const blockedTaskId of blockedTaskIds) {
+            const blockedTaskRef = db.collection('tareas').doc(blockedTaskId);
+
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const blockedTaskDoc = await transaction.get(blockedTaskRef);
+                    if (!blockedTaskDoc.exists) return;
+
+                    const blockedTaskData = blockedTaskDoc.data();
+                    const dependsOn = blockedTaskData.dependsOn || [];
+
+                    // Remove the completed task from the dependency list
+                    const newDependsOn = dependsOn.filter(id => id !== completedTaskId);
+
+                    const updates = { dependsOn: newDependsOn };
+
+                    // If there are no more dependencies, unblock the task
+                    if (newDependsOn.length === 0) {
+                        updates.blocked = false;
+                        console.log(`Unblocking task ${blockedTaskId}.`);
+
+                        // Prepare a notification for the unblocked task's assignee
+                        if (blockedTaskData.assigneeUid) {
+                            const message = `La tarea "${blockedTaskData.title}" ha sido desbloqueada y ya está lista para empezar.`;
+                            const notification = {
+                                userId: blockedTaskData.assigneeUid,
+                                message: message,
+                                view: 'tareas', // Navigate to the tasks view
+                                params: { taskId: blockedTaskId },
+                                createdAt: new Date(),
+                                isRead: false,
+                            };
+                            const notificationRef = db.collection('notifications').doc();
+                            batch.set(notificationRef, notification);
+                        }
+                    }
+
+                    transaction.update(blockedTaskRef, updates);
+                });
+
+            } catch (error) {
+                console.error(`Error processing unblocking for task ${blockedTaskId}:`, error);
+            }
+        }
+
+        try {
+            await batch.commit();
+            console.log(`Successfully processed unblocking for tasks blocked by ${completedTaskId}.`);
+        } catch (error) {
+            console.error('Error committing unblock batch:', error);
+        }
+
+        return null;
+    });
+
 
 exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
