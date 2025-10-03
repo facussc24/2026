@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { state, modelParts, selectedObjects, transparentMaterials, originalPositions, explosionVectors, measurementPoints, clippingPlanes, partCharacteristics, measurementState } from '../visor3d.js';
-import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene, composer, toggleWireframe } from './sceneManager.js';
+import { camera, renderer, controls, zoomToSelection, updateClippingPlane, setSunIntensity, setAmbientLightIntensity, scene, composer, toggleWireframe, setEnvironment } from './sceneManager.js';
 import { updateSelectionUI, toggleButtonActive, toggleExplodeControls, toggleClippingControls, updateIsolationButton, createReportModal } from './uiManager.js';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
@@ -202,17 +202,7 @@ function toggleClippingView() {
     state.isClipping = !state.isClipping;
     toggleButtonActive('clipping-btn', state.isClipping);
     toggleClippingControls(state.isClipping);
-
-    if (state.isClipping) {
-        renderer.clippingPlanes = clippingPlanes;
-        const planeHelper = new THREE.PlaneHelper(clippingPlanes[0], 5, 0x00ff00);
-        planeHelper.name = 'clipping-plane-helper';
-        scene.add(planeHelper);
-    } else {
-        renderer.clippingPlanes = [];
-        const helper = scene.getObjectByName('clipping-plane-helper');
-        if (helper) scene.remove(helper);
-    }
+    // The sceneManager's animate loop will handle the rest based on state.isClipping
 }
 
 function generateReport() {
@@ -344,6 +334,13 @@ export function setupVisor3dEventListeners() {
     if (wireframeToggle) wireframeToggle.addEventListener('change', (e) => {
         toggleWireframe(e.target.checked);
     });
+
+    const environmentSelect = document.getElementById('environment-select');
+    if (environmentSelect) {
+        environmentSelect.addEventListener('change', (e) => {
+            setEnvironment(e.target.value);
+        });
+    }
 
     const searchInput = document.getElementById('visor3d-search');
     if (searchInput) searchInput.addEventListener('keyup', (e) => {

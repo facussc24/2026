@@ -3546,26 +3546,18 @@ onAuthStateChanged(auth, async (user) => {
             showAuthScreen('verify-email');
         }
     } else {
-        // Add a small delay to prevent login screen flashing for authenticated users on refresh.
-        // This gives onAuthStateChanged time to get the cached user.
-        setTimeout(() => {
-            // Re-check the auth state after the delay. If a user is found, do nothing.
-            if (auth.currentUser) {
-                return;
-            }
-
-            dom.loadingOverlay.style.display = 'none';
-            const wasLoggedIn = !!appState.currentUser;
-            stopRealtimeListeners();
-            appState.currentUser = null;
-            dom.authContainer.classList.remove('hidden');
-            dom.appView.classList.add('hidden');
-            updateNavForRole();
-            showAuthScreen('login');
-            if (wasLoggedIn) {
-                showToast(`Sesión cerrada.`, 'info');
-            }
-        }, 200); // A 200ms delay is usually sufficient.
+        // No user is signed in.
+        dom.loadingOverlay.style.display = 'none';
+        const wasLoggedIn = !!appState.currentUser;
+        stopRealtimeListeners();
+        appState.currentUser = null;
+        dom.authContainer.classList.remove('hidden');
+        dom.appView.classList.add('hidden');
+        updateNavForRole();
+        showAuthScreen('login');
+        if (wasLoggedIn) {
+            showToast(`Sesión cerrada.`, 'info');
+        }
     }
 });
 
@@ -3654,6 +3646,9 @@ if (window.location.protocol === 'file:') {
 }
 
 window.seedDatabase = seedDatabase;
+window.switchView = switchView;
+
+// Expose switchView for Playwright
 window.switchView = switchView;
 
 function renderArbolesInitialView() {

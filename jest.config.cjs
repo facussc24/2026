@@ -70,7 +70,10 @@ module.exports = {
     "^three/examples/jsm/lines/Line2.js$": "<rootDir>/__mocks__/three.js",
     "^three/examples/jsm/lines/LineGeometry.js$": "<rootDir>/__mocks__/three.js",
     "^three/examples/jsm/lines/LineMaterial.js$": "<rootDir>/__mocks__/three.js",
+    "^three/examples/jsm/postprocessing/SSAOPass.js$": "<rootDir>/__mocks__/three.js",
+    "^three/examples/jsm/shaders/GammaCorrectionShader.js$": "<rootDir>/__mocks__/three.js",
     "^three$": "<rootDir>/__mocks__/three.js",
+    "^@tweenjs/tween.js$": "<rootDir>/__mocks__/tween.js",
 
     // Map CDN import to local package for Jest
     "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js": "marked"

@@ -75,18 +75,24 @@ describe('Annotation Manager', () => {
             // Arrange
             const modelName = 'test-model';
             const newAnnotation = { id: 'anno3', position: { x: 3, y: 3, z: 3 }, comments: [] };
-            await initAnnotations(modelName, mockScene);
+            const mockDb = { id: 'mock-db' };
+            const mockDocRef = { id: 'mock-doc-ref' };
 
-            // Redefine arrayUnion for this test to wrap the data in an array, matching the test's expectation.
-            arrayUnion.mockImplementation(data => [data]);
+            // Mock the Firestore functions
+            doc.mockReturnValue(mockDocRef);
+            // The real arrayUnion returns a special FieldValue, not the raw data.
+            // We mock it to return a simple object that represents the operation for assertion.
+            arrayUnion.mockImplementation(data => ({ _methodName: 'arrayUnion', _elements: [data] }));
 
             // Act
+            await initAnnotations(modelName, mockScene, mockDb); // Initialize with the mock DB
             await saveAnnotation(newAnnotation);
 
             // Assert
+            expect(doc).toHaveBeenCalledWith(mockDb, "annotations", modelName);
             expect(setDoc).toHaveBeenCalledWith(
-                undefined,
-                { annotations: [newAnnotation] },
+                mockDocRef,
+                { annotations: { _methodName: 'arrayUnion', _elements: [newAnnotation] } },
                 { merge: true }
             );
         });

@@ -106,6 +106,35 @@ export class MeshStandardMaterial {
     }
 }
 
+export class MeshBasicMaterial {
+    constructor(params = {}) {
+        this.colorWrite = params.colorWrite;
+        this.depthWrite = params.depthWrite;
+        this.side = params.side;
+        this.clippingPlanes = null;
+    }
+}
+
+export class Group {
+    constructor() {
+        this.children = [];
+        this.visible = true;
+    }
+    add(object) {
+        this.children.push(object);
+    }
+}
+
+export class BoxGeometry {}
+export class CanvasTexture {}
+export class PlaneHelper {}
+
+
+export const BackSide = 2;
+export const FrontSide = 1;
+export const DoubleSide = 0;
+
+
 // Mock the named exports for addons, as they are mapped to this file in jest.config.js
 export class OrbitControls {
     constructor() {
