@@ -321,287 +321,98 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     initModalEventListeners(modalElement, task, commentsUnsubscribe);
 }
 
-export async function openAIAssistantModal() {
-    // Render the modal shell
-    dom.modalContainer.innerHTML = getAIAssistantModalHTML();
+export function openAIAssistantModal() {
+    dom.modalContainer.innerHTML = getAIChatModalHTML();
     const modalElement = document.getElementById('ai-assistant-modal');
-    const viewContainer = document.getElementById('ai-assistant-view-container');
-    let currentPlan = null; // To store the plan between views
+    const messagesContainer = document.getElementById('ai-chat-messages');
+    const chatForm = document.getElementById('ai-chat-form');
+    const chatInput = document.getElementById('ai-chat-input');
+    const sendBtn = document.getElementById('ai-chat-send-btn');
+
+    let conversationId = null;
+    let jobUnsubscribe = null;
 
     const closeModal = () => {
-        // Dispatch a custom event to clean up any listeners
-        modalElement.dispatchEvent(new CustomEvent('close-modal'));
+        if (jobUnsubscribe) jobUnsubscribe();
         modalElement?.remove();
     };
 
-    // --- Step 4: Execution Progress View ---
-    const renderExecutionProgressView = (jobId, plan) => {
-        let unsubscribe;
-        const steps = plan.map((action, index) => {
-            let description = `Acción: ${action.action}`;
-            if (action.originalTitle) {
-                description = `Ejecutar en: "${action.originalTitle}"`;
-            } else if (action.task && action.task.title) {
-                description = `Crear: "${action.task.title}"`;
-            }
-            return { id: index, description, status: 'PENDING' };
-        });
-
-        viewContainer.innerHTML = getAIAssistantExecutionProgressViewHTML(steps);
+    const addMessage = (sender, content, type = 'text') => {
+        const messageHTML = getAIChatMessageHTML(sender, content, type);
+        messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
         lucide.createIcons();
-
-        const executionStepsList = viewContainer.querySelector('#execution-steps-list');
-        const closeBtn = viewContainer.querySelector('#execution-close-btn');
-        const completeBtn = viewContainer.querySelector('#execution-complete-close-btn');
-
-        closeBtn.addEventListener('click', closeModal);
-
-        const executionRef = doc(db, 'plan_executions', jobId);
-        unsubscribe = onSnapshot(executionRef, (doc) => {
-            const executionData = doc.data();
-            if (!executionData || !executionData.steps) return;
-
-            // BUG FIX: Firestore can return array-like objects as actual objects.
-            // Convert to an array before iterating to prevent "forEach is not a function" error.
-            const stepsArray = Array.isArray(executionData.steps) ? executionData.steps : Object.values(executionData.steps);
-
-            stepsArray.forEach((step, index) => {
-                const stepElement = executionStepsList.querySelector(`#execution-step-${index}`);
-                if (!stepElement) return;
-
-                const iconContainer = stepElement.querySelector('.status-icon');
-                const currentStatus = iconContainer.dataset.status;
-
-                if (step.status !== currentStatus) {
-                    iconContainer.dataset.status = step.status;
-                    let iconHTML = '';
-                    switch (step.status) {
-                        case 'COMPLETED':
-                            iconHTML = '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
-                            stepElement.classList.remove('bg-slate-100', 'dark:bg-slate-700/50');
-                            stepElement.classList.add('bg-green-50', 'dark:bg-green-900/20');
-                            break;
-                        case 'ERROR':
-                            iconHTML = `<i data-lucide="x-circle" class="w-5 h-5 text-red-500" title="${step.error || 'Error'}"></i>`;
-                            stepElement.classList.remove('bg-slate-100', 'dark:bg-slate-700/50');
-                            stepElement.classList.add('bg-red-50', 'dark:bg-red-900/20');
-                            break;
-                        default: // PENDING
-                            iconHTML = '<i data-lucide="loader-circle" class="w-5 h-5 animate-spin text-slate-400"></i>';
-                    }
-                    iconContainer.innerHTML = iconHTML;
-                    lucide.createIcons();
-                }
-            });
-
-            if (executionData.status === 'COMPLETED' || executionData.status === 'ERROR') {
-                if (unsubscribe) unsubscribe();
-
-                completeBtn.disabled = false;
-
-                if (executionData.status === 'COMPLETED') {
-                    completeBtn.className = 'bg-green-600 text-white px-5 py-2 rounded-md hover:bg-green-700 font-semibold transition-colors flex items-center gap-2';
-                    completeBtn.innerHTML = `
-                        <i data-lucide="party-popper" class="w-5 h-5"></i>
-                        <span>¡Hecho! Cerrar</span>
-                    `;
-                    document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
-                } else { // ERROR
-                    completeBtn.className = 'bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 font-semibold transition-colors flex items-center gap-2';
-                    completeBtn.innerHTML = `
-                        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
-                        <span>Error. Cerrar</span>
-                    `;
-                }
-
-                lucide.createIcons({ nodes: [completeBtn.querySelector('i')] });
-                completeBtn.addEventListener('click', closeModal);
-                closeBtn.classList.remove('hidden');
-            }
-        });
-
-        modalElement.addEventListener('close-modal', () => {
-            if (unsubscribe) unsubscribe();
-        }, { once: true });
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
     };
 
+    const handleJobUpdate = (doc) => {
+        const jobData = doc.data();
+        const loadingBubble = document.getElementById('ai-loading-bubble');
+        if (!jobData) return;
 
-    // --- Step 3: Review and Execute ---
-    const renderReviewView = (plan, taskTitleMap) => {
-        currentPlan = plan;
-
-        viewContainer.innerHTML = getAIAssistantReviewViewHTML(plan, taskTitleMap);
-        lucide.createIcons();
-
-        const accordionBtn = viewContainer.querySelector('#thought-process-accordion-btn');
-        accordionBtn.addEventListener('click', function() {
-            const content = viewContainer.querySelector('#thought-process-content');
-            const icon = this.querySelector('svg');
-            const isHidden = content.style.display === 'none' || content.style.display === '';
-            content.style.display = isHidden ? 'block' : 'none';
-            if (icon) icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-        });
-
-        viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
-        viewContainer.querySelector('#ai-reject-plan-btn').addEventListener('click', () => renderPromptView(plan.userPrompt));
-
-        const form = viewContainer.querySelector('#ai-execution-plan-form');
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = new FormData(form);
-            const modifiedExecutionPlan = [];
-            const originalPlanLength = currentPlan.executionPlan.length;
-
-            for (let i = 0; i < originalPlanLength; i++) {
-                const actionId = `action_${i}`;
-                if (!formData.get(`${actionId}_enabled`)) continue;
-
-                const actionType = formData.get(`${actionId}_type`);
-                const originalAction = currentPlan.executionPlan[i];
-                const newAction = { action: actionType, originalTitle: originalAction.originalTitle };
-
-                if (actionType === 'CREATE') {
-                    newAction.task = { title: formData.get(`${actionId}_title`), dueDate: formData.get(`${actionId}_dueDate`) || null };
-                    newAction.docId = originalAction.docId; // Keep temp ID for mapping
-                } else if (actionType === 'UPDATE') {
-                    newAction.docId = formData.get(`${actionId}_docId`);
-                    newAction.updates = {};
-                    let updateIndex = 0;
-                    while (true) {
-                        const updateField = formData.get(`${actionId}_update_field_${updateIndex}`);
-                        if (!updateField) break; // No more update fields for this action
-
-                        let updateValue = formData.get(`${actionId}_update_value_${updateIndex}`);
-                        if (updateValue !== null) {
-                            try {
-                                // Attempt to parse if it's a JSON string (for arrays like dependsOn)
-                                newAction.updates[updateField] = JSON.parse(updateValue);
-                            } catch (e) {
-                                // Otherwise, use the raw value
-                                newAction.updates[updateField] = updateValue;
-                            }
-                        }
-                        updateIndex++;
-                    }
-                } else if (actionType === 'DELETE') {
-                    newAction.docId = originalAction.docId;
-                }
-                modifiedExecutionPlan.push(newAction);
+        if (jobData.status === 'COMPLETED') {
+            if (jobUnsubscribe) jobUnsubscribe();
+            loadingBubble?.remove();
+            if (jobData.summary) {
+                addMessage('ai', jobData.summary, 'text');
+            } else if (jobData.executionPlan && jobData.executionPlan.length > 0) {
+                addMessage('ai', { plan: jobData, taskTitleMap: new Map() }, 'plan');
+            } else {
+                addMessage('ai', "He terminado, pero no tengo un resumen que mostrar.", 'text');
             }
-
-            if (modifiedExecutionPlan.length === 0) {
-                showToast('No hay acciones seleccionadas para ejecutar.', 'warning');
-                return;
-            }
-
-            const jobId = currentPlan.jobId;
-            renderExecutionProgressView(jobId, modifiedExecutionPlan);
-
-            try {
-                const executePlanFn = httpsCallable(functions, 'executeTaskModificationPlan');
-                await executePlanFn({ plan: modifiedExecutionPlan, jobId });
-            } catch (error) {
-                console.error("Error triggering plan execution:", error);
-                showToast(error.message || 'Error al iniciar la ejecución del plan.', 'error');
-            }
-        });
+            sendBtn.disabled = false;
+        } else if (jobData.status === 'ERROR') {
+            if (jobUnsubscribe) jobUnsubscribe();
+            loadingBubble?.remove();
+            addMessage('ai', `Lo siento, encontré un error: ${jobData.error}`, 'text');
+            sendBtn.disabled = false;
+        }
     };
 
-    // --- Step 2: Loading View ---
-    const renderLoadingView = (userPrompt) => {
-        viewContainer.innerHTML = getAIAssistantLoadingViewHTML('Generando plan con IA...');
+    const startJob = async (prompt) => {
+        sendBtn.disabled = true;
+        addMessage('user', prompt, 'text');
+        messagesContainer.insertAdjacentHTML('beforeend', getAILoadingMessageHTML());
         lucide.createIcons();
-        const thinkingStepsContainer = viewContainer.querySelector('#thinking-steps-container');
-        let unsubscribe;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-        (async () => {
-            try {
-                const startJobFn = httpsCallable(functions, 'startAIAgentJob');
-                const allTasks = await fetchAllTasks();
-                const userTasks = allTasks.filter(task => task.assigneeUid === appState.currentUser.uid || task.creatorUid === appState.currentUser.uid || task.isPublic);
+        try {
+            const startJobFn = httpsCallable(functions, 'startAIAgentJob');
+            const allTasks = await fetchAllTasks();
+            const result = await startJobFn({ userPrompt: prompt, tasks: allTasks, conversationId });
 
-                const result = await startJobFn({ userPrompt, tasks: userTasks });
-                const { jobId } = result.data;
-                if (!jobId) throw new Error("La función no devolvió un ID de trabajo.");
+            const newJobId = result.data.jobId;
+            conversationId = result.data.conversationId; // Update conversationId from backend
 
-                const jobRef = doc(db, 'ai_agent_jobs', jobId);
-                unsubscribe = onSnapshot(jobRef, (doc) => {
-                    const jobData = doc.data();
-                    if (!jobData) return;
+            if (jobUnsubscribe) jobUnsubscribe();
+            const jobRef = doc(db, 'ai_agent_jobs', newJobId);
+            jobUnsubscribe = onSnapshot(jobRef, handleJobUpdate);
 
-                    if (jobData.thinkingSteps && thinkingStepsContainer) {
-                        thinkingStepsContainer.innerHTML = jobData.thinkingSteps.map(step => `
-                            <p class="flex items-start gap-2 text-slate-600 dark:text-slate-300 animate-fade-in"><i data-lucide="check-circle" class="w-4 h-4 text-green-500 flex-shrink-0 mt-1"></i><span class="truncate" title="${step.thought}">${step.thought}</span></p>
-                        `).join('');
-                        lucide.createIcons();
-                        thinkingStepsContainer.scrollTop = thinkingStepsContainer.scrollHeight;
-                    }
-
-                    if (jobData.status === 'COMPLETED') {
-                        if (unsubscribe) unsubscribe();
-                        const finalPlan = { ...jobData, jobId: doc.id };
-                        const taskTitleMap = new Map(allTasks.map(t => [t.docId, t.title]));
-                        finalPlan.executionPlan.forEach(action => {
-                            if (action.action === 'CREATE') taskTitleMap.set(action.docId, action.task.title);
-                        });
-                        finalPlan.executionPlan.forEach(action => {
-                            if (action.action !== 'CREATE') action.originalTitle = taskTitleMap.get(action.docId) || 'Tarea no encontrada';
-                        });
-                        renderReviewView(finalPlan, taskTitleMap);
-                    } else if (jobData.status === 'ERROR') {
-                        if (unsubscribe) unsubscribe();
-                        throw new Error(jobData.error || "El agente de IA encontró un error desconocido.");
-                    }
-                });
-
-                modalElement.addEventListener('close-modal', () => {
-                    if (unsubscribe) unsubscribe();
-                }, { once: true });
-
-            } catch (error) {
-                console.error("Error starting or monitoring AI agent job:", error);
-                showToast(error.message || 'Ocurrió un error al contactar al Asistente IA.', 'error');
-                if (unsubscribe) unsubscribe();
-                renderPromptView(userPrompt);
-            }
-        })();
+        } catch (error) {
+            console.error("Error starting AI job:", error);
+            const loadingBubble = document.getElementById('ai-loading-bubble');
+            loadingBubble?.remove();
+            addMessage('ai', `Hubo un error al iniciar el proceso: ${error.message}`, 'text');
+            sendBtn.disabled = false;
+        }
     };
 
-    // --- Step 1: Prompt View ---
-    const renderPromptView = (promptText = '') => {
-        viewContainer.innerHTML = getAIAssistantPromptViewHTML();
-        lucide.createIcons();
+    chatForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const userPrompt = chatInput.value.trim();
+        if (userPrompt) {
+            startJob(userPrompt);
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+        }
+    });
 
-        const promptTextarea = viewContainer.querySelector('#ai-assistant-prompt-input');
-        promptTextarea.value = promptText;
-        promptTextarea.focus();
+    chatInput.addEventListener('input', () => {
+        chatInput.style.height = 'auto';
+        chatInput.style.height = `${chatInput.scrollHeight}px`;
+    });
 
-        viewContainer.querySelector('[data-action="close"]').addEventListener('click', closeModal);
+    modalElement.querySelector('[data-action="close"]').addEventListener('click', closeModal);
 
-        const generateBtn = viewContainer.querySelector('#ai-generate-plan-btn');
-        generateBtn.addEventListener('click', () => {
-            const userPrompt = promptTextarea.value.trim();
-            if (!userPrompt) {
-                showToast('Por favor, describe tu petición al asistente.', 'warning');
-                return;
-            }
-            renderLoadingView(userPrompt);
-        });
-
-        viewContainer.addEventListener('click', (e) => {
-            const templateButton = e.target.closest('[data-action="ai-template"]');
-            if (templateButton) {
-                const templateId = templateButton.dataset.templateId;
-                if (templateId === 'new-amfe-process') {
-                    promptTextarea.value = 'Iniciar un nuevo proceso de AMFE para...';
-                    promptTextarea.focus();
-                    promptTextarea.setSelectionRange(promptTextarea.value.length, promptTextarea.value.length);
-                }
-            }
-        });
-    };
-
-    // Initial render
-    renderPromptView();
+    // Initial greeting from AI
+    addMessage('ai', 'Hola, soy tu asistente de IA. ¿Cómo puedo ayudarte a organizar tus tareas hoy?');
 }
