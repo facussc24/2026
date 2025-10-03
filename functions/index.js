@@ -680,8 +680,13 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                             const { task_id: complete_task_id } = tool_code.parameters;
                             const taskToComplete = tasks.find(t => t.docId === complete_task_id);
                             if (taskToComplete) {
-                                executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates: { status: 'done' }, originalTitle: taskToComplete.title });
-                                toolResult = `OK. Task "${taskToComplete.title}" marked as complete.`;
+                                const updates = {
+                                    status: 'done',
+                                    isArchived: true,
+                                    completedAt: new Date().toISOString()
+                                };
+                                executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates, originalTitle: taskToComplete.title });
+                                toolResult = `OK. Task "${taskToComplete.title}" marked as complete and archived.`;
                             } else {
                                 toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
                             }
