@@ -9,15 +9,29 @@ jest.mock('@google-cloud/vertexai', () => ({
 }));
 
 jest.mock('firebase-admin', () => {
+    const mockBatch = {
+        set: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        commit: jest.fn().mockResolvedValue({ success: true }),
+    };
+
     const firestoreInstance = {
         runTransaction: jest.fn(),
         collection: jest.fn(() => ({
             doc: jest.fn((docId) => ({
-                id: docId,
-                path: `mockCollection/${docId}`
+                id: docId || `mock-doc-${Math.random()}`,
+                path: `mockCollection/${docId}`,
+                update: jest.fn().mockResolvedValue(true),
+                set: jest.fn().mockResolvedValue(true),
+            })),
+            where: jest.fn(() => ({
+                get: jest.fn().mockResolvedValue({ docs: [] })
             }))
-        }))
+        })),
+        batch: () => mockBatch, // Add batch mock here
     };
+
     const firestore = jest.fn(() => firestoreInstance);
     firestore.FieldValue = {
         arrayUnion: (...args) => ({ _type: 'arrayUnion', values: args }),
@@ -111,6 +125,7 @@ describe('aiAgentJobRunner', () => {
             data: () => ({
                 userPrompt,
                 tasks,
+                allUsers: [],
                 currentDate,
                 conversationHistory: [],
                 executionPlan: [],

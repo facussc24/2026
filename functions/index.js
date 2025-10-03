@@ -502,37 +502,32 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
              * - Strict output format: Enforces JSON output with "thought" (in Spanish) and "tool_code".
              */
             const systemPrompt = `
-                You are an autonomous project management agent. Your goal is to fulfill the user's request by thinking step-by-step (in Spanish) and using tools.
+                You are an autonomous project management agent. Your primary goal is to help users manage their tasks by using the provided tools. All your reasoning ('thought') **MUST** be in Spanish.
 
-                **Core Directives:**
-                1.  **Analyze User Intent & History:** First, review the entire 'conversationHistory' to understand the full context. Is the user's latest prompt a question, a new command, or a follow-up command that refers to a previous action?
-                2.  **Date and Time Context:** The user will often refer to "hoy" (today). You **MUST** interpret this as '"plannedDate": "${currentDate}"'. Use 'plannedDate' for scheduling unless the user explicitly mentions a "fecha de vencimiento" (due date), in which case you should use 'dueDate'.
-                3.  **Handle Ambiguity (MANDATORY):** If a user's command is ambiguous (e.g., "complete today's task" but 'find_tasks' with '{"plannedDate": "${currentDate}"}' returns multiple tasks), you **MUST** ask for clarification using the 'answer_question' tool.
-                4.  **If a Task is NOT Found:** If you use 'find_tasks' and it returns an error or no results, you **MUST** inform the user by using the 'answer_question' tool (e.g., "No encontré una tarea con ese nombre."). Do not proceed with other tools.
-                5.  **If it's a Question:** If the prompt is a question (e.g., starts with "¿Qué?", "¿Cuántos?"), find the necessary information using tools like 'find_tasks', then use the 'answer_question' tool to provide a direct, final answer. Your last thought before answering MUST be "Respuesta: [texto de la respuesta]".
-                6.  **If it's a Command (New or Follow-up):** Proceed with the project management workflow below. Always think in Spanish.
+                **Critical Rules:**
+                1.  **Always Find First:** Before modifying any task (update, complete, delete), you **MUST** use the \`find_tasks\` tool to get its ID.
+                2.  **Handle Ambiguity:** If \`find_tasks\` returns multiple items for a vague request (e.g., "the task"), you **MUST** ask for clarification using \`answer_question\`. Do not guess.
+                3.  **Handle Not Found:** If \`find_tasks\` returns no results, you **MUST** inform the user with \`answer_question\`. Do not create a new task unless explicitly asked.
+                4.  **Answer Questions Directly:** For questions (who, what, when), use tools to gather info, then provide a final answer with the \`answer_question\` tool.
+                5.  **Use Today's Date:** "Hoy" or "today" always means \`plannedDate: "${currentDate}"\`.
+                6.  **Summarize Before Finishing:** You **MUST** call \`review_and_summarize_plan\` as the very last step before calling \`finish\`. The summary must be a simple bulleted list (*).
 
-                **Mandatory Workflow for Modifying Existing Tasks:**
-                1.  **Find:** When the user asks to modify an existing task (e.g., "complete the report task"), you **MUST** first use the 'find_tasks' tool to locate it by its title. Example: '{"filter": {"title": "report"}}'.
-                2.  **Confirm or Clarify:**
-                    *   If 'find_tasks' returns one task, proceed to the next step.
-                    *   If it returns multiple tasks, ask the user to clarify using 'answer_question'.
-                    *   If it returns no tasks, inform the user using 'answer_question'.
-                3.  **Act:** Once you have a single task ID from the 'foundTasksContext', use that ID for the subsequent 'update_task' or 'complete_task' action.
-                4.  **Summarize & Finish:** Before using "finish", you MUST use "review_and_summarize_plan". The summary **MUST** be a simple bulleted list (using '*') of the actions taken.
-
-                **Context:**
+                **Context Data:**
                 - Today's Date: ${currentDate}
-                - Existing Tasks (Initial View): ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate})), null, 2)}
-                - Found Tasks (Short-term memory): ${JSON.stringify(foundTasksContext, null, 2)}
-                - Available Users for Assignment: ${JSON.stringify(allUsers, null, 2)}
-                - Company Glossary: AMFE implies a multi-step process (analysis, team, docs, review, implementation).
+                - Existing Tasks: ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate})))}
+                - Found Tasks (from your \`find_tasks\` tool): ${JSON.stringify(foundTasksContext)}
+                - Available Users for assignment: ${JSON.stringify(allUsers.map(u => u.email))}
 
                 **Available Tools:**
                 ${JSON.stringify(toolDefinitions, null, 2)}
 
-                **Output Format:**
-                Respond with a single, valid JSON object: { "thought": "...", "tool_code": { "tool_id": "...", "parameters": {...} } }
+                **Your Response MUST be a single, valid JSON object following this exact format:**
+                \`\`\`json
+                {
+                    "thought": "My reasoning in Spanish on what to do next.",
+                    "tool_code": { "tool_id": "tool_name", "parameters": {"param": "value"} }
+                }
+                \`\`\`
             `;
 
             if (conversationHistory.length === 0) {
@@ -752,7 +747,6 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
 
             let finalThoughtProcessDisplay;
             if (summary) {
-                // If a summary exists, check if it came from an answer or a plan summary.
                 const lastTool = thinkingSteps[thinkingSteps.length - 1]?.tool_code;
                 if (lastTool === 'answer_question') {
                     finalThoughtProcessDisplay = `### Respuesta de la IA:\n\n${summary}`;
@@ -763,6 +757,15 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 finalThoughtProcessDisplay = `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
             }
 
+            // --- Plan Execution ---
+            // If a plan was generated (and it's not just an answer), execute it.
+            if (executionPlan.length > 0) {
+                const db = admin.firestore();
+                // We pass the creator's UID and the current job ID for execution and progress tracking.
+                await _executePlan(db, executionPlan, jobData.creatorUid, context.params.jobId);
+            }
+
+
             await jobRef.update({
                 status: 'COMPLETED',
                 thoughtProcess: finalThoughtProcessDisplay,
@@ -772,7 +775,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
             });
 
             // After a successful run, save the plan to the cache if it's not from there already.
-            if (jobData.requestHash) {
+            if (jobData.requestHash && executionPlan.length > 0) {
                 const db = admin.firestore();
                 const cacheRef = db.collection('ai_plan_cache').doc(jobData.requestHash);
                 await cacheRef.set({
@@ -793,10 +796,10 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
             }
 
         } catch (error) {
-            console.error("Error running AI agent job:", error);
+            console.error(`Error running AI agent job ${context.params.jobId}:`, error);
             await jobRef.update({
                 status: 'ERROR',
-                error: error.message,
+                error: `Agent job failed: ${error.message}`,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
         }
@@ -857,39 +860,21 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
 
 
 /**
- * Executes a multi-step plan generated by the AI assistant.
- * It uses a two-pass approach to handle dependencies with temporary IDs.
- * 1. First Pass: Creates all new tasks and maps their temporary IDs to real Firestore document IDs.
- * 2. Second Pass: Applies all updates (like dependencies) using the ID map to reference the correct documents.
+ * Internal helper function to execute a task modification plan.
+ * This is the core logic, extracted to be reusable by both the HTTPS callable function
+ * and the Firestore-triggered agent runner.
+ *
+ * @param {admin.firestore.Firestore} db The Firestore database instance.
+ * @param {Array<object>} plan The execution plan array.
+ * @param {string} creatorUid The UID of the user who initiated the action.
+ * @param {string|null} jobId The optional job ID for progress tracking.
+ * @returns {Promise<{success: boolean, message: string}>}
  */
-// Helper function to create the initial progress document for a plan execution
-const createExecutionProgressDocument = async (db, jobId, plan) => {
-    const progressRef = db.collection('plan_executions').doc(jobId);
-    const progressSteps = plan.map((action, index) => ({
-        id: index,
-        description: `Executing: ${action.action} on ${action.originalTitle || action.docId || ''}`,
-        status: 'PENDING'
-    }));
-
-    await progressRef.set({
-        status: 'RUNNING',
-        steps: progressSteps,
-        startedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    return progressRef;
-};
-
-exports.executeTaskModificationPlan = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
-
-    const { plan, jobId } = data; // Expect an optional jobId
+const _executePlan = async (db, plan, creatorUid, jobId = null) => {
     if (!plan || !Array.isArray(plan)) {
-        throw new functions.https.HttpsError("invalid-argument", "The 'plan' must be an array of actions.");
+        throw new Error("The 'plan' must be an array of actions.");
     }
 
-    const db = admin.firestore();
     const batch = db.batch();
     const tempIdToRealIdMap = new Map();
     let progressRef = null;
@@ -917,13 +902,13 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
 
     const updateProgress = async (index, status, error = null) => {
         if (!progressRef) return;
-        const updatePayload = {
-            [`steps.${index}.status`]: status
-        };
+        // This is a simplified update for internal execution.
+        // For real-time UI, a more robust update mechanism (like updating the array in place) is needed.
+        // However, for backend-only execution, this is sufficient.
+        progressSteps[index].status = status;
         if (error) {
-            updatePayload[`steps.${index}.error`] = error;
+            progressSteps[index].error = error;
         }
-        await progressRef.update(updatePayload);
     };
 
     try {
@@ -952,7 +937,7 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
                 const newTaskRef = db.collection('tareas').doc();
                 const taskData = {
                     ...action.task,
-                    creatorUid: context.auth.uid,
+                    creatorUid: creatorUid, // Use the provided creatorUid
                     createdAt: new Date(),
                     status: 'todo'
                 };
@@ -962,7 +947,7 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
                     if (assigneeUid) {
                         taskData.assigneeUid = assigneeUid;
                     }
-                    delete taskData.assigneeEmail; // Clean up property
+                    delete taskData.assigneeEmail;
                 }
 
                 batch.set(newTaskRef, taskData);
@@ -977,14 +962,14 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
             if (action.action === 'UPDATE') {
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
-                const resolvedUpdates = {...action.updates}; // Make a copy to modify
+                const resolvedUpdates = {...action.updates};
 
                 if (resolvedUpdates.assigneeEmail) {
                     const assigneeUid = emailToUidCache.get(resolvedUpdates.assigneeEmail);
                     if (assigneeUid) {
                         resolvedUpdates.assigneeUid = assigneeUid;
                     }
-                    delete resolvedUpdates.assigneeEmail; // Clean up property
+                    delete resolvedUpdates.assigneeEmail;
                 }
 
                 const finalUpdates = {};
@@ -1011,6 +996,7 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
         if (progressRef) {
             await progressRef.update({
                 status: 'COMPLETED',
+                steps: progressSteps,
                 finishedAt: admin.firestore.FieldValue.serverTimestamp()
             });
         }
@@ -1023,9 +1009,33 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
             await progressRef.update({
                 status: 'ERROR',
                 error: error.message,
+                steps: progressSteps,
                 finishedAt: admin.firestore.FieldValue.serverTimestamp()
             });
         }
+        // Re-throw the error to be caught by the calling function
+        throw error;
+    }
+};
+
+
+/**
+ * Executes a multi-step plan generated by the AI assistant.
+ * This is an HTTPS callable function that acts as a wrapper around the core `_executePlan` logic.
+ */
+exports.executeTaskModificationPlan = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+    }
+
+    const { plan, jobId } = data;
+    const db = admin.firestore();
+
+    try {
+        return await _executePlan(db, plan, context.auth.uid, jobId);
+    } catch (error) {
+        // The error is already logged by _executePlan.
+        // We just need to throw the appropriate HttpsError.
         throw new functions.https.HttpsError("internal", "Ocurrió un error al ejecutar el plan.", error.message);
     }
 });
