@@ -23,6 +23,7 @@ let clearDataOnly;
 let clearOtherUsers;
 
 let weeklyTasksCache = [];
+let isCacheValid = false;
 let columnTasksMap = new Map();
 
 // --- 2. UI RENDERING ---
@@ -291,6 +292,37 @@ function renderTaskColumn(title, tasks, attributes, isToday = false, taskCount =
         </div>`;
 }
 
+function renderLoadingSkeletons() {
+    const weeklyContainer = document.getElementById('weekly-tasks-container');
+    const overdueContainer = document.querySelector('#overdue-tasks-container .task-list');
+    const unscheduledContainer = document.querySelector('#unscheduled-tasks-container .task-list');
+    const blockedContainer = document.querySelector('#blocked-tasks-container .task-list');
+
+    if (!weeklyContainer || !overdueContainer || !unscheduledContainer || !blockedContainer) return;
+
+    const skeletonDayColumn = `
+        <div class="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 animate-pulse">
+            <div class="h-6 bg-slate-200 dark:bg-slate-700 rounded w-3/4 mx-auto mb-4"></div>
+            <div class="space-y-2">
+                <div class="h-20 bg-slate-200 dark:bg-slate-700 rounded-md"></div>
+                <div class="h-20 bg-slate-200 dark:bg-slate-700 rounded-md"></div>
+                <div class="h-20 bg-slate-200 dark:bg-slate-700 rounded-md"></div>
+            </div>
+        </div>`;
+
+    const skeletonSideColumn = `
+        <div class="space-y-2">
+            <div class="h-16 bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"></div>
+            <div class="h-16 bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"></div>
+            <div class="h-16 bg-slate-200 dark:bg-slate-700 rounded-md animate-pulse"></div>
+        </div>`;
+
+    weeklyContainer.innerHTML = Array(7).fill(skeletonDayColumn).join('');
+    overdueContainer.innerHTML = skeletonSideColumn;
+    unscheduledContainer.innerHTML = skeletonSideColumn;
+    blockedContainer.innerHTML = skeletonSideColumn;
+}
+
 function initWeeklyTasksSortable() {
     const taskLists = document.querySelectorAll('.task-list');
     if (taskLists.length === 0) return;
@@ -325,12 +357,7 @@ function initWeeklyTasksSortable() {
                     return false; // Disallow the move
                 }
 
-                // Rule 3: Allow dragging from "Overdue" to other valid columns (except "Blocked").
-                if (fromColumnType === 'overdue' && toColumnType !== 'blocked') {
-                    return true;
-                }
-
-                return true; // Allow all other moves
+                return true; // Allow all other moves by default
             },
             onStart: () => {
                 document.querySelectorAll('.task-list').forEach(el => {
@@ -347,6 +374,9 @@ function initWeeklyTasksSortable() {
                 const fromColumnType = evt.from.dataset.columnType;
                 const newColumn = evt.to;
                 const columnType = newColumn.dataset.columnType;
+
+                // Invalidate cache on any move attempt to ensure data consistency
+                isCacheValid = false;
 
                 // Final check: Do not update if the task was from the blocked column
                 if (fromColumnType === 'blocked' && evt.from !== evt.to) {
@@ -376,10 +406,11 @@ function initWeeklyTasksSortable() {
                         plannedDate: newDate
                     });
                     showToast('Fecha de tarea planificada actualizada.', 'success');
-                    refreshWeeklyTasksView();
                 } catch (error) {
                     console.error("Error updating task plannedDate:", error);
                     showToast('Error al actualizar la tarea.', 'error');
+                } finally {
+                    // Always refresh the view to reflect the change or revert on error
                     refreshWeeklyTasksView();
                 }
             }
@@ -398,26 +429,44 @@ async function fetchKpiData() {
 async function fetchWeeklyTasks() {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     const user = appState.currentUser;
-    // Corrected Query: Fetch all relevant tasks and filter on the client.
-    // This avoids the invalid compound inequality query.
-    const q = query(tasksRef, or(
-        where('isPublic', '==', true),
-        where('creatorUid', '==', user.uid),
-        where('assigneeUid', '==', user.uid)
-    ));
 
     try {
-        const querySnapshot = await getDocs(q);
-        // Filter for pending tasks on the client side.
-        return querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })).filter(task => task.status !== 'done');
+        // Create three separate queries
+        const publicTasksQuery = query(tasksRef, where('isPublic', '==', true));
+        const createdTasksQuery = query(tasksRef, where('creatorUid', '==', user.uid));
+        const assignedTasksQuery = query(tasksRef, where('assigneeUid', '==', user.uid));
+
+        // Fetch all queries concurrently
+        const [publicTasksSnap, createdTasksSnap, assignedTasksSnap] = await Promise.all([
+            getDocs(publicTasksQuery),
+            getDocs(createdTasksQuery),
+            getDocs(assignedTasksQuery)
+        ]);
+
+        // Merge and deduplicate results
+        const tasksMap = new Map();
+        const processSnapshot = (snapshot) => {
+            snapshot.forEach(doc => {
+                const task = { ...doc.data(), docId: doc.id };
+                // Filter for pending tasks and add to map
+                if (task.status !== 'done') {
+                    tasksMap.set(doc.id, task);
+                }
+            });
+        };
+
+        processSnapshot(publicTasksSnap);
+        processSnapshot(createdTasksSnap);
+        processSnapshot(assignedTasksSnap);
+
+        return Array.from(tasksMap.values());
+
     } catch (error) {
-        console.error("Error fetching weekly tasks:", error);
+        console.error("Error fetching weekly tasks with optimized query:", error);
+        // The 'failed-precondition' error is less likely with these simpler queries,
+        // but it's good practice to keep the error handling.
         if (error.code === 'failed-precondition') {
-            showToast('Se necesita un índice de base de datos para una consulta eficiente. Revise la consola.', 'error', 5000);
-            // Fallback to a potentially less performant but valid query if the index is missing.
-            const fallbackQuery = query(tasksRef, where('assigneeUid', '==', user.uid));
-            const fallbackSnapshot = await getDocs(fallbackQuery);
-            return fallbackSnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })).filter(task => task.status !== 'done');
+            showToast('Se necesita un índice de base de datos. Revise la consola.', 'error', 5000);
         } else {
             showToast('Error al cargar las tareas.', 'error');
         }
@@ -478,33 +527,58 @@ async function refreshWeeklyTasksView(direction = 'next') {
     const weekInfo = getWeekInfo(appState.weekOffset);
     const weekDisplay = document.getElementById('week-display');
     if (weekDisplay) weekDisplay.textContent = `Semana ${weekInfo.weekNumber} - ${weekInfo.monthName} ${weekInfo.year}`;
+
     const container = document.getElementById('weekly-tasks-container');
-    if (!container) return;
+    const overdueContainer = document.querySelector('#overdue-tasks-container .task-list');
+    const unscheduledContainer = document.querySelector('#unscheduled-tasks-container .task-list');
+    const blockedContainer = document.querySelector('#blocked-tasks-container .task-list');
+
+    if (!container || !overdueContainer || !unscheduledContainer || !blockedContainer) return;
+
+    const allContainers = [container, overdueContainer, unscheduledContainer, blockedContainer];
+
     const slideOutClass = direction === 'next' ? 'slide-out-left' : 'slide-out-right';
     const slideInClass = direction === 'next' ? 'slide-in-right' : 'slide-in-left';
-    container.classList.add(slideOutClass);
-    container.addEventListener('animationend', async function onAnimationEnd() {
-        container.removeEventListener('animationend', onAnimationEnd);
-        try {
-            const tasks = await fetchWeeklyTasks();
+
+    allContainers.forEach(c => c.classList.add(slideOutClass));
+
+    const animationPromise = new Promise(resolve => {
+        container.addEventListener('animationend', resolve, { once: true });
+    });
+
+    await animationPromise;
+
+    // Render loading skeletons immediately after the old content has animated out
+    renderLoadingSkeletons();
+
+    try {
+        let tasks;
+        if (isCacheValid) {
+            tasks = weeklyTasksCache;
+        } else {
+            tasks = await fetchWeeklyTasks();
             weeklyTasksCache = tasks;
-            renderWeeklyTasks(tasks);
-            const newContainer = document.getElementById('weekly-tasks-container');
-            if (newContainer) {
-                newContainer.classList.remove(slideOutClass);
-                newContainer.classList.add(slideInClass);
-                newContainer.addEventListener('animationend', () => newContainer.classList.remove(slideInClass), { once: true });
-            }
-        } catch (error) {
-            console.error("Error refreshing weekly tasks view:", error);
-            showToast('Error al actualizar la vista de tareas.', 'error');
-            container.classList.remove(slideOutClass, slideInClass);
+            isCacheValid = true;
         }
-    }, { once: true });
+        // The renderWeeklyTasks function will replace the skeletons with the actual content
+        renderWeeklyTasks(tasks);
+
+    } catch (error) {
+        console.error("Error refreshing weekly tasks view:", error);
+        showToast('Error al actualizar la vista de tareas.', 'error');
+    } finally {
+        // The slide-in animation will now apply to the newly rendered content (or skeletons if fetch fails)
+        allContainers.forEach(c => {
+            c.classList.remove(slideOutClass);
+            c.classList.add(slideInClass);
+            c.addEventListener('animationend', () => c.classList.remove(slideInClass), { once: true });
+        });
+    }
 }
 
 export async function runLandingPageLogic() {
     appState.weekOffset = 0;
+    isCacheValid = false; // Invalidate cache on initial load
     renderLandingPageHTML();
     try {
         const kpiData = await fetchKpiData();
@@ -519,6 +593,7 @@ export async function runLandingPageLogic() {
     // Listen for the custom event dispatched when the AI finishes its work
     document.addEventListener('ai-tasks-updated', () => {
         showToast('El planificador se está actualizando...', 'info');
+        isCacheValid = false;
         refreshWeeklyTasksView();
     });
 
@@ -545,6 +620,7 @@ export async function runLandingPageLogic() {
 
                         await completeAndArchiveTask(taskId);
                         showToast('Tarea completada y archivada.', 'success');
+                        isCacheValid = false; // Invalidate cache
 
                         // Wait for animation to finish before refreshing the data
                         setTimeout(() => {
@@ -571,6 +647,7 @@ export async function runLandingPageLogic() {
                     try {
                         await updateTaskBlockedStatus(taskId, isBlocked);
                         showToast(isBlocked ? 'Tarea bloqueada.' : 'Tarea desbloqueada.', 'success');
+                        isCacheValid = false; // Invalidate cache
                         refreshWeeklyTasksView();
                     } catch (error) {
                         console.error('Error updating task blocked status:', error);
