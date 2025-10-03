@@ -449,7 +449,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 },
                 {
                     id: 'find_tasks',
-                    description: 'Finds a list of tasks based on a property filter. Returns a JSON object containing a list of tasks, like `{\\"tasks\\": [{\\"id\\": \\"...\\", \\"title\\": \\"...\\"}]}`. You MUST parse this JSON to get the task IDs for other tools.',
+                    description: 'Finds tasks based on a property filter. Supports suffixes for advanced queries: `_lte` (less/equal), `_gte` (greater/equal), `_ne` (not equal). Example: `{"dueDate_lte": "2024-10-03", "status_ne": "done"}` finds all overdue, unfinished tasks. Returns a JSON object like `{\\"tasks\\": [...]}`.',
                     parameters: {
                         filter: 'object'
                     }
@@ -496,11 +496,11 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     *   **Summarize Before Finishing:** Before using "finish", you MUST use "review_and_summarize_plan" to provide a high-level summary of your plan in Spanish.
 
                 **Execution Cycle & Tool Interaction Example:**
-                1. **Thought:** Analyze the request. If you need to find tasks first, decide to use \`find_tasks\`.
-                2. **Action:** Call \`find_tasks\`. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "status": "todo" } } }\`
+                1. **Thought:** The user wants to find all overdue tasks that are not yet done. I will use the \`find_tasks\` tool with advanced filters. Today's date is ${currentDate}.
+                2. **Action:** Call \`find_tasks\` with `dueDate_lte` for "less than or equal to" today, and `status_ne` for "not equal to" done. Example: \`{ "tool_id": "find_tasks", "parameters": { "filter": { "dueDate_lte": "${currentDate}", "status_ne": "done" } } }\`
                 3. **Observation:** You will receive a JSON string like: \`{\\"tasks\\": [{\\"id\\": \\"id1\\", \\"title\\": \\"Task 1\\"}, {\\"id\\": \\"id2\\", \\"title\\": \\"Task 2\\"}]}\`.
-                4. **Thought:** You MUST parse this JSON in your head. Now that you have the IDs ("id1", "id2"), you can use them in another tool like \`bulk_update_tasks\`.
-                5. **Action:** Call the next tool with the extracted IDs. Example: \`{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { "priority": "high" } }, { "task_id": "id2", "updates": { "priority": "high" } } ] } }\`
+                4. **Thought:** I have the IDs of the overdue tasks. Now I will use \`bulk_update_tasks\` to reschedule them.
+                5. **Action:** Call the next tool with the extracted IDs. Example: \`{ "tool_id": "bulk_update_tasks", "parameters": { "updates": [ { "task_id": "id1", "updates": { "plannedDate": "..." } }, { "task_id": "id2", "updates": { "plannedDate": "..." } } ] } }\`
                 6. **Repeat:** Continue until the request is complete, then call "finish" or "answer_question".
 
                 **Context:**
@@ -660,28 +660,42 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                                 toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
                             }
                             break;
-                        case 'find_tasks':
+                        case 'find_tasks': {
                             const { filter } = tool_code.parameters;
                             const filterKeys = Object.keys(filter);
                             const foundTasks = tasks.filter(t => {
                                 return filterKeys.every(key => {
-                                    if (key === 'title') {
-                                        return t.title.toLowerCase().includes(filter[key].toLowerCase());
+                                    const filterValue = filter[key];
+                                    if (key.endsWith('_lte')) {
+                                        const field = key.replace('_lte', '');
+                                        return t[field] && t[field] <= filterValue;
                                     }
-                                    if (key === 'plannedDate' && filter[key] === null) {
+                                    if (key.endsWith('_gte')) {
+                                        const field = key.replace('_gte', '');
+                                        return t[field] && t[field] >= filterValue;
+                                    }
+                                    if (key.endsWith('_ne')) {
+                                        const field = key.replace('_ne', '');
+                                        return t[field] !== filterValue;
+                                    }
+                                    if (key === 'title') {
+                                        return t.title.toLowerCase().includes(filterValue.toLowerCase());
+                                    }
+                                    if (key === 'plannedDate' && filterValue === null) {
                                         return !t.plannedDate;
                                     }
-                                    return t[key] === filter[key];
+                                    return t[key] === filterValue;
                                 });
                             });
+
                             if (foundTasks.length > 0) {
-                                // Return a structured JSON object for the AI to parse reliably.
-                                const taskInfo = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate }));
+                                const taskInfo = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate }));
                                 toolResult = JSON.stringify({ tasks: taskInfo });
                             } else {
                                 toolResult = `Error: No tasks found for the given filter.`;
                             }
                             break;
+                        }
                         default:
                             toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
                     }
