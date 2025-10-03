@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 import { createVisorUI, updateStatus, updateSelectionUI, disableAnnotationFeatures } from './components/uiManager.js';
 import { initThreeScene, scene, camera, renderer, controls } from './components/sceneManager.js';
@@ -48,7 +49,7 @@ async function loadModelsFromFirebase() {
     }
 }
 
-async function loadModel(modelRef) {
+async function loadModel(modelRef, db) {
     console.log(`Loading model from Firebase: ${modelRef.name}`);
     if (currentCleanup) {
         currentCleanup();
@@ -76,7 +77,7 @@ async function loadModel(modelRef) {
     try {
         const url = await getDownloadURL(modelRef);
         currentCleanup = initThreeScene(url, onPointerDown);
-        initAnnotations(modelName, scene);
+        initAnnotations(modelName, scene, db);
     } catch (error) {
         console.error("Error getting download URL or initializing scene:", error);
         updateStatus(`Error al cargar el modelo ${modelName}.`, true);
@@ -85,6 +86,7 @@ async function loadModel(modelRef) {
 
 export async function runVisor3dLogic(app) {
     storage = getStorage(app);
+    const db = getFirestore(app);
     console.log("Running Visor3D logic with Firebase Storage direct access...");
 
     createVisorUI();
@@ -116,7 +118,7 @@ export async function runVisor3dLogic(app) {
                 }
                 button.classList.add('active');
                 activeModelButton = button;
-                loadModel(model.ref);
+                loadModel(model.ref, db);
             };
             buttonContainer.appendChild(button);
         });
