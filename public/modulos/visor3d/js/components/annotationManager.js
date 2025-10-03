@@ -4,14 +4,6 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 // No longer import from eventManager to break circular dependency
 
 let db;
-const getDb = () => {
-    if (!db) {
-        const app = getApp("visor3d-app");
-        db = getFirestore(app);
-    }
-    return db;
-};
-
 let currentModelName = null;
 let currentAnnotations = [];
 
@@ -19,8 +11,10 @@ let currentAnnotations = [];
  * Initializes the annotations for a given model.
  * @param {string} modelName - The name of the model.
  * @param {THREE.Scene} scene - The main Three.js scene.
+ * @param {Firestore} firestoreDb - The Firestore instance.
  */
-export async function initAnnotations(modelName, scene) {
+export async function initAnnotations(modelName, scene, firestoreDb) {
+    db = firestoreDb;
     currentModelName = modelName;
     currentAnnotations = await loadAnnotationsFromFirestore(modelName);
     currentAnnotations.forEach(annotation => {

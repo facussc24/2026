@@ -1,9 +1,0 @@
-============================= test session starts ==============================
-platform linux -- Python 3.12.11, pytest-8.4.2, pluggy-1.6.0
-rootdir: /app
-plugins: base-url-2.1.0, playwright-0.7.1
-collected 1 item
-
-jules-scratch/verification/verify_3d_viewer.py .                         [100%]
-
-============================== 1 passed in 10.03s ==============================
