@@ -274,5 +274,14 @@ service cloud.firestore {
     match /ai_plan_cache/{cacheId} {
       allow read, write: if request.auth != null;
     }
+
+    // --- PLAN EXECUTIONS ---
+    match /plan_executions/{jobId} {
+      // A user can read a plan execution document if they are the creator of the original AI job.
+      allow read: if request.auth != null &&
+                    get(/databases/$(database)/documents/ai_agent_jobs/$(jobId)).data.creatorUid == request.auth.uid;
+      // No other client-side operations are permitted.
+      allow create, update, delete: if false;
+    }
   }
 }
