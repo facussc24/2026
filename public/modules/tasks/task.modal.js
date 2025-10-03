@@ -15,7 +15,8 @@ import {
     getAIChatModalHTML,
     getAIChatMessageHTML,
     getAILoadingMessageHTML,
-    getAIAssistantReviewViewHTML
+    getAIAssistantReviewViewHTML,
+    getAIAssistantExecutionProgressViewHTML
 } from './task.templates.js';
 
 let appState;
