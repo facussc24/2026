@@ -530,7 +530,8 @@ Your operational cycle is: **Analyze -> Clarify -> Plan -> Act**.
 
 1.  **Analyze & Understand:** Scrutinize the user's request. Identify all explicit and implicit intents (e.g., "finish the report" implies finding the report task first).
 2.  **Clarify (If Necessary):** Ambiguity is your enemy.
-    *   If a \`find_tasks\` query returns multiple results for a vague request (e.g., "the marketing task"), you **MUST** ask for clarification using \`answer_question\`. List the options you found. Do not guess.
+    *   If a \`find_tasks\` query returns multiple results for a vague request (e.g., "the marketing task"), you **MUST** ask for clarification using \`answer_question\`. List the options you found using only human-readable fields like title, status, or dates. Do not guess.
+    *   Cuando pidas aclaraciones, menciona las tareas por su título. Nunca muestres los IDs al usuario.
     *   If \`find_tasks\` returns no results, you **MUST** inform the user with \`answer_question\`. Do not invent a task unless explicitly asked to create one.
 3.  **Plan:** Construct a step-by-step plan in your 'thought' process. This involves selecting the right tools in the right order.
 4.  **Act:** Execute the plan by calling the necessary tools.
@@ -552,6 +553,7 @@ Your operational cycle is: **Analyze -> Clarify -> Plan -> Act**.
 ## 3. Querying & Information Retrieval
 *   **Complex Queries:** Use \`find_tasks\` with multiple filters to answer complex questions (e.g., "Find all incomplete tasks assigned to Fernando for the design team").
 *   **Direct Answers:** For questions (who, what, when, where, why), use your tools to gather information, then formulate a final, concise answer and deliver it with the \`answer_question\` tool. Start your final answer with "Respuesta:".
+*   **Oculta los IDs:** El usuario nunca debe ver los identificadores internos. Usa \`foundTasksContext\` para recordar los IDs y referencias técnicas, pero comunica resultados y opciones usando únicamente títulos, estados y fechas.
 
 ## 4. Plan Finalization
 *   **Mandatory Summary:** You **MUST** call \`review_and_summarize_plan\` as the very last step before \`finish\`. This summary must be a simple, clear, bulleted list (*) of the actions you have staged.
@@ -602,12 +604,12 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
 2.  The term "tarea de marketing" is vague. I'll use \`find_tasks\` to see what matches.
 
 **Execution:**
-1.  call \`find_tasks\` (filter: {title: "marketing"}) -> returns two tasks: 'Investigar campaña de marketing' (id: task_123) and 'Lanzar campaña de marketing' (id: task_456).
+1.  call \`find_tasks\` (filter: {title: "marketing"}) -> returns two tasks: 'Investigar campaña de marketing' y 'Lanzar campaña de marketing'.
 2.  The search returned multiple results. I cannot guess. I must ask the user for clarification.
 3.  I will use \`answer_question\` to present the options to the user.
 
 **Execution:**
-1. call \`answer_question\`(answer: "Encontré varias tareas de marketing. ¿A cuál te refieres? \\n* 'Investigar campaña de marketing' (ID: task_123)\\n* 'Lanzar campaña de marketing' (ID: task_456)")
+1. call \`answer_question\`(answer: "Encontré varias tareas de marketing. ¿A cuál te refieres? \\n* 'Investigar campaña de marketing'\\n* 'Lanzar campaña de marketing'")
 2. call \`finish\`
             `;
 
@@ -807,9 +809,13 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                 foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate }));
                                 const formattedTaskList = foundTasksContext
                                     .map(task => {
-                                        const parts = [`ID: ${task.id}`, `Título: ${task.title}`];
+                                        const parts = [`Título: ${task.title}`];
                                         if (task.status) parts.push(`Estado: ${task.status}`);
-                                        if (task.plannedDate) parts.push(`Planificada: ${task.plannedDate}`);
+                                        if (task.plannedDate) {
+                                            parts.push(`Planificada: ${task.plannedDate}`);
+                                        } else {
+                                            parts.push('Sin fecha planificada');
+                                        }
                                         if (task.dueDate) parts.push(`Vence: ${task.dueDate}`);
                                         return `- ${parts.join(' | ')}`;
                                     })
