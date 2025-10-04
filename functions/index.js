@@ -74,6 +74,94 @@ const normalizePlannedDate = (plannedDate, timeZone = DEFAULT_AI_TIME_ZONE) => {
     };
 };
 
+const SPANISH_MONTHS = {
+    'enero': 1,
+    'febrero': 2,
+    'marzo': 3,
+    'abril': 4,
+    'mayo': 5,
+    'junio': 6,
+    'julio': 7,
+    'agosto': 8,
+    'septiembre': 9,
+    'setiembre': 9,
+    'octubre': 10,
+    'noviembre': 11,
+    'diciembre': 12,
+};
+
+const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI_TIME_ZONE, baseDate = new Date() } = {}) => {
+    if (!userPrompt || typeof userPrompt !== 'string') {
+        return [];
+    }
+
+    const results = [];
+    const seenIsoDates = new Set();
+    const normalizedPrompt = userPrompt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const referenceDateString = getCurrentDateForUserTZ({ date: baseDate, timeZone });
+    const [referenceYear, referenceMonth, referenceDay] = referenceDateString.split('-').map(Number);
+    const referenceDateUtc = new Date(Date.UTC(referenceYear, referenceMonth - 1, referenceDay, 12));
+
+    const formatCandidateDate = (year, month, day, originalText) => {
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
+            return;
+        }
+
+        let candidate = new Date(Date.UTC(year, month - 1, day, 12));
+        if (Number.isNaN(candidate.getTime())) {
+            return;
+        }
+
+        if (candidate < referenceDateUtc) {
+            const nextYearCandidate = new Date(Date.UTC(year + 1, month - 1, day, 12));
+            if (!Number.isNaN(nextYearCandidate.getTime())) {
+                candidate = nextYearCandidate;
+                year += 1;
+            }
+        }
+
+        const isoFormatter = new Intl.DateTimeFormat('en-CA', { timeZone });
+        const isoDate = isoFormatter.format(candidate);
+        if (seenIsoDates.has(isoDate)) {
+            return;
+        }
+
+        seenIsoDates.add(isoDate);
+        results.push({
+            originalText: originalText.trim(),
+            isoDate,
+            year,
+            month,
+            day,
+        });
+    };
+
+    const numericDateRegex = /(\d{1,2})[\/-](\d{1,2})(?!\d)/g;
+    let numericMatch;
+    while ((numericMatch = numericDateRegex.exec(userPrompt)) !== null) {
+        const [, dayRaw, monthRaw] = numericMatch;
+        const day = Number(dayRaw);
+        const month = Number(monthRaw);
+        formatCandidateDate(referenceYear, month, day, numericMatch[0]);
+    }
+
+    const textualDateRegex = /(\d{1,2})\s+de\s+([a-z\u00f1]+)/gi;
+    let textualMatch;
+    while ((textualMatch = textualDateRegex.exec(normalizedPrompt)) !== null) {
+        const [, dayRaw, monthText] = textualMatch;
+        const day = Number(dayRaw);
+        const month = SPANISH_MONTHS[monthText];
+        if (!month) {
+            continue;
+        }
+        const originalTextStart = textualMatch.index;
+        const originalText = userPrompt.substring(originalTextStart, originalTextStart + textualMatch[0].length);
+        formatCandidateDate(referenceYear, month, day, originalText);
+    }
+
+    return results;
+};
+
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
@@ -405,6 +493,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
 
     const db = admin.firestore();
     const userTimeZone = DEFAULT_AI_TIME_ZONE;
+    const explicitDatesFromUser = extractExplicitDatesFromPrompt(userPrompt, { timeZone: userTimeZone });
     const conversationsRef = db.collection('ai_conversations');
     let conversationHistory = [];
 
@@ -463,6 +552,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
             currentDate: getCurrentDateForUserTZ({ timeZone: userTimeZone }),
             timeZone: userTimeZone,
             sanitySuggestions,
+            explicitDatesFromUser,
         };
         await jobRef.set(jobData);
         return { jobId: jobRef.id, conversationId: conversationId, isFromCache: true };
@@ -486,6 +576,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         conversationId: conversationId, // Pass conversation ID along
         foundTasksContext: [], // Initialize the new memory field
         sanitySuggestions: [],
+        explicitDatesFromUser,
     };
 
     await jobRef.set(jobData);
@@ -499,12 +590,27 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         const jobRef = snap.ref;
         const jobData = snap.data();
         const currentJobId = context?.params?.jobId;
-        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext, timeZone, sanitySuggestions = [] } = jobData;
+        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext, timeZone, sanitySuggestions = [], explicitDatesFromUser = [] } = jobData;
 
         const effectiveTimeZone = timeZone || DEFAULT_AI_TIME_ZONE;
         currentDate = currentDate || getCurrentDateForUserTZ({ timeZone: effectiveTimeZone });
 
         conversationHistory = Array.isArray(conversationHistory) ? conversationHistory : [];
+
+        const explicitDateQueue = Array.isArray(explicitDatesFromUser) ? [...explicitDatesFromUser] : [];
+        const explicitDateCorrections = [];
+        let hasExplicitDateCorrectionInSummary = false;
+
+        const consumeNextExplicitDate = () => {
+            if (!explicitDateQueue.length) {
+                return null;
+            }
+            const next = explicitDateQueue.shift();
+            if (!next || !next.isoDate) {
+                return null;
+            }
+            return next;
+        };
 
         try {
             await jobRef.update({ status: 'RUNNING' });
@@ -767,42 +873,105 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                     }
                                     return '* Realizar una acción desconocida.';
                                 });
+                                if (explicitDateCorrections.length > 0) {
+                                    const correctionPoints = explicitDateCorrections.map(correction => {
+                                        const taskTitle = correction.taskTitle || 'tarea';
+                                        const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
+                                        return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
+                                    });
+                                    if (correctionPoints.length > 0) {
+                                        summaryPoints.push(...correctionPoints);
+                                        hasExplicitDateCorrectionInSummary = true;
+                                    }
+                                }
                                 summary = summaryPoints.join('\n');
                             }
                             toolResult = `OK. Plan summarized accurately from execution plan.`;
                             break;
-                        case 'create_task':
+                        case 'create_task': {
                             const tempId = generateTemporaryTaskId(currentJobId);
                             const taskPayload = { ...tool_code.parameters };
                             const createTaskTitle = taskPayload.title || 'Tarea sin título';
+                            const modelPlannedDate = taskPayload.plannedDate;
 
-                            const {
-                                normalizedDate: normalizedCreateDate,
-                                wasAdjusted: createDateAdjusted,
-                                originalDate: createOriginalDate,
-                                originalWeekday: createOriginalWeekday,
-                                normalizedWeekday: createNormalizedWeekday,
-                            } = normalizePlannedDate(taskPayload.plannedDate, effectiveTimeZone);
+                            const normalizationResult = normalizePlannedDate(modelPlannedDate, effectiveTimeZone);
+                            let finalPlannedDate = modelPlannedDate;
+                            if (modelPlannedDate && normalizationResult.normalizedDate) {
+                                finalPlannedDate = normalizationResult.normalizedDate;
+                            }
 
-                            if (normalizedCreateDate) {
-                                taskPayload.plannedDate = normalizedCreateDate;
+                            let weekendAdjustment = null;
+                            let planEntryNotes = [];
+                            let explicitOverrideInfo = null;
+
+                            if (normalizationResult.wasAdjusted && normalizationResult.normalizedDate) {
+                                weekendAdjustment = {
+                                    from: normalizationResult.originalDate,
+                                    to: normalizationResult.normalizedDate,
+                                    fromWeekday: normalizationResult.originalWeekday,
+                                    toWeekday: normalizationResult.normalizedWeekday,
+                                    taskTitle: createTaskTitle,
+                                };
+                            }
+
+                            const explicitCandidate = consumeNextExplicitDate();
+                            if (explicitCandidate) {
+                                const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalPlannedDate;
+                                if (!modelPlannedDate || explicitCandidate.isoDate !== previousFinalDate) {
+                                    finalPlannedDate = explicitCandidate.isoDate;
+                                    explicitOverrideInfo = {
+                                        from: previousFinalDate || null,
+                                        to: explicitCandidate.isoDate,
+                                        originalText: explicitCandidate.originalText,
+                                        taskTitle: createTaskTitle,
+                                    };
+                                    weekendAdjustment = null;
+                                    const note = `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}". Se estableció ${explicitCandidate.isoDate}.`;
+                                    planEntryNotes.push(note);
+                                    sanitySuggestions.push(`Se corrigió la fecha de "${createTaskTitle}" a ${explicitCandidate.isoDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
+                                    explicitDateCorrections.push({
+                                        taskTitle: createTaskTitle,
+                                        from: explicitOverrideInfo.from,
+                                        to: explicitCandidate.isoDate,
+                                        originalText: explicitCandidate.originalText,
+                                        action: 'CREATE',
+                                    });
+                                }
+                            }
+
+                            if (weekendAdjustment) {
+                                planEntryNotes.push(`Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`);
+                                sanitySuggestions.push(`"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`);
+                            }
+
+                            if (finalPlannedDate) {
+                                taskPayload.plannedDate = finalPlannedDate;
                             }
 
                             const createPlanEntry = { action: "CREATE", docId: tempId, task: taskPayload };
 
-                            if (createDateAdjusted) {
-                                createPlanEntry.adjustments = {
-                                    plannedDate: {
-                                        from: createOriginalDate,
-                                        to: normalizedCreateDate,
-                                        fromWeekday: createOriginalWeekday,
-                                        toWeekday: createNormalizedWeekday,
-                                        taskTitle: createTaskTitle,
-                                    }
+                            if (weekendAdjustment || explicitOverrideInfo) {
+                                createPlanEntry.adjustments = {};
+                                if (weekendAdjustment) {
+                                    createPlanEntry.adjustments.plannedDate = weekendAdjustment;
+                                }
+                                if (explicitOverrideInfo) {
+                                    createPlanEntry.adjustments.explicitDateOverride = explicitOverrideInfo;
+                                }
+                            }
+
+                            if (explicitOverrideInfo) {
+                                createPlanEntry.metadata = {
+                                    ...(createPlanEntry.metadata || {}),
+                                    explicitDateOverride: {
+                                        isoDate: explicitOverrideInfo.to,
+                                        originalText: explicitOverrideInfo.originalText,
+                                    },
                                 };
-                                const adjustmentMessage = `Fecha planificada movida automáticamente de ${createOriginalWeekday} (${createOriginalDate}) a ${createNormalizedWeekday} (${normalizedCreateDate}) para evitar fines de semana.`;
-                                createPlanEntry.notes = [adjustmentMessage];
-                                sanitySuggestions.push(`"${createTaskTitle}" se reprogramó al ${createNormalizedWeekday} ${normalizedCreateDate} porque la fecha sugerida caía en fin de semana.`);
+                            }
+
+                            if (planEntryNotes.length > 0) {
+                                createPlanEntry.notes = planEntryNotes;
                             }
 
                             executionPlan.push(createPlanEntry);
@@ -814,6 +983,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             });
                             toolResult = `OK. Task created with temporary ID: ${tempId}.`;
                             break;
+                        }
                         case 'create_dependency':
                             const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
                             const dependentTaskContext = tasks.find(t => t.docId === dependent_task_id);
@@ -861,41 +1031,68 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                 toolResult = `Error: Task with ID "${task_id}" not found.`;
                             }
                             break;
-                        case 'update_task':
+                        case 'update_task': {
                             const { task_id: update_task_id, updates } = tool_code.parameters;
                             const taskToUpdate = tasks.find(t => t.docId === update_task_id);
                             if (taskToUpdate) {
                                 const updateTaskTitle = taskToUpdate.title || 'Tarea sin título';
                                 const updatePayload = { ...updates };
-                                let updateAdjustments = null;
+                                const planEntryNotes = [];
+                                let weekendAdjustment = null;
+                                let explicitOverrideInfo = null;
 
                                 if (Object.prototype.hasOwnProperty.call(updatePayload, 'plannedDate')) {
-                                    const {
-                                        normalizedDate: normalizedUpdateDate,
-                                        wasAdjusted: updateDateAdjusted,
-                                        originalDate: updateOriginalDate,
-                                        originalWeekday: updateOriginalWeekday,
-                                        normalizedWeekday: updateNormalizedWeekday,
-                                    } = normalizePlannedDate(updatePayload.plannedDate, effectiveTimeZone);
-
-                                    if (normalizedUpdateDate) {
-                                        updatePayload.plannedDate = normalizedUpdateDate;
+                                    const modelUpdateDate = updatePayload.plannedDate;
+                                    const normalizationResult = normalizePlannedDate(modelUpdateDate, effectiveTimeZone);
+                                    let finalUpdateDate = modelUpdateDate;
+                                    if (modelUpdateDate && normalizationResult.normalizedDate) {
+                                        finalUpdateDate = normalizationResult.normalizedDate;
                                     }
 
-                                    if (updateDateAdjusted) {
-                                        updateAdjustments = {
-                                            plannedDate: {
-                                                from: updateOriginalDate,
-                                                to: normalizedUpdateDate,
-                                                fromWeekday: updateOriginalWeekday,
-                                                toWeekday: updateNormalizedWeekday,
-                                                taskTitle: updateTaskTitle,
-                                            }
+                                    if (normalizationResult.wasAdjusted && normalizationResult.normalizedDate) {
+                                        weekendAdjustment = {
+                                            from: normalizationResult.originalDate,
+                                            to: normalizationResult.normalizedDate,
+                                            fromWeekday: normalizationResult.originalWeekday,
+                                            toWeekday: normalizationResult.normalizedWeekday,
+                                            taskTitle: updateTaskTitle,
                                         };
-                                        sanitySuggestions.push(`"${updateTaskTitle}" se reprogramó al ${updateNormalizedWeekday} ${normalizedUpdateDate} porque la fecha sugerida caía en fin de semana.`);
                                     }
 
-                                    taskToUpdate.plannedDate = updatePayload.plannedDate;
+                                    const explicitCandidate = consumeNextExplicitDate();
+                                    if (explicitCandidate) {
+                                        const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalUpdateDate;
+                                        if (!modelUpdateDate || explicitCandidate.isoDate !== previousFinalDate) {
+                                            finalUpdateDate = explicitCandidate.isoDate;
+                                            explicitOverrideInfo = {
+                                                from: previousFinalDate || null,
+                                                to: explicitCandidate.isoDate,
+                                                originalText: explicitCandidate.originalText,
+                                                taskTitle: updateTaskTitle,
+                                            };
+                                            weekendAdjustment = null;
+                                            const note = `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}". Se estableció ${explicitCandidate.isoDate}.`;
+                                            planEntryNotes.push(note);
+                                            sanitySuggestions.push(`Se corrigió la fecha de "${updateTaskTitle}" a ${explicitCandidate.isoDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
+                                            explicitDateCorrections.push({
+                                                taskTitle: updateTaskTitle,
+                                                from: explicitOverrideInfo.from,
+                                                to: explicitCandidate.isoDate,
+                                                originalText: explicitCandidate.originalText,
+                                                action: 'UPDATE',
+                                            });
+                                        }
+                                    }
+
+                                    if (weekendAdjustment) {
+                                        planEntryNotes.push(`Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`);
+                                        sanitySuggestions.push(`"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`);
+                                    }
+
+                                    if (finalUpdateDate) {
+                                        updatePayload.plannedDate = finalUpdateDate;
+                                        taskToUpdate.plannedDate = finalUpdateDate;
+                                    }
                                 }
 
                                 const updatePlanEntry = {
@@ -905,18 +1102,33 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                     updates: updatePayload
                                 };
 
-                                if (updateAdjustments) {
-                                    updatePlanEntry.adjustments = updateAdjustments;
-                                    const { plannedDate } = updateAdjustments;
-                                    updatePlanEntry.notes = [`Fecha planificada movida automáticamente de ${plannedDate.fromWeekday} (${plannedDate.from}) a ${plannedDate.toWeekday} (${plannedDate.to}) para evitar fines de semana.`];
+                                if (weekendAdjustment || explicitOverrideInfo) {
+                                    updatePlanEntry.adjustments = {};
+                                    if (weekendAdjustment) {
+                                        updatePlanEntry.adjustments.plannedDate = weekendAdjustment;
+                                    }
+                                    if (explicitOverrideInfo) {
+                                        updatePlanEntry.adjustments.explicitDateOverride = explicitOverrideInfo;
+                                    }
+                                }
+
+                                if (explicitOverrideInfo) {
+                                    updatePlanEntry.metadata = {
+                                        ...(updatePlanEntry.metadata || {}),
+                                        explicitDateOverride: {
+                                            isoDate: explicitOverrideInfo.to,
+                                            originalText: explicitOverrideInfo.originalText,
+                                        },
+                                    };
+                                }
+
+                                if (planEntryNotes.length > 0) {
+                                    updatePlanEntry.notes = planEntryNotes;
                                 }
 
                                 executionPlan.push(updatePlanEntry);
                                 if (Object.prototype.hasOwnProperty.call(updatePayload, 'title') && typeof updatePayload.title === 'string') {
                                     taskToUpdate.title = updatePayload.title;
-                                }
-                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'plannedDate')) {
-                                    taskToUpdate.plannedDate = updatePayload.plannedDate;
                                 }
                                 if (Object.prototype.hasOwnProperty.call(updatePayload, 'dependsOn')) {
                                     taskToUpdate.dependsOn = Array.isArray(updatePayload.dependsOn) ? [...updatePayload.dependsOn] : updatePayload.dependsOn;
@@ -932,6 +1144,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                 toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
                             }
                             break;
+                        }
                         case 'bulk_update_tasks':
                             const { updates: bulk_updates } = tool_code.parameters;
                             let updated_count = 0;
@@ -1063,6 +1276,18 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
             if (weekendAdjustmentMessages.length > 0) {
                 const bulletMessages = weekendAdjustmentMessages.map(message => `* ${message}`).join('\n');
                 summary = summary ? `${summary}\n${bulletMessages}` : bulletMessages;
+            }
+
+            if (explicitDateCorrections.length > 0 && !hasExplicitDateCorrectionInSummary) {
+                const correctionMessages = explicitDateCorrections.map(correction => {
+                    const taskTitle = correction.taskTitle || 'tarea';
+                    const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
+                    return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
+                }).join('\n');
+                if (correctionMessages) {
+                    summary = summary ? `${summary}\n${correctionMessages}` : correctionMessages;
+                    hasExplicitDateCorrectionInSummary = true;
+                }
             }
 
             const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
@@ -1268,6 +1493,12 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     status: 'todo'
                 };
 
+                const explicitOverride = action?.metadata?.explicitDateOverride;
+                const hasExplicitOverride = Boolean(explicitOverride?.isoDate);
+                if (hasExplicitOverride) {
+                    taskData.plannedDate = explicitOverride.isoDate;
+                }
+
                 if (taskData.assigneeEmail) {
                     const assigneeUid = emailToUidCache.get(taskData.assigneeEmail);
                     if (assigneeUid) {
@@ -1276,11 +1507,13 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     delete taskData.assigneeEmail;
                 }
 
-                if (taskData.plannedDate) {
+                if (taskData.plannedDate && !hasExplicitOverride) {
                     const { normalizedDate } = normalizePlannedDate(taskData.plannedDate);
                     if (normalizedDate) {
                         taskData.plannedDate = normalizedDate;
                     }
+                } else if (hasExplicitOverride) {
+                    taskData.plannedDate = explicitOverride.isoDate;
                 }
 
                 batch.set(newTaskRef, taskData);
@@ -1298,6 +1531,11 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
                 const resolvedUpdates = {...action.updates};
+                const explicitOverride = action?.metadata?.explicitDateOverride;
+                const hasExplicitOverride = Boolean(explicitOverride?.isoDate) && Object.prototype.hasOwnProperty.call(resolvedUpdates, 'plannedDate');
+                if (hasExplicitOverride) {
+                    resolvedUpdates.plannedDate = explicitOverride.isoDate;
+                }
 
                 if (resolvedUpdates.assigneeEmail) {
                     const assigneeUid = emailToUidCache.get(resolvedUpdates.assigneeEmail);
@@ -1307,11 +1545,13 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     delete resolvedUpdates.assigneeEmail;
                 }
 
-                if (resolvedUpdates.plannedDate) {
+                if (resolvedUpdates.plannedDate && !hasExplicitOverride) {
                     const { normalizedDate } = normalizePlannedDate(resolvedUpdates.plannedDate);
                     if (normalizedDate) {
                         resolvedUpdates.plannedDate = normalizedDate;
                     }
+                } else if (hasExplicitOverride) {
+                    resolvedUpdates.plannedDate = explicitOverride.isoDate;
                 }
 
                 const finalUpdates = {};
@@ -1535,4 +1775,5 @@ exports.getCurrentDateForUserTZ = getCurrentDateForUserTZ;
 
 if (process.env.NODE_ENV === 'test') {
     module.exports._executePlan = _executePlan;
+    module.exports.extractExplicitDatesFromPrompt = extractExplicitDatesFromPrompt;
 }
