@@ -12,7 +12,7 @@ jest.mock('firebase-admin', () => ({
   }),
 }));
 
-const { _executePlan } = require('../../../functions/index.js');
+const { _executePlan, extractExplicitDatesFromPrompt } = require('../../../functions/index.js');
 
 const createDbMock = ({ failOnUpdate = false } = {}) => {
   const progressDoc = {
@@ -141,5 +141,43 @@ describe('_executePlan progress status normalization', () => {
     expect(steps[0].status).toBe('completed');
     expect(steps[1].status).toBe('error');
     expect(steps[1].error).toBe('forced update failure');
+  });
+
+  it('applies explicit date overrides without additional normalization', async () => {
+    const { db, batch } = createDbMock();
+    const plan = [
+      {
+        action: 'CREATE',
+        docId: 'temp-1',
+        task: { title: 'Nueva tarea', plannedDate: '2025-10-05' },
+        metadata: {
+          explicitDateOverride: {
+            isoDate: '2025-10-03',
+            originalText: '3/10',
+          },
+        },
+      },
+    ];
+
+    await _executePlan(db, plan, 'creator-uid', 'job-789');
+
+    const setCall = batch.set.mock.calls[0];
+    expect(setCall[1].plannedDate).toBe('2025-10-03');
+  });
+});
+
+describe('extractExplicitDatesFromPrompt helper', () => {
+  it('parses numeric day/month expressions respecting the configured timezone', () => {
+    const baseDate = new Date('2025-09-10T12:00:00Z');
+    const results = extractExplicitDatesFromPrompt(
+      'Necesito que agendes esto para el viernes 3/10, por favor.',
+      { timeZone: 'America/Argentina/Buenos_Aires', baseDate }
+    );
+
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ isoDate: '2025-10-03', originalText: '3/10' }),
+      ])
+    );
   });
 });
