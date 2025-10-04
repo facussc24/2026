@@ -1126,8 +1126,28 @@ exports.executeTaskModificationPlan = functions.https.onCall(async (data, contex
     const db = admin.firestore();
 
     try {
-        return await _executePlan(db, plan, context.auth.uid, jobId);
+        const result = await _executePlan(db, plan, context.auth.uid, jobId);
+
+        if (jobId) {
+            const jobRef = db.collection('ai_agent_jobs').doc(jobId);
+            await jobRef.set({
+                status: 'COMPLETED',
+                awaitingUserConfirmation: false,
+                completedAt: admin.firestore.FieldValue.serverTimestamp(),
+                resultSummary: result?.message || 'Plan ejecutado con éxito.'
+            }, { merge: true });
+        }
+
+        return result;
     } catch (error) {
+        if (jobId) {
+            const jobRef = db.collection('ai_agent_jobs').doc(jobId);
+            await jobRef.set({
+                status: 'ERROR',
+                awaitingUserConfirmation: false,
+                error: error.message
+            }, { merge: true });
+        }
         // The error is already logged by _executePlan.
         // We just need to throw the appropriate HttpsError.
         throw new functions.https.HttpsError("internal", "Ocurrió un error al ejecutar el plan.", error.message);
