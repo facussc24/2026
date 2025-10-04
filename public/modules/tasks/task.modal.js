@@ -340,8 +340,10 @@ export function openAIAssistantModal() {
     const addMessage = (sender, content, type = 'text') => {
         const messageHTML = getAIChatMessageHTML(sender, content, type);
         messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
+        const messageElement = messagesContainer.lastElementChild;
         lucide.createIcons();
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        return messageElement;
     };
 
     const handleJobUpdate = (doc) => {
@@ -355,7 +357,31 @@ export function openAIAssistantModal() {
             if (jobData.summary) {
                 addMessage('ai', jobData.summary, 'text');
             } else if (jobData.executionPlan && jobData.executionPlan.length > 0) {
-                addMessage('ai', { plan: jobData, taskTitleMap: new Map() }, 'plan');
+                const planMessageElement = addMessage('ai', { plan: { ...jobData, jobId: doc.id }, taskTitleMap: new Map() }, 'plan');
+                const confirmButton = planMessageElement?.querySelector('#ai-confirm-plan-btn');
+                const planContainer = planMessageElement?.querySelector('[data-plan-container="true"]');
+                const planInput = planMessageElement?.querySelector('#ai-plan-json');
+
+                const planPayload = {
+                    jobId: doc.id,
+                    executionPlan: jobData.executionPlan || [],
+                    thoughtProcess: jobData.thoughtProcess || '',
+                    sanitySuggestions: jobData.sanitySuggestions || [],
+                    summary: jobData.summary || ''
+                };
+
+                if (confirmButton) {
+                    confirmButton.dataset.plan = JSON.stringify(planPayload);
+                }
+
+                if (planInput && confirmButton?.dataset.plan) {
+                    planInput.value = confirmButton.dataset.plan;
+                    planInput.dataset.jobId = doc.id;
+                }
+
+                if (planContainer) {
+                    planContainer.dataset.jobId = doc.id;
+                }
             } else {
                 addMessage('ai', "He terminado, pero no tengo un resumen que mostrar.", 'text');
             }
@@ -420,40 +446,173 @@ export function openAIAssistantModal() {
 
         if (action === 'close') {
             closeModal();
+        } else if (action === 'reject-ai-plan') {
+            e.preventDefault();
+            const planContainer = button.closest('[data-plan-container="true"]');
+            if (planContainer) {
+                planContainer.remove();
+            }
+            sendBtn.disabled = false;
+            chatInput.focus();
+            addMessage('ai', 'De acuerdo, cuéntame cómo quieres ajustar el plan o pide una nueva propuesta.');
         } else if (action === 'confirm-ai-plan') {
+            e.preventDefault();
+            const form = document.getElementById('ai-execution-plan-form');
+            if (!form) {
+                showToast('No se encontró el formulario del plan.', 'error');
+                return;
+            }
+
+            let planData;
+            try {
+                planData = JSON.parse(button.dataset.plan || form.querySelector('#ai-plan-json')?.value || '{}');
+            } catch (error) {
+                console.error('Error parsing plan data:', error);
+                showToast('No se pudo leer el plan de ejecución.', 'error');
+                return;
+            }
+
+            if (!planData?.jobId) {
+                showToast('Falta el identificador del trabajo para ejecutar el plan.', 'error');
+                return;
+            }
+
+            const rejectButton = form.closest('[data-plan-container="true"]')?.querySelector('#ai-reject-plan-btn');
+            if (rejectButton) {
+                rejectButton.disabled = true;
+            }
+
             button.disabled = true;
             button.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Ejecutando...';
             lucide.createIcons();
 
-            const planData = JSON.parse(button.dataset.plan);
+            const updatedExecutionPlan = [];
+            const executionPlanActions = Array.isArray(planData.executionPlan) ? planData.executionPlan : [];
+            const buildDescriptionFromAction = (action) => {
+                if (!action) return 'Acción del plan';
+                switch (action.action) {
+                    case 'CREATE':
+                        return `Crear tarea "${action.task?.title || 'Sin título'}"`;
+                    case 'UPDATE':
+                        return `Actualizar tarea "${action.originalTitle || action.docId || 'Sin título'}"`;
+                    case 'DELETE':
+                        return `Eliminar tarea "${action.originalTitle || action.docId || 'Sin título'}"`;
+                    default:
+                        return action.description || 'Acción del plan';
+                }
+            };
+
+            executionPlanActions.forEach((action, index) => {
+                const actionId = `action_${index}`;
+                const enabledInput = form.querySelector(`input[name="${actionId}_enabled"]`);
+                if (enabledInput && !enabledInput.checked) {
+                    return;
+                }
+
+                const clonedAction = JSON.parse(JSON.stringify(action));
+
+                if (clonedAction.action === 'CREATE') {
+                    const titleInput = form.querySelector(`#${actionId}_title`);
+                    const dueDateInput = form.querySelector(`#${actionId}_dueDate`);
+                    if (titleInput) {
+                        clonedAction.task = clonedAction.task || {};
+                        clonedAction.task.title = titleInput.value.trim();
+                    }
+                    if (dueDateInput) {
+                        clonedAction.task = clonedAction.task || {};
+                        clonedAction.task.dueDate = dueDateInput.value || null;
+                    }
+                }
+
+                if (clonedAction.action === 'UPDATE') {
+                    const docIdInput = form.querySelector(`input[name="${actionId}_docId"]`);
+                    if (docIdInput) {
+                        clonedAction.docId = docIdInput.value;
+                    }
+
+                    const updateFields = Array.from(form.querySelectorAll(`input[name^="${actionId}_update_field_"]`));
+                    const updates = {};
+                    updateFields.forEach(fieldInput => {
+                        const match = fieldInput.name.match(/_(\d+)$/);
+                        if (!match) return;
+                        const updateIndex = match[1];
+                        const fieldName = fieldInput.value;
+                        const valueInput = form.querySelector(`[name="${actionId}_update_value_${updateIndex}"]`);
+                        if (!valueInput) return;
+
+                        let value = valueInput.value;
+                        if (fieldName === 'dependsOn' || fieldName === 'blocks') {
+                            try {
+                                value = JSON.parse(value);
+                            } catch (error) {
+                                console.warn('No se pudo parsear la dependencia del plan:', error);
+                                value = [];
+                            }
+                        } else if (fieldName === 'blocked') {
+                            value = value === 'true' || value === true;
+                        } else if (fieldName === 'dueDate' || fieldName === 'plannedDate') {
+                            value = value || null;
+                        }
+                        updates[fieldName] = value;
+                    });
+
+                    clonedAction.updates = updates;
+                }
+
+                updatedExecutionPlan.push({
+                    ...clonedAction,
+                    description: buildDescriptionFromAction(clonedAction)
+                });
+            });
+
+            if (updatedExecutionPlan.length === 0) {
+                showToast('Debes seleccionar al menos una acción para ejecutar.', 'warning');
+                button.disabled = false;
+                button.innerHTML = '<i data-lucide="check-check" class="w-5 h-5"></i>Confirmar y Ejecutar';
+                if (rejectButton) {
+                    rejectButton.disabled = false;
+                }
+                lucide.createIcons();
+                return;
+            }
+
             const executePlanFn = httpsCallable(functions, 'executeTaskModificationPlan');
 
             try {
-                await executePlanFn({ plan: planData.executionPlan, jobId: planData.jobId });
+                await executePlanFn({ plan: updatedExecutionPlan, jobId: planData.jobId });
 
-                const modalContent = document.getElementById('ai-modal-content');
-                modalContent.innerHTML = getAIAssistantExecutionProgressViewHTML(planData);
-                lucide.createIcons();
+                const modalContent = document.getElementById('ai-assistant-modal-content');
+                if (modalContent) {
+                    const progressSteps = updatedExecutionPlan.map(step => ({
+                        description: step.description,
+                        status: 'pending'
+                    }));
+                    modalContent.innerHTML = getAIAssistantExecutionProgressViewHTML(progressSteps);
+                    lucide.createIcons();
+                }
 
-                const executionUnsubscribe = onSnapshot(doc(db, "plan_executions", planData.jobId), (doc) => {
-                    const executionData = doc.data();
+                const executionUnsubscribe = onSnapshot(doc(db, "plan_executions", planData.jobId), (snapshot) => {
+                    const executionData = snapshot.data();
                     if (!executionData) return;
 
-                    // FIX: Ensure executionData.steps is an array before calling forEach
                     const steps = executionData.steps || [];
                     steps.forEach((step, index) => {
-                        const stepEl = document.getElementById(`exec-step-${index + 1}`);
+                        const stepEl = document.getElementById(`execution-step-${index}`);
                         if (!stepEl) return;
                         const statusIcon = stepEl.querySelector('.status-icon');
                         const statusText = stepEl.querySelector('.status-text');
 
                         if (step.status === 'completed') {
                             statusIcon.innerHTML = '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
-                            statusText.textContent = 'Completado';
+                            if (statusText) {
+                                statusText.textContent = 'Completado';
+                            }
                             stepEl.classList.add('opacity-70');
                         } else if (step.status === 'error') {
                             statusIcon.innerHTML = '<i data-lucide="x-circle" class="w-5 h-5 text-red-500"></i>';
-                            statusText.textContent = `Error: ${step.error || 'Desconocido'}`;
+                            if (statusText) {
+                                statusText.textContent = `Error: ${step.error || 'Desconocido'}`;
+                            }
                             stepEl.classList.add('bg-red-50');
                         }
                     });
@@ -462,7 +621,7 @@ export function openAIAssistantModal() {
                         if (executionUnsubscribe) executionUnsubscribe();
                         const finalThought = document.getElementById('execution-final-thought');
                         if (finalThought) {
-                           finalThought.innerHTML = `<p class="text-sm text-slate-600 dark:text-slate-400 mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg"><strong>Resumen final:</strong> ${executionData.summary || 'El plan ha finalizado.'}</p>`;
+                            finalThought.innerHTML = `<p class="text-sm text-slate-600 dark:text-slate-400 mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg"><strong>Resumen final:</strong> ${executionData.summary || 'El plan ha finalizado.'}</p>`;
                         }
                         document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
                     }
@@ -472,7 +631,11 @@ export function openAIAssistantModal() {
                 console.error("Error executing plan:", error);
                 showToast(`Error al ejecutar el plan: ${error.message}`, 'error');
                 button.disabled = false;
-                button.innerHTML = 'Confirmar y Ejecutar Plan';
+                button.innerHTML = '<i data-lucide="check-check" class="w-5 h-5"></i>Confirmar y Ejecutar';
+                if (rejectButton) {
+                    rejectButton.disabled = false;
+                }
+                lucide.createIcons();
             }
         }
     });
