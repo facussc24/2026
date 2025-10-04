@@ -359,6 +359,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         conversationId = newConversationRef.id;
     }
 
+    conversationHistory.push({ role: 'user', parts: [{ text: `User Request: "${userPrompt}"` }] });
 
     // Fetch all users to provide as context to the AI for assignments.
     const usersSnapshot = await db.collection('usuarios').get();
@@ -389,6 +390,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
             thoughtProcess: `### Plan de la IA (desde caché)\n\n${summary}`,
             isFromCache: true,
             conversationId: conversationId, // Pass conversation ID along
+            conversationHistory,
         };
         await jobRef.set(jobData);
         return { jobId: jobRef.id, conversationId: conversationId, isFromCache: true };
@@ -424,6 +426,8 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         const jobData = snap.data();
         const currentJobId = context?.params?.jobId;
         let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext } = jobData;
+
+        conversationHistory = Array.isArray(conversationHistory) ? conversationHistory : [];
 
         try {
             await jobRef.update({ status: 'RUNNING' });
@@ -606,11 +610,6 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
 1. call \`answer_question\`(answer: "Encontré varias tareas de marketing. ¿A cuál te refieres? \\n* 'Investigar campaña de marketing' (ID: task_123)\\n* 'Lanzar campaña de marketing' (ID: task_456)")
 2. call \`finish\`
             `;
-
-            if (conversationHistory.length === 0) {
-                 conversationHistory.push({ role: 'user', parts: [{ text: `User Request: "${userPrompt}"` }] });
-            }
-
 
             for (let i = 0; i < 10; i++) { // Main agent loop
                 let agentResponse;
