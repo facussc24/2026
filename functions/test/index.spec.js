@@ -49,9 +49,10 @@ jest.mock('firebase-admin', () => {
 });
 // --- END MOCKING ---
 
-const { describe, beforeEach, test, expect } = require('@jest/globals');
+const { describe, beforeEach, afterEach, test, expect } = require('@jest/globals');
 const admin = require('firebase-admin');
 const firebaseTest = require('firebase-functions-test')();
+const crypto = require('crypto');
 
 // Import the functions to be tested AFTER mocking
 const { executeTaskModificationPlan, aiAgentJobRunner } = require('../index');
@@ -67,6 +68,10 @@ describe('aiAgentJobRunner', () => {
         mockJobRef = {
             update: jest.fn().mockResolvedValue(true),
         };
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
     });
 
     test('should proactively schedule a new task on the least busy day', async () => {
@@ -156,6 +161,151 @@ describe('aiAgentJobRunner', () => {
         expect(finalPlan[0].task.title).toBe("Revisar el informe de marketing");
         expect(finalPlan[0].task.plannedDate).toBe("2025-10-04"); // The crucial check
         expect(finalPlan[0].task.dueDate).toBeUndefined(); // Ensure dueDate was not set
+    });
+
+    test('generates unique temporary IDs for consecutive task creations', async () => {
+        const userPrompt = 'Crear dos tareas dependientes para la campaña.';
+        const tasks = [];
+        const currentDate = '2025-05-01';
+        const jobId = 'job-123';
+
+        const randomUUIDSpy = jest.spyOn(crypto, 'randomUUID');
+        randomUUIDSpy
+            .mockReturnValueOnce('uuid-1')
+            .mockReturnValueOnce('uuid-2');
+
+        const firstTempId = `temp_${jobId}_uuid-1`;
+        const secondTempId = `temp_${jobId}_uuid-2`;
+
+        mockGenerateContent
+            .mockResolvedValueOnce({
+                response: {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    thought: 'Crearé la primera tarea.',
+                                    tool_code: {
+                                        tool_id: 'create_task',
+                                        parameters: {
+                                            title: 'Diseñar campaña',
+                                            plannedDate: currentDate,
+                                        },
+                                    },
+                                }),
+                            }],
+                        },
+                    }],
+                },
+            })
+            .mockResolvedValueOnce({
+                response: {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    thought: 'Crearé la segunda tarea.',
+                                    tool_code: {
+                                        tool_id: 'create_task',
+                                        parameters: {
+                                            title: 'Aprobar campaña',
+                                            plannedDate: '2025-05-02',
+                                        },
+                                    },
+                                }),
+                            }],
+                        },
+                    }],
+                },
+            })
+            .mockResolvedValueOnce({
+                response: {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    thought: 'Configuraré la dependencia.',
+                                    tool_code: {
+                                        tool_id: 'create_dependency',
+                                        parameters: {
+                                            dependent_task_id: secondTempId,
+                                            prerequisite_task_id: firstTempId,
+                                        },
+                                    },
+                                }),
+                            }],
+                        },
+                    }],
+                },
+            })
+            .mockResolvedValueOnce({
+                response: {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    thought: 'Resumiré el plan.',
+                                    tool_code: {
+                                        tool_id: 'review_and_summarize_plan',
+                                        parameters: {},
+                                    },
+                                }),
+                            }],
+                        },
+                    }],
+                },
+            })
+            .mockResolvedValueOnce({
+                response: {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    thought: 'Plan finalizado.',
+                                    tool_code: { tool_id: 'finish', parameters: {} },
+                                }),
+                            }],
+                        },
+                    }],
+                },
+            });
+
+        const snap = {
+            ref: mockJobRef,
+            data: () => ({
+                userPrompt,
+                tasks,
+                allUsers: [],
+                currentDate,
+                conversationHistory: [],
+                executionPlan: [],
+                thinkingSteps: [],
+                summary: '',
+            }),
+        };
+
+        const wrapped = firebaseTest.wrap(aiAgentJobRunner);
+        await wrapped(snap, { params: { jobId } });
+
+        expect(randomUUIDSpy).toHaveBeenCalledTimes(2);
+
+        const finalUpdateCall = mockJobRef.update.mock.calls.find((call) => call[0].status === 'COMPLETED');
+        expect(finalUpdateCall).toBeDefined();
+
+        const { executionPlan } = finalUpdateCall[0];
+        const createActions = executionPlan.filter((action) => action.action === 'CREATE');
+        expect(createActions).toHaveLength(2);
+        const tempIds = createActions.map((action) => action.docId);
+        expect(new Set(tempIds).size).toBe(2);
+        expect(tempIds).toContain(firstTempId);
+        expect(tempIds).toContain(secondTempId);
+
+        const dependencyUpdate = executionPlan.find(
+            (action) => action.action === 'UPDATE' && action.updates && action.updates.dependsOn,
+        );
+        expect(dependencyUpdate).toBeDefined();
+        expect(dependencyUpdate.docId).toBe(secondTempId);
+        expect(dependencyUpdate.updates.dependsOn).toEqual([firstTempId]);
     });
 });
 

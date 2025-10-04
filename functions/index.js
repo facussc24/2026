@@ -311,6 +311,21 @@ const generateRequestHash = (userPrompt, tasks) => {
     return crypto.createHash('sha256').update(data).digest('hex');
 };
 
+/**
+ * Generates a robust temporary ID for newly created tasks within an AI job.
+ * Falls back to random bytes if `crypto.randomUUID` is unavailable.
+ *
+ * @param {string|undefined} jobId The job ID associated with the current plan.
+ * @returns {string} A unique temporary identifier prefixed with `temp_`.
+ */
+const generateTemporaryTaskId = (jobId) => {
+    const jobSegment = jobId ? `${jobId}_` : '';
+    if (typeof crypto.randomUUID === 'function') {
+        return `temp_${jobSegment}${crypto.randomUUID()}`;
+    }
+    return `temp_${jobSegment}${crypto.randomBytes(16).toString('hex')}`;
+};
+
 exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
@@ -407,6 +422,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
     .onCreate(async (snap, context) => {
         const jobRef = snap.ref;
         const jobData = snap.data();
+        const currentJobId = context?.params?.jobId;
         let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext } = jobData;
 
         try {
@@ -678,7 +694,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             toolResult = `OK. Plan summarized accurately from execution plan.`;
                             break;
                         case 'create_task':
-                            const tempId = `temp_${Date.now()}`;
+                            const tempId = generateTemporaryTaskId(currentJobId);
                             const taskPayload = tool_code.parameters;
 
                             // The AI is now responsible for providing this, so we don't default it here.
