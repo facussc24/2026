@@ -356,9 +356,10 @@ export function openAIAssistantModal() {
         if (isPlanReady) {
             if (jobUnsubscribe) jobUnsubscribe();
             loadingBubble?.remove();
-            if (jobData.summary) {
-                addMessage('ai', jobData.summary, 'text');
-            } else if (jobData.executionPlan && jobData.executionPlan.length > 0) {
+
+            const hasExecutionPlan = Array.isArray(jobData.executionPlan) && jobData.executionPlan.length > 0;
+
+            if (hasExecutionPlan) {
                 const planMessageElement = addMessage('ai', { plan: { ...jobData, jobId: doc.id }, taskTitleMap: new Map() }, 'plan');
                 const confirmButton = planMessageElement?.querySelector('#ai-confirm-plan-btn');
                 const planContainer = planMessageElement?.querySelector('[data-plan-container="true"]');
@@ -385,6 +386,12 @@ export function openAIAssistantModal() {
                 if (planContainer) {
                     planContainer.dataset.jobId = doc.id;
                 }
+
+                if (jobData.summary) {
+                    addMessage('ai', jobData.summary, 'text');
+                }
+            } else if (jobData.summary) {
+                addMessage('ai', jobData.summary, 'text');
             } else {
                 addMessage('ai', "He terminado, pero no tengo un resumen que mostrar.", 'text');
             }
