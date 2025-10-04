@@ -855,21 +855,17 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 finalThoughtProcessDisplay = `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
             }
 
-            // --- Plan Execution ---
-            // If a plan was generated (and it's not just an answer), execute it.
-            if (executionPlan.length > 0) {
-                const db = admin.firestore();
-                // We pass the creator's UID and the current job ID for execution and progress tracking.
-                await _executePlan(db, executionPlan, jobData.creatorUid, context.params.jobId);
-            }
-
+            const planRequiresConfirmation = executionPlan.length > 0;
+            const jobStatus = planRequiresConfirmation ? 'AWAITING_CONFIRMATION' : 'COMPLETED';
 
             await jobRef.update({
-                status: 'COMPLETED',
+                status: jobStatus,
                 thoughtProcess: finalThoughtProcessDisplay,
                 executionPlan,
                 summary,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                awaitingUserConfirmation: planRequiresConfirmation,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                conversationHistory,
             });
 
             // After a successful run, save the plan to the cache if it's not from there already.

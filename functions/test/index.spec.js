@@ -148,7 +148,7 @@ describe('aiAgentJobRunner', () => {
         expect(mockJobRef.update).toHaveBeenCalledWith({ status: 'RUNNING' });
 
         // Get the final update call to check the executionPlan
-        const finalUpdateCall = mockJobRef.update.mock.calls.find(call => call[0].status === 'COMPLETED');
+        const finalUpdateCall = mockJobRef.update.mock.calls.find(call => call[0].status === 'AWAITING_CONFIRMATION');
         expect(finalUpdateCall).toBeDefined();
 
         const finalPlan = finalUpdateCall[0].executionPlan;
@@ -161,6 +161,7 @@ describe('aiAgentJobRunner', () => {
         expect(finalPlan[0].task.title).toBe("Revisar el informe de marketing");
         expect(finalPlan[0].task.plannedDate).toBe("2025-10-04"); // The crucial check
         expect(finalPlan[0].task.dueDate).toBeUndefined(); // Ensure dueDate was not set
+        expect(finalUpdateCall[0].awaitingUserConfirmation).toBe(true);
     });
 
     test('generates unique temporary IDs for consecutive task creations', async () => {
@@ -289,7 +290,7 @@ describe('aiAgentJobRunner', () => {
 
         expect(randomUUIDSpy).toHaveBeenCalledTimes(2);
 
-        const finalUpdateCall = mockJobRef.update.mock.calls.find((call) => call[0].status === 'COMPLETED');
+        const finalUpdateCall = mockJobRef.update.mock.calls.find((call) => call[0].status === 'AWAITING_CONFIRMATION');
         expect(finalUpdateCall).toBeDefined();
 
         const { executionPlan } = finalUpdateCall[0];
