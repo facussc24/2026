@@ -816,8 +816,33 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             break;
                         case 'create_dependency':
                             const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
-                            executionPlan.push({ action: "UPDATE", docId: dependent_task_id, updates: { dependsOn: [prerequisite_task_id], blocked: true } });
-                            executionPlan.push({ action: "UPDATE", docId: prerequisite_task_id, updates: { blocks: [dependent_task_id] } });
+                            const dependentTaskContext = tasks.find(t => t.docId === dependent_task_id);
+                            const prerequisiteTaskContext = tasks.find(t => t.docId === prerequisite_task_id);
+
+                            executionPlan.push({
+                                action: "UPDATE",
+                                docId: dependent_task_id,
+                                originalTitle: dependentTaskContext?.title || 'Tarea sin título',
+                                updates: { dependsOn: [prerequisite_task_id], blocked: true }
+                            });
+                            executionPlan.push({
+                                action: "UPDATE",
+                                docId: prerequisite_task_id,
+                                originalTitle: prerequisiteTaskContext?.title || 'Tarea sin título',
+                                updates: { blocks: [dependent_task_id] }
+                            });
+
+                            if (dependentTaskContext) {
+                                const dependsOnSet = new Set([...(dependentTaskContext.dependsOn || []), prerequisite_task_id]);
+                                dependentTaskContext.dependsOn = Array.from(dependsOnSet);
+                                dependentTaskContext.blocked = true;
+                            }
+
+                            if (prerequisiteTaskContext) {
+                                const blocksSet = new Set([...(prerequisiteTaskContext.blocks || []), dependent_task_id]);
+                                prerequisiteTaskContext.blocks = Array.from(blocksSet);
+                            }
+
                             toolResult = `OK. Dependency created: ${dependent_task_id} now depends on ${prerequisite_task_id}.`;
                             break;
                         case 'delete_task':
@@ -873,7 +898,12 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                     taskToUpdate.plannedDate = updatePayload.plannedDate;
                                 }
 
-                                const updatePlanEntry = { action: "UPDATE", docId: update_task_id, updates: updatePayload };
+                                const updatePlanEntry = {
+                                    action: "UPDATE",
+                                    docId: update_task_id,
+                                    originalTitle: updateTaskTitle,
+                                    updates: updatePayload
+                                };
 
                                 if (updateAdjustments) {
                                     updatePlanEntry.adjustments = updateAdjustments;
@@ -882,6 +912,21 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                 }
 
                                 executionPlan.push(updatePlanEntry);
+                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'title') && typeof updatePayload.title === 'string') {
+                                    taskToUpdate.title = updatePayload.title;
+                                }
+                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'plannedDate')) {
+                                    taskToUpdate.plannedDate = updatePayload.plannedDate;
+                                }
+                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'dependsOn')) {
+                                    taskToUpdate.dependsOn = Array.isArray(updatePayload.dependsOn) ? [...updatePayload.dependsOn] : updatePayload.dependsOn;
+                                }
+                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'blocks')) {
+                                    taskToUpdate.blocks = Array.isArray(updatePayload.blocks) ? [...updatePayload.blocks] : updatePayload.blocks;
+                                }
+                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'blocked')) {
+                                    taskToUpdate.blocked = updatePayload.blocked;
+                                }
                                 toolResult = `OK. Task "${updateTaskTitle}" marked for update.`;
                             } else {
                                 toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
@@ -894,14 +939,34 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             for (const item of bulk_updates) {
                                 const taskToUpdate = tasks.find(t => t.docId === item.task_id);
                                 if (taskToUpdate) {
-                                    executionPlan.push({ action: "UPDATE", docId: item.task_id, updates: item.updates });
+                                    executionPlan.push({
+                                        action: "UPDATE",
+                                        docId: item.task_id,
+                                        originalTitle: taskToUpdate.title || 'Tarea sin título',
+                                        updates: item.updates
+                                    });
+                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'title') && typeof item.updates.title === 'string') {
+                                        taskToUpdate.title = item.updates.title;
+                                    }
+                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'plannedDate')) {
+                                        taskToUpdate.plannedDate = item.updates.plannedDate;
+                                    }
+                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'dependsOn')) {
+                                        taskToUpdate.dependsOn = Array.isArray(item.updates.dependsOn) ? [...item.updates.dependsOn] : item.updates.dependsOn;
+                                    }
+                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'blocks')) {
+                                        taskToUpdate.blocks = Array.isArray(item.updates.blocks) ? [...item.updates.blocks] : item.updates.blocks;
+                                    }
+                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'blocked')) {
+                                        taskToUpdate.blocked = item.updates.blocked;
+                                    }
                                     updated_count++;
                                 } else {
                                     not_found_ids.push(item.task_id);
                                 }
                             }
                             toolResult = `OK. Marked ${updated_count} tasks for update.`;
-                            if(not_found_ids.length > 0) {
+                            if (not_found_ids.length > 0) {
                                 toolResult += ` Could not find tasks with IDs: ${not_found_ids.join(', ')}.`;
                             }
                             break;

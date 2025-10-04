@@ -360,7 +360,23 @@ export function openAIAssistantModal() {
             const hasExecutionPlan = Array.isArray(jobData.executionPlan) && jobData.executionPlan.length > 0;
 
             if (hasExecutionPlan) {
-                const planMessageElement = addMessage('ai', { plan: { ...jobData, jobId: doc.id }, taskTitleMap: new Map() }, 'plan');
+                const taskTitleMap = new Map();
+                (jobData.tasks || []).forEach(taskItem => {
+                    if (taskItem?.docId) {
+                        taskTitleMap.set(taskItem.docId, taskItem.title || 'Tarea sin título');
+                    }
+                });
+                (jobData.executionPlan || []).forEach(actionItem => {
+                    if (!actionItem?.docId) return;
+                    if (actionItem.action === 'CREATE') {
+                        const actionTitle = actionItem?.task?.title || 'Tarea sin título';
+                        taskTitleMap.set(actionItem.docId, actionTitle);
+                    } else if (actionItem.originalTitle && !taskTitleMap.has(actionItem.docId)) {
+                        taskTitleMap.set(actionItem.docId, actionItem.originalTitle);
+                    }
+                });
+
+                const planMessageElement = addMessage('ai', { plan: { ...jobData, jobId: doc.id }, taskTitleMap }, 'plan');
                 const confirmButton = planMessageElement?.querySelector('#ai-confirm-plan-btn');
                 const planContainer = planMessageElement?.querySelector('[data-plan-container="true"]');
                 const planInput = planMessageElement?.querySelector('#ai-plan-json');

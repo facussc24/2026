@@ -221,6 +221,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
     const renderAction = (action, index) => {
         let icon, title, details;
         const actionId = `action_${index}`;
+        const resolvedActionTitle = action.originalTitle || taskTitleMap.get(action.docId) || 'Tarea sin título';
 
         // A more modern and clean design for the action items.
         // Using group/action to manage styles based on checkbox state.
@@ -249,7 +250,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
             case 'UPDATE':
                 icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shadow-inner border border-blue-200 dark:border-blue-800"><i data-lucide="edit-3" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i></div>`;
                 title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Actualizar Tarea</p>
-                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">Tarea original: "${action.originalTitle}"</p>`;
+                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">Tarea original: "${resolvedActionTitle}"</p>`;
 
                 content += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
 
@@ -301,7 +302,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                 icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-red-100 dark:bg-red-900/50 flex items-center justify-center shadow-inner border border-red-200 dark:border-red-800"><i data-lucide="trash-2" class="w-6 h-6 text-red-600 dark:text-red-400"></i></div>`;
                 title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Eliminar Tarea</p>`;
                 details = `<div class="mt-2 text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">
-                               Se eliminará la tarea: <strong class="text-red-600 dark:text-red-400">"${action.originalTitle}"</strong>.
+                               Se eliminará la tarea: <strong class="text-red-600 dark:text-red-400">"${resolvedActionTitle}"</strong>.
                            </div>`;
                 content += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
                 break;
