@@ -236,6 +236,10 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
             case 'CREATE':
                 icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center shadow-inner border border-green-200 dark:border-green-800"><i data-lucide="plus" class="w-6 h-6 text-green-600 dark:text-green-400"></i></div>`;
                 title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Crear Nueva Tarea</p>`;
+                const plannedDateValue = action.task?.plannedDate || '';
+                const subtasksTitles = Array.isArray(action.task?.subtasks)
+                    ? action.task.subtasks.map(subtask => (subtask?.title || '').trim()).filter(Boolean).join('\n')
+                    : '';
                 details = `<div class="space-y-3 mt-3">
                                <div class="ai-input-group">
                                    <label for="${actionId}_title" class="ai-input-label">TÍTULO</label>
@@ -244,6 +248,15 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                                <div class="ai-input-group">
                                    <label for="${actionId}_dueDate" class="ai-input-label">FECHA LÍMITE</label>
                                    <input type="date" id="${actionId}_dueDate" name="${actionId}_dueDate" value="${action.task.dueDate || ''}" class="editable-ai-input">
+                               </div>
+                               <div class="ai-input-group">
+                                   <label for="${actionId}_plannedDate" class="ai-input-label">FECHA PLANIFICADA</label>
+                                   <input type="date" id="${actionId}_plannedDate" name="${actionId}_plannedDate" value="${plannedDateValue}" class="editable-ai-input">
+                               </div>
+                               <div class="ai-input-group">
+                                   <label for="${actionId}_subtasks" class="ai-input-label">SUB-TAREAS PROPUESTAS</label>
+                                   <textarea id="${actionId}_subtasks" name="${actionId}_subtasks" rows="3" class="editable-ai-input">${subtasksTitles}</textarea>
+                                   <p class="text-xs text-slate-500 italic mt-1">Edita los títulos si es necesario, una sub-tarea por línea.</p>
                                </div>
                            </div>`;
                 break;
@@ -284,6 +297,24 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                             updateInput = `<div class="ai-input-group">
                                                <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">${label}</label>
                                                <input type="date" id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" value="${updateValue || ''}" class="editable-ai-input">
+                                           </div>`;
+                        } else if (updateField === 'priority') {
+                            updateInput = `<div class="ai-input-group">
+                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">PRIORIDAD</label>
+                                               <select id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" class="editable-ai-input">
+                                                   <option value="low" ${updateValue === 'low' ? 'selected' : ''}>Baja</option>
+                                                   <option value="medium" ${updateValue === 'medium' ? 'selected' : ''}>Media</option>
+                                                   <option value="high" ${updateValue === 'high' ? 'selected' : ''}>Alta</option>
+                                               </select>
+                                           </div>`;
+                        } else if (updateField === 'subtasks') {
+                            const subtaskTitles = Array.isArray(updateValue)
+                                ? updateValue.map(subtask => (subtask?.title || '').trim()).filter(Boolean).join('\n')
+                                : '';
+                            updateInput = `<div class="ai-input-group">
+                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">SUB-TAREAS</label>
+                                               <textarea id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" rows="3" class="editable-ai-input">${subtaskTitles}</textarea>
+                                               <p class="text-xs text-slate-500 italic mt-1">Edita los títulos si es necesario, una sub-tarea por línea.</p>
                                            </div>`;
                         } else {
                             const label = updateField.replace(/([A-Z])/g, ' $1').toUpperCase();

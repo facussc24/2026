@@ -514,6 +514,30 @@ export function openAIAssistantModal() {
 
             const updatedExecutionPlan = [];
             const executionPlanActions = Array.isArray(planData.executionPlan) ? planData.executionPlan : [];
+
+            const buildSubtasksFromInput = (inputValue, existingSubtasks = []) => {
+                if (!inputValue) {
+                    return [];
+                }
+
+                const titles = inputValue
+                    .split('\n')
+                    .map(title => title.trim())
+                    .filter(Boolean);
+
+                if (titles.length === 0) {
+                    return [];
+                }
+
+                return titles.map((title, index) => {
+                    const baseSubtask = existingSubtasks[index] || {};
+                    return {
+                        ...baseSubtask,
+                        title,
+                        completed: typeof baseSubtask.completed === 'boolean' ? baseSubtask.completed : false
+                    };
+                });
+            };
             const buildDescriptionFromAction = (action) => {
                 if (!action) return 'Acción del plan';
                 switch (action.action) {
@@ -540,6 +564,8 @@ export function openAIAssistantModal() {
                 if (clonedAction.action === 'CREATE') {
                     const titleInput = form.querySelector(`#${actionId}_title`);
                     const dueDateInput = form.querySelector(`#${actionId}_dueDate`);
+                    const plannedDateInput = form.querySelector(`#${actionId}_plannedDate`);
+                    const subtasksInput = form.querySelector(`#${actionId}_subtasks`);
                     if (titleInput) {
                         clonedAction.task = clonedAction.task || {};
                         clonedAction.task.title = titleInput.value.trim();
@@ -547,6 +573,15 @@ export function openAIAssistantModal() {
                     if (dueDateInput) {
                         clonedAction.task = clonedAction.task || {};
                         clonedAction.task.dueDate = dueDateInput.value || null;
+                    }
+                    if (plannedDateInput) {
+                        clonedAction.task = clonedAction.task || {};
+                        clonedAction.task.plannedDate = plannedDateInput.value || null;
+                    }
+                    if (subtasksInput) {
+                        clonedAction.task = clonedAction.task || {};
+                        const existingSubtasks = Array.isArray(clonedAction.task.subtasks) ? clonedAction.task.subtasks : [];
+                        clonedAction.task.subtasks = buildSubtasksFromInput(subtasksInput.value, existingSubtasks);
                     }
                 }
 
@@ -578,6 +613,9 @@ export function openAIAssistantModal() {
                             value = value === 'true' || value === true;
                         } else if (fieldName === 'dueDate' || fieldName === 'plannedDate') {
                             value = value || null;
+                        } else if (fieldName === 'subtasks') {
+                            const existingSubtasks = Array.isArray(clonedAction.updates?.subtasks) ? clonedAction.updates.subtasks : [];
+                            value = buildSubtasksFromInput(value, existingSubtasks);
                         }
                         updates[fieldName] = value;
                     });
