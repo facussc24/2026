@@ -6,6 +6,12 @@ const axios = require("axios");
 const nodemailer = require('nodemailer');
 const crypto = require("crypto");
 
+const DEFAULT_AI_TIME_ZONE = 'America/Argentina/Buenos_Aires';
+
+const getCurrentDateForUserTZ = ({ date = new Date(), timeZone = DEFAULT_AI_TIME_ZONE } = {}) => {
+    return new Intl.DateTimeFormat('en-CA', { timeZone }).format(date);
+};
+
 if (admin.apps.length === 0) {
     admin.initializeApp();
 }
@@ -336,6 +342,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     }
 
     const db = admin.firestore();
+    const userTimeZone = DEFAULT_AI_TIME_ZONE;
     const conversationsRef = db.collection('ai_conversations');
     let conversationHistory = [];
 
@@ -391,6 +398,8 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
             isFromCache: true,
             conversationId: conversationId, // Pass conversation ID along
             conversationHistory,
+            currentDate: getCurrentDateForUserTZ({ timeZone: userTimeZone }),
+            timeZone: userTimeZone,
         };
         await jobRef.set(jobData);
         return { jobId: jobRef.id, conversationId: conversationId, isFromCache: true };
@@ -404,7 +413,8 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         allUsers,
         creatorUid: context.auth.uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        currentDate: new Date().toISOString().split('T')[0],
+        currentDate: getCurrentDateForUserTZ({ timeZone: userTimeZone }),
+        timeZone: userTimeZone,
         conversationHistory, // Use existing or new history
         thinkingSteps: [],
         executionPlan: [],
@@ -425,7 +435,10 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         const jobRef = snap.ref;
         const jobData = snap.data();
         const currentJobId = context?.params?.jobId;
-        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext } = jobData;
+        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext, timeZone } = jobData;
+
+        const effectiveTimeZone = timeZone || DEFAULT_AI_TIME_ZONE;
+        currentDate = currentDate || getCurrentDateForUserTZ({ timeZone: effectiveTimeZone });
 
         conversationHistory = Array.isArray(conversationHistory) ? conversationHistory : [];
 
@@ -1290,6 +1303,8 @@ exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00"
   .onRun(async (context) => {
     // ... function logic
   });
+
+exports.getCurrentDateForUserTZ = getCurrentDateForUserTZ;
 
 if (process.env.NODE_ENV === 'test') {
     module.exports._executePlan = _executePlan;

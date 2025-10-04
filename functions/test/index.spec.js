@@ -55,7 +55,7 @@ const firebaseTest = require('firebase-functions-test')();
 const crypto = require('crypto');
 
 // Import the functions to be tested AFTER mocking
-const { executeTaskModificationPlan, aiAgentJobRunner } = require('../index');
+const { executeTaskModificationPlan, aiAgentJobRunner, getCurrentDateForUserTZ } = require('../index');
 
 describe('aiAgentJobRunner', () => {
     let mockJobRef;
@@ -83,7 +83,7 @@ describe('aiAgentJobRunner', () => {
         ];
 
         const userPrompt = 'Crear una nueva tarea para revisar el informe de marketing';
-        const currentDate = '2025-10-02'; // Today
+        const currentDate = getCurrentDateForUserTZ({ date: new Date('2025-10-02T15:00:00Z') }); // Today in default TZ
 
         // Mock the AI's response
         // 1st response: The AI decides to create a task and schedules it on the least busy day (2025-10-04)
@@ -167,7 +167,7 @@ describe('aiAgentJobRunner', () => {
     test('generates unique temporary IDs for consecutive task creations', async () => {
         const userPrompt = 'Crear dos tareas dependientes para la campaña.';
         const tasks = [];
-        const currentDate = '2025-05-01';
+        const currentDate = getCurrentDateForUserTZ({ date: new Date('2025-05-01T15:00:00Z') });
         const jobId = 'job-123';
 
         const randomUUIDSpy = jest.spyOn(crypto, 'randomUUID');
