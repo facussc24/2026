@@ -629,10 +629,43 @@ export function openAIAssistantModal() {
 
                     if (executionData.status === 'completed' || executionData.status === 'error') {
                         if (executionUnsubscribe) executionUnsubscribe();
+
+                        const isError = executionData.status === 'error';
+                        const headerCloseBtn = document.getElementById('execution-close-btn');
+                        const footerCloseBtn = document.getElementById('execution-complete-close-btn');
+
+                        if (headerCloseBtn) {
+                            headerCloseBtn.classList.remove('hidden');
+                        }
+
+                        if (footerCloseBtn) {
+                            footerCloseBtn.disabled = false;
+                            footerCloseBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700', 'bg-green-600', 'hover:bg-green-700', 'bg-red-600', 'hover:bg-red-700');
+                            footerCloseBtn.classList.add(
+                                isError ? 'bg-red-600' : 'bg-green-600',
+                                isError ? 'hover:bg-red-700' : 'hover:bg-green-700'
+                            );
+                            footerCloseBtn.innerHTML = `
+                                <i data-lucide="${isError ? 'x-circle' : 'check-circle-2'}" class="w-5 h-5"></i>
+                                <span>${isError ? 'Cerrar con errores' : 'Cerrar'}</span>
+                            `;
+                        }
+
                         const finalThought = document.getElementById('execution-final-thought');
                         if (finalThought) {
-                            finalThought.innerHTML = `<p class="text-sm text-slate-600 dark:text-slate-400 mt-4 p-4 bg-slate-100 dark:bg-slate-700 rounded-lg"><strong>Resumen final:</strong> ${executionData.summary || 'El plan ha finalizado.'}</p>`;
+                            const summaryText = executionData.summary || (isError ? 'Ocurrió un problema durante la ejecución.' : 'El plan ha finalizado.');
+                            finalThought.innerHTML = `
+                                <div class="flex items-start gap-3 mt-4 p-4 rounded-lg ${isError ? 'bg-red-50 dark:bg-red-900/30' : 'bg-slate-100 dark:bg-slate-700'}">
+                                    <i data-lucide="${isError ? 'x-octagon' : 'check-circle-2'}" class="w-5 h-5 mt-1 ${isError ? 'text-red-600 dark:text-red-300' : 'text-green-600 dark:text-green-300'}"></i>
+                                    <div>
+                                        <p class="text-sm font-semibold ${isError ? 'text-red-700 dark:text-red-200' : 'text-slate-700 dark:text-slate-300'}">${isError ? 'Ejecución con errores' : 'Ejecución completada'}</p>
+                                        <p class="text-sm mt-1 ${isError ? 'text-red-600 dark:text-red-200' : 'text-slate-600 dark:text-slate-400'}">${summaryText}</p>
+                                    </div>
+                                </div>
+                            `;
                         }
+
+                        lucide.createIcons();
                         document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
                     }
                 });

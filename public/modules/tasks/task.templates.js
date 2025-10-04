@@ -60,7 +60,7 @@ export function getAIAssistantExecutionProgressViewHTML(steps) {
         </div>
         <div class="p-4 bg-white/70 dark:bg-slate-800/70 border-t border-slate-200 dark:border-slate-700 backdrop-blur-sm text-right space-y-3">
             <div id="execution-final-thought"></div>
-            <button id="execution-complete-close-btn" type="button" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2" disabled>
+            <button id="execution-complete-close-btn" type="button" data-action="close" class="bg-purple-600 text-white px-5 py-2 rounded-md hover:bg-purple-700 font-semibold transition-colors flex items-center gap-2" disabled>
                 <i data-lucide="loader-circle" class="w-5 h-5 animate-spin"></i>
                 <span>Ejecutando...</span>
             </button>
