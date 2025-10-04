@@ -194,6 +194,24 @@ describe('extractExplicitDatesFromPrompt helper', () => {
     );
   });
 
+  it('preserves textual dates when the user specifies the year explicitly', () => {
+    const baseDate = new Date('2026-08-10T12:00:00Z');
+    const results = extractExplicitDatesFromPrompt(
+      'Programá esto para el 15 de marzo de 2026',
+      { timeZone: 'America/Argentina/Buenos_Aires', baseDate }
+    );
+
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          isoDate: '2026-03-15',
+          originalText: '15 de marzo de 2026',
+          rolledToFuture: false,
+        }),
+      ])
+    );
+  });
+
   it('rolls 3/10 forward when executed on 4/10 and keeps the date on a business day', () => {
     const baseDate = new Date('2023-10-04T12:00:00Z');
     const results = extractExplicitDatesFromPrompt(

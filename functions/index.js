@@ -102,22 +102,23 @@ const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI
     const [referenceYear, referenceMonth, referenceDay] = referenceDateString.split('-').map(Number);
     const referenceDateUtc = new Date(Date.UTC(referenceYear, referenceMonth - 1, referenceDay, 12));
 
-    const formatCandidateDate = (year, month, day, originalText) => {
+    const formatCandidateDate = (year, month, day, originalText, { isYearFixed = false } = {}) => {
         if (month < 1 || month > 12 || day < 1 || day > 31) {
             return;
         }
 
-        let candidate = new Date(Date.UTC(year, month - 1, day, 12));
+        let candidateYear = year;
+        let candidate = new Date(Date.UTC(candidateYear, month - 1, day, 12));
         if (Number.isNaN(candidate.getTime())) {
             return;
         }
 
         let rolledToFuture = false;
-        if (candidate < referenceDateUtc) {
-            const nextYearCandidate = new Date(Date.UTC(year + 1, month - 1, day, 12));
+        if (!isYearFixed && candidate < referenceDateUtc) {
+            const nextYearCandidate = new Date(Date.UTC(candidateYear + 1, month - 1, day, 12));
             if (!Number.isNaN(nextYearCandidate.getTime())) {
                 candidate = nextYearCandidate;
-                year += 1;
+                candidateYear += 1;
                 rolledToFuture = true;
             }
         }
@@ -132,7 +133,7 @@ const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI
         results.push({
             originalText: originalText.trim(),
             isoDate,
-            year,
+            year: candidateYear,
             month,
             day,
             rolledToFuture,
@@ -148,7 +149,7 @@ const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI
         const month = Number(monthRaw);
         const day = Number(dayRaw);
         isoSpans.push({ start: isoMatch.index, end: isoMatch.index + isoMatch[0].length });
-        formatCandidateDate(year, month, day, isoMatch[0]);
+        formatCandidateDate(year, month, day, isoMatch[0], { isYearFixed: true });
     }
 
     const numericDateRegex = /(?<!\d)(\d{1,2})[\/-](\d{1,2})(?!\d)/g;
@@ -167,18 +168,19 @@ const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI
         formatCandidateDate(referenceYear, month, day, numericMatch[0]);
     }
 
-    const textualDateRegex = /(\d{1,2})\s+de\s+([a-z\u00f1]+)/gi;
+    const textualDateRegex = /(\d{1,2})\s+de\s+([a-zñ]+)(?:\s+de\s+(\d{4}))?/gi;
     let textualMatch;
     while ((textualMatch = textualDateRegex.exec(normalizedPrompt)) !== null) {
-        const [, dayRaw, monthText] = textualMatch;
+        const [, dayRaw, monthText, yearRaw] = textualMatch;
         const day = Number(dayRaw);
         const month = SPANISH_MONTHS[monthText];
         if (!month) {
             continue;
         }
+        const candidateYear = yearRaw ? Number(yearRaw) : referenceYear;
         const originalTextStart = textualMatch.index;
         const originalText = userPrompt.substring(originalTextStart, originalTextStart + textualMatch[0].length);
-        formatCandidateDate(referenceYear, month, day, originalText);
+        formatCandidateDate(candidateYear, month, day, originalText, { isYearFixed: Boolean(yearRaw) });
     }
 
     return results;
