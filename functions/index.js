@@ -482,13 +482,96 @@ exports.enviarRecordatoriosDeVencimiento = functions.runWith({ secrets: ["TELEGR
  * @param {Array<object>} tasks The user's list of tasks.
  * @returns {string} A SHA-256 hash string.
  */
+const CRITICAL_TASK_FIELDS_FOR_HASH = [
+    'docId',
+    'title',
+    'status',
+    'plannedDate',
+    'dueDate',
+    'priority',
+    'assigneeEmail',
+    'blocked',
+    'dependsOn',
+    'blocks',
+    'subtasks',
+];
+
+const normalizeObjectKeys = (value) => {
+    if (Array.isArray(value)) {
+        return value.map((item) => normalizeObjectKeys(item));
+    }
+    if (value && typeof value === 'object') {
+        const sortedKeys = Object.keys(value).sort();
+        return sortedKeys.reduce((acc, key) => {
+            acc[key] = normalizeObjectKeys(value[key]);
+            return acc;
+        }, {});
+    }
+    return value;
+};
+
+const normalizeTaskForHash = (task = {}) => {
+    const normalizedTask = {};
+
+    CRITICAL_TASK_FIELDS_FOR_HASH.forEach((field) => {
+        if (!Object.prototype.hasOwnProperty.call(task, field)) {
+            return;
+        }
+
+        let value = task[field];
+        if (value === undefined) {
+            return;
+        }
+
+        if (field === 'dependsOn' || field === 'blocks') {
+            if (!Array.isArray(value)) {
+                return;
+            }
+            value = value
+                .filter((entry) => entry !== undefined && entry !== null)
+                .map((entry) => String(entry))
+                .sort((a, b) => a.localeCompare(b));
+        } else if (field === 'subtasks') {
+            if (!Array.isArray(value)) {
+                return;
+            }
+            value = value.map((subtask) => normalizeObjectKeys(subtask || {}));
+        } else if (value && typeof value === 'object') {
+            value = normalizeObjectKeys(value);
+        }
+
+        normalizedTask[field] = value;
+    });
+
+    return normalizeObjectKeys(normalizedTask);
+};
+
+const compareNormalizedEntries = (a, b) => {
+    const aString = JSON.stringify(a);
+    const bString = JSON.stringify(b);
+    if (aString < bString) {
+        return -1;
+    }
+    if (aString > bString) {
+        return 1;
+    }
+    return 0;
+};
+
 const generateRequestHash = (userPrompt, tasks) => {
-    const taskSignature = tasks
-        .map(t => `${t.docId}:${t.status}:${t.plannedDate}`)
-        .sort()
-        .join(',');
-    const data = `${userPrompt}|${taskSignature}`;
-    return crypto.createHash('sha256').update(data).digest('hex');
+    const promptString = userPrompt == null ? '' : String(userPrompt);
+    const normalizedTasks = Array.isArray(tasks)
+        ? tasks.map((task) => normalizeTaskForHash(task))
+        : [];
+
+    const sortedTasks = normalizedTasks.sort(compareNormalizedEntries);
+    const payload = {
+        userPrompt: promptString,
+        tasks: sortedTasks,
+    };
+
+    const serializedPayload = JSON.stringify(payload);
+    return crypto.createHash('sha256').update(serializedPayload).digest('hex');
 };
 
 /**
@@ -1972,4 +2055,5 @@ exports.getCurrentDateForUserTZ = getCurrentDateForUserTZ;
 if (process.env.NODE_ENV === 'test') {
     module.exports._executePlan = _executePlan;
     module.exports.extractExplicitDatesFromPrompt = extractExplicitDatesFromPrompt;
+    module.exports.generateRequestHash = generateRequestHash;
 }
