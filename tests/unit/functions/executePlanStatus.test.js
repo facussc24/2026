@@ -180,4 +180,17 @@ describe('extractExplicitDatesFromPrompt helper', () => {
       ])
     );
   });
+
+  it('prefers ISO formatted dates over overlapping numeric interpretations', () => {
+    const baseDate = new Date('2025-09-10T12:00:00Z');
+    const results = extractExplicitDatesFromPrompt(
+      'Programar seguimiento para 2025-10-03.',
+      { timeZone: 'America/Argentina/Buenos_Aires', baseDate }
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual(
+      expect.objectContaining({ isoDate: '2025-10-03', originalText: '2025-10-03' })
+    );
+  });
 });
