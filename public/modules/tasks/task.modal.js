@@ -351,7 +351,9 @@ export function openAIAssistantModal() {
         const loadingBubble = document.getElementById('ai-loading-bubble');
         if (!jobData) return;
 
-        if (jobData.status === 'COMPLETED') {
+        const isPlanReady = jobData.status === 'COMPLETED' || jobData.status === 'AWAITING_CONFIRMATION';
+
+        if (isPlanReady) {
             if (jobUnsubscribe) jobUnsubscribe();
             loadingBubble?.remove();
             if (jobData.summary) {
@@ -371,6 +373,7 @@ export function openAIAssistantModal() {
                 };
 
                 if (confirmButton) {
+                    confirmButton.disabled = jobData.awaitingUserConfirmation === false;
                     confirmButton.dataset.plan = JSON.stringify(planPayload);
                 }
 
