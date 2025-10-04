@@ -4,6 +4,7 @@
  */
 
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
+import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.es.js";
 
 export function getEmptyStateHTML(icon, title, message, ctaButton) {
     const buttonHTML = ctaButton ?
@@ -183,7 +184,8 @@ export function getAIChatMessageHTML(sender, content, type = 'text') {
         messageContent = getAIAssistantReviewViewHTML(content.plan, content.taskTitleMap);
     } else {
         // Render simple text or markdown
-        messageContent = `<div class="prose prose-sm dark:prose-invert max-w-none">${marked.parse(content)}</div>`;
+        const sanitizedContent = DOMPurify.sanitize(marked.parse(content || ''));
+        messageContent = `<div class="prose prose-sm dark:prose-invert max-w-none">${sanitizedContent}</div>`;
     }
 
     return `
@@ -535,7 +537,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                             <i data-lucide="chevron-down" class="transition-transform"></i>
                         </button>
                         <div id="thought-process-content" class="prose prose-sm dark:prose-invert max-w-none p-4 pt-0 custom-scrollbar" style="display: none; max-height: 200px; overflow-y: auto;">
-                            ${marked.parse(thoughtProcess)}
+                            ${DOMPurify.sanitize(marked.parse(thoughtProcess || ''))}
                         </div>
                     </div>
 
