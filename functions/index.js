@@ -983,12 +983,12 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
             } else if (action.task && action.task.title) {
                 description = `"${action.task.title}"`;
             }
-            return { id: index, description, status: 'PENDING', action: action.action };
+            return { id: index, description, status: 'pending', action: action.action };
         });
 
         progressRef = db.collection('plan_executions').doc(jobId);
         await progressRef.set({
-            status: 'RUNNING',
+            status: 'running',
             steps: progressSteps,
             startedAt: admin.firestore.FieldValue.serverTimestamp()
         });
@@ -1002,8 +1002,12 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
         progressSteps[index].status = status;
         if (error) {
             progressSteps[index].error = error;
+        } else if (progressSteps[index].error) {
+            delete progressSteps[index].error;
         }
     };
+
+    let currentStepIndex = null;
 
     try {
         // --- Pre-process plan to resolve assignee emails to UIDs ---
@@ -1028,6 +1032,8 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
         for (let i = 0; i < plan.length; i++) {
             const action = plan[i];
             if (action.action === 'CREATE') {
+                currentStepIndex = i;
+                await updateProgress(i, 'running');
                 const newTaskRef = db.collection('tareas').doc();
                 const taskData = {
                     ...action.task,
@@ -1046,7 +1052,7 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
 
                 batch.set(newTaskRef, taskData);
                 tempIdToRealIdMap.set(action.docId, newTaskRef.id);
-                await updateProgress(i, 'COMPLETED');
+                await updateProgress(i, 'completed');
             }
         }
 
@@ -1054,6 +1060,8 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
         for (let i = 0; i < plan.length; i++) {
             const action = plan[i];
             if (action.action === 'UPDATE') {
+                currentStepIndex = i;
+                await updateProgress(i, 'running');
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
                 const resolvedUpdates = {...action.updates};
@@ -1077,11 +1085,13 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     }
                 }
                 batch.update(taskRef, finalUpdates);
-                await updateProgress(i, 'COMPLETED');
+                await updateProgress(i, 'completed');
             } else if (action.action === 'DELETE') {
+                currentStepIndex = i;
+                await updateProgress(i, 'running');
                 const taskRef = db.collection('tareas').doc(action.docId);
                 batch.delete(taskRef);
-                await updateProgress(i, 'COMPLETED');
+                await updateProgress(i, 'completed');
             }
         }
 
@@ -1089,7 +1099,7 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
 
         if (progressRef) {
             await progressRef.update({
-                status: 'COMPLETED',
+                status: 'completed',
                 steps: progressSteps,
                 finishedAt: admin.firestore.FieldValue.serverTimestamp()
             });
@@ -1100,8 +1110,11 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
     } catch (error) {
         console.error("Error executing task modification plan:", error);
         if (progressRef) {
+            if (currentStepIndex !== null) {
+                await updateProgress(currentStepIndex, 'error', error.message);
+            }
             await progressRef.update({
-                status: 'ERROR',
+                status: 'error',
                 error: error.message,
                 steps: progressSteps,
                 finishedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -1277,3 +1290,7 @@ exports.enviarRecordatoriosDiarios = functions.pubsub.schedule("every day 09:00"
   .onRun(async (context) => {
     // ... function logic
   });
+
+if (process.env.NODE_ENV === 'test') {
+    module.exports._executePlan = _executePlan;
+}
