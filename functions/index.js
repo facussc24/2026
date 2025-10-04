@@ -501,7 +501,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
              * - Efficient tool usage: Employs `bulk_update_tasks` for multiple updates.
              * - Strict output format: Enforces JSON output with "thought" (in Spanish) and "tool_code".
              */
-            const systemPrompt = `
+            const buildSystemPrompt = () => `
 You are an elite, autonomous project management assistant. Your name is 'Gestión PRO'. Your primary directive is to help users manage their tasks with maximum efficiency and intelligence. You will interpret complex, natural language requests and translate them into a concrete, actionable plan using the provided tools. All your reasoning ('thought') **MUST** be in Spanish.
 
 # Core Directives & Workflow
@@ -603,6 +603,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 // Inner loop for retrying the model call on JSON parsing errors
                 for (let attempt = 0; attempt < 3; attempt++) {
                     try {
+                        const systemPrompt = buildSystemPrompt();
                         let prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
                         if (attempt > 0) {
                             prompt += `\n\n**Previous Attempt Failed:** Your last response was not valid JSON. Please ensure your entire response is a single, valid JSON object as requested in the system prompt.`;
@@ -639,7 +640,10 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                     : `Preparing to execute tool: ${tool_code.tool_id}.`);
 
                 thinkingSteps.push({ thought, tool_code: tool_code.tool_id });
-                await jobRef.update({ thinkingSteps: admin.firestore.FieldValue.arrayUnion({ thought, tool_code: tool_code.tool_id, timestamp: new Date() }) });
+                await jobRef.update({
+                    thinkingSteps: admin.firestore.FieldValue.arrayUnion({ thought, tool_code: tool_code.tool_id, timestamp: new Date() }),
+                    foundTasksContext,
+                });
 
 
                 if (tool_code.tool_id === 'finish' || tool_code.tool_id === 'answer_question') {
@@ -786,7 +790,16 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
 
                             if (foundTasks.length > 0) {
                                 foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate }));
-                                toolResult = `OK. Found ${foundTasks.length} tasks and saved them to the context.`;
+                                const formattedTaskList = foundTasksContext
+                                    .map(task => {
+                                        const parts = [`ID: ${task.id}`, `Título: ${task.title}`];
+                                        if (task.status) parts.push(`Estado: ${task.status}`);
+                                        if (task.plannedDate) parts.push(`Planificada: ${task.plannedDate}`);
+                                        if (task.dueDate) parts.push(`Vence: ${task.dueDate}`);
+                                        return `- ${parts.join(' | ')}`;
+                                    })
+                                    .join('\n');
+                                toolResult = `OK. Found ${foundTasks.length} tasks and saved them to the context.\n${formattedTaskList}`;
                             } else {
                                 foundTasksContext = []; // Clear context if no tasks are found
                                 toolResult = `Error: No tasks found for the given filter.`;
@@ -802,6 +815,9 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
 
                 conversationHistory.push({ role: 'model', parts: [{ text: JSON.stringify(agentResponse, null, 2) }] });
                 conversationHistory.push({ role: 'user', parts: [{ text: `Observation: ${toolResult}` }] });
+                if (tool_code.tool_id === 'find_tasks' && foundTasksContext.length > 0) {
+                    conversationHistory.push({ role: 'user', parts: [{ text: `Contexto de tareas encontradas: ${JSON.stringify(foundTasksContext)}` }] });
+                }
             }
 
             const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
