@@ -11,6 +11,10 @@ let dom;
 let lucide;
 let dependencies;
 
+function notifyTasksChanged() {
+    document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
+}
+
 // Exported functions for other modules to use
 export {
     calculateOverdueTasksCount,
@@ -152,6 +156,7 @@ export function runTasksLogic(initialView = 'kanban') {
                         try {
                             await deleteTask(taskId);
                             dependencies.showToast('Tarea eliminada con éxito.', 'success');
+                            notifyTasksChanged();
                         } catch (error) {
                             console.error('Error deleting task:', error);
                             dependencies.showToast('Error al eliminar la tarea.', 'error');
@@ -162,6 +167,7 @@ export function runTasksLogic(initialView = 'kanban') {
                 if (!taskId) return;
                 completeAndArchiveTask(taskId).then(() => {
                     dependencies.showToast('Tarea completada y archivada.', 'success');
+                    notifyTasksChanged();
                 }).catch(error => {
                     console.error('Error completing task:', error);
                     dependencies.showToast('Error al completar la tarea.', 'error');
