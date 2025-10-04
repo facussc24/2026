@@ -1472,18 +1472,30 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 }
             }
 
-            const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
+            const connectors = ['Primero', 'Luego', 'Después', 'Más adelante', 'Finalmente'];
+            const humanizedTool = toolCode => {
+                if (!toolCode) return 'continuar con el siguiente paso';
+                if (toolCode === 'answer_question') return 'dar una respuesta directa';
+                if (toolCode === 'no_action_required') return 'dejar constancia de que no se requería acción';
+                return `usar la herramienta "${toolCode}"`;
+            };
+
+            const finalThoughtProcess = thinkingSteps.map((step, i) => {
+                const connector = connectors[Math.min(i, connectors.length - 1)];
+                const actionDescription = humanizedTool(step.tool_code);
+                return `${connector} pensé que ${step.thought}. Por eso decidí ${actionDescription}.`;
+            }).join('\n\n');
 
             let finalThoughtProcessDisplay;
             if (summary) {
                 const lastTool = thinkingSteps[thinkingSteps.length - 1]?.tool_code;
                 if (lastTool === 'answer_question') {
-                    finalThoughtProcessDisplay = `### Respuesta de la IA:\n\n${summary}`;
+                    finalThoughtProcessDisplay = `Aquí está mi respuesta detallada:\n\n${summary}`;
                 } else {
-                    finalThoughtProcessDisplay = `### Resumen del Plan de la IA:\n\n${summary}`;
+                    finalThoughtProcessDisplay = `Este es el plan que tengo en mente:\n\n${summary}`;
                 }
             } else {
-                finalThoughtProcessDisplay = `### Proceso de Pensamiento del Agente:\n\n${finalThoughtProcess}`;
+                finalThoughtProcessDisplay = `Así estuve pensando los pasos a seguir:\n\n${finalThoughtProcess}`;
             }
 
             const planRequiresConfirmation = executionPlan.length > 0;
