@@ -1655,6 +1655,11 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
                 dailyEffort[date] = (dailyEffort[date] || 0) + effort;
                 dailyTaskCount[date] = (dailyTaskCount[date] || 0) + 1;
             }
+        } else if (item.action === 'CREATE' && item.task && item.task.plannedDate) {
+            const date = item.task.plannedDate;
+            const effort = effortCost[item.task.effort] || 3; // Default to medium
+            dailyEffort[date] = (dailyEffort[date] || 0) + effort;
+            dailyTaskCount[date] = (dailyTaskCount[date] || 0) + 1;
         }
     });
 
@@ -1665,7 +1670,7 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
             suggestions.push(`El día ${formattedDate} parece sobrecargado en esfuerzo. Considera mover alguna tarea para balancear la semana.`);
         }
         if (dailyTaskCount[date] > 4) {
-             suggestions.push(`El día ${formattedDate} tiene muchas tareas (${dailyTaskCount[date]}). Considera distribuir el trabajo para evitar el multitasking excesivo.`);
+            suggestions.push(`El día ${formattedDate} tiene muchas tareas (${dailyTaskCount[date]}). Considera distribuir el trabajo para evitar el multitasking excesivo.`);
         }
     }
 
@@ -1675,6 +1680,12 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
             const task = tasksById.get(item.docId);
             if (task && task.dueDate && item.updates.plannedDate > task.dueDate) {
                 suggestions.push(`La tarea "${task.title}" está planificada después de su fecha de vencimiento. Considera adelantarla.`);
+            }
+        } else if (item.action === 'CREATE' && item.task && item.task.plannedDate) {
+            const { task } = item;
+            if (task.dueDate && task.plannedDate > task.dueDate) {
+                const taskTitle = task.title || 'tarea';
+                suggestions.push(`La nueva tarea "${taskTitle}" está planificada después de su fecha de vencimiento. Considera adelantarla.`);
             }
         }
     });
