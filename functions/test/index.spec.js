@@ -174,6 +174,90 @@ describe('aiAgentJobRunner', () => {
         expect(finalUpdateCall[0].awaitingUserConfirmation).toBe(true);
     });
 
+    test('creates a single high-priority task with sanitized subtasks', async () => {
+        const userPrompt = 'Crear tarea X con 2 subtareas y prioridad alta';
+        const tasks = [];
+        const currentDate = getCurrentDateForUserTZ({ date: new Date('2025-03-10T12:00:00Z') });
+
+        const randomUUIDSpy = jest.spyOn(crypto, 'randomUUID');
+        randomUUIDSpy
+            .mockReturnValueOnce('temp-task-uuid')
+            .mockReturnValueOnce('subtask-uuid-1')
+            .mockReturnValueOnce('subtask-uuid-2');
+
+        mockGenerateContent
+            .mockResolvedValueOnce({
+                response: {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    thought: 'Crearé la tarea principal con sus subtareas.',
+                                    tool_code: {
+                                        tool_id: 'create_task',
+                                        parameters: {
+                                            title: 'Tarea Prioritaria',
+                                            plannedDate: currentDate,
+                                            priority: 'HIGH',
+                                            subtasks: [
+                                                { title: 'Preparar informe', completed: true },
+                                                { title: 'Revisar informe' },
+                                            ],
+                                        },
+                                    },
+                                }),
+                            }],
+                        },
+                    }],
+                },
+            })
+            .mockResolvedValueOnce({
+                response: {
+                    candidates: [{
+                        content: {
+                            parts: [{
+                                text: JSON.stringify({
+                                    thought: 'Plan listo.',
+                                    tool_code: { tool_id: 'finish', parameters: {} },
+                                }),
+                            }],
+                        },
+                    }],
+                },
+            });
+
+        const snap = {
+            ref: mockJobRef,
+            data: () => ({
+                userPrompt,
+                tasks,
+                allUsers: [],
+                currentDate,
+                conversationHistory: [],
+                executionPlan: [],
+                thinkingSteps: [],
+                summary: '',
+            }),
+        };
+
+        const wrapped = firebaseTest.wrap(aiAgentJobRunner);
+        await wrapped(snap, { params: { jobId: 'job-priority' } });
+
+        const finalUpdateCall = mockJobRef.update.mock.calls.find((call) => call[0].status === 'AWAITING_CONFIRMATION');
+        expect(finalUpdateCall).toBeDefined();
+
+        const plan = finalUpdateCall[0].executionPlan;
+        expect(plan).toHaveLength(1);
+        const [createAction] = plan;
+        expect(createAction.action).toBe('CREATE');
+        expect(createAction.task.priority).toBe('high');
+        expect(createAction.task.subtasks).toEqual([
+            { id: 'subtask-uuid-1', title: 'Preparar informe', completed: false },
+            { id: 'subtask-uuid-2', title: 'Revisar informe', completed: false },
+        ]);
+        expect(randomUUIDSpy).toHaveBeenCalledTimes(3);
+    });
+
     test('generates unique temporary IDs for consecutive task creations', async () => {
         const userPrompt = 'Crear dos tareas dependientes para la campaña.';
         const tasks = [];
