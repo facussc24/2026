@@ -136,13 +136,23 @@ const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI
         });
     };
 
-    const numericDateRegex = /(\d{1,2})[\/-](\d{1,2})(?!\d)/g;
+    const numericDateRegex = /(?<!\d)(\d{1,2})[\/-](\d{1,2})(?!\d)/g;
     let numericMatch;
     while ((numericMatch = numericDateRegex.exec(userPrompt)) !== null) {
         const [, dayRaw, monthRaw] = numericMatch;
         const day = Number(dayRaw);
         const month = Number(monthRaw);
         formatCandidateDate(referenceYear, month, day, numericMatch[0]);
+    }
+
+    const isoDateRegex = /\b(\d{4})[\/-](\d{2})[\/-](\d{2})\b/g;
+    let isoMatch;
+    while ((isoMatch = isoDateRegex.exec(userPrompt)) !== null) {
+        const [, yearRaw, monthRaw, dayRaw] = isoMatch;
+        const year = Number(yearRaw);
+        const month = Number(monthRaw);
+        const day = Number(dayRaw);
+        formatCandidateDate(year, month, day, isoMatch[0]);
     }
 
     const textualDateRegex = /(\d{1,2})\s+de\s+([a-z\u00f1]+)/gi;
