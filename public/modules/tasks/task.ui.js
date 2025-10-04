@@ -3,6 +3,7 @@ import { getState } from './task.state.js';
 import { deleteTask, loadTelegramConfig, saveTelegramConfig, sendTestTelegram, completeAndArchiveTask } from './task.service.js';
 import { initTasksSortable } from './task.kanban.js';
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.es.js";
 import { getEmptyStateHTML, getTaskCardHTML, getSubtaskHTML, getAdminUserListHTML, getTasksTableHTML, getPaginationControlsHTML, getTaskTableFiltersHTML, getMyPendingTasksWidgetHTML, getTelegramConfigHTML, getPlannerHelpModalHTML, getTasksModalHTML } from './task.templates.js';
 import { openTaskFormModal } from './task.modal.js';
 
@@ -300,7 +301,7 @@ export function openAIAssistantModal() {
 
                 // Using a library like 'marked' would be better, but for now, we'll inject the HTML.
                 // The 'prose' class from Tailwind Typography will style it.
-                analysisContent.innerHTML = result.data.analysis;
+                analysisContent.innerHTML = DOMPurify.sanitize(result.data.analysis || '');
 
                 applyBtn.disabled = false;
                 applyBtn.addEventListener('click', async () => {
@@ -329,7 +330,7 @@ export function openAIAssistantModal() {
 
                 // The AI response is expected to be simple markdown.
                 // We can inject it directly as the 'prose' class will style it.
-                responseContainer.innerHTML = result.data.summary;
+                responseContainer.innerHTML = DOMPurify.sanitize(result.data.summary || '');
             }
 
         } catch (error) {
