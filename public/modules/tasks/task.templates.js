@@ -219,134 +219,299 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
     const { thoughtProcess, executionPlan } = plan;
 
     const renderAction = (action, index) => {
-        let icon, title, details;
+        let icon, titleSection, details;
         const actionId = `action_${index}`;
         const resolvedActionTitle = action.originalTitle || taskTitleMap.get(action.docId) || 'Tarea sin título';
 
-        // A more modern and clean design for the action items.
-        // Using group/action to manage styles based on checkbox state.
-        let content = `<div class="ai-plan-action-item group/action bg-white dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm transition-all duration-300 has-[:checked]:border-purple-300 has-[:checked]:dark:border-purple-700 has-[:not(:checked)]:opacity-60 has-[:not(:checked)]:bg-slate-100 has-[:not(:checked)]:dark:bg-slate-800 relative overflow-hidden">`;
+        const typeStyles = {
+            CREATE: {
+                badge: 'bg-emerald-500 text-white shadow-emerald-500/40 ring-2 ring-emerald-400/40',
+                card: 'border-emerald-100/70 shadow-[0_32px_70px_-45px_rgba(16,185,129,0.9)] dark:border-emerald-900/60',
+                bar: 'from-emerald-400 via-emerald-500 to-emerald-600',
+                iconWrap: 'bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-200',
+                pill: 'bg-emerald-100 text-emerald-700 border border-emerald-300/60 dark:bg-emerald-500/20 dark:text-emerald-200',
+                sectionTag: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200',
+                accentText: 'text-emerald-600 dark:text-emerald-300'
+            },
+            UPDATE: {
+                badge: 'bg-sky-500 text-white shadow-sky-500/40 ring-2 ring-sky-400/40',
+                card: 'border-sky-100/70 shadow-[0_32px_70px_-45px_rgba(14,165,233,0.9)] dark:border-sky-900/60',
+                bar: 'from-sky-400 via-sky-500 to-blue-600',
+                iconWrap: 'bg-sky-50 text-sky-600 ring-1 ring-inset ring-sky-500/40 dark:bg-sky-950/40 dark:text-sky-200',
+                pill: 'bg-sky-100 text-sky-700 border border-sky-300/60 dark:bg-sky-500/20 dark:text-sky-200',
+                sectionTag: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-200',
+                accentText: 'text-sky-600 dark:text-sky-300'
+            },
+            DELETE: {
+                badge: 'bg-rose-500 text-white shadow-rose-500/40 ring-2 ring-rose-400/40',
+                card: 'border-rose-100/70 shadow-[0_32px_70px_-45px_rgba(244,63,94,0.9)] dark:border-rose-900/60',
+                bar: 'from-rose-400 via-rose-500 to-rose-600',
+                iconWrap: 'bg-rose-50 text-rose-600 ring-1 ring-inset ring-rose-500/40 dark:bg-rose-950/40 dark:text-rose-200',
+                pill: 'bg-rose-100 text-rose-700 border border-rose-300/60 dark:bg-rose-500/20 dark:text-rose-200',
+                sectionTag: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-200',
+                accentText: 'text-rose-600 dark:text-rose-300'
+            },
+            DEFAULT: {
+                badge: 'bg-slate-500 text-white shadow-slate-500/40 ring-2 ring-slate-400/40',
+                card: 'border-slate-200/80 shadow-[0_32px_70px_-45px_rgba(71,85,105,0.9)] dark:border-slate-800/70',
+                bar: 'from-slate-400 via-slate-500 to-slate-600',
+                iconWrap: 'bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-400/40 dark:bg-slate-900/40 dark:text-slate-200',
+                pill: 'bg-slate-100 text-slate-600 border border-slate-300/60 dark:bg-slate-700/30 dark:text-slate-200',
+                sectionTag: 'bg-slate-100 text-slate-600 dark:bg-slate-700/30 dark:text-slate-200',
+                accentText: 'text-slate-600 dark:text-slate-300'
+            }
+        };
 
-        content += `<input type="hidden" name="${actionId}_type" value="${action.action}">`;
+        const actionLabels = {
+            CREATE: 'Crear',
+            UPDATE: 'Actualizar',
+            DELETE: 'Eliminar'
+        };
 
-        // Checkbox is now larger and placed with a background for better visibility.
-        content += `<div class="absolute top-3 right-3 z-10"><input type="checkbox" name="${actionId}_enabled" checked class="h-5 w-5 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer" title="Incluir esta acción"></div>`;
+        const styles = typeStyles[action.action] || typeStyles.DEFAULT;
+        const actionLabel = actionLabels[action.action] || action.action;
+
+        const labelClass = 'text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300';
+        const inputBaseClass = 'mt-1 w-full rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500';
+        const textareaClass = `${inputBaseClass} min-h-[120px] resize-vertical leading-relaxed`;
+        const selectClass = `${inputBaseClass} pr-9`;
+        const sectionTitleClass = 'text-sm font-semibold text-slate-700 dark:text-slate-200';
+
+        const renderFieldWrapper = (content, spanClass = 'sm:col-span-1') => `
+            <div class="flex flex-col gap-2 ${spanClass}">
+                ${content}
+            </div>
+        `;
+
+        const renderInputField = ({ id, name, label, value = '', type = 'text', spanClass = 'sm:col-span-1', placeholder = '' }) => renderFieldWrapper(`
+            <label for="${id}" class="${labelClass}">${label}</label>
+            <input type="${type}" id="${id}" name="${name}" value="${value}" ${placeholder ? `placeholder="${placeholder}"` : ''} class="${inputBaseClass}">
+        `, spanClass);
+
+        const renderTextareaField = ({ id, name, label, value = '', spanClass = 'sm:col-span-2', helperText = '' }) => renderFieldWrapper(`
+            <label for="${id}" class="${labelClass}">${label}</label>
+            <textarea id="${id}" name="${name}" rows="3" class="${textareaClass}">${value}</textarea>
+            ${helperText ? `<p class="text-xs text-slate-500 dark:text-slate-400">${helperText}</p>` : ''}
+        `, spanClass);
+
+        const renderSelectField = ({ id, name, label, value = '', spanClass = 'sm:col-span-1', options = [] }) => renderFieldWrapper(`
+            <label for="${id}" class="${labelClass}">${label}</label>
+            <select id="${id}" name="${name}" class="${selectClass}">
+                ${options.map(option => `<option value="${option.value}" ${option.value === value ? 'selected' : ''}>${option.label}</option>`).join('')}
+            </select>
+        `, spanClass);
+
+        const renderInfoField = ({ label, value, spanClass = 'sm:col-span-2' }) => renderFieldWrapper(`
+            <span class="${labelClass}">${label}</span>
+            <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">${value}</div>
+        `, spanClass);
+
+        const renderPanel = ({ title, body, badge, description }) => `
+            <section class="rounded-2xl border border-slate-200/90 bg-white/95 px-5 py-5 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/70">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h6 class="${sectionTitleClass}">${title}</h6>
+                        ${description ? `<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">${description}</p>` : ''}
+                    </div>
+                    ${badge ? `<span class="rounded-full px-3 py-1 text-[0.7rem] font-semibold tracking-wide ${styles.sectionTag}">${badge}</span>` : ''}
+                </div>
+                <div class="mt-4 space-y-4">${body}</div>
+            </section>
+        `;
+
+        let hiddenFields = `<input type="hidden" name="${actionId}_type" value="${action.action}">`;
+        const checkbox = `<input type="checkbox" name="${actionId}_enabled" checked class="h-5 w-5 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer" title="Incluir esta acción">`;
 
         switch (action.action) {
             case 'CREATE':
-                icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-green-100 dark:bg-green-900/50 flex items-center justify-center shadow-inner border border-green-200 dark:border-green-800"><i data-lucide="plus" class="w-6 h-6 text-green-600 dark:text-green-400"></i></div>`;
-                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Crear Nueva Tarea</p>`;
+                icon = `<div class="flex h-12 w-12 items-center justify-center rounded-xl ${styles.iconWrap}"><i data-lucide="plus" class="w-6 h-6"></i></div>`;
+                titleSection = `
+                    <div class="space-y-2">
+                        <h5 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Crear nueva tarea</h5>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">Revísala antes de confirmarla o ajusta cualquier campo.</p>
+                    </div>
+                `;
                 const plannedDateValue = action.task?.plannedDate || '';
                 const subtasksTitles = Array.isArray(action.task?.subtasks)
                     ? action.task.subtasks.map(subtask => (subtask?.title || '').trim()).filter(Boolean).join('\n')
                     : '';
-                details = `<div class="space-y-3 mt-3">
-                               <div class="ai-input-group">
-                                   <label for="${actionId}_title" class="ai-input-label">TÍTULO</label>
-                                   <input type="text" id="${actionId}_title" name="${actionId}_title" value="${action.task.title || ''}" class="editable-ai-input">
-                               </div>
-                               <div class="ai-input-group">
-                                   <label for="${actionId}_dueDate" class="ai-input-label">FECHA LÍMITE</label>
-                                   <input type="date" id="${actionId}_dueDate" name="${actionId}_dueDate" value="${action.task.dueDate || ''}" class="editable-ai-input">
-                               </div>
-                               <div class="ai-input-group">
-                                   <label for="${actionId}_plannedDate" class="ai-input-label">FECHA PLANIFICADA</label>
-                                   <input type="date" id="${actionId}_plannedDate" name="${actionId}_plannedDate" value="${plannedDateValue}" class="editable-ai-input">
-                               </div>
-                               <div class="ai-input-group">
-                                   <label for="${actionId}_subtasks" class="ai-input-label">SUB-TAREAS PROPUESTAS</label>
-                                   <textarea id="${actionId}_subtasks" name="${actionId}_subtasks" rows="3" class="editable-ai-input">${subtasksTitles}</textarea>
-                                   <p class="text-xs text-slate-500 italic mt-1">Edita los títulos si es necesario, una sub-tarea por línea.</p>
-                               </div>
-                           </div>`;
+                const coreFields = `
+                    <div class="grid gap-4 sm:grid-cols-2">
+                        ${renderInputField({ id: `${actionId}_title`, name: `${actionId}_title`, label: 'Título', value: action.task.title || '', spanClass: 'sm:col-span-2', placeholder: 'Describe la tarea...' })}
+                        ${renderInputField({ id: `${actionId}_dueDate`, name: `${actionId}_dueDate`, label: 'Fecha límite', value: action.task.dueDate || '', type: 'date' })}
+                        ${renderInputField({ id: `${actionId}_plannedDate`, name: `${actionId}_plannedDate`, label: 'Fecha planificada', value: plannedDateValue, type: 'date' })}
+                    </div>
+                `;
+                const subtasksPanel = renderPanel({
+                    title: 'Subtareas propuestas',
+                    description: 'Puedes reorganizar o reescribir cada línea para ajustarla al flujo de trabajo.',
+                    body: renderTextareaField({
+                        id: `${actionId}_subtasks`,
+                        name: `${actionId}_subtasks`,
+                        label: 'Lista de subtareas',
+                        value: subtasksTitles,
+                        helperText: 'Edita los títulos si es necesario; escribe una sub-tarea por línea.'
+                    })
+                });
+
+                details = `
+                    <div class="mt-6 space-y-6">
+                        ${renderPanel({ title: 'Detalles principales', body: coreFields, badge: 'Nueva tarea' })}
+                        ${subtasksPanel}
+                    </div>
+                `;
                 break;
             case 'UPDATE':
-                icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center shadow-inner border border-blue-200 dark:border-blue-800"><i data-lucide="edit-3" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i></div>`;
-                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Actualizar Tarea</p>
-                         <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 italic">Tarea original: "${resolvedActionTitle}"</p>`;
+                icon = `<div class="flex h-12 w-12 items-center justify-center rounded-xl ${styles.iconWrap}"><i data-lucide="edit-3" class="w-6 h-6"></i></div>`;
+                titleSection = `
+                    <div class="space-y-3">
+                        <h5 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Actualizar tarea</h5>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">Revisa los cambios sugeridos antes de confirmarlos.</p>
+                    </div>
+                `;
 
-                content += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
-
-                details = '<div class="space-y-3 mt-3">';
+                hiddenFields += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
+                const updateFields = [];
                 let updateIndex = 0;
                 for (const updateField in action.updates) {
                     if (Object.prototype.hasOwnProperty.call(action.updates, updateField)) {
                         const updateValue = action.updates[updateField];
-                        content += `<input type="hidden" name="${actionId}_update_field_${updateIndex}" value="${updateField}">`;
+                        hiddenFields += `<input type="hidden" name="${actionId}_update_field_${updateIndex}" value="${updateField}">`;
                         let updateInput = '';
-
-                        const renderReadOnlyInfo = (label, value) => `
-                            <div class="ai-input-group">
-                                <label class="ai-input-label">${label}</label>
-                                <div class="text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">${value}</div>
-                            </div>`;
 
                         if (updateField === 'dependsOn' || updateField === 'blocks') {
                             const label = updateField === 'dependsOn' ? 'DEPENDE DE (PRERREQUISITO)' : 'BLOQUEA A';
                             const taskTitles = (updateValue || []).map(taskId => taskTitleMap.get(taskId) || taskId).join(', ');
-                            updateInput = renderReadOnlyInfo(label, taskTitles);
-                            content += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value='${JSON.stringify(updateValue)}'>`;
+                            updateInput = renderInfoField({ label, value: taskTitles || 'Sin referencias', spanClass: 'sm:col-span-2' });
+                            hiddenFields += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value='${JSON.stringify(updateValue)}'>`;
                         } else if (updateField === 'blocked') {
-                            updateInput = renderReadOnlyInfo('ESTADO', updateValue ? 'Se marcará como Bloqueada' : 'Se desbloqueará');
-                            content += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="${updateValue}">`;
+                            updateInput = renderInfoField({ label: 'Estado', value: updateValue ? 'Se marcará como bloqueada' : 'Se desbloqueará', spanClass: 'sm:col-span-2' });
+                            hiddenFields += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="${updateValue}">`;
                         } else if (updateField === 'status' && updateValue === 'done') {
-                            updateInput = renderReadOnlyInfo('ESTADO', 'Marcar como Completada');
-                            content += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="done">`;
+                            updateInput = renderInfoField({ label: 'Estado', value: 'Marcar como completada', spanClass: 'sm:col-span-2' });
+                            hiddenFields += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="done">`;
                         } else if (updateField === 'dueDate' || updateField === 'plannedDate') {
                             const label = updateField === 'dueDate' ? 'NUEVA FECHA LÍMITE' : 'NUEVA FECHA PLANIFICADA';
-                            updateInput = `<div class="ai-input-group">
-                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">${label}</label>
-                                               <input type="date" id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" value="${updateValue || ''}" class="editable-ai-input">
-                                           </div>`;
+                            updateInput = renderInputField({
+                                id: `${actionId}_update_value_${updateIndex}`,
+                                name: `${actionId}_update_value_${updateIndex}`,
+                                label,
+                                value: updateValue || '',
+                                type: 'date'
+                            });
                         } else if (updateField === 'priority') {
-                            updateInput = `<div class="ai-input-group">
-                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">PRIORIDAD</label>
-                                               <select id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" class="editable-ai-input">
-                                                   <option value="low" ${updateValue === 'low' ? 'selected' : ''}>Baja</option>
-                                                   <option value="medium" ${updateValue === 'medium' ? 'selected' : ''}>Media</option>
-                                                   <option value="high" ${updateValue === 'high' ? 'selected' : ''}>Alta</option>
-                                               </select>
-                                           </div>`;
+                            updateInput = renderSelectField({
+                                id: `${actionId}_update_value_${updateIndex}`,
+                                name: `${actionId}_update_value_${updateIndex}`,
+                                label: 'Prioridad',
+                                value: updateValue,
+                                options: [
+                                    { value: 'low', label: 'Baja' },
+                                    { value: 'medium', label: 'Media' },
+                                    { value: 'high', label: 'Alta' }
+                                ]
+                            });
                         } else if (updateField === 'subtasks') {
                             const subtaskTitles = Array.isArray(updateValue)
                                 ? updateValue.map(subtask => (subtask?.title || '').trim()).filter(Boolean).join('\n')
                                 : '';
-                            updateInput = `<div class="ai-input-group">
-                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">SUB-TAREAS</label>
-                                               <textarea id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" rows="3" class="editable-ai-input">${subtaskTitles}</textarea>
-                                               <p class="text-xs text-slate-500 italic mt-1">Edita los títulos si es necesario, una sub-tarea por línea.</p>
-                                           </div>`;
+                            updateInput = renderTextareaField({
+                                id: `${actionId}_update_value_${updateIndex}`,
+                                name: `${actionId}_update_value_${updateIndex}`,
+                                label: 'Sub-tareas',
+                                value: subtaskTitles,
+                                helperText: 'Edita los títulos si es necesario; escribe una sub-tarea por línea.'
+                            });
                         } else {
-                            const label = updateField.replace(/([A-Z])/g, ' $1').toUpperCase();
-                            updateInput = `<div class="ai-input-group">
-                                               <label for="${actionId}_update_value_${updateIndex}" class="ai-input-label">${label}</label>
-                                               <input type="text" id="${actionId}_update_value_${updateIndex}" name="${actionId}_update_value_${updateIndex}" value="${updateValue || ''}" class="editable-ai-input">
-                                           </div>`;
+                            const label = updateField.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                            updateInput = renderInputField({
+                                id: `${actionId}_update_value_${updateIndex}`,
+                                name: `${actionId}_update_value_${updateIndex}`,
+                                label,
+                                value: updateValue || '',
+                                spanClass: 'sm:col-span-2 md:col-span-1'
+                            });
                         }
-                        details += updateInput;
+                        updateFields.push(updateInput);
                         updateIndex++;
                     }
                 }
-                details += '</div>';
+                const referencePanel = renderPanel({
+                    title: 'Tarea seleccionada',
+                    body: renderInfoField({ label: 'Título actual', value: `"${resolvedActionTitle}"`, spanClass: 'sm:col-span-2' }),
+                    badge: 'Referencia'
+                });
+                const updatesGrid = `<div class="grid gap-4 sm:grid-cols-2">${updateFields.join('')}</div>`;
+                details = `
+                    <div class="mt-6 space-y-6">
+                        ${referencePanel}
+                        ${renderPanel({
+                            title: 'Cambios propuestos',
+                            body: updatesGrid,
+                            badge: 'Actualizar',
+                            description: 'Solo se aplicarán los campos seleccionados en esta lista.'
+                        })}
+                    </div>
+                `;
                 break;
             case 'DELETE':
-                icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-red-100 dark:bg-red-900/50 flex items-center justify-center shadow-inner border border-red-200 dark:border-red-800"><i data-lucide="trash-2" class="w-6 h-6 text-red-600 dark:text-red-400"></i></div>`;
-                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Eliminar Tarea</p>`;
-                details = `<div class="mt-2 text-sm font-medium p-3 bg-slate-100 dark:bg-slate-900/70 rounded-md border border-slate-200 dark:border-slate-700">
-                               Se eliminará la tarea: <strong class="text-red-600 dark:text-red-400">"${resolvedActionTitle}"</strong>.
-                           </div>`;
-                content += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
+                icon = `<div class="flex h-12 w-12 items-center justify-center rounded-xl ${styles.iconWrap}"><i data-lucide="trash-2" class="w-6 h-6"></i></div>`;
+                titleSection = `
+                    <div class="space-y-2">
+                        <h5 class="text-xl font-semibold text-slate-900 dark:text-slate-100">Eliminar tarea</h5>
+                        <p class="text-sm text-slate-600 dark:text-slate-300">Confirma que esta tarea puede eliminarse del tablero.</p>
+                    </div>
+                `;
+                details = `
+                    <div class="mt-6">
+                        ${renderPanel({
+                            title: 'Resumen de la acción',
+                            body: `
+                                <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                    Se eliminará la tarea <span class="font-semibold ${styles.accentText}">"${resolvedActionTitle}"</span>. Esta acción no se puede deshacer.
+                                </p>
+                            `,
+                            badge: 'Eliminar'
+                        })}
+                    </div>
+                `;
+                hiddenFields += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
                 break;
             default:
-                icon = `<div class="w-11 h-11 flex-shrink-0 rounded-lg bg-gray-100 dark:bg-gray-900/50 flex items-center justify-center shadow-inner border border-gray-200 dark:border-gray-800"><i data-lucide="alert-circle" class="w-6 h-6 text-gray-600 dark:text-gray-400"></i></div>`;
-                title = `<p class="font-bold text-base text-slate-800 dark:text-slate-200">Acción Desconocida</p>`;
-                details = `<p class="text-sm text-slate-500">${action.action}</p>`;
+                icon = `<div class="flex h-12 w-12 items-center justify-center rounded-xl ${styles.iconWrap}"><i data-lucide="alert-circle" class="w-6 h-6"></i></div>`;
+                titleSection = `
+                    <div class="space-y-1">
+                        <h5 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Acción Desconocida</h5>
+                    </div>
+                `;
+                details = `<p class="text-sm text-slate-500 dark:text-slate-400">${action.action}</p>`;
         }
-        content += `<div class="flex items-start gap-4 p-4">
-                        ${icon}
-                        <div class="flex-grow pt-0.5">${title}${details}</div>
-                    </div></div>`;
-        return content;
+
+        return `
+            <li class="ai-plan-timeline-item group/action relative ps-12 sm:ps-16">
+                ${hiddenFields}
+                <span class="absolute -left-1 top-0 flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold shadow-md ${styles.badge}">
+                    ${index + 1}
+                </span>
+                <div class="ai-plan-action-item relative overflow-hidden rounded-3xl border bg-white shadow-xl transition-all duration-300 dark:bg-slate-900/80 ${styles.card} has-[input:not(:checked)]:border-slate-200 has-[input:not(:checked)]:bg-slate-100/80 dark:has-[input:not(:checked)]:border-slate-700 dark:has-[input:not(:checked)]:bg-slate-900/60 has-[input:not(:checked)]:opacity-60">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${styles.bar}"></span>
+                    <div class="absolute right-5 top-5 z-10 flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        <span class="hidden sm:inline">Incluir</span>
+                        ${checkbox}
+                    </div>
+                    <div class="grid items-start gap-8 px-6 py-7 sm:grid-cols-[auto,1fr]">
+                        <div class="flex flex-col items-center gap-3 text-center sm:items-start sm:text-left">
+                            ${icon}
+                            <span class="rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wider ${styles.pill}">${actionLabel}</span>
+                        </div>
+                        <div class="space-y-6 sm:pt-1">
+                            ${titleSection || ''}
+                            ${details || ''}
+                        </div>
+                    </div>
+                </div>
+            </li>
+        `;
     };
 
     const actionsHTML = executionPlan.map(renderAction).join('');
@@ -390,8 +555,10 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                         <input type="hidden" id="ai-plan-json" name="ai-plan-json" value="" data-job-id="">
                         <h4 class="font-bold text-slate-800 dark:text-slate-200 mb-3 text-lg">Plan de Ejecución Propuesto</h4>
                         <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Puedes desmarcar o editar cualquier acción antes de confirmar.</p>
-                        <div class="space-y-4 max-h-64 overflow-y-auto custom-scrollbar pr-2">
-                            ${actionsHTML || '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
+                        <div class="max-h-72 overflow-y-auto pr-3 custom-scrollbar">
+                            ${actionsHTML
+                                ? `<ol class="ai-plan-timeline relative space-y-8 border-s-2 border-dashed border-slate-200 ps-4 dark:border-slate-700 sm:ps-6">${actionsHTML}</ol>`
+                                : '<p class="text-sm text-slate-500">No se proponen acciones.</p>'}
                         </div>
                     </form>
                 </div>
