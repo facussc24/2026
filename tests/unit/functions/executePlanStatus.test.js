@@ -193,4 +193,28 @@ describe('extractExplicitDatesFromPrompt helper', () => {
       expect.objectContaining({ isoDate: '2025-10-03', originalText: '2025-10-03' })
     );
   });
+
+  it('rolls 3/10 forward when executed on 4/10 and keeps the date on a business day', () => {
+    const baseDate = new Date('2023-10-04T12:00:00Z');
+    const results = extractExplicitDatesFromPrompt(
+      'Agendar el control para el 3/10.',
+      { timeZone: 'America/Argentina/Buenos_Aires', baseDate }
+    );
+
+    const candidate = results.find((entry) => entry.originalText === '3/10');
+    expect(candidate).toBeDefined();
+    if (!candidate) {
+      throw new Error('Expected explicit date candidate for 3/10');
+    }
+    expect(candidate).toEqual(
+      expect.objectContaining({
+        isoDate: '2024-10-03',
+        rolledToFuture: true,
+      })
+    );
+
+    const candidateDate = new Date(`${candidate.isoDate}T12:00:00Z`);
+    const dayOfWeek = candidateDate.getUTCDay();
+    expect([0, 6]).not.toContain(dayOfWeek);
+  });
 });

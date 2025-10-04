@@ -112,11 +112,13 @@ const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI
             return;
         }
 
+        let rolledToFuture = false;
         if (candidate < referenceDateUtc) {
             const nextYearCandidate = new Date(Date.UTC(year + 1, month - 1, day, 12));
             if (!Number.isNaN(nextYearCandidate.getTime())) {
                 candidate = nextYearCandidate;
                 year += 1;
+                rolledToFuture = true;
             }
         }
 
@@ -133,6 +135,7 @@ const extractExplicitDatesFromPrompt = (userPrompt = '', { timeZone = DEFAULT_AI
             year,
             month,
             day,
+            rolledToFuture,
         });
     };
 
@@ -991,21 +994,55 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             if (explicitCandidate) {
                                 const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalPlannedDate;
                                 if (!modelPlannedDate || explicitCandidate.isoDate !== previousFinalDate) {
-                                    finalPlannedDate = explicitCandidate.isoDate;
+                                    const requestedDate = explicitCandidate.isoDate;
+                                    const rolledToFuture = Boolean(explicitCandidate.rolledToFuture);
+                                    let overrideFinalDate = requestedDate;
+                                    let overrideWeekendAdjustment = null;
+
+                                    if (rolledToFuture) {
+                                        const overrideNormalization = normalizePlannedDate(requestedDate, effectiveTimeZone);
+                                        if (overrideNormalization.wasAdjusted && overrideNormalization.normalizedDate) {
+                                            overrideFinalDate = overrideNormalization.normalizedDate;
+                                            overrideWeekendAdjustment = {
+                                                from: overrideNormalization.originalDate,
+                                                to: overrideNormalization.normalizedDate,
+                                                fromWeekday: overrideNormalization.originalWeekday,
+                                                toWeekday: overrideNormalization.normalizedWeekday,
+                                                taskTitle: createTaskTitle,
+                                            };
+                                        }
+                                    }
+
+                                    finalPlannedDate = overrideFinalDate;
+                                    weekendAdjustment = overrideWeekendAdjustment;
+
                                     explicitOverrideInfo = {
                                         from: previousFinalDate || null,
-                                        to: explicitCandidate.isoDate,
+                                        to: overrideFinalDate,
                                         originalText: explicitCandidate.originalText,
                                         taskTitle: createTaskTitle,
+                                        requestedDate,
                                     };
-                                    weekendAdjustment = null;
-                                    const note = `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}". Se estableció ${explicitCandidate.isoDate}.`;
-                                    planEntryNotes.push(note);
-                                    sanitySuggestions.push(`Se corrigió la fecha de "${createTaskTitle}" a ${explicitCandidate.isoDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
+
+                                    if (rolledToFuture) {
+                                        explicitOverrideInfo.rolledToFuture = true;
+                                    }
+
+                                    const noteParts = [
+                                        `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}".`,
+                                    ];
+                                    if (overrideWeekendAdjustment && requestedDate !== overrideFinalDate) {
+                                        noteParts.push(`Se movió de ${requestedDate} a ${overrideFinalDate} para evitar fines de semana.`);
+                                    } else {
+                                        noteParts.push(`Se estableció ${overrideFinalDate}.`);
+                                    }
+                                    planEntryNotes.push(noteParts.join(' '));
+
+                                    sanitySuggestions.push(`Se corrigió la fecha de "${createTaskTitle}" a ${overrideFinalDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
                                     explicitDateCorrections.push({
                                         taskTitle: createTaskTitle,
                                         from: explicitOverrideInfo.from,
-                                        to: explicitCandidate.isoDate,
+                                        to: overrideFinalDate,
                                         originalText: explicitCandidate.originalText,
                                         action: 'CREATE',
                                     });
@@ -1013,8 +1050,15 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             }
 
                             if (weekendAdjustment) {
-                                planEntryNotes.push(`Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`);
-                                sanitySuggestions.push(`"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`);
+                                const weekendOriginal = explicitOverrideInfo?.requestedDate || weekendAdjustment.from;
+                                const weekendNote = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                    ? `La fecha indicada por el usuario "${explicitOverrideInfo.originalText}" caía en ${weekendAdjustment.fromWeekday} (${weekendOriginal}) y se reprogramó automáticamente al ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`
+                                    : `Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`;
+                                planEntryNotes.push(weekendNote);
+                                const sanityMessage = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                    ? `"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha indicada por el usuario (${weekendOriginal}) caía en fin de semana.`
+                                    : `"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`;
+                                sanitySuggestions.push(sanityMessage);
                             }
 
                             if (finalPlannedDate) {
@@ -1034,12 +1078,19 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             }
 
                             if (explicitOverrideInfo) {
+                                const metadataPayload = {
+                                    isoDate: explicitOverrideInfo.to,
+                                    originalText: explicitOverrideInfo.originalText,
+                                };
+                                if (explicitOverrideInfo.requestedDate && explicitOverrideInfo.requestedDate !== explicitOverrideInfo.to) {
+                                    metadataPayload.requestedDate = explicitOverrideInfo.requestedDate;
+                                }
+                                if (explicitOverrideInfo.rolledToFuture) {
+                                    metadataPayload.rolledToFuture = true;
+                                }
                                 createPlanEntry.metadata = {
                                     ...(createPlanEntry.metadata || {}),
-                                    explicitDateOverride: {
-                                        isoDate: explicitOverrideInfo.to,
-                                        originalText: explicitOverrideInfo.originalText,
-                                    },
+                                    explicitDateOverride: metadataPayload,
                                 };
                             }
 
@@ -1146,21 +1197,55 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                     if (explicitCandidate) {
                                         const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalUpdateDate;
                                         if (!modelUpdateDate || explicitCandidate.isoDate !== previousFinalDate) {
-                                            finalUpdateDate = explicitCandidate.isoDate;
+                                            const requestedDate = explicitCandidate.isoDate;
+                                            const rolledToFuture = Boolean(explicitCandidate.rolledToFuture);
+                                            let overrideFinalDate = requestedDate;
+                                            let overrideWeekendAdjustment = null;
+
+                                            if (rolledToFuture) {
+                                                const overrideNormalization = normalizePlannedDate(requestedDate, effectiveTimeZone);
+                                                if (overrideNormalization.wasAdjusted && overrideNormalization.normalizedDate) {
+                                                    overrideFinalDate = overrideNormalization.normalizedDate;
+                                                    overrideWeekendAdjustment = {
+                                                        from: overrideNormalization.originalDate,
+                                                        to: overrideNormalization.normalizedDate,
+                                                        fromWeekday: overrideNormalization.originalWeekday,
+                                                        toWeekday: overrideNormalization.normalizedWeekday,
+                                                        taskTitle: updateTaskTitle,
+                                                    };
+                                                }
+                                            }
+
+                                            finalUpdateDate = overrideFinalDate;
+                                            weekendAdjustment = overrideWeekendAdjustment;
+
                                             explicitOverrideInfo = {
                                                 from: previousFinalDate || null,
-                                                to: explicitCandidate.isoDate,
+                                                to: overrideFinalDate,
                                                 originalText: explicitCandidate.originalText,
                                                 taskTitle: updateTaskTitle,
+                                                requestedDate,
                                             };
-                                            weekendAdjustment = null;
-                                            const note = `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}". Se estableció ${explicitCandidate.isoDate}.`;
-                                            planEntryNotes.push(note);
-                                            sanitySuggestions.push(`Se corrigió la fecha de "${updateTaskTitle}" a ${explicitCandidate.isoDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
+
+                                            if (rolledToFuture) {
+                                                explicitOverrideInfo.rolledToFuture = true;
+                                            }
+
+                                            const noteParts = [
+                                                `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}".`,
+                                            ];
+                                            if (overrideWeekendAdjustment && requestedDate !== overrideFinalDate) {
+                                                noteParts.push(`Se movió de ${requestedDate} a ${overrideFinalDate} para evitar fines de semana.`);
+                                            } else {
+                                                noteParts.push(`Se estableció ${overrideFinalDate}.`);
+                                            }
+                                            planEntryNotes.push(noteParts.join(' '));
+
+                                            sanitySuggestions.push(`Se corrigió la fecha de "${updateTaskTitle}" a ${overrideFinalDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
                                             explicitDateCorrections.push({
                                                 taskTitle: updateTaskTitle,
                                                 from: explicitOverrideInfo.from,
-                                                to: explicitCandidate.isoDate,
+                                                to: overrideFinalDate,
                                                 originalText: explicitCandidate.originalText,
                                                 action: 'UPDATE',
                                             });
@@ -1168,8 +1253,15 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                     }
 
                                     if (weekendAdjustment) {
-                                        planEntryNotes.push(`Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`);
-                                        sanitySuggestions.push(`"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`);
+                                        const weekendOriginal = explicitOverrideInfo?.requestedDate || weekendAdjustment.from;
+                                        const weekendNote = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                            ? `La fecha indicada por el usuario "${explicitOverrideInfo.originalText}" caía en ${weekendAdjustment.fromWeekday} (${weekendOriginal}) y se reprogramó automáticamente al ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`
+                                            : `Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`;
+                                        planEntryNotes.push(weekendNote);
+                                        const sanityMessage = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                            ? `"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha indicada por el usuario (${weekendOriginal}) caía en fin de semana.`
+                                            : `"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`;
+                                        sanitySuggestions.push(sanityMessage);
                                     }
 
                                     if (finalUpdateDate) {
@@ -1196,12 +1288,19 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                 }
 
                                 if (explicitOverrideInfo) {
+                                    const metadataPayload = {
+                                        isoDate: explicitOverrideInfo.to,
+                                        originalText: explicitOverrideInfo.originalText,
+                                    };
+                                    if (explicitOverrideInfo.requestedDate && explicitOverrideInfo.requestedDate !== explicitOverrideInfo.to) {
+                                        metadataPayload.requestedDate = explicitOverrideInfo.requestedDate;
+                                    }
+                                    if (explicitOverrideInfo.rolledToFuture) {
+                                        metadataPayload.rolledToFuture = true;
+                                    }
                                     updatePlanEntry.metadata = {
                                         ...(updatePlanEntry.metadata || {}),
-                                        explicitDateOverride: {
-                                            isoDate: explicitOverrideInfo.to,
-                                            originalText: explicitOverrideInfo.originalText,
-                                        },
+                                        explicitDateOverride: metadataPayload,
                                     };
                                 }
 
