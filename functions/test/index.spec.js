@@ -159,7 +159,17 @@ describe('aiAgentJobRunner', () => {
 
         // The created task should have the plannedDate chosen by the AI
         expect(finalPlan[0].task.title).toBe("Revisar el informe de marketing");
-        expect(finalPlan[0].task.plannedDate).toBe("2025-10-04"); // The crucial check
+        expect(finalPlan[0].task.plannedDate).toBe("2025-10-06"); // Falls on the following Monday after normalization
+        expect(finalPlan[0].adjustments?.plannedDate).toEqual({
+            from: "2025-10-04",
+            to: "2025-10-06",
+            fromWeekday: "Sábado",
+            toWeekday: "Lunes",
+            taskTitle: "Revisar el informe de marketing",
+        });
+        expect(finalPlan[0].notes?.[0]).toContain("Fecha planificada movida automáticamente");
+        expect(finalUpdateCall[0].summary).toContain('La fecha planificada de "Revisar el informe de marketing" se movió automáticamente de Sábado (2025-10-04) a Lunes (2025-10-06) para evitar fines de semana.');
+        expect(finalUpdateCall[0].sanitySuggestions).toContain('"Revisar el informe de marketing" se reprogramó al Lunes 2025-10-06 porque la fecha sugerida caía en fin de semana.');
         expect(finalPlan[0].task.dueDate).toBeUndefined(); // Ensure dueDate was not set
         expect(finalUpdateCall[0].awaitingUserConfirmation).toBe(true);
     });

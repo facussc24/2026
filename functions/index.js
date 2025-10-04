@@ -8,8 +8,70 @@ const crypto = require("crypto");
 
 const DEFAULT_AI_TIME_ZONE = 'America/Argentina/Buenos_Aires';
 
+const capitalizeFirstLetter = (value = '') => {
+    if (!value) return value;
+    return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
 const getCurrentDateForUserTZ = ({ date = new Date(), timeZone = DEFAULT_AI_TIME_ZONE } = {}) => {
     return new Intl.DateTimeFormat('en-CA', { timeZone }).format(date);
+};
+
+const normalizePlannedDate = (plannedDate, timeZone = DEFAULT_AI_TIME_ZONE) => {
+    if (!plannedDate || typeof plannedDate !== 'string') {
+        return { normalizedDate: plannedDate, wasAdjusted: false };
+    }
+
+    const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!isoRegex.test(plannedDate)) {
+        return { normalizedDate: plannedDate, wasAdjusted: false };
+    }
+
+    const [year, month, day] = plannedDate.split('-').map(Number);
+    const baseDate = new Date(Date.UTC(year, month - 1, day, 12));
+
+    if (Number.isNaN(baseDate.getTime())) {
+        return { normalizedDate: plannedDate, wasAdjusted: false };
+    }
+
+    const weekdayFormatter = new Intl.DateTimeFormat('es-AR', { weekday: 'long', timeZone });
+    const weekdayAbbrFormatter = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone });
+    const dateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone });
+
+    const originalWeekday = capitalizeFirstLetter(weekdayFormatter.format(baseDate));
+    const dayOfWeek = weekdayAbbrFormatter.format(baseDate);
+
+    let daysToAdd = 0;
+    if (dayOfWeek === 'Sat') {
+        daysToAdd = 2;
+    } else if (dayOfWeek === 'Sun') {
+        daysToAdd = 1;
+    }
+
+    if (daysToAdd === 0) {
+        return {
+            normalizedDate: dateFormatter.format(baseDate),
+            wasAdjusted: false,
+            originalDate: plannedDate,
+            originalWeekday,
+            normalizedWeekday: originalWeekday,
+            adjustedByDays: 0,
+        };
+    }
+
+    const adjustedDate = new Date(baseDate.getTime());
+    adjustedDate.setUTCDate(adjustedDate.getUTCDate() + daysToAdd);
+    const normalizedDate = dateFormatter.format(adjustedDate);
+    const normalizedWeekday = capitalizeFirstLetter(weekdayFormatter.format(adjustedDate));
+
+    return {
+        normalizedDate,
+        wasAdjusted: true,
+        originalDate: plannedDate,
+        originalWeekday,
+        normalizedWeekday,
+        adjustedByDays: daysToAdd,
+    };
 };
 
 if (admin.apps.length === 0) {
@@ -384,7 +446,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
 
     // Cache Hit: If a plan exists, create a pre-completed job.
     if (cachedPlan.exists) {
-        const { executionPlan, summary } = cachedPlan.data();
+        const { executionPlan, summary, sanitySuggestions = [] } = cachedPlan.data();
         const jobData = {
             status: 'COMPLETED', // Instantly completed
             userPrompt,
@@ -400,6 +462,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
             conversationHistory,
             currentDate: getCurrentDateForUserTZ({ timeZone: userTimeZone }),
             timeZone: userTimeZone,
+            sanitySuggestions,
         };
         await jobRef.set(jobData);
         return { jobId: jobRef.id, conversationId: conversationId, isFromCache: true };
@@ -422,6 +485,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         requestHash, // Store hash for later caching
         conversationId: conversationId, // Pass conversation ID along
         foundTasksContext: [], // Initialize the new memory field
+        sanitySuggestions: [],
     };
 
     await jobRef.set(jobData);
@@ -435,7 +499,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         const jobRef = snap.ref;
         const jobData = snap.data();
         const currentJobId = context?.params?.jobId;
-        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext, timeZone } = jobData;
+        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext, timeZone, sanitySuggestions = [] } = jobData;
 
         const effectiveTimeZone = timeZone || DEFAULT_AI_TIME_ZONE;
         currentDate = currentDate || getCurrentDateForUserTZ({ timeZone: effectiveTimeZone });
@@ -709,17 +773,42 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             break;
                         case 'create_task':
                             const tempId = generateTemporaryTaskId(currentJobId);
-                            const taskPayload = tool_code.parameters;
+                            const taskPayload = { ...tool_code.parameters };
+                            const createTaskTitle = taskPayload.title || 'Tarea sin título';
 
-                            // The AI is now responsible for providing this, so we don't default it here.
-                            // if (!taskPayload.plannedDate) {
-                            //     taskPayload.plannedDate = currentDate;
-                            // }
+                            const {
+                                normalizedDate: normalizedCreateDate,
+                                wasAdjusted: createDateAdjusted,
+                                originalDate: createOriginalDate,
+                                originalWeekday: createOriginalWeekday,
+                                normalizedWeekday: createNormalizedWeekday,
+                            } = normalizePlannedDate(taskPayload.plannedDate, effectiveTimeZone);
 
-                            executionPlan.push({ action: "CREATE", docId: tempId, task: taskPayload });
+                            if (normalizedCreateDate) {
+                                taskPayload.plannedDate = normalizedCreateDate;
+                            }
+
+                            const createPlanEntry = { action: "CREATE", docId: tempId, task: taskPayload };
+
+                            if (createDateAdjusted) {
+                                createPlanEntry.adjustments = {
+                                    plannedDate: {
+                                        from: createOriginalDate,
+                                        to: normalizedCreateDate,
+                                        fromWeekday: createOriginalWeekday,
+                                        toWeekday: createNormalizedWeekday,
+                                        taskTitle: createTaskTitle,
+                                    }
+                                };
+                                const adjustmentMessage = `Fecha planificada movida automáticamente de ${createOriginalWeekday} (${createOriginalDate}) a ${createNormalizedWeekday} (${normalizedCreateDate}) para evitar fines de semana.`;
+                                createPlanEntry.notes = [adjustmentMessage];
+                                sanitySuggestions.push(`"${createTaskTitle}" se reprogramó al ${createNormalizedWeekday} ${normalizedCreateDate} porque la fecha sugerida caía en fin de semana.`);
+                            }
+
+                            executionPlan.push(createPlanEntry);
                             tasks.push({
                                 docId: tempId,
-                                title: taskPayload.title,
+                                title: createTaskTitle,
                                 status: 'todo',
                                 plannedDate: taskPayload.plannedDate
                             });
@@ -751,8 +840,49 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             const { task_id: update_task_id, updates } = tool_code.parameters;
                             const taskToUpdate = tasks.find(t => t.docId === update_task_id);
                             if (taskToUpdate) {
-                                executionPlan.push({ action: "UPDATE", docId: update_task_id, updates: updates });
-                                toolResult = `OK. Task "${taskToUpdate.title}" marked for update.`;
+                                const updateTaskTitle = taskToUpdate.title || 'Tarea sin título';
+                                const updatePayload = { ...updates };
+                                let updateAdjustments = null;
+
+                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'plannedDate')) {
+                                    const {
+                                        normalizedDate: normalizedUpdateDate,
+                                        wasAdjusted: updateDateAdjusted,
+                                        originalDate: updateOriginalDate,
+                                        originalWeekday: updateOriginalWeekday,
+                                        normalizedWeekday: updateNormalizedWeekday,
+                                    } = normalizePlannedDate(updatePayload.plannedDate, effectiveTimeZone);
+
+                                    if (normalizedUpdateDate) {
+                                        updatePayload.plannedDate = normalizedUpdateDate;
+                                    }
+
+                                    if (updateDateAdjusted) {
+                                        updateAdjustments = {
+                                            plannedDate: {
+                                                from: updateOriginalDate,
+                                                to: normalizedUpdateDate,
+                                                fromWeekday: updateOriginalWeekday,
+                                                toWeekday: updateNormalizedWeekday,
+                                                taskTitle: updateTaskTitle,
+                                            }
+                                        };
+                                        sanitySuggestions.push(`"${updateTaskTitle}" se reprogramó al ${updateNormalizedWeekday} ${normalizedUpdateDate} porque la fecha sugerida caía en fin de semana.`);
+                                    }
+
+                                    taskToUpdate.plannedDate = updatePayload.plannedDate;
+                                }
+
+                                const updatePlanEntry = { action: "UPDATE", docId: update_task_id, updates: updatePayload };
+
+                                if (updateAdjustments) {
+                                    updatePlanEntry.adjustments = updateAdjustments;
+                                    const { plannedDate } = updateAdjustments;
+                                    updatePlanEntry.notes = [`Fecha planificada movida automáticamente de ${plannedDate.fromWeekday} (${plannedDate.from}) a ${plannedDate.toWeekday} (${plannedDate.to}) para evitar fines de semana.`];
+                                }
+
+                                executionPlan.push(updatePlanEntry);
+                                toolResult = `OK. Task "${updateTaskTitle}" marked for update.`;
                             } else {
                                 toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
                             }
@@ -854,6 +984,22 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 }
             }
 
+            const weekendAdjustmentMessages = executionPlan.reduce((messages, action) => {
+                const adjustment = action?.adjustments?.plannedDate;
+                if (!adjustment) {
+                    return messages;
+                }
+
+                const taskTitle = adjustment.taskTitle || action?.task?.title || action?.originalTitle || action?.docId || 'tarea';
+                messages.push(`La fecha planificada de "${taskTitle}" se movió automáticamente de ${adjustment.fromWeekday} (${adjustment.from}) a ${adjustment.toWeekday} (${adjustment.to}) para evitar fines de semana.`);
+                return messages;
+            }, []);
+
+            if (weekendAdjustmentMessages.length > 0) {
+                const bulletMessages = weekendAdjustmentMessages.map(message => `* ${message}`).join('\n');
+                summary = summary ? `${summary}\n${bulletMessages}` : bulletMessages;
+            }
+
             const finalThoughtProcess = thinkingSteps.map((step, i) => `${i + 1}. **Pensamiento:** ${step.thought}\n   - **Acción:** ${step.tool_code}`).join('\n\n');
 
             let finalThoughtProcessDisplay;
@@ -879,6 +1025,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 awaitingUserConfirmation: planRequiresConfirmation,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 conversationHistory,
+                sanitySuggestions,
             });
 
             // After a successful run, save the plan to the cache if it's not from there already.
@@ -888,6 +1035,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 await cacheRef.set({
                     executionPlan,
                     summary,
+                    sanitySuggestions,
                     createdAt: admin.firestore.FieldValue.serverTimestamp()
                 });
             }
@@ -1063,6 +1211,13 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     delete taskData.assigneeEmail;
                 }
 
+                if (taskData.plannedDate) {
+                    const { normalizedDate } = normalizePlannedDate(taskData.plannedDate);
+                    if (normalizedDate) {
+                        taskData.plannedDate = normalizedDate;
+                    }
+                }
+
                 batch.set(newTaskRef, taskData);
                 tempIdToRealIdMap.set(action.docId, newTaskRef.id);
                 await updateProgress(i, 'completed');
@@ -1085,6 +1240,13 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                         resolvedUpdates.assigneeUid = assigneeUid;
                     }
                     delete resolvedUpdates.assigneeEmail;
+                }
+
+                if (resolvedUpdates.plannedDate) {
+                    const { normalizedDate } = normalizePlannedDate(resolvedUpdates.plannedDate);
+                    if (normalizedDate) {
+                        resolvedUpdates.plannedDate = normalizedDate;
+                    }
                 }
 
                 const finalUpdates = {};
