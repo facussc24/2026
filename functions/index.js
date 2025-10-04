@@ -482,6 +482,13 @@ const generateTemporaryTaskId = (jobId) => {
     return `temp_${jobSegment}${crypto.randomBytes(16).toString('hex')}`;
 };
 
+const generateSubtaskId = () => {
+    if (typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return crypto.randomBytes(16).toString('hex');
+};
+
 exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
@@ -629,7 +636,9 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                         "description": "string (optional)",
                         "plannedDate": "string (YYYY-MM-DD)",
                         "dueDate": "string (YYYY-MM-DD, optional)",
-                        "assigneeEmail": "string (optional)"
+                        "assigneeEmail": "string (optional)",
+                        "priority": "string (optional: low|medium|high)",
+                        "subtasks": "array (optional, each item: { title: string, completed?: boolean })"
                     }
                 },
                 {
@@ -741,6 +750,11 @@ Your operational cycle is: **Analyze -> Clarify -> Plan -> Act**.
 ## 4. Plan Finalization
 *   **Mandatory Summary:** You **MUST** call \`review_and_summarize_plan\` as the very last step before \`finish\`. This summary must be a simple, clear, bulleted list (*) of the actions you have staged.
 *   **Execution:** The user will approve the plan, you do not execute it directly. \`finish\` signals your plan is complete.
+
+## 5. Prioridades y Subtareas
+*   **Prioridad:** Solo puedes usar los valores \`low\`, \`medium\` o \`high\` dentro de \`create_task\`. Escoge \`high\` únicamente cuando el usuario pida explícitamente alta prioridad, urgencia inmediata o utilice términos como "urgente", "crítico" o "prioridad alta".
+*   **Subtareas integradas:** Declara subtareas hijas en el mismo llamado a \`create_task\` usando el arreglo \`subtasks\`. Cada elemento debe ser un objeto con \`title\`. Ejemplo: \`"subtasks": [{"title": "Primer paso"}, {"title": "Segundo paso"}]\`.
+*   **Estado inicial:** Las subtareas recién creadas siempre quedan pendientes; nunca las marques como completadas al crearlas.
 
 # Context Data
 *   **Today's Date:** ${currentDate}
@@ -891,6 +905,46 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                         case 'create_task': {
                             const tempId = generateTemporaryTaskId(currentJobId);
                             const taskPayload = { ...tool_code.parameters };
+                            const allowedPriorities = ['low', 'medium', 'high'];
+
+                            if (Object.prototype.hasOwnProperty.call(taskPayload, 'priority')) {
+                                const rawPriority = typeof taskPayload.priority === 'string'
+                                    ? taskPayload.priority.trim().toLowerCase()
+                                    : '';
+                                if (allowedPriorities.includes(rawPriority)) {
+                                    taskPayload.priority = rawPriority;
+                                } else {
+                                    delete taskPayload.priority;
+                                }
+                            }
+
+                            if (Object.prototype.hasOwnProperty.call(taskPayload, 'subtasks')) {
+                                if (Array.isArray(taskPayload.subtasks)) {
+                                    const sanitizedSubtasks = taskPayload.subtasks.reduce((acc, subtask) => {
+                                        if (!subtask || typeof subtask.title !== 'string') {
+                                            return acc;
+                                        }
+                                        const title = subtask.title.trim();
+                                        if (!title) {
+                                            return acc;
+                                        }
+                                        acc.push({
+                                            id: generateSubtaskId(),
+                                            title,
+                                            completed: false,
+                                        });
+                                        return acc;
+                                    }, []);
+                                    if (sanitizedSubtasks.length > 0) {
+                                        taskPayload.subtasks = sanitizedSubtasks;
+                                    } else {
+                                        delete taskPayload.subtasks;
+                                    }
+                                } else {
+                                    delete taskPayload.subtasks;
+                                }
+                            }
+
                             const createTaskTitle = taskPayload.title || 'Tarea sin título';
                             const modelPlannedDate = taskPayload.plannedDate;
 
@@ -975,12 +1029,22 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             }
 
                             executionPlan.push(createPlanEntry);
-                            tasks.push({
+                            const taskContextEntry = {
                                 docId: tempId,
                                 title: createTaskTitle,
                                 status: 'todo',
                                 plannedDate: taskPayload.plannedDate
-                            });
+                            };
+
+                            if (taskPayload.priority) {
+                                taskContextEntry.priority = taskPayload.priority;
+                            }
+
+                            if (Array.isArray(taskPayload.subtasks)) {
+                                taskContextEntry.subtasks = taskPayload.subtasks.map(subtask => ({ ...subtask }));
+                            }
+
+                            tasks.push(taskContextEntry);
                             toolResult = `OK. Task created with temporary ID: ${tempId}.`;
                             break;
                         }
