@@ -426,10 +426,25 @@ async function fetchWeeklyTasks() {
         console.error("Error fetching weekly tasks:", error);
         if (error.code === 'failed-precondition') {
             showToast('Se necesita un índice de base de datos para una consulta eficiente. Revise la consola.', 'error', 5000);
-            // Fallback to a potentially less performant but valid query if the index is missing.
-            const fallbackQuery = query(tasksRef, where('assigneeUid', '==', user.uid));
-            const fallbackSnapshot = await getDocs(fallbackQuery);
-            return fallbackSnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })).filter(task => task.status !== 'done');
+            // Fallback to three simpler queries combined on the client while the index is created.
+            const fallbackQueries = [
+                query(tasksRef, where('isPublic', '==', true)),
+                query(tasksRef, where('creatorUid', '==', user.uid)),
+                query(tasksRef, where('assigneeUid', '==', user.uid))
+            ];
+
+            const snapshots = await Promise.all(fallbackQueries.map(simpleQuery => getDocs(simpleQuery)));
+            const dedupedTasks = new Map();
+
+            snapshots.forEach(snapshot => {
+                snapshot.docs.forEach(docSnap => {
+                    if (!dedupedTasks.has(docSnap.id)) {
+                        dedupedTasks.set(docSnap.id, { ...docSnap.data(), docId: docSnap.id });
+                    }
+                });
+            });
+
+            return Array.from(dedupedTasks.values()).filter(task => task.status !== 'done');
         } else {
             showToast('Error al cargar las tareas.', 'error');
         }
