@@ -536,11 +536,12 @@ export async function runLandingPageLogic() {
     try {
         const kpiData = await fetchKpiData();
         updateKpiCards(kpiData);
-        await refreshWeeklyTasksView();
     } catch (error) {
-        console.error("Error loading landing page data:", error);
+        console.error("Error fetching KPI data:", error);
+        updateKpiCards({ Proyectos: 0, Productos: 0, Usuarios: 0, Insumos: 0 });
         showToast("Error al cargar los datos del dashboard.", "error");
     }
+    await refreshWeeklyTasksView();
     setupActionButtons();
 
     // Listen for the custom event dispatched when the AI finishes its work
