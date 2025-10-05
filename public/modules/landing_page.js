@@ -208,8 +208,15 @@ function renderWeeklyTasks(tasks) {
 
     tasks.forEach(task => {
         if (task.blocked) { blockedTasks.push(task); return; }
-        if (task.dueDate && task.dueDate < todayStr) { overdueTasks.push(task); return; }
-        if (!task.plannedDate) { unscheduledTasks.push(task); return; }
+
+        const isOverdue = task.dueDate && task.dueDate < todayStr;
+        if (isOverdue) { overdueTasks.push(task); }
+
+        if (!task.plannedDate) {
+            if (!isOverdue) { unscheduledTasks.push(task); }
+            return;
+        }
+
         const plannedDate = new Date(task.plannedDate + 'T00:00:00Z');
         const diffDays = (plannedDate - mondayOfCurrentWeek) / (1000 * 60 * 60 * 24);
         if (diffDays >= 0 && diffDays < 5) {
