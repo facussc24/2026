@@ -1,44 +1,76 @@
-/**
- * @file Manages the task creation and editing modal.
- */
-
-import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
-import { collection, onSnapshot, query, orderBy, addDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
-import { getState } from './task.state.js';
-import { handleTaskFormSubmit, deleteTask, createTask, fetchAllTasks } from './task.service.js';
+import {
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    query,
+    onSnapshot,
+    orderBy
+} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
+import { COLLECTIONS } from '../utils.js';
 import {
     getTaskFormModalHTML,
     getSubtaskHTML,
-    getMultiTaskConfirmationHTML,
     getAIChatModalHTML,
     getAIChatMessageHTML,
     getAILoadingMessageHTML,
     getAIAssistantReviewViewHTML,
-    getAIAssistantExecutionProgressViewHTML
-} from './task.templates.js';
+    getAIAssistantExecutionProgressViewHTML,
+    getPlannerHelpModalHTML,
+    getTasksModalHTML
+} from './landing_page.tasks.templates.js';
 
+let db;
+let functions;
 let appState;
 let dom;
 let lucide;
-let db;
-let functions;
+let showToast;
+let showConfirmationModal;
 
-export function initTaskModal(dependencies) {
+export function initLandingTasksHelper(dependencies) {
+    db = dependencies.db;
+    functions = dependencies.functions;
     appState = dependencies.appState;
     dom = dependencies.dom;
     lucide = dependencies.lucide;
-    db = dependencies.db;
-    functions = dependencies.functions;
+    showToast = dependencies.showToast;
+    showConfirmationModal = dependencies.showConfirmationModal;
+}
+
+function getUsersArray() {
+    if (Array.isArray(appState?.collections?.usuarios)) {
+        return appState.collections.usuarios;
+    }
+    if (appState?.collectionsById?.usuarios instanceof Map) {
+        return Array.from(appState.collectionsById.usuarios.values());
+    }
+    return [];
+}
+
+function getUsersMap() {
+    if (appState?.collectionsById?.usuarios instanceof Map) {
+        return appState.collectionsById.usuarios;
+    }
+    const map = new Map();
+    getUsersArray().forEach(user => {
+        if (user?.docId) {
+            map.set(user.docId, user);
+        }
+    });
+    return map;
 }
 
 function populateTaskAssigneeDropdown() {
     const select = document.getElementById('task-assignee');
-    if (!select) return; // Modal is not open
+    if (!select) return;
 
-    const users = appState.collections.usuarios || [];
-    if (users.length === 0) {
+    const users = getUsersArray();
+    if (!users || users.length === 0) {
         select.innerHTML = '<option value="">No hay usuarios</option>';
         select.disabled = true;
         return;
@@ -47,14 +79,14 @@ function populateTaskAssigneeDropdown() {
     select.disabled = false;
     const selectedUid = select.dataset.selectedUid;
 
-    const userOptions = users
-        .filter(u => u.disabled !== true)
+    const options = users
+        .filter(u => u && u.disabled !== true)
         .map(u => {
-            const displayName = u.name || u.email.split('@')[0];
+            const displayName = u.name || (u.email ? u.email.split('@')[0] : 'Usuario');
             return `<option value="${u.docId}">${displayName}</option>`;
         }).join('');
 
-    select.innerHTML = `<option value="">No asignada</option>${userOptions}`;
+    select.innerHTML = `<option value="">No asignada</option>${options}`;
 
     if (selectedUid) {
         select.value = selectedUid;
@@ -65,7 +97,7 @@ function initSubtasks(modalElement, task) {
     const subtaskListEl = modalElement.querySelector('#subtasks-list');
     const newSubtaskInput = modalElement.querySelector('#new-subtask-title');
     const isEditing = task !== null;
-    let currentSubtasks = isEditing && task.subtasks ? [...task.subtasks] : [];
+    let currentSubtasks = isEditing && Array.isArray(task.subtasks) ? [...task.subtasks] : [];
 
     const rerenderSubtasks = () => {
         subtaskListEl.innerHTML = currentSubtasks.map(getSubtaskHTML).join('') || '<p class="text-xs text-center text-slate-400 py-2">No hay sub-tareas.</p>';
@@ -93,7 +125,7 @@ function initSubtasks(modalElement, task) {
         rerenderSubtasks();
     };
 
-    newSubtaskInput.addEventListener('keydown', e => {
+    newSubtaskInput?.addEventListener('keydown', e => {
         if (e.key === 'Enter') {
             e.preventDefault();
             const title = newSubtaskInput.value.trim();
@@ -102,7 +134,7 @@ function initSubtasks(modalElement, task) {
         }
     });
 
-    subtaskListEl.addEventListener('click', e => {
+    subtaskListEl?.addEventListener('click', e => {
         const subtaskItem = e.target.closest('.subtask-item');
         if (!subtaskItem) return;
 
@@ -124,7 +156,7 @@ function initSubtasks(modalElement, task) {
         }
     });
 
-    rerenderSubtasks(); // Initial render
+    rerenderSubtasks();
 
     return { addSubtask, setSubtasks };
 }
@@ -154,22 +186,24 @@ function initComments(modalElement, task) {
 
     const renderTaskComments = (comments) => {
         if (!commentsListEl) return;
-        if (comments.length === 0) {
+        if (!comments || comments.length === 0) {
             commentsListEl.innerHTML = '<p class="text-xs text-center text-slate-400 py-2">No hay comentarios todavía.</p>';
             return;
         }
+        const usersMap = getUsersMap();
         commentsListEl.innerHTML = comments.map(comment => {
-            const author = (appState.collections.usuarios || []).find(u => u.docId === comment.creatorUid) || { name: 'Usuario Desconocido', photoURL: '' };
+            const author = usersMap.get(comment.creatorUid) || { name: 'Usuario Desconocido', photoURL: '' };
             const timestamp = comment.createdAt?.toDate ? formatTimeAgo(comment.createdAt.toDate()) : 'hace un momento';
+            const avatar = author.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(author.name || 'Usuario')}`;
             return `
                 <div class="flex items-start gap-3 mb-3">
-                    <img src="${author.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(author.name)}`}" alt="Avatar" class="w-8 h-8 rounded-full mt-1">
+                    <img src="${avatar}" alt="Avatar" class="w-8 h-8 rounded-full mt-1">
                     <div class="flex-1 bg-white p-3 rounded-lg border">
                         <div class="flex justify-between items-center">
-                            <p class="font-bold text-sm text-slate-800">${author.name}</p>
+                            <p class="font-bold text-sm text-slate-800">${author.name || 'Usuario'}</p>
                             <p class="text-xs text-slate-400">${timestamp}</p>
                         </div>
-                        <p class="text-sm text-slate-600 mt-1 whitespace-pre-wrap">${comment.text}</p>
+                        <p class="text-sm text-slate-600 mt-1 whitespace-pre-wrap">${comment.text || ''}</p>
                     </div>
                 </div>
             `;
@@ -181,13 +215,13 @@ function initComments(modalElement, task) {
     if (isEditing) {
         postCommentBtn.disabled = false;
         newCommentInput.disabled = false;
-        const commentsRef = collection(db, 'tareas', task.docId, 'comments');
+        const commentsRef = collection(db, COLLECTIONS.TAREAS, task.docId, 'comments');
         const q = query(commentsRef, orderBy('createdAt', 'asc'));
         commentsUnsubscribe = onSnapshot(q, (snapshot) => {
             const comments = snapshot.docs.map(doc => doc.data());
             renderTaskComments(comments);
         }, (error) => {
-            console.error("Error fetching comments: ", error);
+            console.error('Error fetching comments: ', error);
             renderTaskComments([]);
         });
     } else {
@@ -198,28 +232,26 @@ function initComments(modalElement, task) {
     }
 
     const postComment = async () => {
+        if (!task) return;
         const text = newCommentInput.value.trim();
-        if (!text || !isEditing) return;
+        if (!text) return;
 
-        postCommentBtn.disabled = true;
-        const commentsRef = collection(db, 'tareas', task.docId, 'comments');
         try {
+            const commentsRef = collection(db, COLLECTIONS.TAREAS, task.docId, 'comments');
             await addDoc(commentsRef, {
-                text: text,
+                text,
                 creatorUid: appState.currentUser.uid,
                 createdAt: new Date()
             });
             newCommentInput.value = '';
         } catch (error) {
-            console.error("Error posting comment: ", error);
+            console.error('Error posting comment:', error);
             showToast('Error al publicar el comentario.', 'error');
-        } finally {
-            postCommentBtn.disabled = false;
         }
     };
 
-    postCommentBtn.addEventListener('click', postComment);
-    newCommentInput.addEventListener('keydown', (e) => {
+    postCommentBtn?.addEventListener('click', postComment);
+    newCommentInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             postComment();
@@ -229,28 +261,119 @@ function initComments(modalElement, task) {
     return commentsUnsubscribe;
 }
 
-function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
-    modalElement.querySelector('form').addEventListener('submit', handleTaskFormSubmit);
+async function deleteTask(taskId) {
+    await deleteDoc(doc(db, COLLECTIONS.TAREAS, taskId));
+}
 
-    modalElement.addEventListener('click', e => {
+async function saveTask(taskId, data, isEditing) {
+    if (isEditing) {
+        const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+        await updateDoc(taskRef, data);
+    } else {
+        await addDoc(collection(db, COLLECTIONS.TAREAS), data);
+    }
+}
+
+async function handleTaskFormSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const taskId = form.querySelector('[name="taskId"]').value;
+    const isEditing = !!taskId;
+
+    const modalElement = form.closest('#task-form-modal');
+    const data = {
+        title: form.querySelector('[name="title"]').value,
+        description: form.querySelector('[name="description"]').value,
+        assigneeUid: form.querySelector('[name="assigneeUid"]').value,
+        priority: form.querySelector('[name="priority"]').value,
+        effort: form.querySelector('[name="effort"]').value,
+        startDate: form.querySelector('[name="startDate"]').value,
+        dueDate: form.querySelector('[name="dueDate"]').value,
+        plannedDate: form.querySelector('[name="plannedDate"]').value,
+        updatedAt: new Date(),
+        subtasks: modalElement?.dataset?.subtasks ? JSON.parse(modalElement.dataset.subtasks) : []
+    };
+
+    if (!data.title) {
+        showToast('El título es obligatorio.', 'error');
+        return;
+    }
+
+    const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);
+    let tags = [];
+    if (isEditing) {
+        try {
+            const taskDoc = await getDoc(doc(db, COLLECTIONS.TAREAS, taskId));
+            if (taskDoc.exists()) {
+                tags = taskDoc.data().tags || [];
+            }
+        } catch (error) {
+            console.error('Could not fetch existing task to preserve tags:', error);
+        }
+    }
+    data.search_keywords = [...new Set([...titleKeywords, ...tags])];
+
+    const isPublicCheckbox = form.querySelector('[name="isPublic"]');
+    if (isPublicCheckbox) {
+        data.isPublic = isPublicCheckbox.checked;
+    } else if (!isEditing) {
+        data.isPublic = false;
+    }
+
+    const saveButton = modalElement?.querySelector('button[type="submit"]');
+    if (!saveButton) return;
+
+    const originalButtonHTML = saveButton.innerHTML;
+    saveButton.disabled = true;
+    saveButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5"></i>`;
+    lucide.createIcons();
+
+    try {
+        if (isEditing) {
+            await saveTask(taskId, data, true);
+            showToast('Tarea actualizada con éxito.', 'success');
+        } else {
+            const payload = {
+                ...data,
+                creatorUid: appState.currentUser.uid,
+                createdAt: new Date(),
+                status: form.querySelector('[name="status"]').value || 'todo'
+            };
+            await saveTask(null, payload, false);
+            showToast('Tarea creada con éxito.', 'success');
+        }
+        modalElement?.remove();
+        document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
+    } catch (error) {
+        console.error('Error saving task:', error);
+        showToast('Error al guardar la tarea.', 'error');
+        saveButton.disabled = false;
+        saveButton.innerHTML = originalButtonHTML;
+        lucide.createIcons();
+    }
+}
+
+function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
+    const form = modalElement.querySelector('form');
+    form?.addEventListener('submit', handleTaskFormSubmit);
+
+    modalElement.addEventListener('click', (e) => {
         const button = e.target.closest('button');
         if (!button) return;
         const action = button.dataset.action;
         if (action === 'close') {
-            if (commentsUnsubscribe) {
-                commentsUnsubscribe();
-            }
+            commentsUnsubscribe?.();
             modalElement.remove();
-        } else if (action === 'delete') {
+        } else if (action === 'delete' && task) {
             showConfirmationModal('Eliminar Tarea', '¿Estás seguro de que quieres eliminar esta tarea?', async () => {
                 try {
-                    if (commentsUnsubscribe) {
-                        commentsUnsubscribe();
-                    }
+                    commentsUnsubscribe?.();
                     await deleteTask(task.docId);
                     showToast('Tarea eliminada.', 'success');
                     modalElement.remove();
+                    document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
                 } catch (error) {
+                    console.error('Error deleting task:', error);
                     showToast('No tienes permiso para eliminar esta tarea.', 'error');
                 }
             });
@@ -262,27 +385,26 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     const isEditing = task !== null;
     const isAdmin = appState.currentUser.role === 'admin';
 
-    // Enrich task object with dependency details for the modal view
-    if (isEditing && (task.dependsOn?.length > 0 || task.blocks?.length > 0)) {
-        const allTasks = await fetchAllTasks(true); // Force refresh to get latest dependency info
+    if (isEditing && (Array.isArray(task.dependsOn) && task.dependsOn.length > 0 || Array.isArray(task.blocks) && task.blocks.length > 0)) {
+        const allTasks = await fetchAllTasks();
         const tasksById = new Map(allTasks.map(t => [t.docId, t]));
 
-        if (task.dependsOn?.length > 0) {
+        if (Array.isArray(task.dependsOn) && task.dependsOn.length > 0) {
             task.dependsOnDetails = task.dependsOn
                 .map(id => {
                     const dependentTask = tasksById.get(id);
                     return dependentTask ? { docId: id, title: dependentTask.title } : null;
                 })
-                .filter(Boolean); // Remove nulls if a referenced task was deleted
+                .filter(Boolean);
         }
 
-        if (task.blocks?.length > 0) {
+        if (Array.isArray(task.blocks) && task.blocks.length > 0) {
             task.blocksDetails = task.blocks
                 .map(id => {
                     const blockingTask = tasksById.get(id);
                     return blockingTask ? { docId: id, title: blockingTask.title } : null;
                 })
-                .filter(Boolean); // Remove nulls if a referenced task was deleted
+                .filter(Boolean);
         }
     }
 
@@ -290,12 +412,11 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     if (!selectedUid) {
         if (isEditing && task.assigneeUid) {
             selectedUid = task.assigneeUid;
-        } else if (!isEditing && getState().kanban.activeFilter === 'personal') {
+        } else {
             selectedUid = appState.currentUser.uid;
         }
     }
 
-    // If user is not an admin, they can only create/edit tasks for themselves.
     if (!isAdmin) {
         selectedUid = appState.currentUser.uid;
     }
@@ -305,10 +426,8 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     lucide.createIcons();
 
     const modalElement = document.getElementById('task-form-modal');
-
     populateTaskAssigneeDropdown();
 
-    // Also disable the dropdown just in case the template doesn't.
     if (!isAdmin) {
         const assigneeSelect = modalElement.querySelector('#task-assignee');
         if (assigneeSelect) {
@@ -316,9 +435,16 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
         }
     }
 
-    const subtaskManager = initSubtasks(modalElement, task);
+    initSubtasks(modalElement, task);
     const commentsUnsubscribe = initComments(modalElement, task);
     initModalEventListeners(modalElement, task, commentsUnsubscribe);
+}
+
+function buildExecutionSteps(plan) {
+    return Array.isArray(plan) ? plan.map(step => ({
+        description: step.description || 'Acción del plan',
+        status: 'pending'
+    })) : [];
 }
 
 export function openAIAssistantModal() {
@@ -333,7 +459,7 @@ export function openAIAssistantModal() {
     let jobUnsubscribe = null;
 
     const closeModal = () => {
-        if (jobUnsubscribe) jobUnsubscribe();
+        jobUnsubscribe?.();
         modalElement?.remove();
     };
 
@@ -346,15 +472,43 @@ export function openAIAssistantModal() {
         return messageElement;
     };
 
-    const handleJobUpdate = (doc) => {
-        const jobData = doc.data();
+    const updateExecutionStepStatus = (planContainer, stepIndex, status, message) => {
+        const stepElement = planContainer?.querySelector(`#execution-step-${stepIndex}`);
+        if (!stepElement) return;
+        const statusText = stepElement.querySelector('.status-text');
+        const statusIcon = stepElement.querySelector('.status-icon');
+        if (statusText) {
+            const labels = { completed: 'Completado', error: 'Error', pending: 'Pendiente' };
+            statusText.textContent = labels[status] || 'Pendiente';
+        }
+        if (statusIcon) {
+            statusIcon.dataset.status = status;
+            if (status === 'completed') {
+                statusIcon.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>';
+            } else if (status === 'error') {
+                statusIcon.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5 text-red-500"></i>';
+            } else {
+                statusIcon.innerHTML = '<i data-lucide="loader-circle" class="w-5 h-5 animate-spin text-slate-400"></i>';
+            }
+        }
+        if (message) {
+            const finalThought = planContainer?.querySelector('#execution-final-thought');
+            if (finalThought) {
+                finalThought.innerHTML = `<p class="text-sm text-slate-600 dark:text-slate-300">${message}</p>`;
+            }
+        }
+        lucide.createIcons();
+    };
+
+    const handleJobUpdate = (docSnapshot) => {
+        const jobData = docSnapshot.data();
         const loadingBubble = document.getElementById('ai-loading-bubble');
         if (!jobData) return;
 
         const isPlanReady = jobData.status === 'COMPLETED' || jobData.status === 'AWAITING_CONFIRMATION';
 
         if (isPlanReady) {
-            if (jobUnsubscribe) jobUnsubscribe();
+            jobUnsubscribe?.();
             loadingBubble?.remove();
 
             const hasExecutionPlan = Array.isArray(jobData.executionPlan) && jobData.executionPlan.length > 0;
@@ -376,13 +530,13 @@ export function openAIAssistantModal() {
                     }
                 });
 
-                const planMessageElement = addMessage('ai', { plan: { ...jobData, jobId: doc.id }, taskTitleMap }, 'plan');
+                const planMessageElement = addMessage('ai', { plan: { ...jobData, jobId: docSnapshot.id }, taskTitleMap }, 'plan');
                 const confirmButton = planMessageElement?.querySelector('#ai-confirm-plan-btn');
                 const planContainer = planMessageElement?.querySelector('[data-plan-container="true"]');
                 const planInput = planMessageElement?.querySelector('#ai-plan-json');
 
                 const planPayload = {
-                    jobId: doc.id,
+                    jobId: docSnapshot.id,
                     executionPlan: jobData.executionPlan || [],
                     thoughtProcess: jobData.thoughtProcess || '',
                     sanitySuggestions: jobData.sanitySuggestions || [],
@@ -396,11 +550,11 @@ export function openAIAssistantModal() {
 
                 if (planInput && confirmButton?.dataset.plan) {
                     planInput.value = confirmButton.dataset.plan;
-                    planInput.dataset.jobId = doc.id;
+                    planInput.dataset.jobId = docSnapshot.id;
                 }
 
                 if (planContainer) {
-                    planContainer.dataset.jobId = doc.id;
+                    planContainer.dataset.jobId = docSnapshot.id;
                 }
 
                 if (jobData.summary) {
@@ -409,11 +563,11 @@ export function openAIAssistantModal() {
             } else if (jobData.summary) {
                 addMessage('ai', jobData.summary, 'text');
             } else {
-                addMessage('ai', "He terminado, pero no tengo un resumen que mostrar.", 'text');
+                addMessage('ai', 'He terminado, pero no tengo un resumen que mostrar.', 'text');
             }
             sendBtn.disabled = false;
         } else if (jobData.status === 'ERROR') {
-            if (jobUnsubscribe) jobUnsubscribe();
+            jobUnsubscribe?.();
             loadingBubble?.remove();
             addMessage('ai', `Lo siento, encontré un error: ${jobData.error}`, 'text');
             sendBtn.disabled = false;
@@ -433,14 +587,13 @@ export function openAIAssistantModal() {
             const result = await startJobFn({ userPrompt: prompt, tasks: allTasks, conversationId });
 
             const newJobId = result.data.jobId;
-            conversationId = result.data.conversationId; // Update conversationId from backend
+            conversationId = result.data.conversationId;
 
-            if (jobUnsubscribe) jobUnsubscribe();
+            jobUnsubscribe?.();
             const jobRef = doc(db, 'ai_agent_jobs', newJobId);
             jobUnsubscribe = onSnapshot(jobRef, handleJobUpdate);
-
         } catch (error) {
-            console.error("Error starting AI job:", error);
+            console.error('Error starting AI job:', error);
             const loadingBubble = document.getElementById('ai-loading-bubble');
             loadingBubble?.remove();
             addMessage('ai', `Hubo un error al iniciar el proceso: ${error.message}`, 'text');
@@ -448,7 +601,7 @@ export function openAIAssistantModal() {
         }
     };
 
-    chatForm.addEventListener('submit', (e) => {
+    chatForm?.addEventListener('submit', (e) => {
         e.preventDefault();
         const userPrompt = chatInput.value.trim();
         if (userPrompt) {
@@ -458,13 +611,12 @@ export function openAIAssistantModal() {
         }
     });
 
-    chatInput.addEventListener('input', () => {
+    chatInput?.addEventListener('input', () => {
         chatInput.style.height = 'auto';
         chatInput.style.height = `${chatInput.scrollHeight}px`;
     });
 
-    // A single, delegated event listener for all actions within the modal.
-    modalElement.addEventListener('click', async (e) => {
+    modalElement?.addEventListener('click', async (e) => {
         const button = e.target.closest('button[data-action]');
         if (!button) return;
 
@@ -475,9 +627,7 @@ export function openAIAssistantModal() {
         } else if (action === 'reject-ai-plan') {
             e.preventDefault();
             const planContainer = button.closest('[data-plan-container="true"]');
-            if (planContainer) {
-                planContainer.remove();
-            }
+            planContainer?.remove();
             sendBtn.disabled = false;
             chatInput.focus();
             addMessage('ai', 'De acuerdo, cuéntame cómo quieres ajustar el plan o pide una nueva propuesta.');
@@ -512,44 +662,19 @@ export function openAIAssistantModal() {
             button.innerHTML = '<i data-lucide="loader" class="animate-spin h-5 w-5 mr-2"></i>Ejecutando...';
             lucide.createIcons();
 
-            const updatedExecutionPlan = [];
             const executionPlanActions = Array.isArray(planData.executionPlan) ? planData.executionPlan : [];
+            const updatedExecutionPlan = [];
 
             const buildSubtasksFromInput = (inputValue, existingSubtasks = []) => {
                 if (!inputValue) {
-                    return [];
+                    return existingSubtasks;
                 }
-
-                const titles = inputValue
-                    .split('\n')
-                    .map(title => title.trim())
-                    .filter(Boolean);
-
-                if (titles.length === 0) {
-                    return [];
-                }
-
-                return titles.map((title, index) => {
-                    const baseSubtask = existingSubtasks[index] || {};
-                    return {
-                        ...baseSubtask,
-                        title,
-                        completed: typeof baseSubtask.completed === 'boolean' ? baseSubtask.completed : false
-                    };
-                });
-            };
-            const buildDescriptionFromAction = (action) => {
-                if (!action) return 'Acción del plan';
-                switch (action.action) {
-                    case 'CREATE':
-                        return `Crear tarea "${action.task?.title || 'Sin título'}"`;
-                    case 'UPDATE':
-                        return `Actualizar tarea "${action.originalTitle || action.docId || 'Sin título'}"`;
-                    case 'DELETE':
-                        return `Eliminar tarea "${action.originalTitle || action.docId || 'Sin título'}"`;
-                    default:
-                        return action.description || 'Acción del plan';
-                }
+                const titles = inputValue.split('\n').map(title => title.trim()).filter(Boolean);
+                return titles.map(title => ({
+                    id: `sub_${Date.now()}_${Math.random()}`,
+                    title,
+                    completed: false
+                }));
             };
 
             executionPlanActions.forEach((action, index) => {
@@ -625,7 +750,7 @@ export function openAIAssistantModal() {
 
                 updatedExecutionPlan.push({
                     ...clonedAction,
-                    description: buildDescriptionFromAction(clonedAction)
+                    description: clonedAction.description || 'Acción del plan'
                 });
             });
 
@@ -647,86 +772,38 @@ export function openAIAssistantModal() {
 
                 const modalContent = document.getElementById('ai-assistant-modal-content');
                 if (modalContent) {
-                    const progressSteps = updatedExecutionPlan.map(step => ({
-                        description: step.description,
-                        status: 'pending'
-                    }));
+                    const progressSteps = buildExecutionSteps(updatedExecutionPlan);
                     modalContent.innerHTML = getAIAssistantExecutionProgressViewHTML(progressSteps);
                     lucide.createIcons();
                 }
 
-                const executionUnsubscribe = onSnapshot(doc(db, "plan_executions", planData.jobId), (snapshot) => {
+                const executionUnsubscribe = onSnapshot(doc(db, 'plan_executions', planData.jobId), (snapshot) => {
                     const executionData = snapshot.data();
                     if (!executionData) return;
 
-                    const steps = executionData.steps || [];
-                    steps.forEach((step, index) => {
-                        const stepEl = document.getElementById(`execution-step-${index}`);
-                        if (!stepEl) return;
-                        const statusIcon = stepEl.querySelector('.status-icon');
-                        const statusText = stepEl.querySelector('.status-text');
+                    const planContainer = document.getElementById('ai-assistant-modal-content');
+                    if (!planContainer) return;
 
-                        if (step.status === 'completed') {
-                            statusIcon.innerHTML = '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
-                            if (statusText) {
-                                statusText.textContent = 'Completado';
-                            }
-                            stepEl.classList.add('opacity-70');
-                        } else if (step.status === 'error') {
-                            statusIcon.innerHTML = '<i data-lucide="x-circle" class="w-5 h-5 text-red-500"></i>';
-                            if (statusText) {
-                                statusText.textContent = `Error: ${step.error || 'Desconocido'}`;
-                            }
-                            stepEl.classList.add('bg-red-50');
-                        }
+                    (executionData.steps || []).forEach((step, index) => {
+                        updateExecutionStepStatus(planContainer, index, step.status, step.message);
                     });
 
-                    if (executionData.status === 'completed' || executionData.status === 'error') {
-                        if (executionUnsubscribe) executionUnsubscribe();
-
-                        const isError = executionData.status === 'error';
-                        const headerCloseBtn = document.getElementById('execution-close-btn');
-                        const footerCloseBtn = document.getElementById('execution-complete-close-btn');
-
-                        if (headerCloseBtn) {
-                            headerCloseBtn.classList.remove('hidden');
+                    if (executionData.status === 'COMPLETED' || executionData.status === 'ERROR') {
+                        const closeBtn = planContainer.querySelector('#execution-complete-close-btn');
+                        if (closeBtn) {
+                            closeBtn.disabled = false;
+                            closeBtn.innerHTML = executionData.status === 'COMPLETED'
+                                ? '<i data-lucide="check-circle" class="w-5 h-5"></i><span>Finalizado</span>'
+                                : '<i data-lucide="alert-circle" class="w-5 h-5"></i><span>Finalizado con errores</span>';
                         }
-
-                        if (footerCloseBtn) {
-                            footerCloseBtn.disabled = false;
-                            footerCloseBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700', 'bg-green-600', 'hover:bg-green-700', 'bg-red-600', 'hover:bg-red-700');
-                            footerCloseBtn.classList.add(
-                                isError ? 'bg-red-600' : 'bg-green-600',
-                                isError ? 'hover:bg-red-700' : 'hover:bg-green-700'
-                            );
-                            footerCloseBtn.innerHTML = `
-                                <i data-lucide="${isError ? 'x-circle' : 'check-circle-2'}" class="w-5 h-5"></i>
-                                <span>${isError ? 'Cerrar con errores' : 'Cerrar'}</span>
-                            `;
-                        }
-
-                        const finalThought = document.getElementById('execution-final-thought');
-                        if (finalThought) {
-                            const summaryText = executionData.summary || (isError ? 'Ocurrió un problema durante la ejecución.' : 'El plan ha finalizado.');
-                            finalThought.innerHTML = `
-                                <div class="flex items-start gap-3 mt-4 p-4 rounded-lg ${isError ? 'bg-red-50 dark:bg-red-900/30' : 'bg-slate-100 dark:bg-slate-700'}">
-                                    <i data-lucide="${isError ? 'x-octagon' : 'check-circle-2'}" class="w-5 h-5 mt-1 ${isError ? 'text-red-600 dark:text-red-300' : 'text-green-600 dark:text-green-300'}"></i>
-                                    <div>
-                                        <p class="text-sm font-semibold ${isError ? 'text-red-700 dark:text-red-200' : 'text-slate-700 dark:text-slate-300'}">${isError ? 'Ejecución con errores' : 'Ejecución completada'}</p>
-                                        <p class="text-sm mt-1 ${isError ? 'text-red-600 dark:text-red-200' : 'text-slate-600 dark:text-slate-400'}">${summaryText}</p>
-                                    </div>
-                                </div>
-                            `;
-                        }
-
                         lucide.createIcons();
+                        executionUnsubscribe();
                         document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
                     }
                 });
-
             } catch (error) {
-                console.error("Error executing plan:", error);
-                showToast(`Error al ejecutar el plan: ${error.message}`, 'error');
+                console.error('Error executing plan:', error);
+                showToast('Error al ejecutar el plan.', 'error');
                 button.disabled = false;
                 button.innerHTML = '<i data-lucide="check-check" class="w-5 h-5"></i>Confirmar y Ejecutar';
                 if (rejectButton) {
@@ -736,7 +813,108 @@ export function openAIAssistantModal() {
             }
         }
     });
-
-    // Initial greeting from AI
-    addMessage('ai', 'Hola, soy tu asistente de IA. ¿Cómo puedo ayudarte a organizar tus tareas hoy?');
 }
+
+export async function completeAndArchiveTask(taskId) {
+    const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+    await updateDoc(taskRef, {
+        status: 'done',
+        isArchived: true,
+        completedAt: new Date()
+    });
+}
+
+export function updateTaskBlockedStatus(taskId, isBlocked) {
+    const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+    return updateDoc(taskRef, { blocked: isBlocked });
+}
+
+export async function fetchAllTasks() {
+    const tasksQuery = query(collection(db, COLLECTIONS.TAREAS));
+    const snapshot = await getDocs(tasksQuery);
+    return snapshot.docs.map(docSnap => ({ ...docSnap.data(), docId: docSnap.id }));
+}
+
+export function showPlannerHelpModal() {
+    dom.modalContainer.innerHTML = getPlannerHelpModalHTML();
+    lucide.createIcons();
+
+    const modalElement = document.getElementById('planner-help-modal');
+
+    const closeModal = () => {
+        modalElement?.remove();
+    };
+
+    modalElement?.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action="close"]')) {
+            closeModal();
+        }
+    });
+
+    return modalElement;
+}
+
+function buildTaskSummaryCard(task) {
+    const usersMap = getUsersMap();
+    const assignee = task.assigneeUid ? usersMap.get(task.assigneeUid) : null;
+    const priorityColors = { high: 'bg-red-500', medium: 'bg-yellow-500', low: 'bg-green-500' };
+    const priorityClass = priorityColors[task.priority || 'medium'];
+
+    const dueDate = task.dueDate ? new Date(`${task.dueDate}T00:00:00`) : null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isOverdue = dueDate ? dueDate < today : false;
+    const dueDateLabel = dueDate ? dueDate.toLocaleDateString('es-AR') : 'Sin fecha';
+
+    return `
+        <article class="border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 rounded-lg p-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer task-summary-card" data-task-id="${task.docId}">
+            <header class="flex items-start justify-between gap-2">
+                <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-tight">${task.title}</h4>
+                <span class="w-3 h-3 rounded-full ${priorityClass}" title="Prioridad: ${task.priority || 'medium'}"></span>
+            </header>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 line-clamp-3">${task.description || 'Sin descripción.'}</p>
+            <footer class="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span class="flex items-center gap-1">
+                    <i data-lucide="calendar" class="w-4 h-4"></i>
+                    <span class="${isOverdue ? 'text-red-500 font-semibold' : ''}">${dueDateLabel}</span>
+                </span>
+                <span class="flex items-center gap-1">
+                    <i data-lucide="user" class="w-4 h-4"></i>
+                    <span>${assignee?.name?.split(' ')[0] || 'Sin asignar'}</span>
+                </span>
+            </footer>
+        </article>
+    `;
+}
+
+export function showTasksInModal(title, tasks) {
+    dom.modalContainer.innerHTML = getTasksModalHTML(title);
+    const modalElement = document.getElementById('tasks-list-modal');
+    const tasksContainer = modalElement?.querySelector('#modal-tasks-container');
+
+    if (!tasksContainer) return;
+
+    if (!tasks || tasks.length === 0) {
+        tasksContainer.innerHTML = '<p class="text-center text-slate-500 py-8">No hay tareas para mostrar en esta sección.</p>';
+    } else {
+        tasksContainer.innerHTML = tasks.map(buildTaskSummaryCard).join('');
+        lucide.createIcons();
+
+        tasksContainer.querySelectorAll('.task-summary-card').forEach(card => {
+            card.addEventListener('click', async () => {
+                const taskId = card.dataset.taskId;
+                const task = tasks.find(t => t.docId === taskId);
+                if (task) {
+                    await openTaskFormModal(task);
+                }
+            });
+        });
+    }
+
+    modalElement?.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action="close"]')) {
+            modalElement.remove();
+        }
+    });
+}
+
