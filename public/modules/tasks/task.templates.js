@@ -217,6 +217,22 @@ export function getAILoadingMessageHTML() {
 }
 
 
+const toSafeString = (value) => (value ?? '').toString();
+
+const escapeText = (value) => toSafeString(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+const escapeAttribute = (value) => escapeText(value)
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const sanitizeRichText = (value) => {
+    const prepared = toSafeString(value).replace(/\r?\n/g, '<br>');
+    return DOMPurify.sanitize(prepared, { SAFE_FOR_TEMPLATES: true });
+};
+
 export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
     const { thoughtProcess, executionPlan } = plan;
 
@@ -224,6 +240,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
         let icon, titleSection, details;
         const actionId = `action_${index}`;
         const resolvedActionTitle = action.originalTitle || taskTitleMap.get(action.docId) || 'Tarea sin título';
+        const safeResolvedActionTitle = escapeText(resolvedActionTitle);
 
         const typeStyles = {
             CREATE: {
@@ -272,6 +289,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
 
         const styles = typeStyles[action.action] || typeStyles.DEFAULT;
         const actionLabel = actionLabels[action.action] || action.action;
+        const safeActionLabel = escapeText(actionLabel);
 
         const labelClass = 'text-[0.72rem] font-semibold uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300';
         const inputBaseClass = 'mt-1 w-full rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500';
@@ -280,49 +298,51 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
         const sectionTitleClass = 'text-sm font-semibold text-slate-700 dark:text-slate-200';
 
         const renderFieldWrapper = (content, spanClass = 'sm:col-span-1') => `
-            <div class="flex flex-col gap-2 ${spanClass}">
+            <div class="flex flex-col gap-2 ${escapeAttribute(spanClass)}">
                 ${content}
             </div>
         `;
 
         const renderInputField = ({ id, name, label, value = '', type = 'text', spanClass = 'sm:col-span-1', placeholder = '' }) => renderFieldWrapper(`
-            <label for="${id}" class="${labelClass}">${label}</label>
-            <input type="${type}" id="${id}" name="${name}" value="${value}" ${placeholder ? `placeholder="${placeholder}"` : ''} class="${inputBaseClass}">
+            <label for="${escapeAttribute(id)}" class="${labelClass}">${escapeText(label)}</label>
+            <input type="${escapeAttribute(type)}" id="${escapeAttribute(id)}" name="${escapeAttribute(name)}" value="${escapeAttribute(value)}" ${placeholder ? `placeholder="${escapeAttribute(placeholder)}"` : ''} class="${inputBaseClass}">
         `, spanClass);
 
         const renderTextareaField = ({ id, name, label, value = '', spanClass = 'sm:col-span-2', helperText = '' }) => renderFieldWrapper(`
-            <label for="${id}" class="${labelClass}">${label}</label>
-            <textarea id="${id}" name="${name}" rows="3" class="${textareaClass}">${value}</textarea>
-            ${helperText ? `<p class="text-xs text-slate-500 dark:text-slate-400">${helperText}</p>` : ''}
+            <label for="${escapeAttribute(id)}" class="${labelClass}">${escapeText(label)}</label>
+            <textarea id="${escapeAttribute(id)}" name="${escapeAttribute(name)}" rows="3" class="${textareaClass}">${escapeText(value)}</textarea>
+            ${helperText ? `<p class="text-xs text-slate-500 dark:text-slate-400">${escapeText(helperText)}</p>` : ''}
         `, spanClass);
 
         const renderSelectField = ({ id, name, label, value = '', spanClass = 'sm:col-span-1', options = [] }) => renderFieldWrapper(`
-            <label for="${id}" class="${labelClass}">${label}</label>
-            <select id="${id}" name="${name}" class="${selectClass}">
-                ${options.map(option => `<option value="${option.value}" ${option.value === value ? 'selected' : ''}>${option.label}</option>`).join('')}
+            <label for="${escapeAttribute(id)}" class="${labelClass}">${escapeText(label)}</label>
+            <select id="${escapeAttribute(id)}" name="${escapeAttribute(name)}" class="${selectClass}">
+                ${options.map(option => `<option value="${escapeAttribute(option.value)}" ${option.value === value ? 'selected' : ''}>${escapeText(option.label)}</option>`).join('')}
             </select>
         `, spanClass);
 
         const renderInfoField = ({ label, value, spanClass = 'sm:col-span-2' }) => renderFieldWrapper(`
-            <span class="${labelClass}">${label}</span>
-            <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">${value}</div>
+            <span class="${labelClass}">${escapeText(label)}</span>
+            <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200">${sanitizeRichText(value)}</div>
         `, spanClass);
 
         const renderPanel = ({ title, body, badge, description }) => `
             <section class="rounded-2xl border border-slate-200/90 bg-white/95 px-5 py-5 shadow-sm dark:border-slate-700/70 dark:bg-slate-900/70">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h6 class="${sectionTitleClass}">${title}</h6>
-                        ${description ? `<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">${description}</p>` : ''}
+                        <h6 class="${sectionTitleClass}">${escapeText(title)}</h6>
+                        ${description ? `<p class="mt-1 text-xs text-slate-500 dark:text-slate-400">${escapeText(description)}</p>` : ''}
                     </div>
-                    ${badge ? `<span class="rounded-full px-3 py-1 text-[0.7rem] font-semibold tracking-wide ${styles.sectionTag}">${badge}</span>` : ''}
+                    ${badge ? `<span class="rounded-full px-3 py-1 text-[0.7rem] font-semibold tracking-wide ${styles.sectionTag}">${escapeText(badge)}</span>` : ''}
                 </div>
                 <div class="mt-4 space-y-4">${body}</div>
             </section>
         `;
 
-        let hiddenFields = `<input type="hidden" name="${actionId}_type" value="${action.action}">`;
-        const checkbox = `<input type="checkbox" name="${actionId}_enabled" checked class="h-5 w-5 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer" title="Incluir esta acción">`;
+        const createHiddenInput = (name, value) => `<input type="hidden" name="${escapeAttribute(name)}" value="${escapeAttribute(value)}">`;
+
+        let hiddenFields = createHiddenInput(`${actionId}_type`, action.action);
+        const checkbox = `<input type="checkbox" name="${escapeAttribute(`${actionId}_enabled`)}" checked class="h-5 w-5 rounded text-purple-600 focus:ring-purple-500 border-gray-300 cursor-pointer" title="Incluir esta acción">`;
 
         switch (action.action) {
             case 'CREATE':
@@ -372,26 +392,26 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                     </div>
                 `;
 
-                hiddenFields += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
+                hiddenFields += createHiddenInput(`${actionId}_docId`, action.docId);
                 const updateFields = [];
                 let updateIndex = 0;
                 for (const updateField in action.updates) {
                     if (Object.prototype.hasOwnProperty.call(action.updates, updateField)) {
                         const updateValue = action.updates[updateField];
-                        hiddenFields += `<input type="hidden" name="${actionId}_update_field_${updateIndex}" value="${updateField}">`;
+                        hiddenFields += createHiddenInput(`${actionId}_update_field_${updateIndex}`, updateField);
                         let updateInput = '';
 
                         if (updateField === 'dependsOn' || updateField === 'blocks') {
                             const label = updateField === 'dependsOn' ? 'DEPENDE DE (PRERREQUISITO)' : 'BLOQUEA A';
                             const taskTitles = (updateValue || []).map(taskId => taskTitleMap.get(taskId) || taskId).join(', ');
                             updateInput = renderInfoField({ label, value: taskTitles || 'Sin referencias', spanClass: 'sm:col-span-2' });
-                            hiddenFields += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value='${JSON.stringify(updateValue)}'>`;
+                            hiddenFields += createHiddenInput(`${actionId}_update_value_${updateIndex}`, JSON.stringify(updateValue));
                         } else if (updateField === 'blocked') {
                             updateInput = renderInfoField({ label: 'Estado', value: updateValue ? 'Se marcará como bloqueada' : 'Se desbloqueará', spanClass: 'sm:col-span-2' });
-                            hiddenFields += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="${updateValue}">`;
+                            hiddenFields += createHiddenInput(`${actionId}_update_value_${updateIndex}`, updateValue);
                         } else if (updateField === 'status' && updateValue === 'done') {
                             updateInput = renderInfoField({ label: 'Estado', value: 'Marcar como completada', spanClass: 'sm:col-span-2' });
-                            hiddenFields += `<input type="hidden" name="${actionId}_update_value_${updateIndex}" value="done">`;
+                            hiddenFields += createHiddenInput(`${actionId}_update_value_${updateIndex}`, 'done');
                         } else if (updateField === 'dueDate' || updateField === 'plannedDate') {
                             const label = updateField === 'dueDate' ? 'NUEVA FECHA LÍMITE' : 'NUEVA FECHA PLANIFICADA';
                             updateInput = renderInputField({
@@ -470,14 +490,14 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                             title: 'Resumen de la acción',
                             body: `
                                 <p class="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                                    Se eliminará la tarea <span class="font-semibold ${styles.accentText}">"${resolvedActionTitle}"</span>. Esta acción no se puede deshacer.
+                                    Se eliminará la tarea <span class="font-semibold ${styles.accentText}">"${safeResolvedActionTitle}"</span>. Esta acción no se puede deshacer.
                                 </p>
                             `,
                             badge: 'Eliminar'
                         })}
                     </div>
                 `;
-                hiddenFields += `<input type="hidden" name="${actionId}_docId" value="${action.docId}">`;
+                hiddenFields += createHiddenInput(`${actionId}_docId`, action.docId);
                 break;
             default:
                 icon = `<div class="flex h-12 w-12 items-center justify-center rounded-xl ${styles.iconWrap}"><i data-lucide="alert-circle" class="w-6 h-6"></i></div>`;
@@ -486,7 +506,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                         <h5 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Acción Desconocida</h5>
                     </div>
                 `;
-                details = `<p class="text-sm text-slate-500 dark:text-slate-400">${action.action}</p>`;
+                details = `<p class="text-sm text-slate-500 dark:text-slate-400">${escapeText(action.action)}</p>`;
         }
 
         return `
@@ -504,7 +524,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                     <div class="grid items-start gap-8 px-6 py-7 sm:grid-cols-[auto,1fr]">
                         <div class="flex flex-col items-center gap-3 text-center sm:items-start sm:text-left">
                             ${icon}
-                            <span class="rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wider ${styles.pill}">${actionLabel}</span>
+                            <span class="rounded-full px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-wider ${styles.pill}">${safeActionLabel}</span>
                         </div>
                         <div class="space-y-6 sm:pt-1">
                             ${titleSection || ''}
@@ -548,7 +568,7 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                             Sugerencias de Planificación
                         </h4>
                         <ul class="list-disc list-inside space-y-1 text-sm text-yellow-700 dark:text-yellow-300">
-                            ${plan.sanitySuggestions.map(s => `<li>${s}</li>`).join('')}
+                            ${plan.sanitySuggestions.map(s => `<li>${sanitizeRichText(s)}</li>`).join('')}
                         </ul>
                     </div>
                     ` : ''}
@@ -581,6 +601,10 @@ export function getMultiTaskConfirmationHTML(suggestedTasks) {
         const priorityMap = { high: 'Alta', medium: 'Media', low: 'Baja' };
         const priorityText = priorityMap[task.priority] || 'No especificada';
         const dueDateText = task.dueDate || 'No especificada';
+        const safeTitle = escapeText(task.title || 'Tarea sin título');
+        const safeDescription = sanitizeRichText(task.description || 'Sin descripción.');
+        const safePriorityText = escapeText(priorityText);
+        const safeDueDateText = escapeText(dueDateText);
 
         // Card for each suggested task, redesigned for clarity and robustness.
         return `
@@ -589,8 +613,8 @@ export function getMultiTaskConfirmationHTML(suggestedTasks) {
                     <div class="flex items-start gap-4">
                         <input type="checkbox" class="suggested-task-checkbox mt-1.5 h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300" data-task-index="${index}" checked>
                         <div class="flex-grow">
-                            <p class="font-bold text-slate-800">${task.title || 'Tarea sin título'}</p>
-                            <p class="text-sm text-slate-600 mt-1">${task.description || 'Sin descripción.'}</p>
+                            <p class="font-bold text-slate-800">${safeTitle}</p>
+                            <p class="text-sm text-slate-600 mt-1">${safeDescription}</p>
                         </div>
                     </div>
                 </div>
@@ -598,11 +622,11 @@ export function getMultiTaskConfirmationHTML(suggestedTasks) {
                     <div class="flex items-center gap-x-6 gap-y-2 flex-wrap">
                         <span class="flex items-center gap-1.5" title="Prioridad">
                             <i data-lucide="flag" class="w-4 h-4"></i>
-                            <span class="font-semibold">${priorityText}</span>
+                            <span class="font-semibold">${safePriorityText}</span>
                         </span>
                         <span class="flex items-center gap-1.5" title="Fecha Límite">
                             <i data-lucide="calendar" class="w-4 h-4"></i>
-                            <span class="font-semibold">${dueDateText}</span>
+                            <span class="font-semibold">${safeDueDateText}</span>
                         </span>
                     </div>
                 </div>
@@ -714,13 +738,20 @@ export function getAdminUserListHTML(users) {
                 <p class="text-slate-500 mt-2 text-lg">Selecciona un usuario para ver su tablero de tareas.</p>
             </div>
             <div id="admin-user-list-container" class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                ${users.map(user => `
-                    <div class="admin-user-card text-center p-6 bg-slate-50 rounded-lg hover:shadow-xl hover:bg-white hover:-translate-y-1 transition-all duration-200 cursor-pointer border" data-user-id="${user.docId}">
-                        <img src="${user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.name)}`}" alt="Avatar" class="w-20 h-20 rounded-full mx-auto mb-4 border-4 border-white shadow-md">
-                        <h3 class="font-bold text-slate-800">${user.name}</h3>
-                        <p class="text-sm text-slate-500">${user.email}</p>
+                ${users.map(user => {
+                    const safeDocId = escapeAttribute(user.docId || '');
+                    const fallbackAvatar = `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.name || 'usuario')}`;
+                    const safeAvatar = escapeAttribute(user.photoURL || fallbackAvatar);
+                    const safeName = escapeText(user.name || 'Usuario');
+                    const safeEmail = escapeText(user.email || '');
+                    return `
+                    <div class="admin-user-card text-center p-6 bg-slate-50 rounded-lg hover:shadow-xl hover:bg-white hover:-translate-y-1 transition-all duration-200 cursor-pointer border" data-user-id="${safeDocId}">
+                        <img src="${safeAvatar}" alt="Avatar" class="w-20 h-20 rounded-full mx-auto mb-4 border-4 border-white shadow-md">
+                        <h3 class="font-bold text-slate-800">${safeName}</h3>
+                        <p class="text-sm text-slate-500">${safeEmail}</p>
                     </div>
-                `).join('')}
+                    `;
+                }).join('')}
             </div>
         </div>
     `;
@@ -750,14 +781,20 @@ export function getTasksTableHTML(tasks, userMap) {
             progress = 100;
         }
 
+        const safeDocId = escapeAttribute(task.docId || '');
+        const safeTitle = escapeText(task.title || '');
+        const safeProject = escapeText(project);
+        const safeAssignee = escapeText(assigneeName);
+        const safeDueDate = escapeText(dueDate);
+
         return `
-            <tr class="border-t border-t-[#dbe0e6] dark:border-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors duration-150" data-task-id="${task.docId}" style="cursor: pointer;">
-                <td class="h-[72px] px-4 py-2 text-text-light dark:text-text-dark text-sm font-medium leading-normal">${task.title}</td>
-                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${project}</td>
-                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${assigneeName}</td>
+            <tr class="border-t border-t-[#dbe0e6] dark:border-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors duration-150" data-task-id="${safeDocId}" style="cursor: pointer;">
+                <td class="h-[72px] px-4 py-2 text-text-light dark:text-text-dark text-sm font-medium leading-normal">${safeTitle}</td>
+                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${safeProject}</td>
+                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${safeAssignee}</td>
                 <td class="h-[72px] px-4 py-2 w-40 text-sm font-normal leading-normal"><button class="btn btn-sm w-full ${statusColor} !opacity-100" disabled>${statusText}</button></td>
                 <td class="h-[72px] px-4 py-2 w-40 text-sm font-normal leading-normal"><button class="btn btn-sm w-full ${priorityColor} !opacity-100" disabled>${priorityText}</button></td>
-                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${dueDate}</td>
+                <td class="h-[72px] px-4 py-2 text-text-secondary-light dark:text-text-secondary-dark text-sm font-normal leading-normal">${safeDueDate}</td>
                 <td class="h-[72px] px-4 py-2 w-48 text-sm font-normal leading-normal">
                     <div class="flex items-center gap-3">
                         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5"><div class="h-2.5 rounded-full bg-primary-DEFAULT" style="width: ${progress}%;"></div></div>
@@ -863,12 +900,15 @@ export function getMyPendingTasksWidgetHTML(tasks) {
             low: 'border-slate-300',
         };
         const priorityBorder = priorityClasses[task.priority] || 'border-slate-300';
+        const safeDocId = escapeAttribute(task.docId || '');
+        const safeTitle = escapeText(task.title || '');
+        const safeDueDateStr = escapeText(dueDateStr);
 
         return `
-            <div class="p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border-l-4 ${priorityBorder} cursor-pointer" data-action="view-task" data-task-id="${task.docId}">
+            <div class="p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border-l-4 ${priorityBorder} cursor-pointer" data-action="view-task" data-task-id="${safeDocId}">
                 <div class="flex justify-between items-center">
-                    <p class="font-bold text-slate-800 text-sm">${task.title}</p>
-                    <span class="text-xs ${dateClass}">${dueDateStr}</span>
+                    <p class="font-bold text-slate-800 text-sm">${safeTitle}</p>
+                    <span class="text-xs ${dateClass}">${safeDueDateStr}</span>
                 </div>
             </div>
         `;
@@ -1017,6 +1057,11 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     const creationDate = task.createdAt?.seconds ? new Date(task.createdAt.seconds * 1000) : null;
     const creationDateStr = creationDate ? creationDate.toLocaleDateString('es-AR') : 'N/A';
 
+    const safeTaskId = escapeAttribute(task.docId || '');
+    const safeTitle = escapeText(task.title || '');
+    const safeDescription = sanitizeRichText(task.description || '');
+    const safeDueDateStr = escapeText(dueDateStr);
+
     const taskTypeIcon = task.isPublic
         ? `<span title="Tarea de Ingeniería (Pública)"><i data-lucide="briefcase" class="w-4 h-4 text-slate-400"></i></span>`
         : `<span title="Tarea Privada"><i data-lucide="lock" class="w-4 h-4 text-slate-400"></i></span>`;
@@ -1025,11 +1070,15 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     if (task.tags && task.tags.length > 0) {
         tagsHTML = `
             <div class="my-3 flex flex-wrap gap-2">
-                ${task.tags.map(tag => `
-                    <button data-action="search-by-tag" data-tag="${tag}" class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full hover:bg-blue-200 hover:text-blue-900 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                        ${tag}
+                ${task.tags.map(tag => {
+                    const safeTagAttr = escapeAttribute(tag);
+                    const safeTagText = escapeText(tag);
+                    return `
+                    <button data-action="search-by-tag" data-tag="${safeTagAttr}" class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full hover:bg-blue-200 hover:text-blue-900 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        ${safeTagText}
                     </button>
-                `).join('')}
+                    `;
+                }).join('')}
             </div>
         `;
     }
@@ -1057,14 +1106,27 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     }
     const dragClass = checkUserPermission('edit', task) ? '' : 'no-drag';
 
+    let assigneeAvatarHTML = '<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="No asignada"><i data-lucide="user-x" class="w-4 h-4 text-gray-500"></i></div>';
+    let assigneeNameText = 'No asignada';
+    if (assignee) {
+        const fallbackAvatar = `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(assignee.name || assignee.email || 'usuario')}`;
+        const safeAvatar = escapeAttribute(assignee.photoURL || fallbackAvatar);
+        const displayName = assignee.name || assignee.email || 'Usuario';
+        const nameForLabel = assignee.name || (assignee.email ? assignee.email.split('@')[0] : 'Usuario');
+        const safeDisplayNameAttr = escapeAttribute(`Asignada a: ${displayName}`);
+        const safeNameText = escapeText(nameForLabel);
+        assigneeAvatarHTML = `<img src="${safeAvatar}" title="${safeDisplayNameAttr}" class="w-6 h-6 rounded-full">`;
+        assigneeNameText = safeNameText;
+    }
+
     return `
-        <div class="task-card bg-white rounded-lg p-4 shadow-sm border ${urgencyClass} cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${task.docId}">
+        <div class="task-card bg-white rounded-lg p-4 shadow-sm border ${urgencyClass} cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${safeTaskId}">
             <div class="flex justify-between items-start gap-2 mb-2">
-                <h4 class="font-bold text-slate-800 flex-grow">${task.title}</h4>
+                <h4 class="font-bold text-slate-800 flex-grow">${safeTitle}</h4>
                 ${taskTypeIcon}
             </div>
 
-            <p class="text-sm text-slate-600 break-words flex-grow mb-3">${task.description || ''}</p>
+            <p class="text-sm text-slate-600 break-words flex-grow mb-3">${safeDescription}</p>
 
             ${tagsHTML}
 
@@ -1080,24 +1142,24 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
                     </div>
                     <div class="flex items-center gap-3">
                         <span class="flex items-center gap-1.5 font-medium ${dateClass}" title="Fecha de entrega">
-                            <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> ${dueDateStr}
+                            <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> ${safeDueDateStr}
                         </span>
                     </div>
                 </div>
 
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                        ${assignee ? `<img src="${assignee.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(assignee.name || assignee.email)}`}" title="Asignada a: ${assignee.name || assignee.email}" class="w-6 h-6 rounded-full">` : '<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="No asignada"><i data-lucide="user-x" class="w-4 h-4 text-gray-500"></i></div>'}
-                        <span class="text-sm text-slate-500">${assignee ? (assignee.name || assignee.email.split('@')[0]) : 'No asignada'}</span>
+                        ${assigneeAvatarHTML}
+                        <span class="text-sm text-slate-500">${assigneeNameText}</span>
                     </div>
                     <div class="task-actions flex items-center gap-2">
                     ${task.status !== 'done' ? `
-                        <button data-action="complete-task" data-doc-id="${task.docId}" class="text-green-600 hover:text-white hover:bg-green-500 border border-green-500 text-xs font-bold px-2 py-1 rounded-full transition-colors duration-200 flex items-center gap-1">
+                        <button data-action="complete-task" data-doc-id="${safeTaskId}" class="text-green-600 hover:text-white hover:bg-green-500 border border-green-500 text-xs font-bold px-2 py-1 rounded-full transition-colors duration-200 flex items-center gap-1">
                             <i data-lucide="check" class="w-4 h-4"></i> Completar
                         </button>
                     ` : ''}
                     ${checkUserPermission('delete', task) ? `
-                        <button data-action="delete-task" data-doc-id="${task.docId}" class="text-gray-400 hover:text-red-600 p-1 rounded-full" title="Eliminar tarea">
+                        <button data-action="delete-task" data-doc-id="${safeTaskId}" class="text-gray-400 hover:text-red-600 p-1 rounded-full" title="Eliminar tarea">
                             <i data-lucide="trash-2" class="h-4 w-4 pointer-events-none"></i>
                         </button>
                         ` : ''}
@@ -1112,11 +1174,14 @@ export function getSubtaskHTML(subtask) {
     const titleClass = subtask.completed ? 'line-through text-slate-500' : 'text-slate-800';
     const containerClass = subtask.completed ? 'opacity-70' : '';
     const checkboxId = `subtask-checkbox-${subtask.id}`;
+    const safeCheckboxId = escapeAttribute(checkboxId);
+    const safeSubtaskId = escapeAttribute(subtask.id || '');
+    const safeTitle = escapeText(subtask.title || '');
     return `
-        <div class="subtask-item group flex items-center gap-3 p-2 bg-slate-100 hover:bg-slate-200/70 rounded-md transition-all duration-150 ${containerClass}" data-subtask-id="${subtask.id}">
-            <label for="${checkboxId}" class="flex-grow flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" id="${checkboxId}" name="${checkboxId}" class="subtask-checkbox h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer" ${subtask.completed ? 'checked' : ''}>
-                <span class="flex-grow text-sm font-medium ${titleClass}">${subtask.title}</span>
+        <div class="subtask-item group flex items-center gap-3 p-2 bg-slate-100 hover:bg-slate-200/70 rounded-md transition-all duration-150 ${containerClass}" data-subtask-id="${safeSubtaskId}">
+            <label for="${safeCheckboxId}" class="flex-grow flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" id="${safeCheckboxId}" name="${safeCheckboxId}" class="subtask-checkbox h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300 cursor-pointer" ${subtask.completed ? 'checked' : ''}>
+                <span class="flex-grow text-sm font-medium ${titleClass}">${safeTitle}</span>
             </label>
             <button type="button" class="subtask-delete-btn text-slate-400 hover:text-red-500 p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="trash-2" class="h-4 w-4 pointer-events-none"></i></button>
         </div>
