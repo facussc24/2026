@@ -17,6 +17,11 @@ let writeBatch;
 let openTaskFormModal;
 let openAIAssistantModal;
 
+const onAITasksUpdated = () => {
+    showToast('El planificador se está actualizando...', 'info');
+    refreshWeeklyTasksView();
+};
+
 // Functions from main.js to be injected
 let seedDatabase;
 let clearDataOnly;
@@ -524,10 +529,12 @@ export async function runLandingPageLogic() {
     setupActionButtons();
 
     // Listen for the custom event dispatched when the AI finishes its work
-    document.addEventListener('ai-tasks-updated', () => {
-        showToast('El planificador se está actualizando...', 'info');
-        refreshWeeklyTasksView();
-    });
+    document.removeEventListener('ai-tasks-updated', onAITasksUpdated);
+    document.addEventListener('ai-tasks-updated', onAITasksUpdated);
+
+    appState.currentViewCleanup = () => {
+        document.removeEventListener('ai-tasks-updated', onAITasksUpdated);
+    };
 
     // This listener handles clicks on the entire view, specifically for the complete task button
     const landingPageContainer = dom.viewContent.querySelector('#landing-page-container');
