@@ -1,8 +1,15 @@
 import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
-import { showPlannerHelpModal, showAIAnalysisModal, showTasksInModal } from './tasks/task.ui.js';
-import { completeAndArchiveTask, updateTaskBlockedStatus } from './tasks/task.service.js';
+import {
+    initLandingTasksHelper,
+    openTaskFormModal,
+    openAIAssistantModal,
+    completeAndArchiveTask,
+    updateTaskBlockedStatus,
+    showPlannerHelpModal,
+    showTasksInModal
+} from './landing_page.tasks.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -12,21 +19,12 @@ let appState;
 let dom;
 let lucide;
 let showToast;
-let functions;
-let writeBatch;
-let openTaskFormModal;
-let openAIAssistantModal;
-
 const onAITasksUpdated = () => {
     showToast('El planificador se está actualizando...', 'info');
     refreshWeeklyTasksView();
 };
 
 // Functions from main.js to be injected
-let seedDatabase;
-let clearDataOnly;
-let clearOtherUsers;
-
 let weeklyTasksCache = [];
 let columnTasksMap = new Map();
 
@@ -624,11 +622,14 @@ export function initLandingPageModule(dependencies) {
     dom = dependencies.dom;
     lucide = dependencies.lucide;
     showToast = dependencies.showToast;
-    openTaskFormModal = dependencies.openTaskFormModal;
-    openAIAssistantModal = dependencies.openAIAssistantModal;
-    functions = dependencies.functions;
-    writeBatch = dependencies.writeBatch; // Injected dependency
-    seedDatabase = dependencies.seedDatabase;
-    clearDataOnly = dependencies.clearDataOnly;
-    clearOtherUsers = dependencies.clearOtherUsers;
+
+    initLandingTasksHelper({
+        db,
+        functions: dependencies.functions,
+        appState,
+        dom,
+        lucide,
+        showToast,
+        showConfirmationModal: dependencies.showConfirmationModal
+    });
 }

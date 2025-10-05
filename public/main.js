@@ -7,17 +7,7 @@ import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateD
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, validateField, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
 import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
-import {
-    initTasksModule,
-    runTasksLogic as runTasksLogicFromModule,
-    calculateOverdueTasksCount,
-    fetchAllTasks,
-    renderMyPendingTasksWidget,
-    renderTasksByProjectChart,
-    renderTaskDashboardView,
-    openTaskFormModal,
-    openAIAssistantModal
-} from './modules/tasks/tasks.js';
+import { openTaskFormModal } from './modules/landing_page.tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
@@ -73,8 +63,6 @@ const viewConfig = {
     flujograma: { title: 'Flujograma de Procesos', singular: 'Flujograma' },
     arboles: { title: 'Editor de Estructura de Producto', singular: 'Árbol' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
-    tareas: { title: 'Gestor de Tareas', singular: 'Tarea' },
-    'task-dashboard': { title: 'Dashboard de Tareas', singular: 'Dashboard de Tareas' },
     proyectos: {
         title: 'Proyectos',
         singular: 'Proyecto',
@@ -360,9 +348,7 @@ async function startRealtimeListeners() {
         appState.collections.tareas = allRecentTasks.filter(t => t.status !== 'done').slice(0, 5);
 
         if (appState.currentView === 'dashboard') {
-            // The main dashboard logic already renders the chart once.
-            // This listener will just update the task list for now.
-            renderMyPendingTasksWidget(appState.collections.tareas);
+            console.debug('Tareas recientes actualizadas para el dashboard.', appState.collections.tareas);
         }
     }, (error) => console.error("Error listening to user tasks:", error));
     listeners.push(tasksUnsub);
@@ -1342,8 +1328,6 @@ async function switchView(viewName, params = null) {
     else if (viewName === 'flujograma') await runFlujogramaLogic();
     else if (viewName === 'arboles') await renderArbolesInitialView();
     else if (viewName === 'profile') await runProfileLogic();
-    else if (viewName === 'tareas') await runTasksLogicFromModule('kanban');
-    else if (viewName === 'task-dashboard') await runTasksLogicFromModule('dashboard');
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
         dom.searchInput.style.display = 'block';
@@ -1382,7 +1366,7 @@ function handleViewContentActions(e) {
     const userId = button.dataset.userId;
 
     const actions = {
-        'admin-back-to-board': () => switchView('tareas'),
+        'admin-back-to-board': () => switchView('landing-page'),
         'details': () => openDetailsModal(appState.currentData.find(d => d.id == id)),
         'edit': () => openFormModal(appState.currentData.find(d => d.id == id)),
         'delete': () => deleteItem(docId),
@@ -3491,8 +3475,7 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
-            initTasksModule(appDependencies);
+            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, writeBatch };
             initLandingPageModule(appDependencies);
 
 
