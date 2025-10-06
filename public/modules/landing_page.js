@@ -30,6 +30,22 @@ let clearOtherUsers;
 let weeklyTasksCache = [];
 let columnTasksMap = new Map();
 
+const MONTH_NAMES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+];
+
+let monthlyViewState = {
+    months: [],
+    monthlyTasksByKey: new Map(),
+    selectedMonthKey: null,
+    selectedWeekIndex: null,
+    yearOffset: 0,
+    viewPhase: 'months'
+};
+
+let monthWeekBucketsCache = new Map();
+
 // --- 2. UI RENDERING ---
 
 function getWeekInfo(offset = 0) {
@@ -40,8 +56,7 @@ function getWeekInfo(offset = 0) {
     const pastDaysOfYear = (date - firstDayOfYear) / 86400000;
     const weekNumber = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
 
-    const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    const monthName = monthNames[date.getMonth()];
+    const monthName = MONTH_NAMES[date.getMonth()];
 
     return {
         weekNumber,
@@ -74,34 +89,94 @@ function renderLandingPageHTML() {
 
             <div class="grid grid-cols-1 gap-6 mb-8">
                 <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
-                    <div class="flex justify-between items-center mb-4">
+                    <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-4">
                         <div class="flex items-center gap-2">
                              <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Planificador Semanal</h3>
                              <button id="show-planner-help-btn" class="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400" title="Ayuda sobre el planificador">
                                  <i data-lucide="help-circle" class="w-5 h-5"></i>
                              </button>
                         </div>
-                        <div id="week-display" class="font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"></div>
-                        <div class="flex items-center gap-2">
-                             <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
-                             <button id="today-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Volver a Hoy"><i data-lucide="calendar-check-2" class="w-5 h-5"></i></button>
-                            <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
-                            <button id="ai-assistant-btn" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
-                                <span class="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-600 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></span>
-                                <span class="relative flex items-center">
-                                    <i data-lucide="bot" class="mr-2 h-5 w-5"></i>Asistente de IA
-                                </span>
-                            </button>
-                            <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea Manual</button>
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between flex-1">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <div id="week-display" class="font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"></div>
+                                <div id="planner-view-toggle" class="inline-flex rounded-full bg-slate-200 dark:bg-slate-700 p-1">
+                                    <button data-view-mode="weekly" class="planner-toggle-btn px-4 py-1.5 text-sm font-semibold rounded-full transition-colors">Semanal</button>
+                                    <button data-view-mode="monthly" class="planner-toggle-btn px-4 py-1.5 text-sm font-semibold rounded-full transition-colors">Mensual</button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                                 <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+                                 <button id="today-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Volver a Hoy"><i data-lucide="calendar-check-2" class="w-5 h-5"></i></button>
+                                <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+                                <button id="ai-assistant-btn" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
+                                    <span class="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-600 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></span>
+                                    <span class="relative flex items-center">
+                                        <i data-lucide="bot" class="mr-2 h-5 w-5"></i>Asistente de IA
+                                    </span>
+                                </button>
+                                <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea Manual</button>
+                            </div>
                         </div>
                     </div>
-                     <div id="priority-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
-                        <span class="font-bold">Prioridad:</span>
-                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span>Alta</div>
-                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span>Media</div>
-                        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span>Baja</div>
+                    <div id="weekly-view-container">
+                         <div id="priority-legend" class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 mb-6 border-t border-b border-slate-200 dark:border-slate-700 py-2">
+                            <span class="font-bold">Prioridad:</span>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span>Alta</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span>Media</div>
+                            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span>Baja</div>
+                        </div>
+                        <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-7 gap-6 min-h-[400px]"></div>
                     </div>
-                    <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-7 gap-6 min-h-[400px]"></div>
+                    <div id="monthly-view-container" class="hidden">
+                        <div class="space-y-6">
+                            <div class="flex flex-col gap-3">
+                                <div class="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <h4 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Planificación mensual</h4>
+                                        <p class="text-sm text-slate-500 dark:text-slate-400">Elegí un mes para visualizar sus semanas y profundizar en las tareas planificadas.</p>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button id="monthly-prev-year-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Año anterior">
+                                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                                        </button>
+                                        <span id="monthly-year-label" class="text-sm font-semibold text-slate-700 dark:text-slate-200"></span>
+                                        <button id="monthly-next-year-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Próximo año">
+                                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="monthly-months-section" class="monthly-section">
+                                <div id="monthly-months-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+                            </div>
+                            <div id="monthly-weeks-section" class="monthly-section hidden space-y-4">
+                                <div class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-4 py-3 shadow-sm">
+                                    <button type="button" data-action="monthly-back-to-months" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors">
+                                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                                        Volver atrás
+                                    </button>
+                                    <div class="text-right">
+                                        <p id="monthly-selected-month-title" class="text-base font-semibold text-slate-700 dark:text-slate-200"></p>
+                                        <p id="monthly-selected-month-total" class="text-xs text-slate-500 dark:text-slate-400"></p>
+                                    </div>
+                                </div>
+                                <div id="monthly-week-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3"></div>
+                            </div>
+                            <div id="monthly-tasks-section" class="monthly-section hidden space-y-4">
+                                <div class="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-4 py-3 shadow-sm">
+                                    <button type="button" data-action="monthly-back-to-weeks" class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-600 transition-colors">
+                                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                                        Volver atrás
+                                    </button>
+                                    <div class="text-right">
+                                        <p id="monthly-selected-week-title" class="text-base font-semibold text-slate-700 dark:text-slate-200"></p>
+                                        <p id="monthly-selected-week-total" class="text-xs text-slate-500 dark:text-slate-400"></p>
+                                    </div>
+                                </div>
+                                <div id="monthly-week-tasks" class="space-y-2"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -189,6 +264,351 @@ function renderTaskCardsHTML(tasks) {
                 </div>
             </div>`;
     }).join('');
+}
+
+function getRollingMonths(yearOffset = 0) {
+    const baseYear = new Date().getFullYear() + yearOffset;
+    return Array.from({ length: 12 }).map((_, monthIndex) => {
+        const key = `${baseYear}-${String(monthIndex + 1).padStart(2, '0')}`;
+        return {
+            key,
+            label: `${MONTH_NAMES[monthIndex]} ${baseYear}`,
+            monthIndex,
+            year: baseYear
+        };
+    });
+}
+
+function buildMonthlySummary(tasks) {
+    const summary = new Map();
+    tasks.forEach(task => {
+        if (!task.plannedDate) return;
+        const date = new Date(`${task.plannedDate}T00:00:00`);
+        if (Number.isNaN(date.getTime())) return;
+        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        if (!summary.has(key)) {
+            summary.set(key, []);
+        }
+        summary.get(key).push(task);
+    });
+    return summary;
+}
+
+function getWeekBucketsForMonth(year, monthIndex, tasks) {
+    const cacheKey = `${year}-${monthIndex}`;
+    if (monthWeekBucketsCache.has(cacheKey)) {
+        return monthWeekBucketsCache.get(cacheKey);
+    }
+
+    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+    const ranges = [
+        { label: 'Semana 1', startDay: 1, endDay: Math.min(7, lastDay) },
+        { label: 'Semana 2', startDay: 8, endDay: Math.min(14, lastDay) },
+        { label: 'Semana 3', startDay: 15, endDay: Math.min(21, lastDay) },
+        { label: 'Semana 4', startDay: 22, endDay: lastDay }
+    ];
+
+    const buckets = ranges.map(range => ({ ...range, tasks: [] }));
+
+    tasks.forEach(task => {
+        if (!task.plannedDate) return;
+        const date = new Date(`${task.plannedDate}T00:00:00`);
+        if (Number.isNaN(date.getTime())) return;
+        if (date.getFullYear() !== year || date.getMonth() !== monthIndex) return;
+        const day = date.getDate();
+        const bucket = buckets.find(range => day >= range.startDay && day <= range.endDay);
+        if (bucket) {
+            bucket.tasks.push(task);
+        }
+    });
+
+    buckets.forEach(bucket => {
+        bucket.tasks.sort((a, b) => {
+            const dateA = a.plannedDate ? new Date(`${a.plannedDate}T00:00:00`).getTime() : Number.POSITIVE_INFINITY;
+            const dateB = b.plannedDate ? new Date(`${b.plannedDate}T00:00:00`).getTime() : Number.POSITIVE_INFINITY;
+            if (dateA === dateB) return (a.priority || '').localeCompare(b.priority || '');
+            return dateA - dateB;
+        });
+    });
+
+    monthWeekBucketsCache.set(cacheKey, buckets);
+    return buckets;
+}
+
+function formatWeekRangeLabel(range, monthIndex, year) {
+    const start = String(range.startDay).padStart(2, '0');
+    const end = String(range.endDay).padStart(2, '0');
+    return `${start} - ${end} de ${MONTH_NAMES[monthIndex]} ${year}`;
+}
+
+function updateMonthlyYearLabel() {
+    const yearLabel = document.getElementById('monthly-year-label');
+    if (!yearLabel) return;
+    const currentYear = new Date().getFullYear() + monthlyViewState.yearOffset;
+    yearLabel.textContent = currentYear.toString();
+}
+
+function updatePlannerViewToggleButtons() {
+    const toggleContainer = document.getElementById('planner-view-toggle');
+    if (!toggleContainer) return;
+    const buttons = toggleContainer.querySelectorAll('.planner-toggle-btn');
+    buttons.forEach(btn => {
+        const isActive = btn.dataset.viewMode === appState.plannerViewMode;
+        if (isActive) {
+            btn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
+            btn.classList.remove('bg-transparent', 'text-slate-600', 'dark:text-slate-300', 'hover:bg-slate-300/60', 'dark:hover:bg-slate-600/70');
+        } else {
+            btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
+            btn.classList.add('bg-transparent', 'text-slate-600', 'dark:text-slate-300', 'hover:bg-slate-300/60', 'dark:hover:bg-slate-600/70');
+        }
+    });
+}
+
+function ensurePlannerContainersVisibility() {
+    const weeklyContainer = document.getElementById('weekly-view-container');
+    const monthlyContainer = document.getElementById('monthly-view-container');
+    if (weeklyContainer) {
+        weeklyContainer.classList.toggle('hidden', appState.plannerViewMode !== 'weekly');
+    }
+    if (monthlyContainer) {
+        monthlyContainer.classList.toggle('hidden', appState.plannerViewMode !== 'monthly');
+        if (appState.plannerViewMode === 'monthly') {
+            updateMonthlySectionsVisibility();
+        }
+    }
+}
+
+function toggleMonthlySectionVisibility(section, shouldShow) {
+    if (!section) return;
+    if (shouldShow) {
+        if (section.classList.contains('hidden')) {
+            section.classList.remove('hidden');
+        }
+        section.classList.remove('animate-fade-in-up');
+        void section.offsetWidth; // force reflow to restart the animation
+        section.classList.add('animate-fade-in-up');
+    } else if (!section.classList.contains('hidden')) {
+        section.classList.add('hidden');
+    }
+}
+
+function updateMonthlySectionsVisibility() {
+    const monthsSection = document.getElementById('monthly-months-section');
+    const weeksSection = document.getElementById('monthly-weeks-section');
+    const tasksSection = document.getElementById('monthly-tasks-section');
+
+    toggleMonthlySectionVisibility(monthsSection, monthlyViewState.viewPhase === 'months');
+    toggleMonthlySectionVisibility(weeksSection, monthlyViewState.viewPhase === 'weeks');
+    toggleMonthlySectionVisibility(tasksSection, monthlyViewState.viewPhase === 'tasks');
+}
+
+function setPlannerViewMode(mode) {
+    if (!['weekly', 'monthly'].includes(mode)) return;
+    if (appState.plannerViewMode === mode) return;
+    appState.plannerViewMode = mode;
+    if (mode === 'monthly') {
+        monthlyViewState.viewPhase = 'months';
+        monthlyViewState.selectedMonthKey = null;
+        monthlyViewState.selectedWeekIndex = null;
+    }
+    ensurePlannerContainersVisibility();
+    updatePlannerViewToggleButtons();
+    if (mode === 'monthly') {
+        updateMonthlyView(weeklyTasksCache);
+    }
+}
+
+function selectMonthlyMonth(monthKey) {
+    if (!monthKey) return;
+    monthlyViewState.selectedMonthKey = monthKey;
+    monthlyViewState.selectedWeekIndex = null;
+    monthlyViewState.viewPhase = 'weeks';
+    renderMonthlyMonthsGrid();
+    renderMonthlyWeekList();
+    renderMonthlyWeekTasks();
+    updateMonthlySectionsVisibility();
+}
+
+function selectMonthlyWeek(monthKey, weekIndex) {
+    if (typeof weekIndex !== 'number' || Number.isNaN(weekIndex)) return;
+    if (monthKey && monthlyViewState.selectedMonthKey !== monthKey) {
+        monthlyViewState.selectedMonthKey = monthKey;
+    }
+    monthlyViewState.selectedWeekIndex = weekIndex;
+    monthlyViewState.viewPhase = 'tasks';
+    renderMonthlyMonthsGrid();
+    renderMonthlyWeekList();
+    renderMonthlyWeekTasks();
+    updateMonthlySectionsVisibility();
+}
+
+function returnToMonthlyMonths() {
+    monthlyViewState.viewPhase = 'months';
+    monthlyViewState.selectedWeekIndex = null;
+    renderMonthlyMonthsGrid();
+    renderMonthlyWeekList();
+    renderMonthlyWeekTasks();
+    updateMonthlySectionsVisibility();
+}
+
+function returnToMonthlyWeeks() {
+    if (!monthlyViewState.selectedMonthKey) {
+        monthlyViewState.viewPhase = 'months';
+    } else {
+        monthlyViewState.viewPhase = 'weeks';
+    }
+    renderMonthlyWeekList();
+    renderMonthlyWeekTasks();
+    updateMonthlySectionsVisibility();
+}
+
+function updateMonthlyView(tasks) {
+    const monthlyContainer = document.getElementById('monthly-view-container');
+    if (!monthlyContainer) return;
+
+    monthlyViewState.months = getRollingMonths(monthlyViewState.yearOffset);
+    monthlyViewState.monthlyTasksByKey = buildMonthlySummary(tasks || []);
+    monthWeekBucketsCache = new Map();
+    updateMonthlyYearLabel();
+
+    const hasSelectedMonth = monthlyViewState.months.some(month => month.key === monthlyViewState.selectedMonthKey);
+    if (!hasSelectedMonth) {
+        monthlyViewState.selectedMonthKey = null;
+        monthlyViewState.selectedWeekIndex = null;
+        if (monthlyViewState.viewPhase !== 'months') {
+            monthlyViewState.viewPhase = 'months';
+        }
+    }
+
+    if (monthlyViewState.selectedMonthKey) {
+        const selectedMonth = monthlyViewState.months.find(month => month.key === monthlyViewState.selectedMonthKey);
+        if (selectedMonth) {
+            const monthTasks = monthlyViewState.monthlyTasksByKey.get(selectedMonth.key) || [];
+            const weekBuckets = getWeekBucketsForMonth(selectedMonth.year, selectedMonth.monthIndex, monthTasks);
+            const isWeekValid = typeof monthlyViewState.selectedWeekIndex === 'number'
+                && monthlyViewState.selectedWeekIndex >= 0
+                && monthlyViewState.selectedWeekIndex < weekBuckets.length;
+            if (!isWeekValid) {
+                monthlyViewState.selectedWeekIndex = null;
+                if (monthlyViewState.viewPhase === 'tasks') {
+                    monthlyViewState.viewPhase = 'weeks';
+                }
+            }
+        }
+    } else if (monthlyViewState.viewPhase !== 'months') {
+        monthlyViewState.viewPhase = 'months';
+    }
+
+    renderMonthlyMonthsGrid();
+    renderMonthlyWeekList();
+    renderMonthlyWeekTasks();
+    updateMonthlySectionsVisibility();
+}
+
+function renderMonthlyMonthsGrid() {
+    const monthsGrid = document.getElementById('monthly-months-grid');
+    if (!monthsGrid) return;
+
+    if (monthlyViewState.months.length === 0) {
+        monthsGrid.innerHTML = `<p class="text-sm text-slate-500 dark:text-slate-400">No hay meses para mostrar.</p>`;
+        return;
+    }
+
+    const cardsHTML = monthlyViewState.months.map(month => {
+        const monthTasks = monthlyViewState.monthlyTasksByKey.get(month.key) || [];
+        const isActive = month.key === monthlyViewState.selectedMonthKey && monthlyViewState.viewPhase !== 'months';
+        const baseClasses = 'w-full text-left rounded-2xl border transition-all duration-200 px-5 py-6 flex flex-col gap-3 shadow-sm hover:-translate-y-1';
+        const activeClasses = 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-200 shadow-md';
+        const inactiveClasses = 'border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 hover:border-blue-400 hover:bg-blue-50/60';
+        return `
+            <button type="button" data-month-key="${month.key}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">
+                <div class="flex items-center justify-between">
+                    <p class="text-sm font-semibold">${month.label}</p>
+                    <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/70 text-blue-600 dark:text-blue-200 font-bold">${monthTasks.length}</span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400">${monthTasks.length === 1 ? '1 tarea planificada' : `${monthTasks.length} tareas planificadas`}</p>
+            </button>
+        `;
+    }).join('');
+
+    monthsGrid.innerHTML = cardsHTML;
+}
+
+function renderMonthlyWeekList() {
+    const weekListContainer = document.getElementById('monthly-week-list');
+    const monthTitleElement = document.getElementById('monthly-selected-month-title');
+    const monthTotalElement = document.getElementById('monthly-selected-month-total');
+    if (!weekListContainer || !monthTitleElement || !monthTotalElement) return;
+
+    const selectedMonth = monthlyViewState.months.find(month => month.key === monthlyViewState.selectedMonthKey);
+    if (!selectedMonth) {
+        weekListContainer.innerHTML = `<div class="col-span-full text-sm text-slate-500 dark:text-slate-400">Seleccioná un mes para ver sus semanas.</div>`;
+        monthTitleElement.textContent = '';
+        monthTotalElement.textContent = '';
+        return;
+    }
+
+    const monthTasks = monthlyViewState.monthlyTasksByKey.get(selectedMonth.key) || [];
+    monthTitleElement.textContent = selectedMonth.label;
+    monthTotalElement.textContent = monthTasks.length === 1 ? '1 tarea planificada' : `${monthTasks.length} tareas planificadas`;
+
+    const weekBuckets = getWeekBucketsForMonth(selectedMonth.year, selectedMonth.monthIndex, monthTasks);
+
+    const cardsHTML = weekBuckets.map((bucket, index) => {
+        const isActive = monthlyViewState.selectedWeekIndex === index;
+        const baseClasses = 'w-full text-left rounded-2xl border px-4 py-4 transition-all duration-200 bg-white/80 dark:bg-slate-800/60 hover:-translate-y-1';
+        const activeClasses = 'border-emerald-500 shadow-md';
+        const inactiveClasses = 'border-slate-200 dark:border-slate-700 hover:border-emerald-400 hover:bg-emerald-50/60';
+        return `
+            <button type="button" data-week-index="${index}" data-month-key="${selectedMonth.key}" class="${baseClasses} ${isActive ? activeClasses : inactiveClasses}">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-semibold">${bucket.label}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">${formatWeekRangeLabel(bucket, selectedMonth.monthIndex, selectedMonth.year)}</p>
+                    </div>
+                    <span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-200 font-semibold">${bucket.tasks.length}</span>
+                </div>
+            </button>
+        `;
+    }).join('');
+
+    weekListContainer.innerHTML = cardsHTML;
+}
+
+function renderMonthlyWeekTasks() {
+    const tasksContainer = document.getElementById('monthly-week-tasks');
+    const weekTitleElement = document.getElementById('monthly-selected-week-title');
+    const weekTotalElement = document.getElementById('monthly-selected-week-total');
+    if (!tasksContainer || !weekTitleElement || !weekTotalElement) return;
+
+    const selectedMonth = monthlyViewState.months.find(month => month.key === monthlyViewState.selectedMonthKey);
+    if (!selectedMonth) {
+        tasksContainer.innerHTML = `<p class="text-sm text-slate-500 dark:text-slate-400">Seleccioná un mes para ver las tareas.</p>`;
+        weekTitleElement.textContent = '';
+        weekTotalElement.textContent = '';
+        return;
+    }
+
+    const monthTasks = monthlyViewState.monthlyTasksByKey.get(selectedMonth.key) || [];
+    const weekBuckets = getWeekBucketsForMonth(selectedMonth.year, selectedMonth.monthIndex, monthTasks);
+    const selectedWeek = typeof monthlyViewState.selectedWeekIndex === 'number' ? weekBuckets[monthlyViewState.selectedWeekIndex] : null;
+
+    if (!selectedWeek) {
+        tasksContainer.innerHTML = `<p class="text-sm text-slate-500 dark:text-slate-400">Seleccioná una semana para ver sus tareas detalladas.</p>`;
+        weekTitleElement.textContent = '';
+        weekTotalElement.textContent = '';
+        return;
+    }
+
+    const totalLabel = selectedWeek.tasks.length === 1 ? '1 tarea' : `${selectedWeek.tasks.length} tareas`;
+    weekTitleElement.textContent = `${selectedWeek.label} · ${formatWeekRangeLabel(selectedWeek, selectedMonth.monthIndex, selectedMonth.year)}`;
+    weekTotalElement.textContent = totalLabel;
+    tasksContainer.innerHTML = `
+        <div class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
+            ${renderTaskCardsHTML(selectedWeek.tasks)}
+        </div>
+    `;
+    lucide.createIcons();
 }
 
 function renderWeeklyTasks(tasks) {
@@ -461,6 +881,55 @@ function updateKpiCards(kpiData) {
 
 function setupActionButtons() {
     document.getElementById('show-planner-help-btn')?.addEventListener('click', () => showPlannerHelpModal());
+    const plannerToggleButtons = document.querySelectorAll('#planner-view-toggle .planner-toggle-btn');
+    plannerToggleButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mode = btn.dataset.viewMode;
+            if (mode) {
+                setPlannerViewMode(mode);
+            }
+        });
+    });
+    document.getElementById('monthly-prev-year-btn')?.addEventListener('click', () => {
+        monthlyViewState.yearOffset--;
+        monthlyViewState.selectedMonthKey = null;
+        monthlyViewState.selectedWeekIndex = null;
+        monthlyViewState.viewPhase = 'months';
+        updateMonthlyView(weeklyTasksCache);
+    });
+    document.getElementById('monthly-next-year-btn')?.addEventListener('click', () => {
+        monthlyViewState.yearOffset++;
+        monthlyViewState.selectedMonthKey = null;
+        monthlyViewState.selectedWeekIndex = null;
+        monthlyViewState.viewPhase = 'months';
+        updateMonthlyView(weeklyTasksCache);
+    });
+    const monthlyContainer = document.getElementById('monthly-view-container');
+    monthlyContainer?.addEventListener('click', (event) => {
+        const actionButton = event.target.closest('[data-action]');
+        if (actionButton) {
+            const action = actionButton.dataset.action;
+            if (action === 'monthly-back-to-months') {
+                returnToMonthlyMonths();
+                return;
+            }
+            if (action === 'monthly-back-to-weeks') {
+                returnToMonthlyWeeks();
+                return;
+            }
+        }
+        const monthButton = event.target.closest('[data-month-key]');
+        if (monthButton) {
+            selectMonthlyMonth(monthButton.dataset.monthKey);
+            return;
+        }
+        const weekButton = event.target.closest('[data-week-index]');
+        if (weekButton) {
+            const weekIndex = Number.parseInt(weekButton.dataset.weekIndex, 10);
+            const monthKey = weekButton.dataset.monthKey || monthlyViewState.selectedMonthKey;
+            selectMonthlyWeek(monthKey, weekIndex);
+        }
+    });
     document.getElementById('ai-assistant-btn')?.addEventListener('click', () => {
         if (openAIAssistantModal) {
             openAIAssistantModal();
@@ -509,13 +978,29 @@ async function refreshWeeklyTasksView(direction = 'next') {
     if (!container) return;
     const slideOutClass = direction === 'next' ? 'slide-out-left' : 'slide-out-right';
     const slideInClass = direction === 'next' ? 'slide-in-right' : 'slide-in-left';
+
+    const fetchAndRenderTasks = async () => {
+        const tasks = await fetchWeeklyTasks();
+        weeklyTasksCache = tasks;
+        renderWeeklyTasks(tasks);
+        updateMonthlyView(tasks);
+    };
+
+    if (appState.plannerViewMode === 'monthly') {
+        try {
+            await fetchAndRenderTasks();
+        } catch (error) {
+            console.error("Error refreshing monthly planner data:", error);
+            showToast('Error al actualizar la vista de tareas.', 'error');
+        }
+        return;
+    }
+
     container.classList.add(slideOutClass);
     container.addEventListener('animationend', async function onAnimationEnd() {
         container.removeEventListener('animationend', onAnimationEnd);
         try {
-            const tasks = await fetchWeeklyTasks();
-            weeklyTasksCache = tasks;
-            renderWeeklyTasks(tasks);
+            await fetchAndRenderTasks();
             const newContainer = document.getElementById('weekly-tasks-container');
             if (newContainer) {
                 newContainer.classList.remove(slideOutClass);
@@ -532,7 +1017,15 @@ async function refreshWeeklyTasksView(direction = 'next') {
 
 export async function runLandingPageLogic() {
     appState.weekOffset = 0;
+    appState.plannerViewMode = 'weekly';
+    monthlyViewState.yearOffset = 0;
+    monthlyViewState.selectedMonthKey = null;
+    monthlyViewState.selectedWeekIndex = null;
+    monthlyViewState.viewPhase = 'months';
     renderLandingPageHTML();
+    ensurePlannerContainersVisibility();
+    updatePlannerViewToggleButtons();
+    updateMonthlyYearLabel();
     try {
         const kpiData = await fetchKpiData();
         updateKpiCards(kpiData);
