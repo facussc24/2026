@@ -482,15 +482,16 @@ export function openAIAssistantModal() {
         if (!stepElement) return;
         const statusText = stepElement.querySelector('.status-text');
         const statusIcon = stepElement.querySelector('.status-icon');
+        const normalizedStatus = typeof status === 'string' ? status.toLowerCase() : 'pending';
         if (statusText) {
             const labels = { completed: 'Completado', error: 'Error', pending: 'Pendiente' };
-            statusText.textContent = labels[status] || 'Pendiente';
+            statusText.textContent = labels[normalizedStatus] || 'Pendiente';
         }
         if (statusIcon) {
-            statusIcon.dataset.status = status;
-            if (status === 'completed') {
+            statusIcon.dataset.status = normalizedStatus;
+            if (normalizedStatus === 'completed') {
                 statusIcon.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5 text-green-500"></i>';
-            } else if (status === 'error') {
+            } else if (normalizedStatus === 'error') {
                 statusIcon.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5 text-red-500"></i>';
             } else {
                 statusIcon.innerHTML = '<i data-lucide="loader-circle" class="w-5 h-5 animate-spin text-slate-400"></i>';
@@ -499,7 +500,8 @@ export function openAIAssistantModal() {
         if (message) {
             const finalThought = planContainer?.querySelector('#execution-final-thought');
             if (finalThought) {
-                finalThought.innerHTML = `<p class="text-sm text-slate-600 dark:text-slate-300">${message}</p>`;
+                finalThought.classList.add('text-sm', 'text-slate-600', 'dark:text-slate-300');
+                finalThought.textContent = message;
             }
         }
         lucide.createIcons();
@@ -800,6 +802,17 @@ export function openAIAssistantModal() {
                             closeBtn.innerHTML = executionData.status === 'COMPLETED'
                                 ? '<i data-lucide="check-circle" class="w-5 h-5"></i><span>Finalizado</span>'
                                 : '<i data-lucide="alert-circle" class="w-5 h-5"></i><span>Finalizado con errores</span>';
+                        }
+                        const headerCloseBtn = planContainer.querySelector('#execution-close-btn');
+                        if (headerCloseBtn) {
+                            headerCloseBtn.classList.remove('hidden');
+                            headerCloseBtn.disabled = false;
+                        }
+                        const statusHeading = planContainer.querySelector('#execution-status-text');
+                        if (statusHeading) {
+                            statusHeading.textContent = executionData.status === 'COMPLETED'
+                                ? 'Plan ejecutado correctamente'
+                                : 'Plan finalizado con errores';
                         }
                         lucide.createIcons();
                         executionUnsubscribe();
