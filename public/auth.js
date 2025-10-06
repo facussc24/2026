@@ -8,6 +8,24 @@ import { COLLECTIONS } from './utils.js';
 // These will be initialized by main.js
 let auth;
 let db;
+let notify = (message, type = 'info') => {
+    console.warn('showToast no ha sido inicializado.', { message, type });
+};
+
+const AUTH_SCREENS = new Set(['login', 'register', 'reset', 'verify-email']);
+const SCREEN_HASH_MAP = {
+    login: '#/login',
+    register: '#/register',
+    reset: '#/reset-password',
+    'verify-email': '#/verify-email'
+};
+const HASH_SCREEN_MAP = Object.entries(SCREEN_HASH_MAP).reduce((acc, [screen, hash]) => {
+    acc[hash] = screen;
+    return acc;
+}, {});
+
+let suppressNextHashSync = false;
+let currentScreen = null;
 
 /**
  * @constant {Object} DOM_ELEMENTS
@@ -25,6 +43,13 @@ const DOM_ELEMENTS = {
     registerForm: 'register-form',
     resetForm: 'reset-form',
     logoutButton: 'logout-button'
+};
+
+const SCREEN_TO_PANEL_ID = {
+    login: DOM_ELEMENTS.loginPanel,
+    register: DOM_ELEMENTS.registerPanel,
+    reset: DOM_ELEMENTS.resetPanel,
+    'verify-email': DOM_ELEMENTS.verifyEmailPanel
 };
 
 /**
@@ -48,21 +73,63 @@ const dom = new Proxy({}, {
     }
 });
 
-export function showAuthScreen(screenName) {
-    const screens = [
-        DOM_ELEMENTS.loginPanel,
-        DOM_ELEMENTS.registerPanel,
-        DOM_ELEMENTS.resetPanel,
-        DOM_ELEMENTS.verifyEmailPanel
-    ];
+export function showAuthScreen(screenName, options = {}) {
+    const { updateHash = true } = options;
+    const normalizedScreen = AUTH_SCREENS.has(screenName) ? screenName : 'login';
 
-    screens.forEach(id => {
+    Object.values(SCREEN_TO_PANEL_ID).forEach(id => {
         const panel = document.getElementById(id);
         if (panel) panel.classList.add('hidden');
     });
 
-    const panelToShow = document.getElementById(`${screenName}-panel`);
-    if (panelToShow) panelToShow.classList.remove('hidden');
+    const panelId = SCREEN_TO_PANEL_ID[normalizedScreen];
+    const panelToShow = panelId ? document.getElementById(panelId) : null;
+    if (panelToShow) {
+        panelToShow.classList.remove('hidden');
+        const firstInput = panelToShow.querySelector('input:not([type="hidden"])');
+        if (firstInput && typeof firstInput.focus === 'function') {
+            setTimeout(() => firstInput.focus(), 0);
+        }
+    }
+
+    currentScreen = normalizedScreen;
+
+    if (updateHash) {
+        const expectedHash = SCREEN_HASH_MAP[normalizedScreen];
+        if (expectedHash && window.location.hash !== expectedHash) {
+            suppressNextHashSync = true;
+            window.location.hash = expectedHash;
+        }
+    }
+
+    if (window.lucide?.createIcons) {
+        window.lucide.createIcons();
+    }
+}
+
+function getScreenFromHash(hashValue) {
+    if (!hashValue) return 'login';
+    const normalizedHash = hashValue.startsWith('#') ? hashValue : `#${hashValue}`;
+    return HASH_SCREEN_MAP[normalizedHash] || 'login';
+}
+
+function syncAuthScreenWithHash() {
+    const hash = window.location.hash;
+    const screen = getScreenFromHash(hash);
+    const shouldUpdateHash = hash !== SCREEN_HASH_MAP[screen];
+    showAuthScreen(screen, { updateHash: shouldUpdateHash });
+}
+
+function handleAuthHashChange() {
+    if (suppressNextHashSync) {
+        suppressNextHashSync = false;
+        return;
+    }
+
+    const screen = getScreenFromHash(window.location.hash);
+    if (screen !== currentScreen) {
+        showAuthScreen(screen, { updateHash: false });
+    }
 }
 
 async function handleResendVerificationEmail() {
@@ -73,7 +140,7 @@ async function handleResendVerificationEmail() {
 
     try {
         await sendEmailVerification(auth.currentUser);
-        window.showToast('Se ha enviado un nuevo correo de verificación.', 'success');
+        notify('Se ha enviado un nuevo correo de verificación.', 'success');
 
         // Cooldown timer
         let seconds = 60;
@@ -95,7 +162,7 @@ async function handleResendVerificationEmail() {
         if (error.code === 'auth/too-many-requests') {
             friendlyMessage = 'Demasiados intentos. Por favor, espera un momento antes de volver a intentarlo.';
         }
-        window.showToast(friendlyMessage, 'error');
+        notify(friendlyMessage, 'error');
         dom.resendTimer.textContent = 'Hubo un error. Inténtalo de nuevo más tarde.';
         setTimeout(() => {
             if (dom.resendTimer.textContent.includes('error')) {
@@ -113,11 +180,24 @@ async function handleLogin(form, email, password) {
 }
 
 async function handleRegister(form, email, password) {
-    const name = form.querySelector('#register-name').value;
-    if (!email.toLowerCase().endsWith('@barackmercosul.com')) {
+    const name = form.querySelector('#register-name').value.trim();
+    const emailField = form.querySelector('#register-email');
+    const sanitizedEmail = email.trim();
+    const normalizedEmail = sanitizedEmail.toLowerCase();
+
+    if (emailField) {
+        emailField.setCustomValidity('');
+    }
+
+    if (!normalizedEmail.endsWith('@barackmercosul.com')) {
+        if (emailField) {
+            emailField.setCustomValidity('Introduce un correo corporativo válido @barackmercosul.com.');
+            emailField.reportValidity();
+        }
         throw new Error('auth/unauthorized-domain');
     }
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+    const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
     await updateProfile(userCredential.user, { displayName: name });
 
     await setDoc(doc(db, COLLECTIONS.USUARIOS, userCredential.user.uid), {
@@ -130,13 +210,15 @@ async function handleRegister(form, email, password) {
     });
 
     await sendEmailVerification(userCredential.user);
-    window.showToast('¡Registro exitoso! Revisa tu correo para verificar tu cuenta.', 'success');
+    form.reset();
+    notify('¡Registro exitoso! Revisa tu correo para verificar tu cuenta.', 'success');
     showAuthScreen('verify-email');
 }
 
 async function handlePasswordReset(form, email) {
-    await sendPasswordResetEmail(auth, email);
-    window.showToast(`Si la cuenta ${email} existe, se ha enviado un enlace para restablecer la contraseña.`, 'info');
+    await sendPasswordResetEmail(auth, email.trim());
+    form.reset();
+    notify(`Si la cuenta ${email} existe, se ha enviado un enlace para restablecer la contraseña.`, 'info');
     showAuthScreen('login');
 }
 
@@ -144,7 +226,11 @@ export async function handleAuthForms(e) {
     e.preventDefault();
     const form = e.target;
     const formId = form.id;
-    const email = form.querySelector('input[type="email"]').value;
+    const emailInput = form.querySelector('input[type="email"]');
+    const email = emailInput ? emailInput.value.trim() : '';
+    if (emailInput) {
+        emailInput.value = email;
+    }
     const passwordInput = form.querySelector('input[type="password"]');
     const password = passwordInput ? passwordInput.value : null;
 
@@ -152,18 +238,25 @@ export async function handleAuthForms(e) {
     const originalButtonHTML = submitButton.innerHTML;
     submitButton.disabled = true;
     submitButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5 mx-auto"></i>`;
-    window.lucide.createIcons();
+    if (window.lucide?.createIcons) {
+        window.lucide.createIcons();
+    }
+
+    let operationSuccessful = false;
 
     try {
         switch (formId) {
             case 'login-form':
                 await handleLogin(form, email, password);
+                operationSuccessful = true;
                 break;
             case 'register-form':
                 await handleRegister(form, email, password);
+                operationSuccessful = true;
                 break;
             case 'reset-form':
                 await handlePasswordReset(form, email);
+                operationSuccessful = true;
                 break;
         }
     } catch (error) {
@@ -173,7 +266,12 @@ export async function handleAuthForms(e) {
             case 'auth/invalid-login-credentials':
             case 'auth/wrong-password':
             case 'auth/user-not-found':
+            case 'auth/invalid-credential':
                 friendlyMessage = 'Credenciales incorrectas. Por favor, verifique su email y contraseña.';
+                break;
+            case 'auth/missing-email':
+            case 'auth/invalid-email':
+                friendlyMessage = 'Ingresa un correo electrónico válido.';
                 break;
             case 'auth/email-not-verified':
                 friendlyMessage = 'Debe verificar su email para poder iniciar sesión. Revise su casilla de correo.';
@@ -185,19 +283,33 @@ export async function handleAuthForms(e) {
             case 'auth/weak-password':
                 friendlyMessage = 'La contraseña debe tener al menos 6 caracteres.';
                 break;
+            case 'auth/missing-password':
+                friendlyMessage = 'Ingresa una contraseña.';
+                break;
             case 'auth/unauthorized-domain':
                 friendlyMessage = 'Dominio no autorizado. Use un correo de @barackmercosul.com.';
                 break;
             case 'auth/too-many-requests':
                  friendlyMessage = 'Demasiados intentos. Por favor, espera un momento antes de volver a intentarlo.';
                  break;
+            case 'auth/network-request-failed':
+                 friendlyMessage = 'No se pudo conectar con el servidor. Verifica tu conexión e inténtalo nuevamente.';
+                 break;
             default:
                 friendlyMessage = 'Error de autenticación. Intente de nuevo más tarde.';
         }
-        window.showToast(friendlyMessage, 'error');
+        notify(friendlyMessage, 'error');
+        operationSuccessful = false;
+    }
 
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonHTML;
+    submitButton.disabled = false;
+    submitButton.innerHTML = originalButtonHTML;
+    if (window.lucide?.createIcons) {
+        window.lucide.createIcons();
+    }
+
+    if (formId === 'login-form' && operationSuccessful) {
+        form.reset();
     }
 }
 
@@ -206,7 +318,7 @@ export async function logOutUser() {
         await signOut(auth);
     } catch (error) {
         console.error("Error signing out:", error);
-        window.showToast("Error al cerrar sesión.", "error");
+        notify("Error al cerrar sesión.", "error");
     }
 }
 
@@ -217,6 +329,22 @@ function setupEventListeners() {
     dom.loginForm?.addEventListener('submit', handleAuthForms);
     dom.registerForm?.addEventListener('submit', handleAuthForms);
     dom.resetForm?.addEventListener('submit', handleAuthForms);
+
+    window.addEventListener('hashchange', handleAuthHashChange);
+
+    const registerEmailInput = document.getElementById('register-email');
+    if (registerEmailInput) {
+        registerEmailInput.addEventListener('input', () => registerEmailInput.setCustomValidity(''));
+        registerEmailInput.addEventListener('invalid', () => {
+            if (registerEmailInput.validity.valueMissing) {
+                registerEmailInput.setCustomValidity('Este campo es obligatorio.');
+            } else if (registerEmailInput.validity.patternMismatch) {
+                registerEmailInput.setCustomValidity('Introduce un correo corporativo válido @barackmercosul.com.');
+            } else {
+                registerEmailInput.setCustomValidity('');
+            }
+        });
+    }
 
     // Utiliza un único listener en el documento para manejar clics en enlaces
     // y botones relacionados con la autenticación, mejorando el rendimiento.
@@ -248,6 +376,8 @@ function setupEventListeners() {
             handleResendVerificationEmail();
         }
     });
+
+    syncAuthScreenWithHash();
 }
 
 
@@ -257,9 +387,15 @@ function setupEventListeners() {
  * @param {*} _auth - La instancia de autenticación de Firebase.
  * @param {*} _db - La instancia de Firestore de Firebase.
  */
-export function initAuthModule(_auth, _db) {
+export function initAuthModule(_auth, _db, options = {}) {
     auth = _auth;
     db = _db;
+
+    if (typeof options.showToast === 'function') {
+        notify = options.showToast;
+    } else if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+        notify = window.showToast.bind(window);
+    }
 
     setupEventListeners();
 

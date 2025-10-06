@@ -1495,6 +1495,10 @@ export function showToast(message, type = 'success', options = {}) {
     return toastElement.id;
 }
 
+if (typeof window !== 'undefined') {
+    window.showToast = showToast;
+}
+
 function renderNotificationCenter() {
     const container = document.getElementById('notification-center-container');
     if (!container) return;
@@ -3635,7 +3639,7 @@ function renderUserMenu() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    initAuthModule(auth, db);
+    initAuthModule(auth, db, { showToast });
     initializeAppListeners();
     lucide.createIcons();
 });
