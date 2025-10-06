@@ -2,9 +2,25 @@ import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 function sanitizeHTML(html) {
     if (!html) return '';
+
     if (typeof window !== 'undefined' && window.DOMPurify) {
         return window.DOMPurify.sanitize(html);
     }
+
+    const ParserClass = typeof DOMParser !== 'undefined'
+        ? DOMParser
+        : (typeof window !== 'undefined' ? window.DOMParser : null);
+
+    if (ParserClass) {
+        try {
+            const parser = new ParserClass();
+            const doc = parser.parseFromString(html, 'text/html');
+            return doc?.body?.textContent?.trim() ? doc.body.textContent : '';
+        } catch (error) {
+            console.warn('No se pudo sanear HTML mediante DOMParser:', error);
+        }
+    }
+
     return html
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -288,17 +304,17 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
 
                         ${action.action === 'CREATE' ? `
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
+                                <div class="flex flex-col gap-1">
                                     <label class="block text-xs font-semibold text-slate-500">Título sugerido</label>
-                                    <input id="action_${index}_title" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm" value="${sanitizeHTML(action.task?.title || '')}">
+                                    <input id="action_${index}_title" class="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm" value="${sanitizeHTML(action.task?.title || '')}">
                                 </div>
-                                <div>
+                                <div class="flex flex-col gap-1">
                                     <label class="block text-xs font-semibold text-slate-500">Fecha límite</label>
-                                    <input id="action_${index}_dueDate" type="date" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm" value="${action.task?.dueDate || ''}">
+                                    <input id="action_${index}_dueDate" type="date" class="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm" value="${action.task?.dueDate || ''}">
                                 </div>
-                                <div class="md:col-span-2">
+                                <div class="md:col-span-2 flex flex-col gap-1">
                                     <label class="block text-xs font-semibold text-slate-500">Sub-tareas propuestas</label>
-                                    <textarea id="action_${index}_subtasks" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm" rows="2" placeholder="Una sub-tarea por línea">${Array.isArray(action.task?.subtasks) ? action.task.subtasks.map(st => st.title).join('\n') : ''}</textarea>
+                                    <textarea id="action_${index}_subtasks" class="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm" rows="2" placeholder="Una sub-tarea por línea">${Array.isArray(action.task?.subtasks) ? action.task.subtasks.map(st => st.title).join('\n') : ''}</textarea>
                                 </div>
                             </div>
                         ` : ''}
@@ -308,13 +324,13 @@ export function getAIAssistantReviewViewHTML(plan, taskTitleMap) {
                             <div class="space-y-2">
                                 ${(action.updates || []).map((update, updateIndex) => `
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div>
+                                        <div class="flex flex-col gap-1">
                                             <label class="block text-xs font-semibold text-slate-500">Campo a actualizar</label>
-                                            <input type="text" name="action_${index}_update_field_${updateIndex}" value="${sanitizeHTML(update.field || '')}" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+                                            <input type="text" name="action_${index}_update_field_${updateIndex}" value="${sanitizeHTML(update.field || '')}" class="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
                                         </div>
-                                        <div>
+                                        <div class="flex flex-col gap-1">
                                             <label class="block text-xs font-semibold text-slate-500">Nuevo valor</label>
-                                            <input type="text" name="action_${index}_update_value_${updateIndex}" value="${sanitizeHTML(typeof update.value === 'string' ? update.value : JSON.stringify(update.value || ''))}" class="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
+                                            <input type="text" name="action_${index}_update_value_${updateIndex}" value="${sanitizeHTML(typeof update.value === 'string' ? update.value : JSON.stringify(update.value || ''))}" class="w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm">
                                         </div>
                                     </div>
                                 `).join('')}
@@ -448,7 +464,7 @@ export function getAIAssistantExecutionProgressViewHTML(steps) {
         <div class="flex justify-between items-center p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-3">
                 <i data-lucide="bot" class="w-6 h-6 text-purple-500"></i>
-                Ejecutando Plan de la IA
+                <span id="execution-status-text">Ejecutando Plan de la IA</span>
             </h3>
             <button data-action="close" class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors hidden" id="execution-close-btn">
                 <i data-lucide="x" class="h-6 w-6"></i>
