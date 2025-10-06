@@ -454,6 +454,7 @@ export function openAIAssistantModal() {
     const chatForm = document.getElementById('ai-chat-form');
     const chatInput = document.getElementById('ai-chat-input');
     const sendBtn = document.getElementById('ai-chat-send-btn');
+    lucide.createIcons();
 
     let conversationId = null;
     let jobUnsubscribe = null;
@@ -471,6 +472,10 @@ export function openAIAssistantModal() {
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         return messageElement;
     };
+
+    if (messagesContainer) {
+        addMessage('ai', 'Hola, ¿qué quieres hacer hoy? Puedo ayudarte a planificar o ejecutar tareas.');
+    }
 
     const updateExecutionStepStatus = (planContainer, stepIndex, status, message) => {
         const stepElement = planContainer?.querySelector(`#execution-step-${stepIndex}`);

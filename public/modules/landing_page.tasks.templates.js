@@ -2,9 +2,25 @@ import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 function sanitizeHTML(html) {
     if (!html) return '';
+
     if (typeof window !== 'undefined' && window.DOMPurify) {
         return window.DOMPurify.sanitize(html);
     }
+
+    const ParserClass = typeof DOMParser !== 'undefined'
+        ? DOMParser
+        : (typeof window !== 'undefined' ? window.DOMParser : null);
+
+    if (ParserClass) {
+        try {
+            const parser = new ParserClass();
+            const doc = parser.parseFromString(html, 'text/html');
+            return doc?.body?.textContent?.trim() ? doc.body.textContent : '';
+        } catch (error) {
+            console.warn('No se pudo sanear HTML mediante DOMParser:', error);
+        }
+    }
+
     return html
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
