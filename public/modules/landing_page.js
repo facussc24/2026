@@ -284,7 +284,7 @@ function buildMonthlySummary(tasks) {
     const summary = new Map();
     tasks.forEach(task => {
         if (!task.plannedDate) return;
-        const date = new Date(`${task.plannedDate}T00:00:00`);
+        const date = new Date(`${task.plannedDate}T12:00:00`);
         if (Number.isNaN(date.getTime())) return;
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         if (!summary.has(key)) {
@@ -301,23 +301,59 @@ function getWeekBucketsForMonth(year, monthIndex, tasks) {
         return monthWeekBucketsCache.get(cacheKey);
     }
 
-    const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-    const ranges = [
-        { label: 'Semana 1', startDay: 1, endDay: Math.min(7, lastDay) },
-        { label: 'Semana 2', startDay: 8, endDay: Math.min(14, lastDay) },
-        { label: 'Semana 3', startDay: 15, endDay: Math.min(21, lastDay) },
-        { label: 'Semana 4', startDay: 22, endDay: lastDay }
-    ];
+    const firstDayOfMonth = new Date(year, monthIndex, 1, 12);
+    const lastDayOfMonth = new Date(year, monthIndex + 1, 0, 12);
 
-    const buckets = ranges.map(range => ({ ...range, tasks: [] }));
+    const firstWeekday = new Date(firstDayOfMonth);
+    while (firstWeekday.getDay() === 0 || firstWeekday.getDay() === 6) {
+        firstWeekday.setDate(firstWeekday.getDate() + 1);
+    }
+
+    const lastWeekday = new Date(lastDayOfMonth);
+    while (lastWeekday.getDay() === 0 || lastWeekday.getDay() === 6) {
+        lastWeekday.setDate(lastWeekday.getDate() - 1);
+    }
+
+    if (firstWeekday > lastWeekday) {
+        firstWeekday.setTime(firstDayOfMonth.getTime());
+        lastWeekday.setTime(lastDayOfMonth.getTime());
+    }
+
+    let currentMonday = getMondayForDate(firstWeekday);
+    const finalMonday = getMondayForDate(lastWeekday);
+    const buckets = [];
+
+    while (currentMonday.getTime() <= finalMonday.getTime()) {
+        const startDate = new Date(currentMonday);
+        const endDate = new Date(currentMonday);
+        endDate.setDate(endDate.getDate() + 4);
+
+        buckets.push({
+            label: `Semana ${buckets.length + 1}`,
+            startDate: new Date(startDate),
+            endDate,
+            tasks: []
+        });
+
+        currentMonday = new Date(currentMonday);
+        currentMonday.setDate(currentMonday.getDate() + 7);
+        currentMonday = getMondayForDate(currentMonday);
+    }
+
+    if (buckets.length === 0) {
+        const startDate = getMondayForDate(firstDayOfMonth);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 4);
+        buckets.push({ label: 'Semana 1', startDate, endDate, tasks: [] });
+    }
 
     tasks.forEach(task => {
         if (!task.plannedDate) return;
-        const date = new Date(`${task.plannedDate}T00:00:00`);
+        const date = new Date(`${task.plannedDate}T12:00:00`);
         if (Number.isNaN(date.getTime())) return;
         if (date.getFullYear() !== year || date.getMonth() !== monthIndex) return;
-        const day = date.getDate();
-        const bucket = buckets.find(range => day >= range.startDay && day <= range.endDay);
+        const monday = getMondayForDate(date);
+        const bucket = buckets.find(item => item.startDate.getTime() === monday.getTime());
         if (bucket) {
             bucket.tasks.push(task);
         }
@@ -325,8 +361,8 @@ function getWeekBucketsForMonth(year, monthIndex, tasks) {
 
     buckets.forEach(bucket => {
         bucket.tasks.sort((a, b) => {
-            const dateA = a.plannedDate ? new Date(`${a.plannedDate}T00:00:00`).getTime() : Number.POSITIVE_INFINITY;
-            const dateB = b.plannedDate ? new Date(`${b.plannedDate}T00:00:00`).getTime() : Number.POSITIVE_INFINITY;
+            const dateA = a.plannedDate ? new Date(`${a.plannedDate}T12:00:00`).getTime() : Number.POSITIVE_INFINITY;
+            const dateB = b.plannedDate ? new Date(`${b.plannedDate}T12:00:00`).getTime() : Number.POSITIVE_INFINITY;
             if (dateA === dateB) return (a.priority || '').localeCompare(b.priority || '');
             return dateA - dateB;
         });
@@ -336,10 +372,19 @@ function getWeekBucketsForMonth(year, monthIndex, tasks) {
     return buckets;
 }
 
-function formatWeekRangeLabel(range, monthIndex, year) {
-    const start = String(range.startDay).padStart(2, '0');
-    const end = String(range.endDay).padStart(2, '0');
-    return `${start} - ${end} de ${MONTH_NAMES[monthIndex]} ${year}`;
+function formatWeekRangeLabel(range) {
+    const start = range.startDate;
+    const end = range.endDate;
+    const startDay = String(start.getDate()).padStart(2, '0');
+    const endDay = String(end.getDate()).padStart(2, '0');
+    const startMonthName = MONTH_NAMES[start.getMonth()];
+    const endMonthName = MONTH_NAMES[end.getMonth()];
+
+    if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+        return `${startDay} - ${endDay} de ${endMonthName} ${end.getFullYear()}`;
+    }
+
+    return `${startDay} de ${startMonthName} ${start.getFullYear()} - ${endDay} de ${endMonthName} ${end.getFullYear()}`;
 }
 
 function getMondayForDate(baseDate) {
@@ -379,7 +424,7 @@ function transitionFromMonthlyToWeekly(selectedMonth, selectedWeek) {
         ensurePlannerContainersVisibility();
     };
 
-    const targetDate = new Date(selectedMonth.year, selectedMonth.monthIndex, selectedWeek.startDay);
+    const targetDate = new Date(selectedWeek.startDate);
     targetDate.setHours(12, 0, 0, 0);
     const previousOffset = typeof appState.weekOffset === 'number' ? appState.weekOffset : 0;
     const computedOffset = calculateWeekOffsetFromToday(targetDate);
@@ -644,7 +689,7 @@ function renderMonthlyWeekList() {
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-sm font-semibold">${bucket.label}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">${formatWeekRangeLabel(bucket, selectedMonth.monthIndex, selectedMonth.year)}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">${formatWeekRangeLabel(bucket)}</p>
                     </div>
                     <span class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-200 font-semibold">${bucket.tasks.length}</span>
                 </div>
@@ -700,7 +745,7 @@ function renderMonthlyWeekTasks() {
     }
 
     const totalLabel = selectedWeek.tasks.length === 1 ? '1 tarea' : `${selectedWeek.tasks.length} tareas`;
-    weekTitleElement.textContent = `${selectedWeek.label} · ${formatWeekRangeLabel(selectedWeek, selectedMonth.monthIndex, selectedMonth.year)}`;
+    weekTitleElement.textContent = `${selectedWeek.label} · ${formatWeekRangeLabel(selectedWeek)}`;
     weekTotalElement.textContent = totalLabel;
     tasksContainer.innerHTML = `
         <div class="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-1">
