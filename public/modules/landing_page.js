@@ -45,6 +45,7 @@ let monthlyViewState = {
 };
 
 let monthWeekBucketsCache = new Map();
+let isPlannerTransitioning = false;
 
 // --- 2. UI RENDERING ---
 
@@ -341,6 +342,76 @@ function formatWeekRangeLabel(range, monthIndex, year) {
     return `${start} - ${end} de ${MONTH_NAMES[monthIndex]} ${year}`;
 }
 
+function getMondayForDate(baseDate) {
+    const reference = new Date(baseDate);
+    reference.setHours(12, 0, 0, 0);
+    const day = reference.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    reference.setDate(reference.getDate() + diff);
+    reference.setHours(12, 0, 0, 0);
+    return reference;
+}
+
+function calculateWeekOffsetFromToday(targetDate) {
+    const today = new Date();
+    const currentMonday = getMondayForDate(today);
+    const targetMonday = getMondayForDate(targetDate);
+    const diffMs = targetMonday.getTime() - currentMonday.getTime();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    return Math.round(diffMs / weekMs);
+}
+
+function transitionFromMonthlyToWeekly(selectedMonth, selectedWeek) {
+    if (!selectedMonth || !selectedWeek) return;
+    if (isPlannerTransitioning) return;
+
+    const monthlyContainer = document.getElementById('monthly-view-container');
+    const weeklyContainer = document.getElementById('weekly-view-container');
+    if (!monthlyContainer || !weeklyContainer) return;
+
+    isPlannerTransitioning = true;
+    let transitionCompleted = false;
+
+    const finalizeTransition = () => {
+        if (transitionCompleted) return;
+        transitionCompleted = true;
+        isPlannerTransitioning = false;
+        ensurePlannerContainersVisibility();
+    };
+
+    const targetDate = new Date(selectedMonth.year, selectedMonth.monthIndex, selectedWeek.startDay);
+    targetDate.setHours(12, 0, 0, 0);
+    const previousOffset = typeof appState.weekOffset === 'number' ? appState.weekOffset : 0;
+    const computedOffset = calculateWeekOffsetFromToday(targetDate);
+    const direction = computedOffset === previousOffset
+        ? 'jump'
+        : (computedOffset > previousOffset ? 'next' : 'prev');
+
+    appState.weekOffset = computedOffset;
+    appState.plannerViewMode = 'weekly';
+    updatePlannerViewToggleButtons();
+
+    weeklyContainer.classList.remove('hidden', 'slide-in-right', 'slide-in-left');
+    monthlyContainer.classList.remove('hidden', 'slide-out-left', 'slide-out-right');
+
+    monthlyContainer.classList.add('slide-out-left');
+    const handleMonthlyAnimationEnd = () => {
+        monthlyContainer.classList.add('hidden');
+        monthlyContainer.classList.remove('slide-out-left');
+        monthlyContainer.removeEventListener('animationend', handleMonthlyAnimationEnd);
+    };
+    monthlyContainer.addEventListener('animationend', handleMonthlyAnimationEnd);
+
+    weeklyContainer.classList.add('slide-in-right');
+    weeklyContainer.addEventListener('animationend', () => {
+        weeklyContainer.classList.remove('slide-in-right');
+        finalizeTransition();
+    }, { once: true });
+
+    setTimeout(finalizeTransition, 400);
+    refreshWeeklyTasksView(direction);
+}
+
 function updateMonthlyYearLabel() {
     const yearLabel = document.getElementById('monthly-year-label');
     if (!yearLabel) return;
@@ -440,6 +511,15 @@ function selectMonthlyWeek(monthKey, weekIndex) {
     renderMonthlyWeekList();
     renderMonthlyWeekTasks();
     updateMonthlySectionsVisibility();
+
+    const selectedMonth = monthlyViewState.months.find(month => month.key === monthlyViewState.selectedMonthKey);
+    if (!selectedMonth) return;
+    const monthTasks = monthlyViewState.monthlyTasksByKey.get(selectedMonth.key) || [];
+    const weekBuckets = getWeekBucketsForMonth(selectedMonth.year, selectedMonth.monthIndex, monthTasks);
+    const selectedWeek = weekBuckets[weekIndex];
+    if (selectedWeek) {
+        transitionFromMonthlyToWeekly(selectedMonth, selectedWeek);
+    }
 }
 
 function returnToMonthlyMonths() {
@@ -573,6 +653,25 @@ function renderMonthlyWeekList() {
     }).join('');
 
     weekListContainer.innerHTML = cardsHTML;
+    attachMonthlyWeekButtonListeners();
+}
+
+function handleMonthlyWeekButtonClick(event) {
+    const weekButton = event.currentTarget;
+    const weekIndex = Number.parseInt(weekButton.dataset.weekIndex, 10);
+    if (Number.isNaN(weekIndex)) return;
+    const monthKey = weekButton.dataset.monthKey || monthlyViewState.selectedMonthKey;
+    selectMonthlyWeek(monthKey, weekIndex);
+}
+
+function attachMonthlyWeekButtonListeners() {
+    const weekListContainer = document.getElementById('monthly-week-list');
+    if (!weekListContainer) return;
+    const buttons = weekListContainer.querySelectorAll('button[data-week-index]');
+    buttons.forEach(button => {
+        button.removeEventListener('click', handleMonthlyWeekButtonClick);
+        button.addEventListener('click', handleMonthlyWeekButtonClick);
+    });
 }
 
 function renderMonthlyWeekTasks() {
@@ -923,12 +1022,6 @@ function setupActionButtons() {
             selectMonthlyMonth(monthButton.dataset.monthKey);
             return;
         }
-        const weekButton = event.target.closest('[data-week-index]');
-        if (weekButton) {
-            const weekIndex = Number.parseInt(weekButton.dataset.weekIndex, 10);
-            const monthKey = weekButton.dataset.monthKey || monthlyViewState.selectedMonthKey;
-            selectMonthlyWeek(monthKey, weekIndex);
-        }
     });
     document.getElementById('ai-assistant-btn')?.addEventListener('click', () => {
         if (openAIAssistantModal) {
@@ -991,6 +1084,16 @@ async function refreshWeeklyTasksView(direction = 'next') {
             await fetchAndRenderTasks();
         } catch (error) {
             console.error("Error refreshing monthly planner data:", error);
+            showToast('Error al actualizar la vista de tareas.', 'error');
+        }
+        return;
+    }
+
+    if (direction === 'jump') {
+        try {
+            await fetchAndRenderTasks();
+        } catch (error) {
+            console.error("Error refreshing weekly tasks view:", error);
             showToast('Error al actualizar la vista de tareas.', 'error');
         }
         return;
