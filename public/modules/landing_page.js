@@ -35,6 +35,8 @@ const MONTH_NAMES = [
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
 ];
 
+const WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
+
 let monthlyViewState = {
     months: [],
     monthlyTasksByKey: new Map(),
@@ -406,16 +408,45 @@ function setPlannerViewMode(mode) {
     if (!['weekly', 'monthly'].includes(mode)) return;
     if (appState.plannerViewMode === mode) return;
     appState.plannerViewMode = mode;
-    if (mode === 'monthly') {
-        monthlyViewState.viewPhase = 'months';
-        monthlyViewState.selectedMonthKey = null;
-        monthlyViewState.selectedWeekIndex = null;
-    }
     ensurePlannerContainersVisibility();
     updatePlannerViewToggleButtons();
     if (mode === 'monthly') {
         updateMonthlyView(weeklyTasksCache);
     }
+}
+
+function getMondayForDate(date) {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    const day = normalized.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    normalized.setDate(normalized.getDate() + diffToMonday);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+}
+
+function calculateWeekOffsetFromDate(targetDate) {
+    if (!(targetDate instanceof Date) || Number.isNaN(targetDate.getTime())) return null;
+    const currentMonday = getMondayForDate(new Date());
+    const targetMonday = getMondayForDate(targetDate);
+    const diffMs = targetMonday.getTime() - currentMonday.getTime();
+    return Math.round(diffMs / WEEK_IN_MS);
+}
+
+function getRepresentativeDateForWeekBucket(selectedMonth, weekBucket) {
+    if (!selectedMonth || !weekBucket) return null;
+
+    if (Array.isArray(weekBucket.tasks)) {
+        const taskWithDate = weekBucket.tasks.find(task => Boolean(task.plannedDate));
+        if (taskWithDate) {
+            const parsed = new Date(`${taskWithDate.plannedDate}T00:00:00`);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed;
+            }
+        }
+    }
+
+    return new Date(selectedMonth.year, selectedMonth.monthIndex, weekBucket.startDay);
 }
 
 function selectMonthlyMonth(monthKey) {
@@ -434,12 +465,30 @@ function selectMonthlyWeek(monthKey, weekIndex) {
     if (monthKey && monthlyViewState.selectedMonthKey !== monthKey) {
         monthlyViewState.selectedMonthKey = monthKey;
     }
+    const selectedMonth = monthlyViewState.months.find(month => month.key === monthlyViewState.selectedMonthKey);
+    let targetWeekBucket = null;
+    if (selectedMonth) {
+        const monthTasks = monthlyViewState.monthlyTasksByKey.get(selectedMonth.key) || [];
+        const weekBuckets = getWeekBucketsForMonth(selectedMonth.year, selectedMonth.monthIndex, monthTasks);
+        targetWeekBucket = weekBuckets[weekIndex] || null;
+    }
     monthlyViewState.selectedWeekIndex = weekIndex;
     monthlyViewState.viewPhase = 'tasks';
     renderMonthlyMonthsGrid();
     renderMonthlyWeekList();
     renderMonthlyWeekTasks();
     updateMonthlySectionsVisibility();
+
+    if (!selectedMonth || !targetWeekBucket) return;
+
+    const representativeDate = getRepresentativeDateForWeekBucket(selectedMonth, targetWeekBucket);
+    const newOffset = calculateWeekOffsetFromDate(representativeDate);
+    if (typeof newOffset !== 'number' || Number.isNaN(newOffset)) return;
+
+    appState.weekOffset = newOffset;
+
+    setPlannerViewMode('weekly');
+    refreshWeeklyTasksView('instant');
 }
 
 function returnToMonthlyMonths() {
@@ -986,7 +1035,7 @@ async function refreshWeeklyTasksView(direction = 'next') {
         updateMonthlyView(tasks);
     };
 
-    if (appState.plannerViewMode === 'monthly') {
+    if (direction === 'instant' || appState.plannerViewMode === 'monthly') {
         try {
             await fetchAndRenderTasks();
         } catch (error) {
