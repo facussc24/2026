@@ -93,4 +93,89 @@ describe('analyzePlanSanity callable', () => {
       ])
     );
   });
+
+  it('uses updated effort values when tasks are rescheduled in the plan', async () => {
+    const plan = [
+      {
+        action: 'UPDATE',
+        docId: 'task-1',
+        updates: { plannedDate: '2025-06-10', effort: 'HIGH' },
+      },
+      {
+        action: 'UPDATE',
+        docId: 'task-2',
+        updates: { plannedDate: '2025-06-10' },
+      },
+      {
+        action: 'CREATE',
+        task: { title: 'Nueva sin esfuerzo', plannedDate: '2025-06-10' },
+      },
+    ];
+
+    const tasks = [
+      { docId: 'task-1', title: 'Alta', effort: 'low' },
+      { docId: 'task-2', title: 'Media', effort: 'medium' },
+    ];
+
+    const result = await analyzePlanSanity({ plan, tasks }, authContext);
+
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('parece sobrecargado en esfuerzo'),
+      ]),
+    );
+    expect(result.suggestions).toEqual(
+      expect.not.arrayContaining([
+        expect.stringContaining('tiene muchas tareas'),
+      ]),
+    );
+  });
+
+  it('detects when rescheduled tasks exceed their due date', async () => {
+    const plan = [
+      {
+        action: 'UPDATE',
+        docId: 'task-1',
+        updates: { plannedDate: '2025-07-05' },
+      },
+    ];
+
+    const tasks = [
+      { docId: 'task-1', title: 'Reporte trimestral', dueDate: '2025-07-01', effort: 'high' },
+    ];
+
+    const result = await analyzePlanSanity({ plan, tasks }, authContext);
+
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Reporte trimestral'),
+      ]),
+    );
+  });
+
+  it('returns no suggestions when the plan is balanced and on time', async () => {
+    const plan = [
+      {
+        action: 'CREATE',
+        task: { title: 'Investigación', plannedDate: '2025-08-10', effort: 'low' },
+      },
+      {
+        action: 'CREATE',
+        task: { title: 'Diseño', plannedDate: '2025-08-11', effort: 'medium' },
+      },
+      {
+        action: 'UPDATE',
+        docId: 'task-2',
+        updates: { plannedDate: '2025-08-12', effort: 'low' },
+      },
+    ];
+
+    const tasks = [
+      { docId: 'task-2', title: 'Revisión', plannedDate: '2025-08-15', effort: 'medium', dueDate: '2025-08-20' },
+    ];
+
+    const result = await analyzePlanSanity({ plan, tasks }, authContext);
+
+    expect(result.suggestions).toEqual([]);
+  });
 });

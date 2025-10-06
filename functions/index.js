@@ -733,6 +733,28 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
             const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
             const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
+            const allowedEfforts = ['low', 'medium', 'high'];
+            const normalizeEffortValue = (value) => {
+                if (typeof value !== 'string') {
+                    return null;
+                }
+                const normalized = value.trim().toLowerCase();
+                return allowedEfforts.includes(normalized) ? normalized : null;
+            };
+
+            const effortHumanLabels = {
+                low: 'Bajo',
+                medium: 'Medio',
+                high: 'Alto',
+            };
+
+            tasks = Array.isArray(tasks)
+                ? tasks.map(task => {
+                    const normalized = normalizeEffortValue(task?.effort);
+                    return { ...task, effort: normalized || 'medium' };
+                })
+                : [];
+
             const toolDefinitions = [
                 // Tool definitions remain the same
                  {
@@ -745,6 +767,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                         "dueDate": "string (YYYY-MM-DD, optional)",
                         "assigneeEmail": "string (optional)",
                         "priority": "string (optional: low|medium|high)",
+                        "effort": "string (optional: low|medium|high)",
                         "subtasks": "array (optional, each item: { title: string, completed?: boolean })"
                     }
                 },
@@ -860,12 +883,13 @@ Your operational cycle is: **Analyze -> Clarify -> Plan -> Act**.
 
 ## 5. Prioridades y Subtareas
 *   **Prioridad:** Solo puedes usar los valores \`low\`, \`medium\` o \`high\` dentro de \`create_task\`. Escoge \`high\` únicamente cuando el usuario pida explícitamente alta prioridad, urgencia inmediata o utilice términos como "urgente", "crítico" o "prioridad alta".
+*   **Esfuerzo estimado:** Toda tarea tiene un campo \`effort\` con los valores permitidos \`low\`, \`medium\` o \`high\`. Usa \`medium\` como valor por defecto cuando el usuario no lo indique, pero ajústalo si la persona lo solicita o si necesitas balancear la semana. Considera que \`low\` = 1 punto, \`medium\` = 3 puntos y \`high\` = 5 puntos; evita que un mismo día supere los 8 puntos de esfuerzo planificado.
 *   **Subtareas integradas:** Declara subtareas hijas en el mismo llamado a \`create_task\` usando el arreglo \`subtasks\`. Cada elemento debe ser un objeto con \`title\`. Ejemplo: \`"subtasks": [{"title": "Primer paso"}, {"title": "Segundo paso"}]\`.
 *   **Estado inicial:** Las subtareas recién creadas siempre quedan pendientes; nunca las marques como completadas al crearlas.
 
 # Context Data
 *   **Today's Date:** ${currentDate}
-*   **Existing Tasks:** ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dependsOn: t.dependsOn || [], blocks: t.blocks || []})))}
+*   **Existing Tasks:** ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, effort: t.effort || 'medium', dependsOn: t.dependsOn || [], blocks: t.blocks || []})))}
 *   **Found Tasks (from your \`find_tasks\` tool):** ${JSON.stringify(foundTasksContext)}
 *   **Available Users for assignment:** ${JSON.stringify(allUsers.map(u => u.email))}
 
@@ -1023,6 +1047,13 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                 } else {
                                     delete taskPayload.priority;
                                 }
+                            }
+
+                            const normalizedEffort = normalizeEffortValue(taskPayload.effort);
+                            if (normalizedEffort) {
+                                taskPayload.effort = normalizedEffort;
+                            } else {
+                                taskPayload.effort = 'medium';
                             }
 
                             if (Object.prototype.hasOwnProperty.call(taskPayload, 'subtasks')) {
@@ -1188,7 +1219,8 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                 docId: tempId,
                                 title: createTaskTitle,
                                 status: 'todo',
-                                plannedDate: taskPayload.plannedDate
+                                plannedDate: taskPayload.plannedDate,
+                                effort: taskPayload.effort
                             };
 
                             if (taskPayload.priority) {
@@ -1355,6 +1387,16 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                     }
                                 }
 
+                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'effort')) {
+                                    const normalized = normalizeEffortValue(updatePayload.effort);
+                                    if (normalized) {
+                                        updatePayload.effort = normalized;
+                                        taskToUpdate.effort = normalized;
+                                    } else {
+                                        delete updatePayload.effort;
+                                    }
+                                }
+
                                 const updatePlanEntry = {
                                     action: "UPDATE",
                                     docId: update_task_id,
@@ -1419,26 +1461,37 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             for (const item of bulk_updates) {
                                 const taskToUpdate = tasks.find(t => t.docId === item.task_id);
                                 if (taskToUpdate) {
+                                    const itemUpdates = { ...item.updates };
+                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'effort')) {
+                                        const normalized = normalizeEffortValue(itemUpdates.effort);
+                                        if (normalized) {
+                                            itemUpdates.effort = normalized;
+                                            taskToUpdate.effort = normalized;
+                                        } else {
+                                            delete itemUpdates.effort;
+                                        }
+                                    }
+
                                     executionPlan.push({
                                         action: "UPDATE",
                                         docId: item.task_id,
                                         originalTitle: taskToUpdate.title || 'Tarea sin título',
-                                        updates: item.updates
+                                        updates: itemUpdates
                                     });
-                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'title') && typeof item.updates.title === 'string') {
-                                        taskToUpdate.title = item.updates.title;
+                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'title') && typeof itemUpdates.title === 'string') {
+                                        taskToUpdate.title = itemUpdates.title;
                                     }
-                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'plannedDate')) {
-                                        taskToUpdate.plannedDate = item.updates.plannedDate;
+                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'plannedDate')) {
+                                        taskToUpdate.plannedDate = itemUpdates.plannedDate;
                                     }
-                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'dependsOn')) {
-                                        taskToUpdate.dependsOn = Array.isArray(item.updates.dependsOn) ? [...item.updates.dependsOn] : item.updates.dependsOn;
+                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'dependsOn')) {
+                                        taskToUpdate.dependsOn = Array.isArray(itemUpdates.dependsOn) ? [...itemUpdates.dependsOn] : itemUpdates.dependsOn;
                                     }
-                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'blocks')) {
-                                        taskToUpdate.blocks = Array.isArray(item.updates.blocks) ? [...item.updates.blocks] : item.updates.blocks;
+                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'blocks')) {
+                                        taskToUpdate.blocks = Array.isArray(itemUpdates.blocks) ? [...itemUpdates.blocks] : itemUpdates.blocks;
                                     }
-                                    if (Object.prototype.hasOwnProperty.call(item.updates, 'blocked')) {
-                                        taskToUpdate.blocked = item.updates.blocked;
+                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'blocked')) {
+                                        taskToUpdate.blocked = itemUpdates.blocked;
                                     }
                                     updated_count++;
                                 } else {
@@ -1494,7 +1547,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             });
 
                             if (foundTasks.length > 0) {
-                                foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate }));
+                                foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate, effort: t.effort || 'medium' }));
                                 const formattedTaskList = foundTasksContext
                                     .map(task => {
                                         const parts = [`Título: ${task.title}`];
@@ -1505,6 +1558,10 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                                             parts.push('Sin fecha planificada');
                                         }
                                         if (task.dueDate) parts.push(`Vence: ${task.dueDate}`);
+                                        if (task.effort) {
+                                            const label = effortHumanLabels[task.effort] || task.effort;
+                                            parts.push(`Esfuerzo: ${label}`);
+                                        }
                                         return `- ${parts.join(' | ')}`;
                                     })
                                     .join('\n');
@@ -1641,6 +1698,14 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
 
     const suggestions = [];
     const effortCost = { high: 5, medium: 3, low: 1 };
+    const allowedEfforts = new Set(['low', 'medium', 'high']);
+    const normalizeEffort = (value) => {
+        if (typeof value !== 'string') {
+            return null;
+        }
+        const normalized = value.trim().toLowerCase();
+        return allowedEfforts.has(normalized) ? normalized : null;
+    };
     const dailyEffort = {};
     const dailyTaskCount = {};
     const tasksById = new Map(tasks.map(t => [t.docId, t]));
@@ -1651,13 +1716,15 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
             const task = tasksById.get(item.docId);
             if (task) {
                 const date = item.updates.plannedDate;
-                const effort = effortCost[task.effort] || 3; // Default to medium
+                const plannedEffort = normalizeEffort(item.updates.effort) || normalizeEffort(task.effort) || 'medium';
+                const effort = effortCost[plannedEffort] || 3; // Default to medium
                 dailyEffort[date] = (dailyEffort[date] || 0) + effort;
                 dailyTaskCount[date] = (dailyTaskCount[date] || 0) + 1;
             }
         } else if (item.action === 'CREATE' && item.task && item.task.plannedDate) {
             const date = item.task.plannedDate;
-            const effort = effortCost[item.task.effort] || 3; // Default to medium
+            const plannedEffort = normalizeEffort(item.task.effort) || 'medium';
+            const effort = effortCost[plannedEffort] || 3; // Default to medium
             dailyEffort[date] = (dailyEffort[date] || 0) + effort;
             dailyTaskCount[date] = (dailyTaskCount[date] || 0) + 1;
         }
