@@ -20,6 +20,14 @@
       {
         "source": "/visor3d",
         "destination": "/index.html"
+      },
+      {
+        "source": "/visor3d/**",
+        "destination": "/index.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
       }
     ],
     "headers": [
