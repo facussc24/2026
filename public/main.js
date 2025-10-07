@@ -13,7 +13,7 @@ import {
     openAIAssistantModal
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
-import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
+import { deleteProductAndOrphanedSubProducts } from './services/product.service.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
 
 // Provide a resilient lucide wrapper so UI rendering does not break if the icon
@@ -118,125 +118,8 @@ const PREDEFINED_AVATARS = [
 const viewConfig = {
     visor3d: { title: 'Visor 3D', singular: 'Visor 3D' },
     'landing-page': { title: 'Página Principal', singular: 'Página Principal' },
-    sinoptico_tabular: { title: 'Lista de Materiales (Tabular)', singular: 'Lista de Materiales (Tabular)' },
-    flujograma: { title: 'Flujograma de Procesos', singular: 'Flujograma' },
-    arboles: { title: 'Editor de Estructura de Producto', singular: 'Árbol' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
-    proyectos: {
-        title: 'Proyectos',
-        singular: 'Proyecto',
-        dataKey: COLLECTIONS.PROYECTOS,
-        columns: [
-            { key: 'codigo', label: 'Código' },
-            { key: 'nombre', label: 'Nombre' },
-            { key: 'descripcion', label: 'Descripción' },
-            { key: 'status', label: 'Estado' }
-        ],
-        fields: [
-            { key: 'codigo', label: 'Código', type: 'text', required: true },
-            { key: 'nombre', label: 'Nombre', type: 'text', required: true },
-            { key: 'descripcion', label: 'Descripción', type: 'textarea' },
-            { key: 'status', label: 'Estado', type: 'select', options: ['Activo', 'Pausado', 'Finalizado'], required: true },
-        ]
-    },
-    productos: {
-        title: 'Productos',
-        singular: 'Producto',
-        dataKey: COLLECTIONS.PRODUCTOS,
-        columns: [
-            { key: 'codigo_pieza', label: 'Código de pieza' },
-            { key: 'codigo_cliente', label: 'Código de cliente' },
-            { key: 'descripcion', label: 'Descripción' },
-            { key: 'proceso', label: 'Proceso' },
-            { key: 'aspecto', label: 'Aspecto' },
-        ],
-        fields: [
-            { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
-            { key: 'codigo_cliente', label: 'Código de cliente', type: 'text' },
-            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
-            { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
-            { key: 'peso', label: 'Peso (gr)', type: 'number' },
-            { key: 'imagen', label: 'Imagen (URL)', type: 'text' },
-            { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
-        ]
-    },
-    semiterminados: {
-        title: 'Semiterminados',
-        singular: 'Semiterminado',
-        dataKey: COLLECTIONS.SEMITERMINADOS,
-        columns: [
-            { key: 'codigo_pieza', label: 'Código de pieza' },
-            { key: 'descripcion', label: 'Descripción' },
-            { key: 'proceso', label: 'Proceso' },
-        ],
-        fields: [
-            { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
-            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
-            { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
-            { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
-            { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
-            { key: 'peso_gr', label: 'Peso (gr)', type: 'number' },
-            { key: 'tolerancia_gr', label: 'Tolerancia (gr)', type: 'number' },
-            { key: 'imagen', label: 'Imagen (URL)', type: 'text' },
-        ]
-    },
-    insumos: {
-        title: 'Insumos',
-        singular: 'Insumo',
-        dataKey: COLLECTIONS.INSUMOS,
-        columns: [
-            { key: 'codigo_pieza', label: 'Código de pieza' },
-            { key: 'descripcion', label: 'Descripción' },
-            { key: 'proveedor', label: 'Proveedor' },
-            { key: 'proceso', label: 'Proceso' },
-        ],
-        fields: [
-            { key: 'codigo_pieza', label: 'Código de pieza', type: 'text', required: true },
-            { key: 'codigo_proveedor', label: 'Código de proveedor', type: 'text', required: true },
-            { key: 'descripcion', label: 'Descripción', type: 'textarea', required: true },
-            { key: 'lc_kd', label: 'LC / KD', type: 'select', options: ['LC', 'KD'], required: true },
-            { key: 'imagen', label: 'Imagen (URL)', type: 'text' },
-            { key: 'proveedor', label: 'Proveedor', type: 'select', searchKey: COLLECTIONS.PROVEEDORES, required: true },
-            { key: 'proceso', label: 'Proceso', type: 'select', searchKey: COLLECTIONS.PROCESOS, required: true },
-            { key: 'aspecto', label: 'Aspecto', type: 'select', options: ['Sí', 'No'], required: true },
-            { key: 'unidad_medida', label: 'Unidad de Medida', type: 'select', searchKey: COLLECTIONS.UNIDADES, required: true },
-        ]
-    },
-    clientes: { title: 'Clientes', singular: 'Cliente', dataKey: COLLECTIONS.CLIENTES, columns: [ { key: 'id', label: 'Código' }, { key: 'descripcion', label: 'Descripción' } ], fields: [ { key: 'id', label: 'Código', type: 'text', required: true }, { key: 'descripcion', label: 'Descripción', type: 'text', required: true } ] },
     sectores: { title: 'Sectores', singular: 'Sector', dataKey: COLLECTIONS.SECTORES, columns: [ { key: 'id', label: 'Código' }, { key: 'descripcion', label: 'Descripción' } ], fields: [ { key: 'id', label: 'Código', type: 'text', required: true }, { key: 'descripcion', label: 'Descripción', type: 'text', required: true }, { key: 'icon', label: 'Icono (Lucide)', type: 'text', required: true } ] },
-    proveedores: { 
-        title: 'Proveedores', 
-        singular: 'Proveedor', 
-        dataKey: COLLECTIONS.PROVEEDORES, 
-        columns: [ { key: 'id', label: 'Código' }, { key: 'descripcion', label: 'Razón Social' } ], 
-        fields: [ 
-            { key: 'id', label: 'Código', type: 'text', required: true }, 
-            { key: 'descripcion', label: 'Razón Social', type: 'text', required: true } 
-        ] 
-    },
-    unidades: {
-        title: 'Unidades de Medida',
-        singular: 'Unidad',
-        dataKey: COLLECTIONS.UNIDADES,
-        columns: [ { key: 'id', label: 'Abreviatura' }, { key: 'descripcion', label: 'Descripción' } ],
-        fields: [
-            { key: 'id', label: 'Abreviatura (ej: Kg, M, Un)', type: 'text', required: true },
-            { key: 'descripcion', label: 'Descripción (ej: Kilogramos, Metros, Unidades)', type: 'text', required: true }
-        ]
-    },
-    procesos: { 
-        title: 'Procesos', 
-        singular: 'Proceso', 
-        dataKey: COLLECTIONS.PROCESOS, 
-        columns: [ 
-            { key: 'id', label: 'Código' }, 
-            { key: 'descripcion', label: 'Descripción' } 
-        ],
-        fields: [ 
-            { key: 'id', label: 'Código', type: 'text', required: true }, 
-            { key: 'descripcion', label: 'Descripción', type: 'text', required: true } 
-        ]
-    },
     user_management: {
         title: 'Gestión de Usuarios',
         singular: 'Usuario',
@@ -1160,7 +1043,7 @@ async function seedDatabase() {
         await setDoc(counterRef, kpiCounts, { merge: true });
         console.log("Initial KPI counts set after seeding:", kpiCounts);
 
-        switchView('dashboard');
+        switchView('landing-page');
     } catch (error) {
         console.error("Error al cargar datos de prueba masivos: ", error);
         showToast('Error al cargar datos masivos. Verifique la consola.', 'error');
@@ -1342,18 +1225,22 @@ async function switchView(viewName, params = null) {
         appState.currentViewCleanup();
         appState.currentViewCleanup = null;
     }
-    if (appState.currentView === 'sinoptico') appState.sinopticoState = null;
-    if (appState.currentView === 'sinoptico_tabular') appState.sinopticoTabularState = null;
     appState.currentView = viewName;
     const config = viewConfig[viewName];
+
+    if (!config) {
+        console.warn(`[Navigation] Attempted to load disabled view: ${viewName}`);
+        showToast('La vista solicitada no está disponible.', 'error');
+
+        if (viewName !== 'landing-page' && viewConfig['landing-page']) {
+            return switchView('landing-page');
+        }
+        return;
+    }
+
     dom.viewTitle.textContent = config.title;
 
-    // Hide the title for the tabular view to save space, but show it for all other views.
-    if (viewName === 'sinoptico_tabular') {
-        dom.viewTitle.style.display = 'none';
-    } else {
-        dom.viewTitle.style.display = 'block';
-    }
+    dom.viewTitle.style.display = 'block';
 
     // Update active link styling
     document.querySelectorAll('#main-nav .nav-link').forEach(link => {
@@ -1379,10 +1266,6 @@ async function switchView(viewName, params = null) {
     // resolves before moving on. This makes view transitions predictable.
     if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic(app);
     else if (viewName === 'landing-page') await runLandingPageLogic();
-    else if (viewName === 'sinoptico') await runSinopticoLogic();
-    else if (viewName === 'sinoptico_tabular') await runSinopticoTabularLogic();
-    else if (viewName === 'flujograma') await runFlujogramaLogic();
-    else if (viewName === 'arboles') await renderArbolesInitialView();
     else if (viewName === 'profile') await runProfileLogic();
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
@@ -1984,6 +1867,11 @@ async function generateFichaPdf(fichaId) {
 async function exportEcrToPdf(ecrId) {
     if (!ecrId) {
         showToast('No se ha proporcionado un ID de ECR para exportar.', 'error');
+        return;
+    }
+
+    if (!viewConfig['ecr_form']) {
+        showToast('La exportación de ECR no está disponible en esta versión.', 'error');
         return;
     }
 
@@ -3613,20 +3501,22 @@ onAuthStateChanged(auth, async (user) => {
 function updateNavForRole() {
     const userManagementLink = document.querySelector('[data-view="user_management"]');
     const coverMasterLink = document.querySelector('[data-view="cover_master"]');
-    const versionsLink = document.querySelector('[data-view="versions"]');
+    const adminLinks = [userManagementLink, coverMasterLink].filter(Boolean);
 
-    if (!userManagementLink || !coverMasterLink || !versionsLink) return;
+    if (adminLinks.length === 0) return;
 
     const shouldShow = appState.currentUser && appState.currentUser.role === 'admin';
 
-    userManagementLink.style.display = shouldShow ? 'flex' : 'none';
-    coverMasterLink.style.display = shouldShow ? 'flex' : 'none';
-    versionsLink.style.display = shouldShow ? 'flex' : 'none';
+    adminLinks.forEach(link => {
+        link.style.display = shouldShow ? 'flex' : 'none';
+    });
 
-    // This targets the single divider after all admin links
-    const divider = versionsLink.nextElementSibling;
-    if (divider && divider.matches('.border-t')) {
-        divider.style.display = shouldShow ? 'block' : 'none';
+    if (coverMasterLink) {
+        // This targets the single divider after all admin links
+        const divider = coverMasterLink.nextElementSibling;
+        if (divider && divider.matches('.border-t')) {
+            divider.style.display = shouldShow ? 'block' : 'none';
+        }
     }
 }
 
