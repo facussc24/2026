@@ -12,8 +12,6 @@ let notify = (message, type = 'info') => {
     console.warn('showToast no ha sido inicializado.', { message, type });
 };
 
-let authGuardian = null;
-
 const AUTH_SCREENS = new Set(['login', 'register', 'reset', 'verify-email']);
 const SCREEN_HASH_MAP = {
     login: '#/login',
@@ -44,10 +42,7 @@ const DOM_ELEMENTS = {
     loginForm: 'login-form',
     registerForm: 'register-form',
     resetForm: 'reset-form',
-    logoutButton: 'logout-button',
-    guardianStatus: 'auth-guardian-status',
-    guardianAlert: 'auth-guardian-alert',
-    guardianAlertMessage: 'auth-guardian-alert-message'
+    logoutButton: 'logout-button'
 };
 
 const SCREEN_TO_PANEL_ID = {
@@ -77,110 +72,6 @@ const dom = new Proxy({}, {
         return undefined;
     }
 });
-
-function createAuthGuardians() {
-    const container = document.getElementById('auth-container');
-    if (!container) return null;
-
-    const statusEl = document.getElementById(DOM_ELEMENTS.guardianStatus);
-    const alertEl = document.getElementById(DOM_ELEMENTS.guardianAlert);
-    const alertMessageEl = document.getElementById(DOM_ELEMENTS.guardianAlertMessage);
-
-    const defaultMessages = {
-        ok: 'Guardián activo • Sin anomalías',
-        warning: 'Guardián en alerta • Restaurando vista',
-        error: 'Guardián en alerta • Incidencia detectada'
-    };
-
-    let suppressEvaluation = false;
-
-    const setStatus = (tone = 'ok', message = defaultMessages[tone]) => {
-        if (!statusEl) return;
-        statusEl.dataset.tone = tone;
-        statusEl.textContent = message;
-    };
-
-    const hideAlert = () => {
-        if (!alertEl) return;
-        alertEl.classList.add('hidden');
-        alertEl.removeAttribute('data-tone');
-        if (alertMessageEl) {
-            alertMessageEl.textContent = '';
-        }
-    };
-
-    const showAlert = (tone = 'warning', message = '') => {
-        if (!alertEl) return;
-        alertEl.dataset.tone = tone;
-        alertEl.classList.remove('hidden');
-        if (alertMessageEl) {
-            alertMessageEl.textContent = message;
-        }
-        if (window.lucide?.createIcons) {
-            window.lucide.createIcons();
-        }
-    };
-
-    const evaluatePanels = () => {
-        if (suppressEvaluation) return;
-
-        const panels = Array.from(container.querySelectorAll('.auth-panel'));
-        const visiblePanels = panels.filter(panel => !panel.classList.contains('hidden'));
-
-        if (visiblePanels.length === 1) {
-            setStatus('ok');
-            hideAlert();
-            return;
-        }
-
-        if (visiblePanels.length === 0) {
-            console.warn('[AuthGuardian] No se encontró un panel visible. Forzando restablecimiento.', { panels: panels.map(panel => panel.id) });
-            setStatus('warning');
-            showAlert('warning', 'No se encontró un panel visible. Restauramos la pantalla de inicio de sesión por seguridad.');
-            suppressEvaluation = true;
-            showAuthScreen('login');
-            suppressEvaluation = false;
-            return;
-        }
-
-        console.error('[AuthGuardian] Se detectaron múltiples paneles visibles.', { activos: visiblePanels.map(panel => panel.id) });
-        setStatus('error', `Guardián en alerta • ${visiblePanels.length} paneles activos`);
-        const panelNames = visiblePanels.map(panel => `#${panel.id}`).join(', ');
-        showAlert('error', `Se detectaron múltiples paneles visibles (${panelNames}). Restablecimos la pantalla principal.`);
-        suppressEvaluation = true;
-        panels.forEach(panel => {
-            if (panel.id !== SCREEN_TO_PANEL_ID.login) {
-                panel.classList.add('hidden');
-            }
-        });
-        showAuthScreen('login');
-        suppressEvaluation = false;
-    };
-
-    const observer = new MutationObserver(() => evaluatePanels());
-    observer.observe(container, { attributes: true, subtree: true, attributeFilter: ['class'] });
-
-    // Evaluación inicial para reflejar el estado real en cuanto cargue la vista
-    requestAnimationFrame(() => evaluatePanels());
-
-    return {
-        checkPanels: () => requestAnimationFrame(() => evaluatePanels()),
-        notify: (tone = 'ok', message = '') => {
-            if (tone === 'ok') {
-                setStatus('ok', message || defaultMessages.ok);
-                hideAlert();
-                return;
-            }
-
-            const statusMessage = tone === 'warning'
-                ? (message ? `Guardián en alerta • ${message}` : defaultMessages.warning)
-                : (message ? `Guardián en alerta • ${message}` : defaultMessages.error);
-            setStatus(tone, statusMessage);
-            showAlert(tone, message || defaultMessages[tone]);
-        },
-        disconnect: () => observer.disconnect()
-    };
-}
 
 let isTransitioning = false;
 let queuedScreen = null;
@@ -246,8 +137,6 @@ export function showAuthScreen(screenName, options = {}) {
         isTransitioning = false;
         const firstInput = panelToShow.querySelector('input:not([type="hidden"])');
         if (firstInput) firstInput.focus();
-
-        authGuardian?.checkPanels?.();
 
         if (queuedScreen) {
             const { screenName: nextScreen, options: nextOptions } = queuedScreen;
@@ -562,11 +451,6 @@ export function initAuthModule(_auth, _db, options = {}) {
     }
 
     setupEventListeners();
-
-    if (authGuardian?.disconnect) {
-        authGuardian.disconnect();
-    }
-    authGuardian = createAuthGuardians();
 
     console.log("Authentication module initialized.");
     window.showAuthScreen = showAuthScreen;

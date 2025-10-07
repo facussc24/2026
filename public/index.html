@@ -161,164 +161,104 @@
 </div>
 
 <!-- Contenedor de Autenticación -->
-<div id="auth-container" class="fixed inset-0 z-50 hidden">
-    <div class="auth-shell">
-        <aside class="auth-brand" aria-label="Acerca de Barack Mercosur">
-            <div class="auth-brand-header">
-                <img src="barack_logo.png" alt="Barack Mercosur" class="auth-brand-logo" loading="lazy">
+<div id="auth-container" class="fixed inset-0 flex items-center justify-center z-50 hidden">
+    <div class="auth-panel" id="login-panel">
+        <div class="auth-header">
+            <img src="barack_logo.png" alt="Logo" class="logo-img" loading="lazy">
+            <p class="subtitle">Inicie sesión para continuar.</p>
+        </div>
+        <form id="login-form" class="auth-form">
+            <div class="input-group">
+                <label for="login-email">Correo electrónico</label>
+                <input type="email" id="login-email" name="login-email" autocomplete="email" inputmode="email" required>
+            </div>
+            <div class="input-group">
+                <label for="login-password">Contraseña</label>
+                <input type="password" id="login-password" name="login-password" autocomplete="current-password" required>
+            </div>
+            <div class="forgot-password-link">
+                <a href="#/reset-password" data-auth-screen="reset" class="auth-link">¿Olvidaste tu contraseña?</a>
+            </div>
+            <button type="submit" class="submit-button">Iniciar Sesión</button>
+        </form>
+        <div class="auth-footer-text">
+            <span>¿No tienes cuenta?</span>
+            <a href="#/register" data-auth-screen="register" class="auth-link">Regístrate</a>
+        </div>
+    </div>
+        <!-- Panel de Registro -->
+        <div id="register-panel" class="auth-panel hidden">
+            <div class="text-center">
+                <i data-lucide="user-plus" class="mx-auto text-blue-600 h-16 w-16"></i>
+                <h1 class="text-4xl font-extrabold mt-4 text-slate-800">Crear Cuenta</h1>
+                <p class="text-slate-500 mt-2 mb-8">Solo se permiten correos del dominio de la empresa.</p>
+            </div>
+            <form id="register-form" class="auth-form">
+                 <div>
+                    <label for="register-name" class="block text-sm font-medium text-gray-700 mb-1">Nombre Completo</label>
+                    <input type="text" id="register-name" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" required>
+                </div>
                 <div>
-                    <p class="auth-brand-eyebrow">Barack Mercosur</p>
-                    <h1 class="auth-brand-title">Gestión de ingeniería sin fricción</h1>
-                    <p class="auth-brand-description">Centraliza proyectos, productos y equipos en una plataforma colaborativa pensada para organizaciones industriales.</p>
-                </div>
-            </div>
-            <ul class="auth-brand-highlights" role="list">
-                <li>
-                    <span class="auth-highlight-title">Control total</span>
-                    <span class="auth-highlight-description">Seguimiento en tiempo real de tareas, versiones y aprobaciones críticas.</span>
-                </li>
-                <li>
-                    <span class="auth-highlight-title">Trazabilidad asegurada</span>
-                    <span class="auth-highlight-description">Flujos auditables desde la idea hasta la implementación en planta.</span>
-                </li>
-                <li>
-                    <span class="auth-highlight-title">Soporte experto</span>
-                    <span class="auth-highlight-description">Guardianes automáticos vigilan anomalías en la autenticación para anticipar incidencias.</span>
-                </li>
-            </ul>
-            <div class="auth-brand-footer">
-                <span id="auth-guardian-status" class="auth-guardian-badge" data-tone="ok">Guardián activo • Sin anomalías</span>
-                <p class="auth-brand-meta">Monitoreamos la experiencia de inicio de sesión para detectar y aislar errores en tiempo real.</p>
-            </div>
-        </aside>
-        <main class="auth-content" aria-live="polite">
-            <div id="auth-guardian-alert" class="guardian-alert hidden" role="alert">
-                <div class="guardian-alert-icon" aria-hidden="true">
-                    <i data-lucide="shield-alert"></i>
+                    <label for="register-email" class="block text-sm font-medium text-gray-700 mb-1">Correo de la empresa</label>
+                    <input
+                        type="email"
+                        id="register-email"
+                        name="register-email"
+                        placeholder="usuario@barackmercosul.com"
+                        class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                        inputmode="email"
+                        autocomplete="email"
+                        pattern="^[^@\s]+@barackmercosul\.com$"
+                        required
+                    >
                 </div>
                 <div>
-                    <strong>Guardianes activados</strong>
-                    <p id="auth-guardian-alert-message"></p>
+                    <label for="register-password" class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" id="register-password" name="register-password" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" autocomplete="new-password" required>
                 </div>
+                <div class="pt-2">
+                    <button type="submit" class="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-semibold">Crear Cuenta y Verificar</button>
+                </div>
+            </form>
+            <div class="text-center mt-6 text-sm">
+                <p class="text-slate-500">¿Ya tienes una cuenta? <a href="#/login" data-auth-screen="login" class="font-semibold text-blue-600 hover:underline">Inicia Sesión</a></p>
             </div>
-
-            <section id="login-panel" class="auth-panel" aria-labelledby="login-panel-title">
-                <div class="auth-panel-surface">
-                    <div class="auth-panel-icon" aria-hidden="true">
-                        <i data-lucide="log-in"></i>
-                    </div>
-                    <header class="auth-header">
-                        <span class="auth-eyebrow">Bienvenido de nuevo</span>
-                        <h2 class="title" id="login-panel-title">Iniciar Sesión</h2>
-                        <p class="subtitle">Ingresa con tu correo corporativo para continuar.</p>
-                    </header>
-                    <form id="login-form" class="auth-form">
-                        <div class="input-group">
-                            <label for="login-email">Correo electrónico</label>
-                            <input type="email" id="login-email" name="login-email" autocomplete="email" inputmode="email" required>
-                        </div>
-                        <div class="input-group">
-                            <label for="login-password">Contraseña</label>
-                            <input type="password" id="login-password" name="login-password" autocomplete="current-password" required>
-                        </div>
-                        <div class="forgot-password-link">
-                            <a href="#/reset-password" data-auth-screen="reset" class="auth-link">¿Olvidaste tu contraseña?</a>
-                        </div>
-                        <button type="submit" class="submit-button">Iniciar Sesión</button>
-                    </form>
-                    <div class="auth-footer-text">
-                        <span>¿No tienes cuenta?</span>
-                        <a href="#/register" data-auth-screen="register" class="auth-link">Regístrate</a>
-                    </div>
+        </div>
+        
+        <!-- Panel de Olvidó Contraseña -->
+        <div id="reset-panel" class="auth-panel hidden">
+             <div class="text-center">
+                <i data-lucide="key-round" class="mx-auto text-blue-600 h-16 w-16"></i>
+                <h1 class="text-4xl font-extrabold mt-4 text-slate-800">Restablecer Contraseña</h1>
+                <p class="text-slate-500 mt-2 mb-8">Ingresa tu correo y te enviaremos un enlace para recuperarla.</p>
+            </div>
+            <form id="reset-form" class="auth-form">
+                <div>
+                    <label for="reset-email" class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+                    <input type="email" id="reset-email" name="reset-email" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" autocomplete="email" inputmode="email" required>
                 </div>
-            </section>
-
-            <!-- Panel de Registro -->
-            <section id="register-panel" class="auth-panel hidden" aria-labelledby="register-panel-title">
-                <div class="auth-panel-surface">
-                    <div class="auth-panel-icon" aria-hidden="true">
-                        <i data-lucide="user-plus"></i>
-                    </div>
-                    <header class="auth-header">
-                        <span class="auth-eyebrow">Primer acceso</span>
-                        <h2 class="title" id="register-panel-title">Crear Cuenta</h2>
-                        <p class="subtitle">Solo se permiten correos del dominio corporativo.</p>
-                    </header>
-                    <form id="register-form" class="auth-form">
-                        <div class="input-group">
-                            <label for="register-name">Nombre completo</label>
-                            <input type="text" id="register-name" required>
-                        </div>
-                        <div class="input-group">
-                            <label for="register-email">Correo de la empresa</label>
-                            <input
-                                type="email"
-                                id="register-email"
-                                name="register-email"
-                                placeholder="usuario@barackmercosul.com"
-                                inputmode="email"
-                                autocomplete="email"
-                                pattern="^[^@\s]+@barackmercosul\.com$"
-                                required
-                            >
-                        </div>
-                        <div class="input-group">
-                            <label for="register-password">Contraseña</label>
-                            <input type="password" id="register-password" name="register-password" autocomplete="new-password" required>
-                        </div>
-                        <button type="submit" class="submit-button">Crear Cuenta y Verificar</button>
-                    </form>
-                    <div class="auth-footer-text">
-                        <span>¿Ya tienes una cuenta?</span>
-                        <a href="#/login" data-auth-screen="login" class="auth-link">Inicia Sesión</a>
-                    </div>
+                <div class="pt-2">
+                    <button type="submit" class="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-semibold">Enviar Enlace</button>
                 </div>
-            </section>
+            </form>
+             <div class="text-center mt-6 text-sm">
+                <p class="text-slate-500">Volver a <a href="#/login" data-auth-screen="login" class="font-semibold text-blue-600 hover:underline">Iniciar Sesión</a></p>
+            </div>
+        </div>
+        <!-- Panel de Verificar Email -->
+        <div id="verify-email-panel" class="auth-panel hidden">
+             <div class="text-center">
+                <i data-lucide="mail-warning" class="mx-auto text-amber-500 h-16 w-16"></i>
+                <h1 class="text-4xl font-extrabold mt-4 text-slate-800">Verifica tu Correo</h1>
+                <p class="text-slate-500 mt-2 mb-6">Hemos enviado un enlace de verificación a tu correo. Por favor, haz clic en él para activar tu cuenta. <br><strong>Revisa tu carpeta de spam si no lo encuentras.</strong></p>
 
-            <!-- Panel de Olvidó Contraseña -->
-            <section id="reset-panel" class="auth-panel hidden" aria-labelledby="reset-panel-title">
-                <div class="auth-panel-surface">
-                    <div class="auth-panel-icon" aria-hidden="true">
-                        <i data-lucide="key-round"></i>
-                    </div>
-                    <header class="auth-header">
-                        <span class="auth-eyebrow">Recupera tu acceso</span>
-                        <h2 class="title" id="reset-panel-title">Restablecer Contraseña</h2>
-                        <p class="subtitle">Ingresa tu correo y enviaremos un enlace de recuperación.</p>
-                    </header>
-                    <form id="reset-form" class="auth-form">
-                        <div class="input-group">
-                            <label for="reset-email">Correo electrónico</label>
-                            <input type="email" id="reset-email" name="reset-email" autocomplete="email" inputmode="email" required>
-                        </div>
-                        <button type="submit" class="submit-button">Enviar Enlace</button>
-                    </form>
-                    <div class="auth-footer-text">
-                        <span>¿Recordaste tu contraseña?</span>
-                        <a href="#/login" data-auth-screen="login" class="auth-link">Volver a iniciar sesión</a>
-                    </div>
+                <div class="space-y-4">
+                    <button id="resend-verification-btn" class="w-full bg-slate-600 text-white px-6 py-3 rounded-md hover:bg-slate-700 font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">Reenviar Correo de Verificación</button>
+                    <a href="#/login" data-auth-screen="login" class="w-full block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-semibold">Ya lo verifiqué, ir a Iniciar Sesión</a>
                 </div>
-            </section>
-
-            <!-- Panel de Verificar Email -->
-            <section id="verify-email-panel" class="auth-panel hidden" aria-labelledby="verify-email-panel-title">
-                <div class="auth-panel-surface">
-                    <div class="auth-panel-icon" aria-hidden="true">
-                        <i data-lucide="mail-warning"></i>
-                    </div>
-                    <header class="auth-header">
-                        <span class="auth-eyebrow">Paso final</span>
-                        <h2 class="title" id="verify-email-panel-title">Verifica tu Correo</h2>
-                        <p class="subtitle">Hemos enviado un enlace de verificación. Revisa también tu carpeta de spam.</p>
-                    </header>
-                    <div class="auth-verify-actions">
-                        <button id="resend-verification-btn" class="submit-button">Reenviar correo de verificación</button>
-                        <a href="#/login" data-auth-screen="login" class="submit-button submit-button--secondary">Ya lo verifiqué, ir a Iniciar Sesión</a>
-                    </div>
-                    <p id="resend-timer" class="auth-verify-timer" role="status" aria-live="polite"></p>
-                </div>
-            </section>
-        </main>
+                <p id="resend-timer" class="text-sm text-slate-400 mt-4 h-5"></p>
+            </div>
+        </div>
     </div>
 </div>
 
