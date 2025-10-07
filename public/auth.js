@@ -122,7 +122,7 @@ function createAuthGuardians() {
     };
 
     const evaluatePanels = () => {
-        if (suppressEvaluation) return;
+        if (suppressEvaluation || isTransitioning) return;
 
         const panels = Array.from(container.querySelectorAll('.auth-panel'));
         const visiblePanels = panels.filter(panel => !panel.classList.contains('hidden'));
