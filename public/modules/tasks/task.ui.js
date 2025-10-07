@@ -185,6 +185,82 @@ export function showTasksInModal(title, tasks) {
         });
     }
 
+    const showEmptyStateIfNeeded = () => {
+        if (!tasksContainer.querySelector('[data-task-id]')) {
+            tasksContainer.innerHTML = `<p class="text-center text-slate-500 py-8">No hay tareas para mostrar en esta sección.</p>`;
+        }
+    };
+
+    const notifyTasksChanged = () => {
+        document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
+    };
+
+    tasksContainer.addEventListener('click', (event) => {
+        const actionButton = event.target.closest('button[data-action]');
+        if (!actionButton) return;
+
+        const action = actionButton.dataset.action;
+        const taskId = actionButton.dataset.docId;
+        if (!taskId) return;
+
+        const taskCard = actionButton.closest('[data-task-id]');
+
+        const setButtonLoading = (isLoading) => {
+            actionButton.disabled = isLoading;
+            actionButton.classList.toggle('opacity-60', isLoading);
+            actionButton.classList.toggle('pointer-events-none', isLoading);
+        };
+
+        if (action === 'delete-task') {
+            const targetButton = actionButton;
+            showConfirmationModal(
+                'Eliminar Tarea',
+                '¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.',
+                async () => {
+                    try {
+                        setButtonLoading(true);
+                        await deleteTask(taskId);
+                        if (taskCard) {
+                            taskCard.remove();
+                            showEmptyStateIfNeeded();
+                        }
+                        showToast('Tarea eliminada con éxito.', 'success');
+                        notifyTasksChanged();
+                    } catch (error) {
+                        console.error('Error deleting task from modal:', error);
+                        showToast('Error al eliminar la tarea.', 'error');
+                        if (targetButton.isConnected) {
+                            setButtonLoading(false);
+                        }
+                    }
+                }
+            );
+        } else if (action === 'complete-task') {
+            const previousHtml = actionButton.innerHTML;
+            setButtonLoading(true);
+            actionButton.innerHTML = '<span class="flex items-center gap-1"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Procesando</span>';
+            lucide.createIcons();
+            completeAndArchiveTask(taskId)
+                .then(() => {
+                    if (taskCard) {
+                        taskCard.remove();
+                        showEmptyStateIfNeeded();
+                    }
+                    showToast('Tarea completada y archivada.', 'success');
+                    notifyTasksChanged();
+                })
+                .catch((error) => {
+                    console.error('Error completing task from modal:', error);
+                    showToast('Error al completar la tarea.', 'error');
+                    if (actionButton.isConnected) {
+                        actionButton.innerHTML = previousHtml;
+                        setButtonLoading(false);
+                        lucide.createIcons();
+                    }
+                });
+        }
+    });
+
     // 4. Add event listener to close the modal
     modalElement.addEventListener('click', (e) => {
         if (e.target.closest('[data-action="close"]')) {
