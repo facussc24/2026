@@ -269,7 +269,7 @@
                     <img src="barack_logo.png" alt="Logo" class="h-10 w-auto" loading="lazy">
                 </div>
                 <!-- Navegación -->
-                <nav id="main-nav" class="hidden md:flex items-center space-x-2">
+<nav id="main-nav" class="hidden md:flex items-center space-x-2">
                     <a href="#" data-view="landing-page" class="nav-link px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100">
                         <i data-lucide="layout-dashboard" class="inline-block w-4 h-4 mr-1.5 -mt-0.5"></i>Página Principal
                     </a>
@@ -282,6 +282,17 @@
                         </button>
                         <div class="dropdown-menu absolute mt-2 w-56 bg-white border rounded-lg shadow-xl">
                             <a href="#" data-view="user_management" class="nav-link flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="user-cog" class="w-5 h-5 text-slate-500"></i>Usuarios</a>
+                        </div>
+                    </div>
+
+                    <!-- Dropdown de Administración -->
+                    <div id="admin-nav-section" class="relative nav-dropdown" style="display: none;">
+                        <button class="nav-link dropdown-toggle px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100 flex items-center">
+                            <i data-lucide="briefcase" class="inline-block w-4 h-4 mr-1.5 -mt-0.5"></i>Administración
+                            <i data-lucide="chevron-down" class="w-4 h-4 ml-1"></i>
+                        </button>
+                        <div class="dropdown-menu absolute mt-2 w-56 bg-white border rounded-lg shadow-xl">
+                            <a href="#" data-view="tasks-new" class="nav-link flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="calendar" class="w-5 h-5 text-slate-500"></i>Planificador (nuevo)</a>
                         </div>
                     </div>
                 </nav>
@@ -330,6 +341,7 @@
     AHORA SE CARGA DESDE EL ARCHIVO EXTERNO main.js
 -->
 <!-- Library Scripts -->
+<script src="vendor/daypilot/daypilot-all.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/20.0.3/tween.umd.js"></script>
 <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
