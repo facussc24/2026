@@ -9,12 +9,6 @@ import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, validateFiel
 import { initAuthModule, showAuthScreen, logOutUser, authWatchdog } from './auth.js';
 import {
     initTasksModule,
-    runTasksLogic as runTasksLogicFromModule,
-    calculateOverdueTasksCount,
-    fetchAllTasks,
-    renderMyPendingTasksWidget,
-    renderTasksByProjectChart,
-    renderTaskDashboardView,
     openTaskFormModal,
     openAIAssistantModal
 } from './modules/tasks/tasks.js';
@@ -128,8 +122,6 @@ const viewConfig = {
     flujograma: { title: 'Flujograma de Procesos', singular: 'Flujograma' },
     arboles: { title: 'Editor de Estructura de Producto', singular: 'Árbol' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
-    tareas: { title: 'Gestor de Tareas', singular: 'Tarea' },
-    'task-dashboard': { title: 'Dashboard de Tareas', singular: 'Dashboard de Tareas' },
     proyectos: {
         title: 'Proyectos',
         singular: 'Proyecto',
@@ -414,11 +406,6 @@ async function startRealtimeListeners() {
         // Filter out completed tasks on the client and take the 5 most recent.
         appState.collections.tareas = allRecentTasks.filter(t => t.status !== 'done').slice(0, 5);
 
-        if (appState.currentView === 'dashboard') {
-            // The main dashboard logic already renders the chart once.
-            // This listener will just update the task list for now.
-            renderMyPendingTasksWidget(appState.collections.tareas);
-        }
     }, (error) => console.error("Error listening to user tasks:", error));
     listeners.push(tasksUnsub);
 
@@ -1397,8 +1384,6 @@ async function switchView(viewName, params = null) {
     else if (viewName === 'flujograma') await runFlujogramaLogic();
     else if (viewName === 'arboles') await renderArbolesInitialView();
     else if (viewName === 'profile') await runProfileLogic();
-    else if (viewName === 'tareas') await runTasksLogicFromModule('kanban');
-    else if (viewName === 'task-dashboard') await runTasksLogicFromModule('dashboard');
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
         dom.searchInput.style.display = 'block';
@@ -1437,7 +1422,6 @@ function handleViewContentActions(e) {
     const userId = button.dataset.userId;
 
     const actions = {
-        'admin-back-to-board': () => switchView('tareas'),
         'details': () => openDetailsModal(appState.currentData.find(d => d.id == id)),
         'edit': () => openFormModal(appState.currentData.find(d => d.id == id)),
         'delete': () => deleteItem(docId),
@@ -2897,7 +2881,6 @@ function renderAdminUserList() {
         <div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-2xl font-bold">Supervisión de Tareas de Usuarios</h3>
-                <button data-action="admin-back-to-board" class="bg-slate-200 text-slate-700 px-4 py-2 rounded-md hover:bg-slate-300 text-sm font-semibold">Volver al Tablero</button>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
     `;
@@ -3201,8 +3184,6 @@ function renderSubtask(subtask) {
         </div>
     `;
 }
-
-// This function was removed as it is a duplicate and now lives in task.kanban.js
 
 // =================================================================================
 // --- 8. LÓGICA DE ECR/ECO (MÁQUINA DE ESTADOS Y NOTIFICACIONES) ---

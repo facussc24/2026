@@ -6,7 +6,6 @@ import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 import { collection, onSnapshot, query, orderBy, addDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
-import { getState } from './task.state.js';
 import { handleTaskFormSubmit, deleteTask, createTask, fetchAllTasks } from './task.service.js';
 import {
     getTaskFormModalHTML,
@@ -287,12 +286,12 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     }
 
     let selectedUid = defaultAssigneeUid || '';
-    if (!selectedUid) {
-        if (isEditing && task.assigneeUid) {
-            selectedUid = task.assigneeUid;
-        } else if (!isEditing && getState().kanban.activeFilter === 'personal') {
-            selectedUid = appState.currentUser.uid;
-        }
+    if (!selectedUid && isEditing && task.assigneeUid) {
+        selectedUid = task.assigneeUid;
+    }
+
+    if (!selectedUid && !isEditing) {
+        selectedUid = appState.currentUser.uid;
     }
 
     // If user is not an admin, they can only create/edit tasks for themselves.
