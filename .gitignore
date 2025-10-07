@@ -50,3 +50,7 @@ firestore-debug.log
 .env.production.local
 .cache
 /coverage
+
+# Python cache
+*.pyc
+__pycache__/

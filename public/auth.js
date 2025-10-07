@@ -73,24 +73,64 @@ const dom = new Proxy({}, {
     }
 });
 
+let isTransitioning = false;
 export function showAuthScreen(screenName, options = {}) {
+    if (isTransitioning) return;
+
     const { updateHash = true } = options;
     const normalizedScreen = AUTH_SCREENS.has(screenName) ? screenName : 'login';
 
-    Object.values(SCREEN_TO_PANEL_ID).forEach(id => {
-        const panel = document.getElementById(id);
-        if (panel) panel.classList.add('hidden');
+    if (normalizedScreen === currentScreen) return;
+
+    isTransitioning = true;
+
+    const panelToHideId = SCREEN_TO_PANEL_ID[currentScreen];
+    const panelToHide = panelToHideId ? document.getElementById(panelToHideId) : null;
+
+    const panelToShowId = SCREEN_TO_PANEL_ID[normalizedScreen];
+    const panelToShow = panelToShowId ? document.getElementById(panelToShowId) : null;
+
+    if (!panelToShow) {
+        isTransitioning = false;
+        return;
+    }
+
+    const transitionDuration = 200;
+
+    if (panelToHide) {
+        panelToHide.style.transition = `opacity ${transitionDuration}ms ease, transform ${transitionDuration}ms ease`;
+        panelToHide.style.opacity = '0';
+        panelToHide.style.transform = 'scale(0.98)';
+
+        setTimeout(() => {
+            panelToHide.classList.add('hidden');
+        }, transitionDuration);
+    }
+
+    panelToShow.classList.remove('hidden');
+    panelToShow.style.opacity = '0';
+    panelToShow.style.transform = 'scale(0.98)';
+    panelToShow.style.transition = `opacity ${transitionDuration}ms ease, transform ${transitionDuration}ms ease`;
+
+    requestAnimationFrame(() => {
+        panelToShow.style.opacity = '1';
+        panelToShow.style.transform = 'scale(1)';
     });
 
-    const panelId = SCREEN_TO_PANEL_ID[normalizedScreen];
-    const panelToShow = panelId ? document.getElementById(panelId) : null;
-    if (panelToShow) {
-        panelToShow.classList.remove('hidden');
-        const firstInput = panelToShow.querySelector('input:not([type="hidden"])');
-        if (firstInput && typeof firstInput.focus === 'function') {
-            setTimeout(() => firstInput.focus(), 0);
+    setTimeout(() => {
+        if (panelToHide) {
+            panelToHide.style.transition = '';
+            panelToHide.style.transform = '';
+            panelToHide.style.opacity = '';
         }
-    }
+        panelToShow.style.transition = '';
+        panelToShow.style.transform = '';
+        panelToShow.style.opacity = '';
+
+        isTransitioning = false;
+        const firstInput = panelToShow.querySelector('input:not([type="hidden"])');
+        if (firstInput) firstInput.focus();
+    }, transitionDuration);
 
     currentScreen = normalizedScreen;
 
@@ -400,4 +440,5 @@ export function initAuthModule(_auth, _db, options = {}) {
     setupEventListeners();
 
     console.log("Authentication module initialized.");
+    window.showAuthScreen = showAuthScreen;
 }
