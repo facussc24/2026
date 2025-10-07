@@ -228,7 +228,21 @@ async function handleResendVerificationEmail() {
 
 
 async function handleLogin(form, email, password) {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+        const error = new Error('Email is required.');
+        error.code = 'auth/missing-email';
+        throw error;
+    }
+
+    if (!password) {
+        const error = new Error('Password is required.');
+        error.code = 'auth/missing-password';
+        throw error;
+    }
+
+    const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
     // The onAuthStateChanged listener will handle successful login
 }
 
@@ -250,13 +264,13 @@ async function handleRegister(form, email, password) {
         throw new Error('auth/unauthorized-domain');
     }
 
-    const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, password);
+    const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
     await updateProfile(userCredential.user, { displayName: name });
 
     await setDoc(doc(db, COLLECTIONS.USUARIOS, userCredential.user.uid), {
         id: userCredential.user.uid,
         name: name,
-        email: userCredential.user.email,
+        email: normalizedEmail,
         role: 'lector',
         sector: 'Sin Asignar',
         createdAt: new Date()
@@ -269,7 +283,8 @@ async function handleRegister(form, email, password) {
 }
 
 async function handlePasswordReset(form, email) {
-    await sendPasswordResetEmail(auth, email.trim());
+    const normalizedEmail = email.trim().toLowerCase();
+    await sendPasswordResetEmail(auth, normalizedEmail);
     form.reset();
     notify(`Si la cuenta ${email} existe, se ha enviado un enlace para restablecer la contraseña.`, 'info');
     showAuthScreen('login');
