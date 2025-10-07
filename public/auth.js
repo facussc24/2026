@@ -24,6 +24,86 @@ const HASH_SCREEN_MAP = Object.entries(SCREEN_HASH_MAP).reduce((acc, [screen, ha
     return acc;
 }, {});
 
+const authWatchdog = (() => {
+    const history = [];
+    const MAX_HISTORY = 50;
+    const LOOP_PATTERN = ['SIGNED_IN', 'SIGNED_OUT', 'SIGNED_IN', 'SIGNED_OUT'];
+    const LOOP_WINDOW_MS = 8000;
+    let notifier = null;
+    let loopAlertTimestamp = 0;
+
+    const cloneEntry = (entry) => ({ ...entry, timestamp: entry.timestamp });
+
+    const pushHistory = (entry) => {
+        history.push({ ...entry, timestamp: Date.now() });
+        if (history.length > MAX_HISTORY) {
+            history.shift();
+        }
+    };
+
+    const maybeReportLoop = () => {
+        const stateEntries = history.filter(entry => entry.type === 'state');
+        if (stateEntries.length < LOOP_PATTERN.length) return;
+
+        const recentStates = stateEntries.slice(-LOOP_PATTERN.length);
+        const matchesPattern = recentStates.every((entry, idx) => entry.state === LOOP_PATTERN[idx]);
+        if (!matchesPattern) return;
+
+        const elapsed = recentStates[recentStates.length - 1].timestamp - recentStates[0].timestamp;
+        if (elapsed > LOOP_WINDOW_MS) return;
+
+        const now = Date.now();
+        if (loopAlertTimestamp && now - loopAlertTimestamp < LOOP_WINDOW_MS) return;
+
+        loopAlertTimestamp = now;
+        console.error('[AuthWatchdog] Potential login loop detected', { events: recentStates.map(cloneEntry) });
+        if (typeof notifier === 'function') {
+            try {
+                notifier('Detectamos un bucle durante el inicio de sesión. Código: AUTH_LOOP_DETECTED. Revisa la consola para más detalles.', 'error');
+            } catch (notifyError) {
+                console.error('[AuthWatchdog] Failed to notify about login loop', notifyError);
+            }
+        }
+    };
+
+    const api = {
+        log(stage, details = {}) {
+            pushHistory({ type: 'stage', stage, details });
+            console.debug(`[AuthWatchdog] ${stage}`, details);
+        },
+        error(stage, error, details = {}) {
+            pushHistory({ type: 'error', stage, details, error: error?.message || error });
+            console.error(`[AuthWatchdog] ${stage}`, { error, ...details });
+        },
+        recordState(state, meta = {}) {
+            pushHistory({ type: 'state', state, meta });
+            console.debug(`[AuthWatchdog] state -> ${state}`, meta);
+            maybeReportLoop();
+        },
+        setNotifier(fn) {
+            notifier = typeof fn === 'function' ? fn : null;
+        },
+        resetLoopFlag() {
+            loopAlertTimestamp = 0;
+        },
+        getHistory() {
+            return history.map(cloneEntry);
+        },
+        expose() {
+            if (typeof window !== 'undefined') {
+                window.__AUTH_WATCHDOG__ = {
+                    getHistory: () => history.map(cloneEntry),
+                    log: (stage, payload = {}) => api.log(stage, payload),
+                    recordState: (state, payload = {}) => api.recordState(state, payload)
+                };
+            }
+        }
+    };
+
+    return api;
+})();
+export { authWatchdog };
+
 let suppressNextHashSync = false;
 let currentScreen = null;
 
@@ -79,6 +159,12 @@ let queuedScreen = null;
 export function showAuthScreen(screenName, options = {}) {
     const { updateHash = true } = options;
     const normalizedScreen = AUTH_SCREENS.has(screenName) ? screenName : 'login';
+
+    authWatchdog.log('showAuthScreen', {
+        requested: screenName,
+        normalized: normalizedScreen,
+        updateHash
+    });
 
     if (isTransitioning) {
         if (queuedScreen?.screenName !== normalizedScreen) {
@@ -191,9 +277,12 @@ async function handleResendVerificationEmail() {
     dom.resendVerificationBtn.disabled = true;
     dom.resendTimer.textContent = 'Enviando...';
 
+    authWatchdog.log('resendVerificationEmail:start');
+
     try {
         await sendEmailVerification(auth.currentUser);
         notify('Se ha enviado un nuevo correo de verificación.', 'success');
+        authWatchdog.log('resendVerificationEmail:success');
 
         // Cooldown timer
         let seconds = 60;
@@ -211,6 +300,7 @@ async function handleResendVerificationEmail() {
 
     } catch (error) {
         console.error("Error resending verification email:", error);
+        authWatchdog.error('resendVerificationEmail:error', error);
         let friendlyMessage = 'Error al reenviar el correo.';
         if (error.code === 'auth/too-many-requests') {
             friendlyMessage = 'Demasiados intentos. Por favor, espera un momento antes de volver a intentarlo.';
@@ -230,6 +320,8 @@ async function handleResendVerificationEmail() {
 async function handleLogin(form, email, password) {
     const normalizedEmail = email?.trim().toLowerCase();
 
+    authWatchdog.log('handleLogin:start', { email: normalizedEmail });
+
     if (!normalizedEmail) {
         const error = new Error('Email is required.');
         error.code = 'auth/missing-email';
@@ -243,6 +335,7 @@ async function handleLogin(form, email, password) {
     }
 
     const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+    authWatchdog.log('handleLogin:success', { uid: userCredential.user.uid });
     // The onAuthStateChanged listener will handle successful login
 }
 
@@ -251,6 +344,8 @@ async function handleRegister(form, email, password) {
     const emailField = form.querySelector('#register-email');
     const sanitizedEmail = email.trim();
     const normalizedEmail = sanitizedEmail.toLowerCase();
+
+    authWatchdog.log('handleRegister:start', { email: normalizedEmail });
 
     if (emailField) {
         emailField.setCustomValidity('');
@@ -280,20 +375,24 @@ async function handleRegister(form, email, password) {
     form.reset();
     notify('¡Registro exitoso! Revisa tu correo para verificar tu cuenta.', 'success');
     showAuthScreen('verify-email');
+    authWatchdog.log('handleRegister:success', { uid: userCredential.user.uid });
 }
 
 async function handlePasswordReset(form, email) {
     const normalizedEmail = email.trim().toLowerCase();
+    authWatchdog.log('handlePasswordReset:start', { email: normalizedEmail });
     await sendPasswordResetEmail(auth, normalizedEmail);
     form.reset();
     notify(`Si la cuenta ${email} existe, se ha enviado un enlace para restablecer la contraseña.`, 'info');
     showAuthScreen('login');
+    authWatchdog.log('handlePasswordReset:success', { email: normalizedEmail });
 }
 
 export async function handleAuthForms(e) {
     e.preventDefault();
     const form = e.target;
     const formId = form.id;
+    authWatchdog.log('authForm:submit', { formId });
     const emailInput = form.querySelector('input[type="email"]');
     const email = emailInput ? emailInput.value.trim() : '';
     if (emailInput) {
@@ -329,6 +428,7 @@ export async function handleAuthForms(e) {
         }
     } catch (error) {
         console.error("Authentication error:", error);
+        authWatchdog.error('authForm:error', error, { formId });
         let friendlyMessage = "Ocurrió un error inesperado.";
         switch (error.code || error.message) {
             case 'auth/invalid-login-credentials':
@@ -379,14 +479,19 @@ export async function handleAuthForms(e) {
     if (formId === 'login-form' && operationSuccessful) {
         form.reset();
     }
+
+    authWatchdog.log('authForm:completed', { formId, success: operationSuccessful });
 }
 
 export async function logOutUser() {
     try {
+        authWatchdog.log('logout:requested');
         await signOut(auth);
+        authWatchdog.log('logout:success');
     } catch (error) {
         console.error("Error signing out:", error);
         notify("Error al cerrar sesión.", "error");
+        authWatchdog.error('logout:error', error);
     }
 }
 
@@ -394,6 +499,7 @@ export async function logOutUser() {
  * Configura todos los manejadores de eventos para el módulo de autenticación.
  */
 function setupEventListeners() {
+    authWatchdog.log('authModule:setupEventListeners');
     dom.loginForm?.addEventListener('submit', handleAuthForms);
     dom.registerForm?.addEventListener('submit', handleAuthForms);
     dom.resetForm?.addEventListener('submit', handleAuthForms);
@@ -465,7 +571,12 @@ export function initAuthModule(_auth, _db, options = {}) {
         notify = window.showToast.bind(window);
     }
 
+    authWatchdog.setNotifier(notify);
+    authWatchdog.log('initAuthModule');
+    authWatchdog.expose();
+
     setupEventListeners();
+    authWatchdog.log('initAuthModule:ready');
 
     console.log("Authentication module initialized.");
     window.showAuthScreen = showAuthScreen;

@@ -2,11 +2,11 @@
 // =================================================================================
 // Importar funciones de los SDKs de Firebase
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, updateProfile } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, updatePassword, reauthenticateWithCredential, EmailAuthProvider, deleteUser, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, writeBatch, runTransaction, orderBy, limit, startAfter, or, getCountFromServer } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS, getUniqueKeyForCollection, createHelpTooltip, validateField, flattenEstructura, prepareDataForPdfAutoTable, generateProductStructureReportHTML } from './utils.js';
-import { initAuthModule, showAuthScreen, logOutUser } from './auth.js';
+import { initAuthModule, showAuthScreen, logOutUser, authWatchdog } from './auth.js';
 import {
     initTasksModule,
     runTasksLogic as runTasksLogicFromModule,
@@ -21,6 +21,61 @@ import {
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './data_logic.js';
 import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
+
+// Provide a resilient lucide wrapper so UI rendering does not break if the icon
+// library finishes loading after the main bundle.
+const lucideCallQueue = [];
+let lucideFlushTimer = null;
+
+const flushLucideQueue = () => {
+    if (typeof window === 'undefined' || !window.lucide?.createIcons) {
+        return false;
+    }
+
+    while (lucideCallQueue.length > 0) {
+        const options = lucideCallQueue.shift();
+        try {
+            window.lucide.createIcons(options);
+        } catch (error) {
+            console.error('[LucideGuard] Failed to render queued icons', error, options);
+        }
+    }
+    return true;
+};
+
+const scheduleLucideFlush = () => {
+    if (typeof window === 'undefined') return;
+    if (lucideFlushTimer !== null) return;
+
+    const attempt = () => {
+        if (flushLucideQueue()) {
+            window.clearInterval(lucideFlushTimer);
+            lucideFlushTimer = null;
+        }
+    };
+
+    lucideFlushTimer = window.setInterval(attempt, 200);
+    attempt();
+};
+
+const lucide = {
+    createIcons(options) {
+        if (typeof window !== 'undefined' && window.lucide?.createIcons) {
+            try {
+                window.lucide.createIcons(options);
+            } catch (error) {
+                console.error('[LucideGuard] Error rendering icons', error, options);
+            }
+        } else {
+            lucideCallQueue.push(options);
+            scheduleLucideFlush();
+        }
+    }
+};
+
+if (typeof window !== 'undefined') {
+    scheduleLucideFlush();
+}
 
 // NOTA DE SEGURIDAD: La configuración de Firebase no debe estar hardcodeada en el código fuente.
 // En un entorno de producción, estos valores deben cargarse de forma segura,
@@ -3431,118 +3486,135 @@ async function seedMinimalTestDataForE2E() {
 
 
 onAuthStateChanged(auth, async (user) => {
+    authWatchdog.recordState(user ? 'SIGNED_IN' : 'SIGNED_OUT', {
+        email: user?.email ?? null,
+        emailVerified: !!user?.emailVerified
+    });
+
     if (user) {
+        authWatchdog.log('auth-state:user-detected', { email: user.email, emailVerified: user.emailVerified });
         const urlParams = new URLSearchParams(window.location.search);
         const isTestMode = urlParams.get('env') === 'test';
 
-        // if (isTestMode && !window.e2eDataSeeded) {
-        //     await seedMinimalTestDataForE2E();
-        //     window.e2eDataSeeded = true;
-        // }
+        try {
+            if (user.emailVerified || isTestMode) {
+                const wasAlreadyLoggedIn = !!appState.currentUser;
 
-        if (user.emailVerified || isTestMode) {
-            const wasAlreadyLoggedIn = !!appState.currentUser;
+                const loadingText = dom.loadingOverlay.querySelector('p');
+                if (loadingText) {
+                    loadingText.textContent = wasAlreadyLoggedIn ? 'Recargando datos...' : 'Verificación exitosa, cargando datos...';
+                }
+                dom.loadingOverlay.style.display = 'flex';
 
-            const loadingText = dom.loadingOverlay.querySelector('p');
-            loadingText.textContent = wasAlreadyLoggedIn ? 'Recargando datos...' : 'Verificación exitosa, cargando datos...';
-            dom.loadingOverlay.style.display = 'flex';
+                const userDocRef = doc(db, COLLECTIONS.USUARIOS, user.uid);
+                let userDocSnap = await getDoc(userDocRef);
 
-            const userDocRef = doc(db, COLLECTIONS.USUARIOS, user.uid);
-            let userDocSnap = await getDoc(userDocRef);
+                if (!userDocSnap.exists()) {
+                    showToast(`Creando perfil para usuario existente: ${user.email}`, 'info', 4000);
+                    authWatchdog.log('auth-state:create-user-profile', { email: user.email });
+                    const newUserDoc = {
+                        id: user.uid,
+                        name: user.displayName || user.email.split('@')[0],
+                        email: user.email,
+                        role: 'lector',
+                        sector: 'Sin Asignar',
+                        createdAt: new Date(),
+                        photoURL: user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.displayName || user.email)}`
+                    };
+                    await setDoc(userDocRef, newUserDoc);
+                    userDocSnap = await getDoc(userDocRef);
+                }
 
-            if (!userDocSnap.exists()) {
-                showToast(`Creando perfil para usuario existente: ${user.email}`, 'info', 4000);
-                const newUserDoc = {
-                    id: user.uid,
+                if (userDocSnap.exists() && userDocSnap.data().disabled) {
+                    await signOut(auth);
+                    dom.loadingOverlay.style.display = 'none';
+                    showToast('Tu cuenta ha sido deshabilitada por un administrador.', 'error', 5000);
+                    authWatchdog.log('auth-state:disabled-user', { email: user.email });
+                    return;
+                }
+
+                const userData = userDocSnap.exists() ? userDocSnap.data() : {};
+
+                if (user.email === 'f.santoro@barackmercosul.com' && userData.role !== 'admin') {
+                    showToast('Restaurando permisos de administrador...', 'info');
+                    authWatchdog.log('auth-state:restore-admin-role', { email: user.email });
+                    await updateDoc(doc(db, COLLECTIONS.USUARIOS, user.uid), { role: 'admin', isSuperAdmin: true });
+                    location.reload();
+                    return;
+                }
+
+                appState.currentUser = {
+                    uid: user.uid,
                     name: user.displayName || user.email.split('@')[0],
                     email: user.email,
-                    role: 'lector',
-                    sector: 'Sin Asignar',
-                    createdAt: new Date(),
-                    photoURL: user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.displayName || user.email)}`
+                    avatarUrl: user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.displayName || user.email)}`,
+                    role: userData.role || 'lector',
+                    isSuperAdmin: userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2',
+                    godModeState: (userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2') ? { realRole: userData.role || 'admin', isImpersonating: false } : null
                 };
-                await setDoc(userDocRef, newUserDoc);
-                userDocSnap = await getDoc(userDocRef);
-            }
-
-            if (userDocSnap.exists() && userDocSnap.data().disabled) {
-                await signOut(auth);
-                dom.loadingOverlay.style.display = 'none';
-                showToast('Tu cuenta ha sido deshabilitada por un administrador.', 'error', 5000);
-                return;
-            }
-
-            const userData = userDocSnap.exists() ? userDocSnap.data() : {};
-
-            if (user.email === 'f.santoro@barackmercosul.com' && userData.role !== 'admin') {
-                showToast('Restaurando permisos de administrador...', 'info');
-                await updateDoc(doc(db, COLLECTIONS.USUARIOS, user.uid), { role: 'admin', isSuperAdmin: true });
-                location.reload();
-                return;
-            }
-
-            appState.currentUser = {
-                uid: user.uid,
-                name: user.displayName || user.email.split('@')[0],
-                email: user.email,
-                avatarUrl: user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.displayName || user.email)}`,
-                role: userData.role || 'lector',
-                isSuperAdmin: userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2',
-                godModeState: (userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2') ? { realRole: userData.role || 'admin', isImpersonating: false } : null
-            };
-            if(appState.currentUser.godModeState) {
-                appState.godModeState = appState.currentUser.godModeState;
-            }
-
-            // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
-            initTasksModule(appDependencies);
-            initLandingPageModule(appDependencies);
-
-
-            if (!isTestMode) {
-                if (appState.currentUser.isSuperAdmin) {
-                    await seedDefaultSectors();
-                    await seedDefaultRoles();
+                if (appState.currentUser.godModeState) {
+                    appState.godModeState = appState.currentUser.godModeState;
                 }
-                await startRealtimeListeners();
+
+                const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
+                initTasksModule(appDependencies);
+                initLandingPageModule(appDependencies);
+                authWatchdog.log('auth-state:modules-initialized');
+
+                if (!isTestMode) {
+                    if (appState.currentUser.isSuperAdmin) {
+                        await seedDefaultSectors();
+                        await seedDefaultRoles();
+                    }
+                    await startRealtimeListeners();
+                } else {
+                    appState.isAppInitialized = true;
+                }
+
+                updateNavForRole();
+                renderUserMenu();
+                renderNotificationCenter();
+
+                console.log("About to switch view to landing-page...");
+                await switchView('landing-page');
+                console.log("switchView('landing-page') completed.");
+
+                dom.loadingOverlay.style.display = 'none';
+                dom.authContainer.classList.add('hidden');
+                dom.appView.classList.remove('hidden');
+                authWatchdog.log('auth-state:ui-ready');
+
+                if (window.location.pathname === '/visor3d') {
+                    switchView('visor3d');
+                }
+
+                if (!wasAlreadyLoggedIn && !isTestMode) {
+                    showToast(`¡Bienvenido de nuevo, ${appState.currentUser.name}!`, 'success');
+                }
+
+                authWatchdog.resetLoopFlag();
+                authWatchdog.log('auth-state:ready', { email: user.email });
             } else {
-                appState.isAppInitialized = true;
+                dom.loadingOverlay.style.display = 'none';
+                showToast('Por favor, verifica tu correo electrónico para continuar.', 'info');
+                showAuthScreen('verify-email');
+                authWatchdog.log('auth-state:awaiting-verification', { email: user.email });
             }
-
-            // This must happen BEFORE switchView to avoid UI flicker
-            updateNavForRole();
-            renderUserMenu();
-            renderNotificationCenter();
-
-            // The old version checker has been removed.
-            // The new system uses Firestore listeners for real-time notifications.
-
-            console.log("About to switch view to landing-page...");
-            // This is the critical sequence: render the content, THEN hide the loading screen.
-            await switchView('landing-page');
-            console.log("switchView('landing-page') completed.");
-
-            // Hide loading overlay and show the main app view
+        } catch (error) {
+            authWatchdog.error('auth-state:processing-error', error, { email: user.email });
+            console.error('Error while processing authenticated user:', error);
             dom.loadingOverlay.style.display = 'none';
-            dom.authContainer.classList.add('hidden');
-            dom.appView.classList.remove('hidden');
-
-            // Path-based routing for /visor3d
-            if (window.location.pathname === '/visor3d') {
-                switchView('visor3d');
+            dom.authContainer.classList.remove('hidden');
+            dom.appView.classList.add('hidden');
+            showToast('No se pudo completar el inicio de sesión. Código: AUTH_INIT_FAILURE. Inténtalo nuevamente.', 'error');
+            try {
+                await logOutUser();
+            } catch (logoutError) {
+                authWatchdog.error('auth-state:logout-recovery-failed', logoutError);
             }
-
-            if (!wasAlreadyLoggedIn && !isTestMode) {
-                showToast(`¡Bienvenido de nuevo, ${appState.currentUser.name}!`, 'success');
-            }
-        } else {
-            dom.loadingOverlay.style.display = 'none';
-            showToast('Por favor, verifica tu correo electrónico para continuar.', 'info');
-            showAuthScreen('verify-email');
         }
     } else {
-        // No user is signed in.
+        authWatchdog.log('auth-state:no-user');
         dom.loadingOverlay.style.display = 'none';
         const wasLoggedIn = !!appState.currentUser;
         stopRealtimeListeners();
