@@ -57,3 +57,34 @@ def test_auth_flow_transitions(page: Page):
     expect(login_panel).to_be_visible(timeout=2000)
     expect(reset_panel).to_be_hidden()
     page.screenshot(path="tests/e2e/screenshots/05_final_login_view.png")
+
+def test_rapid_history_navigation(page: Page):
+    """
+    Verifies that rapid back/forward navigation doesn't de-sync the UI.
+    """
+    # Initial setup, navigate and wait for the app to be ready
+    page.goto("http://localhost:8081")
+    page.wait_for_function("() => typeof window.switchView === 'function'", timeout=10000)
+    expect(page.locator("#loading-overlay")).to_be_hidden(timeout=10000)
+    login_panel = page.locator("#login-panel")
+    register_panel = page.locator("#register-panel")
+    reset_panel = page.locator("#reset-panel")
+
+    # 1. Navigate through a few screens to build up history
+    page.locator('a[data-auth-screen="register"]').click()
+    expect(register_panel).to_be_visible(timeout=2000)
+    page.locator('#register-panel a[data-auth-screen="login"]').click()
+    expect(login_panel).to_be_visible(timeout=2000)
+    page.locator('a[data-auth-screen="reset"]').click()
+    expect(reset_panel).to_be_visible(timeout=2000)
+
+    # 2. Simulate rapid back/forward navigation
+    page.go_back()  # Should go to login
+    page.go_back()  # Should go to register
+    page.go_forward() # Should go back to login
+
+    # 3. Assert the final state is correct after animations
+    expect(login_panel).to_be_visible(timeout=3000)
+    expect(register_panel).to_be_hidden()
+    expect(reset_panel).to_be_hidden()
+    expect(page).to_have_url(RegExp(r".*#\/login"))
