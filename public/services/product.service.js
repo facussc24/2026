@@ -1,3 +1,12 @@
+/**
+ * Product maintenance services.
+ *
+ * Houses shared helpers that operate on product documents, including the logic
+ * required to delete a product and cascade clean up orphaned sub-components.
+ *
+ * @module services/product.service
+ */
+
 import { limit } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 /**
