@@ -552,19 +552,6 @@ public/modulos/visor3d/
 <!-- Library Scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/20.0.3/tween.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/alyssaxuu/flowy/flowy.min.js"></script>
-<script>
-    window.__lucideFallbackQueue = window.__lucideFallbackQueue || [];
-    var lucide = window.lucide = window.lucide || {};
-    if (typeof lucide.createIcons !== 'function') {
-        const fallbackCreateIcons = function(options) {
-            window.__lucideFallbackQueue.push(options);
-        };
-        fallbackCreateIcons.__isFallback = true;
-        lucide.createIcons = fallbackCreateIcons;
-    } else if (lucide.createIcons && typeof lucide.createIcons === 'function' && !lucide.createIcons.__isFallback) {
-        lucide.createIcons.__isFallback = false;
-    }
-</script>
 <!-- Firebase Hosting Scripts -->
 <script type="module" src="main.js"></script>
 
