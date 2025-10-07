@@ -12,7 +12,8 @@ import {
     openTaskFormModal,
     openAIAssistantModal
 } from './modules/tasks/tasks.js';
-import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
+import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page/index.js';
+import { initUserManagementModule, handleUserDisable } from './modules/user_management/index.js';
 import { deleteProductAndOrphanedSubProducts } from './services/product.service.js';
 
 // Provide a resilient lucide wrapper so UI rendering does not break if the icon
@@ -108,23 +109,6 @@ const PREDEFINED_AVATARS = [
     'https://api.dicebear.com/8.x/identicon/svg?seed=Ada%20Lovelace',
     'https://api.dicebear.com/8.x/identicon/svg?seed=Katherine%20Johnson'
 ];
-
-const PRESERVED_COLLECTION_LABELS = {
-    [COLLECTIONS.USUARIOS]: 'usuarios',
-    [COLLECTIONS.TAREAS]: 'tareas'
-};
-
-if (COLLECTIONS.MODELOS) {
-    PRESERVED_COLLECTION_LABELS[COLLECTIONS.MODELOS] = 'modelos 3D';
-}
-
-function formatListInSpanish(items) {
-    if (!items || items.length === 0) return '';
-    if (items.length === 1) return items[0];
-    const lastItem = items[items.length - 1];
-    return `${items.slice(0, -1).join(', ')} y ${lastItem}`;
-}
-
 // =================================================================================
 // --- 2. ESTADO GLOBAL Y CONFIGURACIÓN DE LA APP ---
 // =================================================================================
@@ -168,13 +152,43 @@ const viewConfig = {
     }
 };
 
+/**
+ * Garantiza que la vista solicitada exista en la configuración global antes de continuar.
+ * Muestra un toast de error para los usuarios/administradores si la vista no se encuentra.
+ *
+ * @param {string} viewName - Identificador de la vista que se desea activar.
+ * @returns {boolean} `true` si la vista existe, `false` en caso contrario.
+ */
+export function assertViewExists(viewName) {
+    if (!viewName || typeof viewName !== 'string') {
+        console.error('[Navigation] Invalid view requested:', viewName);
+        showToast('No se pudo determinar la vista solicitada.', 'error');
+        return false;
+    }
+
+    if (!Object.prototype.hasOwnProperty.call(viewConfig, viewName)) {
+        console.error('[Navigation] Attempted to access unknown view:', viewName, {
+            availableViews: Object.keys(viewConfig)
+        });
+        showToast(`La vista "${viewName}" no está disponible.`, 'error');
+        return false;
+    }
+
+    return true;
+}
+
+if (typeof window !== 'undefined') {
+    window.assertViewExists = assertViewExists;
+}
+
 // --- Estado Global de la Aplicación ---
 export let appState = {
     currentView: 'landing-page',
     weekOffset: 0,
-    currentData: [], 
+    currentData: [],
     arbolActivo: null,
     currentUser: null,
+    previewRole: null,
     currentViewCleanup: null,
     isAppInitialized: false,
     isTutorialActive: false,
@@ -221,6 +235,26 @@ export let dom = {
 };
 
 const dashboardCharts = {};
+
+export function getEffectiveRole() {
+    if (!appState.currentUser) {
+        return null;
+    }
+
+    if (appState.previewRole) {
+        return appState.previewRole;
+    }
+
+    if (appState.currentUser.isSuperAdmin) {
+        return 'admin';
+    }
+
+    return appState.currentUser.role || null;
+}
+
+function isSuperAdminActive() {
+    return Boolean(appState.currentUser?.isSuperAdmin) && !appState.previewRole;
+}
 
 // =================================================================================
 // --- 3. LÓGICA DE DATOS (FIRESTORE) ---
@@ -495,35 +529,16 @@ function deleteItem(docId) {
     // For most items, only a super admin can delete.
     // We make exceptions for specific cases below.
     if (config.dataKey !== COLLECTIONS.USUARIOS && config.dataKey !== COLLECTIONS.PRODUCTOS) {
-        if (!appState.currentUser.isSuperAdmin) {
+        if (!isSuperAdminActive()) {
             showToast('Solo un Super Administrador puede eliminar este tipo de registro.', 'error');
             return;
         }
     }
 
     if (config.dataKey === COLLECTIONS.USUARIOS) {
-        const itemToDelete = appState.currentData.find(d => d.docId === docId);
-        if (itemToDelete?.docId === auth.currentUser.uid) {
-            showToast('No puedes deshabilitar tu propia cuenta desde aquí.', 'error');
+        if (handleUserDisable(docId)) {
             return;
         }
-        const itemName = itemToDelete ? (itemToDelete.name || itemToDelete.email) : 'este usuario';
-        showConfirmationModal(
-            `Deshabilitar Usuario`,
-            `¿Estás seguro de que deseas deshabilitar a "${itemName}"? El usuario ya no podrá iniciar sesión.`,
-            async () => {
-                try {
-                    const userDocRef = doc(db, COLLECTIONS.USUARIOS, docId);
-                    await updateDoc(userDocRef, { disabled: true });
-                    showToast('Usuario deshabilitado con éxito.', 'success');
-                    runTableLogic(); // Refresh the table
-                } catch (error) {
-                    console.error("Error disabling user: ", error);
-                    showToast('Error al deshabilitar el usuario.', 'error');
-                }
-            }
-        );
-        return;
     }
 
     if (config.dataKey === COLLECTIONS.PRODUCTOS) {
@@ -550,114 +565,6 @@ function deleteItem(docId) {
             deleteDocument(config.dataKey, docId);
         }
     );
-}
-
-async function clearDataOnly() {
-    showToast('Limpiando colecciones de datos...', 'info', 5000);
-    const collectionNames = Object.values(COLLECTIONS);
-    const collectionsToSkip = new Set([COLLECTIONS.USUARIOS, COLLECTIONS.TAREAS]);
-    if (COLLECTIONS.MODELOS) {
-        collectionsToSkip.add(COLLECTIONS.MODELOS);
-    }
-
-    let hadErrors = false;
-
-    for (const name of collectionNames) {
-        if (!name || collectionsToSkip.has(name)) {
-            console.log(`Se omite la limpieza de la colección '${name}' para preservar los datos.`);
-            continue;
-        }
-        try {
-            const collectionRef = collection(db, name);
-            const snapshot = await getDocs(collectionRef);
-            if (snapshot.empty) continue;
-
-            const batch = writeBatch(db);
-            snapshot.docs.forEach(docSnap => {
-                batch.delete(docSnap.ref);
-            });
-            await batch.commit();
-            console.log(`Colección '${name}' limpiada.`);
-        } catch (error) {
-            hadErrors = true;
-            console.error(`Error limpiando la colección ${name}:`, error);
-            showToast(`Error al limpiar la colección ${name}.`, 'error');
-        }
-    }
-
-    if (hadErrors) {
-        showToast('La limpieza terminó con errores. Revise la consola para más detalles.', 'error', 5000);
-    } else {
-        showToast('Limpieza de datos completada.', 'success');
-    }
-
-    return {
-        hadErrors,
-        skippedCollections: Array.from(collectionsToSkip)
-    };
-}
-
-async function clearVisor3dModels() {
-    if (!COLLECTIONS.MODELOS) {
-        showToast('La colección de modelos 3D no está configurada.', 'warning');
-        return { hadErrors: true, deletedCount: 0 };
-    }
-
-    showToast('Eliminando modelos 3D...', 'info', 4000);
-
-    try {
-        const modelsRef = collection(db, COLLECTIONS.MODELOS);
-        const snapshot = await getDocs(modelsRef);
-
-        if (snapshot.empty) {
-            showToast('No hay modelos 3D para eliminar.', 'info');
-            return { hadErrors: false, deletedCount: 0 };
-        }
-
-        const batch = writeBatch(db);
-        snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
-        await batch.commit();
-
-        showToast(`Se eliminaron ${snapshot.size} modelos 3D.`, 'success');
-        return { hadErrors: false, deletedCount: snapshot.size };
-    } catch (error) {
-        console.error('Error al eliminar los modelos 3D:', error);
-        showToast('Error al eliminar los modelos 3D.', 'error');
-        return { hadErrors: true, deletedCount: 0 };
-    }
-}
-
-async function clearOtherUsers() {
-    showToast('Eliminando otros usuarios...', 'info', 4000);
-    const adminUID = 'HyM0eC3pujQtg8EgTXMu3h6AmMw2';
-    const usersRef = collection(db, COLLECTIONS.USUARIOS);
-
-    try {
-        const snapshot = await getDocs(usersRef);
-        if (snapshot.empty) {
-            showToast('No hay otros usuarios para eliminar.', 'info');
-            return;
-        }
-
-        const batch = writeBatch(db);
-        let deletedCount = 0;
-        snapshot.docs.forEach(doc => {
-            if (doc.id !== adminUID) {
-                batch.delete(doc.ref);
-                deletedCount++;
-            }
-        });
-
-        if (deletedCount > 0) {
-            await batch.commit();
-            showToast(`${deletedCount} usuario(s) han sido eliminados.`, 'success');
-        } else {
-            showToast('No se encontraron otros usuarios para eliminar.', 'info');
-        }
-    } catch (error) {
-        console.error("Error eliminando otros usuarios:", error);
-        showToast('Error al eliminar los otros usuarios.', 'error');
-    }
 }
 
 async function seedEcos(batch, users, generatedEcrs) {
@@ -877,7 +784,6 @@ async function seedReunionesEcr(batch) {
 
 
 async function seedDatabase() {
-    await clearDataOnly();
     showToast('Iniciando carga masiva de datos de prueba...', 'info');
     const batch = writeBatch(db);
     const TOTAL_PRODUCTS = 10;
@@ -1124,10 +1030,12 @@ export function checkUserPermission(action, item = null) {
         return false; // Si no hay usuario, no hay permisos.
     }
 
-    const { role, uid, isSuperAdmin } = appState.currentUser;
+    const { uid, isSuperAdmin } = appState.currentUser;
+    const role = getEffectiveRole();
+    const isPreviewActive = Boolean(appState.previewRole);
 
     // 1. SuperAdmins can do anything.
-    if (isSuperAdmin) {
+    if (isSuperAdmin && !isPreviewActive) {
         return true;
     }
 
@@ -1252,22 +1160,21 @@ function setupGlobalEventListeners() {
 }
 
 async function switchView(viewName, params = null) {
-    if (appState.currentViewCleanup) {
-        appState.currentViewCleanup();
-        appState.currentViewCleanup = null;
-    }
-    appState.currentView = viewName;
-    const config = viewConfig[viewName];
-
-    if (!config) {
-        console.warn(`[Navigation] Attempted to load disabled view: ${viewName}`);
-        showToast('La vista solicitada no está disponible.', 'error');
-
-        if (viewName !== 'landing-page' && viewConfig['landing-page']) {
+    if (!assertViewExists(viewName)) {
+        if (viewName !== 'landing-page' && assertViewExists('landing-page')) {
+            console.info('[Navigation] Redirecting to landing-page because the requested view is unavailable.');
             return switchView('landing-page');
         }
         return;
     }
+
+    if (appState.currentViewCleanup) {
+        appState.currentViewCleanup();
+        appState.currentViewCleanup = null;
+    }
+
+    appState.currentView = viewName;
+    const config = viewConfig[viewName];
 
     dom.viewTitle.textContent = config.title;
 
@@ -1359,49 +1266,6 @@ function handleViewContentActions(e) {
                 seedDatabase
             );
         },
-        'clear-data-only': () => {
-            const preservedKeys = [COLLECTIONS.USUARIOS, COLLECTIONS.TAREAS];
-            if (COLLECTIONS.MODELOS) {
-                preservedKeys.push(COLLECTIONS.MODELOS);
-            }
-            const preservedLabels = preservedKeys.map(key => PRESERVED_COLLECTION_LABELS[key] || key);
-            const preservedSummary = formatListInSpanish(preservedLabels);
-
-            showConfirmationModal(
-                'Limpiar Base de Datos',
-                `¿Estás seguro? Esta acción eliminará todas las colecciones excepto ${preservedSummary}.`,
-                async () => {
-                    const { hadErrors, skippedCollections } = await clearDataOnly();
-
-                    if (!hadErrors && skippedCollections.length > 0) {
-                        const skippedLabels = skippedCollections.map(key => PRESERVED_COLLECTION_LABELS[key] || key);
-                        const skippedSummary = formatListInSpanish(skippedLabels);
-                        showToast(`Se conservaron ${skippedSummary}.`, 'info', 4000);
-                    }
-                }
-            );
-        },
-        'clear-visor3d-models': () => {
-            if (!COLLECTIONS.MODELOS) {
-                showToast('La colección de modelos 3D no está configurada.', 'warning');
-                return;
-            }
-
-            showConfirmationModal(
-                'Eliminar modelos 3D',
-                '¿Estás seguro? Esta acción eliminará todos los modelos almacenados para el visor 3D.',
-                async () => {
-                    await clearVisor3dModels();
-                }
-            );
-        },
-        'clear-other-users': () => {
-            showConfirmationModal(
-                'Borrar Otros Usuarios',
-                '¿Estás seguro? Esto eliminará a TODOS los usuarios excepto al administrador principal. Esta acción es irreversible.',
-                clearOtherUsers
-            );
-        },
         'clone-product-from-table': () => {
             const productDocId = button.dataset.docId;
             const productToClone = appState.currentData.find(p => p.docId === productDocId);
@@ -1479,6 +1343,52 @@ export function showToast(message, type = 'success', options = {}) {
 if (typeof window !== 'undefined') {
     window.showToast = showToast;
 }
+
+const globalErrorBoundaryState = {
+    lastToastMessage: null,
+    lastToastTimestamp: 0
+};
+
+function presentGlobalError(message, error, origin = 'runtime') {
+    console.error(`[GlobalErrorBoundary:${origin}]`, error);
+
+    if (!dom?.toastContainer) {
+        console.warn('[GlobalErrorBoundary] Toast container is not ready; skipping user notification.');
+        return;
+    }
+
+    const now = Date.now();
+    const shouldNotify =
+        globalErrorBoundaryState.lastToastMessage !== message ||
+        now - globalErrorBoundaryState.lastToastTimestamp > 5000;
+
+    if (shouldNotify) {
+        showToast(message, 'error', { duration: 7000 });
+        globalErrorBoundaryState.lastToastMessage = message;
+        globalErrorBoundaryState.lastToastTimestamp = now;
+    }
+}
+
+function initializeGlobalErrorBoundary() {
+    if (typeof window === 'undefined') return;
+    if (window.__globalErrorBoundaryInitialized) return;
+
+    window.__globalErrorBoundaryInitialized = true;
+
+    window.addEventListener('error', (event) => {
+        if (!event) return;
+        const friendlyMessage = 'Ha ocurrido un error inesperado. Los detalles técnicos se registraron en la consola.';
+        presentGlobalError(friendlyMessage, event.error || event.message, 'error');
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+        if (!event) return;
+        const friendlyMessage = 'Se detectó un error en una operación asíncrona. Revise la consola para más detalles.';
+        presentGlobalError(friendlyMessage, event.reason, 'unhandledrejection');
+    });
+}
+
+initializeGlobalErrorBoundary();
 
 function renderNotificationCenter() {
     const container = document.getElementById('notification-center-container');
@@ -2033,7 +1943,19 @@ function handleGlobalClick(e) {
         }
         return; // Prioritize view switching
     }
-    
+
+    const previewRoleButton = target.closest('[data-action="set-preview-role"]');
+    if (previewRoleButton) {
+        e.preventDefault();
+        const selectedRole = previewRoleButton.dataset.role;
+        Promise.resolve(applyPreviewRole(selectedRole)).catch(error => {
+            console.error('Error applying preview role:', error);
+            showToast('No se pudo cambiar la vista previa del rol.', 'error');
+        });
+        document.getElementById('user-dropdown')?.classList.add('hidden');
+        return;
+    }
+
     const notificationLink = target.closest('[data-action="notification-click"]');
     if (notificationLink) {
         e.preventDefault();
@@ -2179,40 +2101,7 @@ function renderTable(data, config) {
     const { currentPage, totalItems } = appState.pagination;
     const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
-    const shouldShowDataMaintenance = config.dataKey === COLLECTIONS.USUARIOS && appState.currentUser && (appState.currentUser.role === 'admin' || appState.currentUser.isSuperAdmin);
-    let adminActionsHTML = '';
-
-    if (shouldShowDataMaintenance) {
-        const preservedKeys = [COLLECTIONS.USUARIOS, COLLECTIONS.TAREAS];
-        if (COLLECTIONS.MODELOS) {
-            preservedKeys.push(COLLECTIONS.MODELOS);
-        }
-        const preservedLabels = preservedKeys.map(key => PRESERVED_COLLECTION_LABELS[key] || key);
-        const preservedSummary = formatListInSpanish(preservedLabels);
-
-        adminActionsHTML = `
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                <div class="flex items-start gap-3 text-slate-600">
-                    <i data-lucide="database" class="w-5 h-5 text-slate-500 mt-1"></i>
-                    <div>
-                        <p class="font-semibold text-slate-700">Mantenimiento de datos</p>
-                        <p class="text-sm text-slate-500">Utiliza estas herramientas para depurar la base conservando ${preservedSummary} o eliminar los modelos del visor 3D.</p>
-                    </div>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <button data-action="clear-data-only" class="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 text-sm font-semibold transition-colors">
-                        <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        Limpiar base de datos
-                    </button>
-                    <button data-action="clear-visor3d-models" class="inline-flex items-center gap-2 bg-amber-500 text-white px-4 py-2 rounded-md hover:bg-amber-600 text-sm font-semibold transition-colors">
-                        <i data-lucide="cube" class="w-4 h-4"></i>
-                        Eliminar modelos 3D
-                    </button>
-                </div>
-            </div>`;
-    }
-
-    let tableHTML = `<div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">${adminActionsHTML}
+    let tableHTML = `<div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">
         <div class="flex justify-end mb-4">
             <button data-action="export-pdf" class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 flex items-center text-sm shadow-sm"><i data-lucide="file-text" class="mr-2 h-4 w-4"></i>PDF</button>
             <button data-action="export-excel" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center text-sm ml-2 shadow-sm"><i data-lucide="file-spreadsheet" class="mr-2 h-4 w-4"></i>Excel</button>
@@ -2875,7 +2764,7 @@ function renderTaskFilters() {
         { key: 'engineering', label: 'Ingeniería' },
         { key: 'personal', label: 'Mis Tareas' }
     ];
-    if (appState.currentUser.role === 'admin' || appState.currentUser.isSuperAdmin) {
+    if (getEffectiveRole() === 'admin') {
         filters.push({ key: 'all', label: 'Todas' });
     }
     const filterContainer = document.getElementById('task-filters');
@@ -2893,6 +2782,8 @@ function fetchAndRenderTasks() {
 
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     const user = appState.currentUser;
+    const effectiveRole = getEffectiveRole();
+    const isAdminView = effectiveRole === 'admin';
 
     // Clear board before fetching and show loading indicator
     document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-slate-500"><i data-lucide="loader" class="h-8 w-8 animate-spin mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`);
@@ -2921,7 +2812,7 @@ function fetchAndRenderTasks() {
         ));
     } else if (taskState.activeFilter === 'engineering') {
         queryConstraints.unshift(where('isPublic', '==', true));
-    } else if (taskState.activeFilter !== 'all' || user.role !== 'admin') {
+    } else if (taskState.activeFilter !== 'all' || !isAdminView) {
         // For admin 'all' view, no additional filter is needed.
         // For non-admin, default to public tasks if no other filter matches.
         if (taskState.activeFilter !== 'all') {
@@ -3130,6 +3021,11 @@ function renderSubtask(subtask) {
 async function sendNotification(userId, message, view, params = {}) {
     if (!userId || !message || !view) {
         console.error('sendNotification called with invalid parameters:', { userId, message, view });
+        return;
+    }
+
+    if (!assertViewExists(view)) {
+        console.warn('sendNotification aborted because the target view does not exist:', view);
         return;
     }
 
@@ -3463,10 +3359,31 @@ onAuthStateChanged(auth, async (user) => {
                     role: userData.role || 'lector',
                     isSuperAdmin: userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2'
                 };
+                appState.previewRole = null;
 
-                const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
+                const appDependencies = {
+                    db,
+                    functions,
+                    appState,
+                    dom,
+                    showToast,
+                    showConfirmationModal,
+                    switchView,
+                    checkUserPermission,
+                    lucide,
+                    seedDatabase,
+                    openTaskFormModal,
+                    openAIAssistantModal,
+                    writeBatch,
+                    auth,
+                    COLLECTIONS,
+                    runTableLogic,
+                    updateDoc,
+                    doc
+                };
                 initTasksModule(appDependencies);
                 initLandingPageModule(appDependencies);
+                initUserManagementModule(appDependencies);
                 authWatchdog.log('auth-state:modules-initialized');
 
                 if (!isTestMode) {
@@ -3523,6 +3440,7 @@ onAuthStateChanged(auth, async (user) => {
         const wasLoggedIn = !!appState.currentUser;
         stopRealtimeListeners();
         appState.currentUser = null;
+        appState.previewRole = null;
         dom.authContainer.classList.remove('hidden');
         dom.appView.classList.add('hidden');
         updateNavForRole();
@@ -3537,21 +3455,127 @@ function updateNavForRole() {
     const userManagementLink = document.querySelector('[data-view="user_management"]');
     if (!userManagementLink) return;
 
-    const shouldShow = appState.currentUser && (appState.currentUser.role === 'admin' || appState.currentUser.isSuperAdmin);
+    const shouldShow = appState.currentUser && getEffectiveRole() === 'admin';
     userManagementLink.style.display = shouldShow ? 'flex' : 'none';
+}
+
+async function refreshUIForRoleChange() {
+    updateNavForRole();
+    renderUserMenu();
+
+    const currentView = appState.currentView;
+    if (!currentView) return;
+
+    if (currentView === 'landing-page') {
+        await runLandingPageLogic();
+    } else if (currentView === 'profile') {
+        runProfileLogic();
+    } else {
+        const config = viewConfig[currentView];
+        if (config?.dataKey) {
+            if (checkUserPermission('create')) {
+                dom.addNewButton.style.display = 'flex';
+                dom.addButtonText.textContent = `Agregar ${config.singular}`;
+            } else {
+                dom.addNewButton.style.display = 'none';
+            }
+
+            if (Array.isArray(appState.currentData)) {
+                renderTable(appState.currentData, config);
+            }
+        }
+    }
+}
+
+async function applyPreviewRole(roleOption) {
+    if (!appState.currentUser) return;
+
+    const baseRole = appState.currentUser.isSuperAdmin ? 'admin' : appState.currentUser.role;
+    if (baseRole !== 'admin') {
+        return;
+    }
+
+    const allowedOptions = new Set(['default', 'editor', 'lector']);
+    const normalizedOption = allowedOptions.has(roleOption) ? roleOption : 'default';
+    const previewRole = normalizedOption === 'default' ? null : normalizedOption;
+
+    if (appState.previewRole === previewRole) {
+        renderUserMenu();
+        return;
+    }
+
+    appState.previewRole = previewRole;
+
+    await refreshUIForRoleChange();
+
+    const roleLabels = { admin: 'Administrador', editor: 'Editor', lector: 'Lector' };
+    const message = previewRole
+        ? `Vista previa activada como ${roleLabels[previewRole] || previewRole}.`
+        : 'Vista previa desactivada. Restaurando permisos originales.';
+    showToast(message, 'info');
 }
 
 function renderUserMenu() {
     if (appState.currentUser) {
+        const effectiveRole = getEffectiveRole();
+        const roleLabels = { admin: 'Administrador', editor: 'Editor', lector: 'Lector' };
+        const baseRole = appState.currentUser.isSuperAdmin ? 'admin' : appState.currentUser.role;
+        const isAdminUser = baseRole === 'admin';
+        const activePreview = appState.previewRole ? appState.previewRole : 'default';
+
+        const previewOptions = [
+            { value: 'default', label: 'Vista original', icon: 'user-check', description: roleLabels[baseRole] || 'Sin rol' },
+            { value: 'editor', label: 'Vista como editor', icon: 'pencil', description: roleLabels.editor },
+            { value: 'lector', label: 'Vista como lector', icon: 'book-open', description: roleLabels.lector }
+        ];
+
+        const previewControlsHTML = isAdminUser ? `
+            <div class="border-t border-slate-200">
+                <div class="px-4 pt-3 pb-2">
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Vista previa de rol</p>
+                    <p class="text-xs text-slate-400">Simula otro rol sin cambiar tu cuenta real.</p>
+                </div>
+                <div class="px-3 pb-3 space-y-2">
+                    ${previewOptions.map(option => {
+                        const isActive = activePreview === option.value;
+                        const buttonClasses = isActive
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-transparent';
+                        return `
+                            <button type="button" data-action="set-preview-role" data-role="${option.value}" class="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm font-semibold transition-colors ${buttonClasses}">
+                                <i data-lucide="${option.icon}" class="w-4 h-4"></i>
+                                <span class="flex-1 text-left">${option.label}</span>
+                                <span class="text-xs text-slate-500">${option.description}</span>
+                            </button>`;
+                    }).join('')}
+                </div>
+            </div>
+        ` : '';
+
+        const previewBadge = appState.previewRole
+            ? `<span class="inline-flex items-center gap-1 text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Vista como ${roleLabels[appState.previewRole] || appState.previewRole}</span>`
+            : '';
+
         dom.userMenuContainer.innerHTML = `
             <button id="user-menu-button" class="flex items-center space-x-2">
                 <img src="${appState.currentUser.avatarUrl}" alt="Avatar" class="w-10 h-10 rounded-full border-2 border-slate-300">
                 <span class="font-semibold text-slate-700 hidden md:inline">${appState.currentUser.name}</span>
                 <i data-lucide="chevron-down" class="text-slate-600"></i>
             </button>
-            <div id="user-dropdown" class="absolute z-20 right-0 mt-2 w-56 bg-white border rounded-lg shadow-xl hidden dropdown-menu">
-                <div class="p-4 border-b"><p class="font-bold text-slate-800">${appState.currentUser.name}</p><p class="text-sm text-slate-500">${appState.currentUser.email}</p></div>
+            <div id="user-dropdown" class="absolute z-20 right-0 mt-2 w-72 bg-white border rounded-lg shadow-xl hidden dropdown-menu">
+                <div class="p-4 border-b space-y-2">
+                    <div>
+                        <p class="font-bold text-slate-800">${appState.currentUser.name}</p>
+                        <p class="text-sm text-slate-500">${appState.currentUser.email}</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Rol real: ${roleLabels[baseRole] || 'Sin rol'}</span>
+                        ${previewBadge}
+                        <span class="inline-flex items-center gap-1 text-xs font-medium text-slate-500 px-2 py-0.5">Vista activa: ${roleLabels[effectiveRole] || 'Sin rol'}</span>
+                    </div>
+                </div>
                 <a href="#" data-view="profile" class="flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="user-circle" class="w-5 h-5 text-slate-500"></i>Mi Perfil</a>
+                ${previewControlsHTML}
                 <a href="#" id="logout-button" class="flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50"><i data-lucide="log-out" class="w-5 h-5"></i>Cerrar Sesión</a>
             </div>`;
     } else {

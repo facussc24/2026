@@ -10,6 +10,16 @@
 *   **Reasoning:** This decision has been made to ensure consistency, predictable performance, and to avoid errors that could arise from switching between different models.
 *   **Action:** Do not change this model or implement logic that uses other models (e.g., GPT, Claude, other Gemini versions) without explicit, multi-step confirmation from the user. This is a fixed technical requirement.
 
+### 2. UI Scope Guardrails
+
+*   **Directive:** The simplified dashboard focuses on task planning and user management. Do **not** reintroduce database cleanup buttons, KPI tiles, or any visor 3D remnants unless the user explicitly requests it.
+*   **Action:** When maintenance operations are required, direct the implementation toward backend scripts or Firebase console workflows instead of the public UI.
+
+## Runtime Safety Requirements
+
+1. **View Guards:** Before altering navigation state or rendering logic, confirm the target view exists using the shared `assertViewExists(viewName)` helper (or an equivalent guard). Never assume that a view listed in historical code is still present.
+2. **Collection Checks:** Verify that referenced Firestore collections exist and are safe to mutate before performing operations. Cleanup utilities must *never* delete or modify preserved collections such as `usuarios` and `tareas`.
+
 
 This file contains guidelines and lessons learned for AI agents working on this codebase.
 
@@ -104,19 +114,6 @@ The process is now fully managed within the application's UI and backend.
 *   **Form Modals:** The `openFormModal` function is generic and driven by the `viewConfig` object. It can be extended to support new field types and configurations.
 *   **Styling:** The project uses TailwindCSS. All new UI should conform to this styling.
 *   **Icons:** The project uses the Lucide icon library. Refer to the official Lucide website for a list of available icons.
-
-## Estructura del Proyecto
-
-### Módulo de Visualización 3D
-
-Para mantener el módulo de visualización 3D organizado y escalable, todos los archivos relacionados deben colocarse en la siguiente estructura de carpetas dentro de `public/modulos/visor3d/`:
-
--   **`js/`**: Contiene los archivos JavaScript principales del visor, como `visor3d.js`.
--   **`css/`**: Contiene las hojas de estilo específicas para el visor, como `visor3d.css`.
--   **`modelos/`**: Almacena todos los modelos 3D (archivos `.glb`, `.gltf`, etc.). Se recomienda crear subcarpetas para una mejor organización (por ejemplo, `modelos/autos/`, `modelos/piezas/`).
--   **`imagenes/`**: Contiene todas las imágenes y texturas utilizadas por el visor 3D.
-
-Al agregar nuevos recursos, es fundamental seguir esta estructura para asegurar que el código siga siendo fácil de mantener.
 
 ## Development Credentials
 

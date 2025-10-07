@@ -1,11 +1,26 @@
 /**
- * @file This file contains all the HTML template functions for the tasks module.
- * These functions are responsible for generating the HTML structure of the components.
+ * Tasks HTML template utilities.
+ *
+ * Exposes a collection of pure functions that generate sanitized HTML snippets
+ * for the task dashboards, modals, and AI assistant overlays. Keeping the
+ * markup generation centralized makes it easier to maintain styling coherence
+ * across the application.
+ *
+ * @module modules/tasks/task.templates
  */
 
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.es.js";
 
+/**
+ * Builds the empty state block used across task dashboards.
+ *
+ * @param {string} icon - Lucide icon name to display.
+ * @param {string} title - Headline text for the empty state.
+ * @param {string} message - Supporting explanation shown below the title.
+ * @param {{action: string, status?: string, icon?: string, text: string}|null} ctaButton - Optional CTA button config.
+ * @returns {string} HTML string representing the empty state.
+ */
 export function getEmptyStateHTML(icon, title, message, ctaButton) {
     const buttonHTML = ctaButton ?
         `<button data-action="${ctaButton.action}" data-status="${ctaButton.status || ''}" class="mt-4 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold text-sm py-1.5 px-4 rounded-full mx-auto flex items-center transition-colors">
@@ -23,6 +38,12 @@ export function getEmptyStateHTML(icon, title, message, ctaButton) {
     `;
 }
 
+/**
+ * Produces the execution progress view for the AI assistant workflow.
+ *
+ * @param {Array<{description: string, status: string}>} steps - Execution steps to visualize.
+ * @returns {string} HTML snippet with animated progress indicators.
+ */
 export function getAIAssistantExecutionProgressViewHTML(steps) {
     // Step 3: Show the execution progress in real-time.
     const stepsHTML = steps.map((step, index) => {
@@ -729,6 +750,12 @@ export function getTelegramConfigHTML() {
     `;
 }
 
+/**
+ * Renders the admin supervision grid that allows selecting another user's dashboard.
+ *
+ * @param {Array<Object>} users - List of user records to display.
+ * @returns {string} HTML markup representing the user grid.
+ */
 export function getAdminUserListHTML(users) {
     return `
         <div class="bg-white p-8 rounded-xl shadow-lg border animate-fade-in-up">
@@ -757,6 +784,13 @@ export function getAdminUserListHTML(users) {
     `;
 }
 
+/**
+ * Creates the main task table body with status badges and progress bars.
+ *
+ * @param {Array<Object>} tasks - Tasks to list in the table.
+ * @param {Map<string, Object>} userMap - Lookup map of users keyed by UID.
+ * @returns {string} Table HTML string.
+ */
 export function getTasksTableHTML(tasks, userMap) {
     const tableRows = tasks.map(task => {
         const assignee = userMap.get(task.assigneeUid);
@@ -827,6 +861,13 @@ export function getTasksTableHTML(tasks, userMap) {
     `;
 }
 
+/**
+ * Builds pagination controls for table views.
+ *
+ * @param {number} currentPage - Current page index.
+ * @param {boolean} isLastPage - Flag indicating if the last page is visible.
+ * @returns {string} HTML markup for pagination controls.
+ */
 export function getPaginationControlsHTML(currentPage, isLastPage) {
     const prevDisabled = currentPage === 1;
     const nextDisabled = isLastPage;
@@ -848,9 +889,17 @@ export function getPaginationControlsHTML(currentPage, isLastPage) {
     `;
 }
 
+/**
+ * Generates the filter controls for the task table view.
+ *
+ * @param {Object} currentUser - Authenticated user record for permission-aware UI.
+ * @param {Array<Object>} users - User list used to populate filter dropdowns.
+ * @returns {string} HTML markup for the filter controls.
+ */
 export function getTaskTableFiltersHTML(currentUser, users) {
     let userFilterHTML = '';
-    if (currentUser.role === 'admin') {
+    const effectiveRole = currentUser?.effectiveRole ?? (currentUser?.isSuperAdmin ? 'admin' : currentUser?.role);
+    if (effectiveRole === 'admin') {
         const userOptions = users.map(u => `<option value="${u.docId}">${u.name || u.email}</option>`).join('');
         userFilterHTML = `
             <div class="relative">
@@ -1188,6 +1237,16 @@ export function getSubtaskHTML(subtask) {
     `;
 }
 
+/**
+ * Builds the full markup for the task modal including field values and tabs.
+ *
+ * @param {Object|null} task - Existing task data to populate the form.
+ * @param {string} defaultStatus - Status used when creating a task from context.
+ * @param {string|null} selectedUid - Default assignee UID.
+ * @param {string|null} defaultDate - Date prefill for start/due fields.
+ * @param {boolean} isAdmin - Whether the user has administrative privileges.
+ * @returns {string} HTML string for the task modal.
+ */
 export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDate, isAdmin) {
     const isEditing = task !== null;
 

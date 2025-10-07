@@ -1,11 +1,18 @@
 /**
- * @file Manages the task creation and editing modal.
+ * Task modal UI helpers.
+ *
+ * Responsible for rendering the task creation/edit modal, orchestrating
+ * Firestore-backed submissions, and coordinating AI assistant interactions.
+ * The module consumes shared dependencies injected during initialization so it
+ * can remain framework-agnostic and testable.
+ *
+ * @module modules/tasks/task.modal
  */
 
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 import { collection, onSnapshot, query, orderBy, addDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
-import { checkUserPermission, showConfirmationModal, showToast } from '../../main.js';
+import { checkUserPermission, getEffectiveRole, showConfirmationModal, showToast } from '../../main.js';
 import { handleTaskFormSubmit, deleteTask, createTask, fetchAllTasks } from './task.service.js';
 import {
     getTaskFormModalHTML,
@@ -24,6 +31,11 @@ let lucide;
 let db;
 let functions;
 
+/**
+ * Wires runtime dependencies used by the modal helpers.
+ *
+ * @param {Object} dependencies - Shared application services and state.
+ */
 export function initTaskModal(dependencies) {
     appState = dependencies.appState;
     dom = dependencies.dom;
@@ -257,9 +269,17 @@ function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
     });
 }
 
+/**
+ * Opens the task modal populated with an existing record or default values.
+ *
+ * @param {Object|null} task - Task record to edit, or null to create a new one.
+ * @param {string} [defaultStatus='todo'] - Status pre-selected for new tasks.
+ * @param {string|null} [defaultAssigneeUid=null] - User ID to prefill as assignee.
+ * @param {string|null} [defaultDate=null] - ISO date string to seed date fields.
+ */
 export async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
     const isEditing = task !== null;
-    const isAdmin = appState.currentUser.role === 'admin';
+    const isAdmin = getEffectiveRole() === 'admin';
 
     // Enrich task object with dependency details for the modal view
     if (isEditing && (task.dependsOn?.length > 0 || task.blocks?.length > 0)) {
@@ -320,6 +340,9 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
     initModalEventListeners(modalElement, task, commentsUnsubscribe);
 }
 
+/**
+ * Displays the AI assistant modal and initializes the conversation shell.
+ */
 export function openAIAssistantModal() {
     dom.modalContainer.innerHTML = getAIChatModalHTML();
     const modalElement = document.getElementById('ai-assistant-modal');

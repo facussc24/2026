@@ -1,3 +1,15 @@
+/**
+ * Core task data services.
+ *
+ * Provides Firestore-backed helpers for CRUD operations, streaming updates,
+ * and integrations (Telegram, Excel export) used across the task management
+ * experience. The module relies on dependency injection so that the Firebase
+ * instances are controlled by the application shell, easing testing and future
+ * refactors.
+ *
+ * @module modules/tasks/task.service
+ */
+
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../../utils.js';
@@ -9,6 +21,12 @@ let appState;
 let showToast;
 let lucide;
 
+/**
+ * Stores shared dependencies so the service functions can interact with
+ * Firestore and the UI without coupling to global imports.
+ *
+ * @param {Object} dependencies - Firebase instances and UI callbacks.
+ */
 export function initTaskService(dependencies) {
     db = dependencies.db;
     functions = dependencies.functions;
@@ -17,6 +35,11 @@ export function initTaskService(dependencies) {
     lucide = dependencies.lucide;
 }
 
+/**
+ * Fetches every task document without pagination.
+ *
+ * @returns {Promise<Array<Object>>} List of serialized task documents.
+ */
 export async function fetchAllTasks() {
     const tasksQuery = query(collection(db, COLLECTIONS.TAREAS));
     const snapshot = await getDocs(tasksQuery);
@@ -100,6 +123,12 @@ export async function sendTestTelegram(container) {
     }
 };
 
+/**
+ * Handles the submission of the task modal form, delegating to Firestore for
+ * document creation or updates and synchronizing the cached modal state.
+ *
+ * @param {SubmitEvent} e - Form submit event from the task modal.
+ */
 export async function handleTaskFormSubmit(e) {
     e.preventDefault();
     const form = e.target;
@@ -183,6 +212,12 @@ export async function handleTaskFormSubmit(e) {
     }
 }
 
+/**
+ * Persists a new task document.
+ *
+ * @param {Object} taskData - Task payload collected from the UI.
+ * @returns {Promise<boolean>} Indicates whether the operation succeeded.
+ */
 export async function createTask(taskData) {
     const data = {
         ...taskData,
@@ -207,15 +242,34 @@ export async function createTask(taskData) {
     }
 }
 
+/**
+ * Deletes a task document by ID.
+ *
+ * @param {string} taskId - Firestore document ID for the task.
+ * @returns {Promise<void>}
+ */
 export function deleteTask(taskId) {
     return deleteDoc(doc(db, COLLECTIONS.TAREAS, taskId));
 }
 
+/**
+ * Updates a task's status field, maintaining audit metadata.
+ *
+ * @param {string} taskId - Identifier of the task to update.
+ * @param {string} newStatus - New status (todo, inprogress, done).
+ * @returns {Promise<void>}
+ */
 export function updateTaskStatus(taskId, newStatus) {
     const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
     return updateDoc(taskRef, { status: newStatus });
 }
 
+/**
+ * Marks a task as completed and records archival metadata.
+ *
+ * @param {string} taskId - Identifier of the task to archive.
+ * @returns {Promise<void>}
+ */
 export async function completeAndArchiveTask(taskId) {
     const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
     await updateDoc(taskRef, {
@@ -225,11 +279,25 @@ export async function completeAndArchiveTask(taskId) {
     });
 }
 
+/**
+ * Flags or unflags a task as blocked.
+ *
+ * @param {string} taskId - Identifier of the task to update.
+ * @param {boolean} isBlocked - Whether the task should be considered blocked.
+ * @returns {Promise<void>}
+ */
 export function updateTaskBlockedStatus(taskId, isBlocked) {
     const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
     return updateDoc(taskRef, { blocked: isBlocked });
 }
 
+/**
+ * Registers a real-time listener for all tasks ordered by creation date.
+ *
+ * @param {Function} callback - Invoked with serialized task records on update.
+ * @param {Function} [handleError] - Optional listener error handler.
+ * @returns {Function} Unsubscribe function.
+ */
 export function subscribeToAllTasks(callback, handleError) {
     const tasksRef = collection(db, COLLECTIONS.TAREAS);
     // Always order by creation date descending for consistency.
@@ -241,6 +309,15 @@ export function subscribeToAllTasks(callback, handleError) {
     return unsubscribe;
 }
 
+/**
+ * Streams paginated task batches that honor filtering options.
+ *
+ * @param {Object} filters - Filter options (searchTerm, user, status, priority).
+ * @param {Object} pagination - Pagination state (lastVisible, pageSize).
+ * @param {Function} callback - Receives task batch updates.
+ * @param {Function} handleError - Error handler for snapshot failures.
+ * @returns {Function} Unsubscribe function.
+ */
 export function subscribeToPaginatedTasks(filters, pagination, callback, handleError) {
     const { searchTerm, user, status, priority } = filters;
     const { lastVisible, pageSize = 10 } = pagination;
@@ -295,6 +372,12 @@ export function subscribeToPaginatedTasks(filters, pagination, callback, handleE
 }
 
 
+/**
+ * Calculates how many tasks are overdue relative to today.
+ *
+ * @param {Array<Object>} tasks - Task list to evaluate.
+ * @returns {number} Overdue task count.
+ */
 export function calculateOverdueTasksCount(tasks) {
     if (!tasks || !Array.isArray(tasks)) {
         return 0;
@@ -312,8 +395,10 @@ export function calculateOverdueTasksCount(tasks) {
 }
 
 /**
- * Fetches all tasks, formats them into a user-friendly structure, and exports them to an Excel file.
- * The exported file will have formatted headers and adjusted column widths.
+ * Fetches all tasks, formats them into a user-friendly structure, and exports
+ * them to an Excel file with styled headers and consistent column widths.
+ *
+ * @returns {Promise<void>} Resolves once the workbook has been generated.
  */
 export async function exportTasksToExcel() {
     showToast('Generando reporte de tareas...', 'info');

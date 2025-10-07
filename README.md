@@ -4,6 +4,20 @@
 
 La aplicación está construida con HTML, CSS y JavaScript puro, y utiliza **Firebase** como backend para la autenticación, base de datos en tiempo real (Cloud Firestore) y hosting.
 
+El enfoque actual del producto está puesto en la coordinación de tareas y la administración de usuarios. La página principal muestra el planificador semanal como protagonista y dejó atrás las tarjetas KPI o botones de mantenimiento agresivo para mantener la experiencia limpia y segura.
+
+## Estructura del Frontend
+
+El código que vive dentro de `public/` se organiza por responsabilidad para facilitar el mantenimiento:
+
+- `public/modules/tasks/`: componentes de UI, plantillas y servicios que manejan el ciclo de vida de las tareas.
+- `public/modules/landing_page/`: lógica del planificador semanal y los paneles de tareas del dashboard.
+- `public/modules/user_management/`: utilidades que encapsulan acciones administrativas sobre la colección de usuarios.
+- `public/services/`: servicios compartidos reutilizables (por ejemplo, operaciones sobre productos).
+- `public/archived/`: código legado que se conserva solo como referencia histórica.
+
+Cada módulo documenta sus funciones principales y recibe las dependencias que necesita desde `main.js`, de modo que nuevas funcionalidades puedan ubicarse rápidamente y extenderse sin romper otras secciones.
+
 ## Flujo de Trabajo y Colaboración
 
 Este proyecto sigue un flujo de trabajo colaborativo en el que el desarrollador principal dirige el proyecto y un asistente de IA se encarga de la implementación de código bajo instrucciones específicas. El proceso es el siguiente:
@@ -138,13 +152,9 @@ Para ofrecer una visión de alto nivel sobre la eficiencia del proceso, el siste
 
 Este dashboard es una herramienta estratégica para la mejora continua del proceso de gestión de cambios de ingeniería.
 
-## Panel de Administración del Dashboard
+## Mantenimiento de Datos
 
-El dashboard incluye un panel de administración con herramientas potentes para gestionar el estado de la base de datos. Estas acciones son delicadas y deben usarse con precaución.
-
--   **Limpiar y Cargar Datos:** Esta es la acción de reinicio principal. Borra todas las colecciones de datos (productos, insumos, etc.) **excepto los usuarios** y luego carga el conjunto de datos de demostración. Es ideal para restaurar el entorno a un estado conocido.
--   **Borrar Solo Datos:** Una opción más segura que la anterior. Borra todas las colecciones de datos pero **deja intacta la colección de usuarios**. Útil para limpiar el entorno de trabajo sin afectar las cuentas existentes.
--   **Borrar Otros Usuarios:** Esta es una acción delicada. Elimina **únicamente** los documentos de la colección `usuarios`, preservando siempre al usuario administrador principal.
+La interfaz de usuario se centra exclusivamente en la gestión de tareas y usuarios. El dashboard principal muestra el planificador semanal y los tableros de backlog sin tarjetas KPI ni botones de limpieza masiva. Cualquier operación destructiva (limpiar colecciones, reiniciar datos, etc.) debe ejecutarse mediante scripts controlados o directamente desde la consola de Firebase. Esto evita acciones accidentales desde la UI y mantiene las operaciones de mantenimiento bajo la supervisión del equipo técnico.
 
 ### Usuario Administrador Principal
 
@@ -215,12 +225,6 @@ En algunos entornos, el comando `firebase` puede no estar en el `PATH` del siste
 ## Estructura del Proyecto
 
 La aplicación sigue una estructura de archivos organizada para facilitar el mantenimiento y la escalabilidad. Los archivos principales se encuentran en el directorio `public/`.
-
-### Recursos archivados del Visor 3D
-
-El visor 3D ha sido retirado de la aplicación. Todo el código y los recursos asociados se conservaron en `public/archived/visor3d/` únicamente como referencia histórica. Las rutas anteriores dentro de `public/modulos/visor3d/` ya no están activas en la aplicación ni se sirven en producción.
-
-Si necesitas revisar la implementación previa, encontrarás los scripts, estilos y datos en la carpeta archivada. Los modelos cargados en Firebase pueden eliminarse desde la interfaz de administración mediante el botón **Eliminar modelos 3D** disponible en la vista de Gestión de Usuarios.
 
 ## Pruebas Automatizadas
 
