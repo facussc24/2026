@@ -15,6 +15,7 @@ export const COLLECTIONS = {
     ECR_FORMS: 'ecr_forms',
     COVER_MASTER: 'cover_master',
     REUNIONES_ECR: 'reuniones_ecr',
+    MODELOS: 'modelos',
     NOTIFICATIONS: 'notifications'
 };
 

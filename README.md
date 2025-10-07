@@ -216,22 +216,11 @@ En algunos entornos, el comando `firebase` puede no estar en el `PATH` del siste
 
 La aplicación sigue una estructura de archivos organizada para facilitar el mantenimiento y la escalabilidad. Los archivos principales se encuentran en el directorio `public/`.
 
-### Módulo de Visualización 3D
+### Recursos archivados del Visor 3D
 
-Para la gestión de los recursos del visor 3D, se ha creado una estructura de carpetas específica dentro de `public/modulos/visor3d/`. Aunque algunas carpetas locales (`modelos/`, `imagenes/`) se mantienen para propósitos de fallback o desarrollo, la carga principal de modelos se realiza de forma dinámica.
+El visor 3D ha sido retirado de la aplicación. Todo el código y los recursos asociados se conservaron en `public/archived/visor3d/` únicamente como referencia histórica. Las rutas anteriores dentro de `public/modulos/visor3d/` ya no están activas en la aplicación ni se sirven en producción.
 
-#### Integración con Firebase Storage
-
-El visor 3D ha sido actualizado para cargar los modelos dinámicamente desde **Firebase Storage**, en lugar de depender de los archivos locales. Esto permite una gestión de modelos más flexible y centralizada.
-
--   **Lógica de Carga:** Al iniciar, el visor se conecta a Firebase Storage y lista todos los archivos `.glb` disponibles en la carpeta `modelos3d/`.
--   **Botones Dinámicos:** Se crea un botón por cada modelo encontrado, permitiendo al usuario seleccionar cuál visualizar.
--   **Configuración:** La configuración de la conexión a Firebase se encuentra en `public/modulos/visor3d/js/visor3d.js`.
--   **Estructura de Almacenamiento:** Para que el visor los encuentre, los modelos 3D deben subirse a la raíz de una carpeta llamada `modelos3d/` en el bucket de Firebase Storage del proyecto. Las reglas de seguridad de Storage están configuradas para permitir el acceso público de solo lectura a esta carpeta específica.
-
-La estructura de archivos local sirve como referencia:
--   **`js/`**: Contiene los archivos JavaScript principales del visor.
--   **`css/`**: Contiene las hojas de estilo específicas para el visor.
+Si necesitas revisar la implementación previa, encontrarás los scripts, estilos y datos en la carpeta archivada. Los modelos cargados en Firebase pueden eliminarse desde la interfaz de administración mediante el botón **Eliminar modelos 3D** disponible en la vista de Gestión de Usuarios.
 
 ## Pruebas Automatizadas
 

@@ -14,7 +14,6 @@ import {
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page.js';
 import { deleteProductAndOrphanedSubProducts } from './services/product.service.js';
-import { runVisor3dLogic } from './modulos/visor3d/js/visor3d.js';
 
 // Provide a resilient lucide wrapper so UI rendering does not break if the icon
 // library finishes loading after the main bundle.
@@ -110,16 +109,30 @@ const PREDEFINED_AVATARS = [
     'https://api.dicebear.com/8.x/identicon/svg?seed=Katherine%20Johnson'
 ];
 
+const PRESERVED_COLLECTION_LABELS = {
+    [COLLECTIONS.USUARIOS]: 'usuarios',
+    [COLLECTIONS.TAREAS]: 'tareas'
+};
+
+if (COLLECTIONS.MODELOS) {
+    PRESERVED_COLLECTION_LABELS[COLLECTIONS.MODELOS] = 'modelos 3D';
+}
+
+function formatListInSpanish(items) {
+    if (!items || items.length === 0) return '';
+    if (items.length === 1) return items[0];
+    const lastItem = items[items.length - 1];
+    return `${items.slice(0, -1).join(', ')} y ${lastItem}`;
+}
+
 // =================================================================================
 // --- 2. ESTADO GLOBAL Y CONFIGURACIÓN DE LA APP ---
 // =================================================================================
 
 // --- Configuración de Vistas ---
 const viewConfig = {
-    visor3d: { title: 'Visor 3D', singular: 'Visor 3D' },
     'landing-page': { title: 'Página Principal', singular: 'Página Principal' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
-    sectores: { title: 'Sectores', singular: 'Sector', dataKey: COLLECTIONS.SECTORES, columns: [ { key: 'id', label: 'Código' }, { key: 'descripcion', label: 'Descripción' } ], fields: [ { key: 'id', label: 'Código', type: 'text', required: true }, { key: 'descripcion', label: 'Descripción', type: 'text', required: true }, { key: 'icon', label: 'Icono (Lucide)', type: 'text', required: true } ] },
     user_management: {
         title: 'Gestión de Usuarios',
         singular: 'Usuario',
@@ -188,8 +201,7 @@ export let appState = {
         pageCursors: { 1: null }, // Store the startAfter cursor for each page
         currentPage: 1,
         totalItems: 0,
-    },
-    godModeState: null
+    }
 };
 
 export let dom = {
@@ -543,9 +555,15 @@ function deleteItem(docId) {
 async function clearDataOnly() {
     showToast('Limpiando colecciones de datos...', 'info', 5000);
     const collectionNames = Object.values(COLLECTIONS);
-    const collectionsToSkip = [COLLECTIONS.USUARIOS, COLLECTIONS.TAREAS, COLLECTIONS.COVER_MASTER, 'notifications'];
+    const collectionsToSkip = new Set([COLLECTIONS.USUARIOS, COLLECTIONS.TAREAS]);
+    if (COLLECTIONS.MODELOS) {
+        collectionsToSkip.add(COLLECTIONS.MODELOS);
+    }
+
+    let hadErrors = false;
+
     for (const name of collectionNames) {
-        if (collectionsToSkip.includes(name)) {
+        if (!name || collectionsToSkip.has(name)) {
             console.log(`Se omite la limpieza de la colección '${name}' para preservar los datos.`);
             continue;
         }
@@ -555,17 +573,58 @@ async function clearDataOnly() {
             if (snapshot.empty) continue;
 
             const batch = writeBatch(db);
-            snapshot.docs.forEach(doc => {
-                batch.delete(doc.ref);
+            snapshot.docs.forEach(docSnap => {
+                batch.delete(docSnap.ref);
             });
             await batch.commit();
             console.log(`Colección '${name}' limpiada.`);
         } catch (error) {
+            hadErrors = true;
             console.error(`Error limpiando la colección ${name}:`, error);
             showToast(`Error al limpiar la colección ${name}.`, 'error');
         }
     }
-    showToast('Limpieza de datos completada.', 'success');
+
+    if (hadErrors) {
+        showToast('La limpieza terminó con errores. Revise la consola para más detalles.', 'error', 5000);
+    } else {
+        showToast('Limpieza de datos completada.', 'success');
+    }
+
+    return {
+        hadErrors,
+        skippedCollections: Array.from(collectionsToSkip)
+    };
+}
+
+async function clearVisor3dModels() {
+    if (!COLLECTIONS.MODELOS) {
+        showToast('La colección de modelos 3D no está configurada.', 'warning');
+        return { hadErrors: true, deletedCount: 0 };
+    }
+
+    showToast('Eliminando modelos 3D...', 'info', 4000);
+
+    try {
+        const modelsRef = collection(db, COLLECTIONS.MODELOS);
+        const snapshot = await getDocs(modelsRef);
+
+        if (snapshot.empty) {
+            showToast('No hay modelos 3D para eliminar.', 'info');
+            return { hadErrors: false, deletedCount: 0 };
+        }
+
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(docSnap => batch.delete(docSnap.ref));
+        await batch.commit();
+
+        showToast(`Se eliminaron ${snapshot.size} modelos 3D.`, 'success');
+        return { hadErrors: false, deletedCount: snapshot.size };
+    } catch (error) {
+        console.error('Error al eliminar los modelos 3D:', error);
+        showToast('Error al eliminar los modelos 3D.', 'error');
+        return { hadErrors: true, deletedCount: 0 };
+    }
 }
 
 async function clearOtherUsers() {
@@ -1066,10 +1125,9 @@ export function checkUserPermission(action, item = null) {
     }
 
     const { role, uid, isSuperAdmin } = appState.currentUser;
-    const isImpersonating = appState.godModeState?.isImpersonating;
 
-    // 1. SuperAdmins can do anything, UNLESS they are impersonating another role.
-    if (isSuperAdmin && !isImpersonating) {
+    // 1. SuperAdmins can do anything.
+    if (isSuperAdmin) {
         return true;
     }
 
@@ -1191,33 +1249,6 @@ function setupGlobalEventListeners() {
 
     document.addEventListener('click', handleGlobalClick);
 
-    // --- New Help Modal Logic ---
-    function setupHelpButtonListener() {
-        const helpBtn = document.getElementById('help-tutorial-btn');
-        const helpModal = document.getElementById('help-modal');
-
-        if (helpBtn && helpModal) {
-            const closeHelpButtons = helpModal.querySelectorAll('[data-action="close-help-modal"]');
-
-            helpBtn.addEventListener('click', () => {
-                helpModal.classList.remove('hidden');
-            });
-
-            closeHelpButtons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    helpModal.classList.add('hidden');
-                });
-            });
-
-            // Close modal by clicking on the backdrop
-            helpModal.addEventListener('click', (e) => {
-                if (e.target === helpModal) {
-                    helpModal.classList.add('hidden');
-                }
-            });
-        }
-    }
-    window.setupHelpButtonListener = setupHelpButtonListener;
 }
 
 async function switchView(viewName, params = null) {
@@ -1264,8 +1295,7 @@ async function switchView(viewName, params = null) {
     
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
-    if (viewName === 'visor3d') appState.currentViewCleanup = await runVisor3dLogic(app);
-    else if (viewName === 'landing-page') await runLandingPageLogic();
+    if (viewName === 'landing-page') await runLandingPageLogic();
     else if (viewName === 'profile') await runProfileLogic();
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
@@ -1330,10 +1360,39 @@ function handleViewContentActions(e) {
             );
         },
         'clear-data-only': () => {
+            const preservedKeys = [COLLECTIONS.USUARIOS, COLLECTIONS.TAREAS];
+            if (COLLECTIONS.MODELOS) {
+                preservedKeys.push(COLLECTIONS.MODELOS);
+            }
+            const preservedLabels = preservedKeys.map(key => PRESERVED_COLLECTION_LABELS[key] || key);
+            const preservedSummary = formatListInSpanish(preservedLabels);
+
             showConfirmationModal(
-                'Borrar Solo Datos',
-                '¿Estás seguro? Esto borrará todos los datos de productos, insumos, etc., pero mantendrá a todos los usuarios.',
-                clearDataOnly
+                'Limpiar Base de Datos',
+                `¿Estás seguro? Esta acción eliminará todas las colecciones excepto ${preservedSummary}.`,
+                async () => {
+                    const { hadErrors, skippedCollections } = await clearDataOnly();
+
+                    if (!hadErrors && skippedCollections.length > 0) {
+                        const skippedLabels = skippedCollections.map(key => PRESERVED_COLLECTION_LABELS[key] || key);
+                        const skippedSummary = formatListInSpanish(skippedLabels);
+                        showToast(`Se conservaron ${skippedSummary}.`, 'info', 4000);
+                    }
+                }
+            );
+        },
+        'clear-visor3d-models': () => {
+            if (!COLLECTIONS.MODELOS) {
+                showToast('La colección de modelos 3D no está configurada.', 'warning');
+                return;
+            }
+
+            showConfirmationModal(
+                'Eliminar modelos 3D',
+                '¿Estás seguro? Esta acción eliminará todos los modelos almacenados para el visor 3D.',
+                async () => {
+                    await clearVisor3dModels();
+                }
             );
         },
         'clear-other-users': () => {
@@ -1954,46 +2013,6 @@ async function exportEcrToPdf(ecrId) {
     }
 }
 
-function updateGodModeIndicator() {
-    const indicator = document.getElementById('god-mode-indicator');
-    if (!indicator) return;
-
-    if (appState.godModeState?.isImpersonating) {
-        const roleLabels = { admin: 'Admin', editor: 'Editor', lector: 'Lector' };
-        const currentRoleLabel = roleLabels[appState.currentUser.role] || 'Desconocido';
-        indicator.innerHTML = `
-            <div class="god-mode-badge">
-                <i data-lucide="shield-alert" class="w-4 h-4"></i>
-                <span>Viendo como: <strong>${currentRoleLabel}</strong></span>
-            </div>
-        `;
-        indicator.style.display = 'block';
-        lucide.createIcons();
-    } else {
-        indicator.innerHTML = '';
-        indicator.style.display = 'none';
-    }
-}
-
-function handleGodModeRoleChange(role) {
-    if (!appState.godModeState) return;
-
-    if (role === 'real') {
-        appState.currentUser.role = appState.godModeState.realRole;
-        appState.godModeState.isImpersonating = false;
-        showToast(`Modo Dios: Rol real restaurado (${appState.currentUser.role}).`, 'info');
-    } else {
-        appState.godModeState.isImpersonating = true;
-        appState.currentUser.role = role;
-        showToast(`Modo Dios: Viendo como ${role}.`, 'success');
-    }
-
-    updateNavForRole();
-    renderUserMenu();
-    switchView(appState.currentView);
-    updateGodModeIndicator();
-}
-
 function handleGlobalClick(e) {
     if (appState.isTutorialActive) return; // Don't process global clicks if tutorial is running
 
@@ -2015,15 +2034,6 @@ function handleGlobalClick(e) {
         return; // Prioritize view switching
     }
     
-    const godModeButton = target.closest('.god-mode-role-btn');
-    if (godModeButton) {
-        e.preventDefault();
-        const roleToSimulate = godModeButton.dataset.godModeRole;
-        handleGodModeRoleChange(roleToSimulate);
-        document.getElementById('user-dropdown')?.classList.add('hidden');
-        return;
-    }
-
     const notificationLink = target.closest('[data-action="notification-click"]');
     if (notificationLink) {
         e.preventDefault();
@@ -2169,7 +2179,40 @@ function renderTable(data, config) {
     const { currentPage, totalItems } = appState.pagination;
     const totalPages = Math.ceil(totalItems / PAGE_SIZE);
 
-    let tableHTML = `<div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">
+    const shouldShowDataMaintenance = config.dataKey === COLLECTIONS.USUARIOS && appState.currentUser && (appState.currentUser.role === 'admin' || appState.currentUser.isSuperAdmin);
+    let adminActionsHTML = '';
+
+    if (shouldShowDataMaintenance) {
+        const preservedKeys = [COLLECTIONS.USUARIOS, COLLECTIONS.TAREAS];
+        if (COLLECTIONS.MODELOS) {
+            preservedKeys.push(COLLECTIONS.MODELOS);
+        }
+        const preservedLabels = preservedKeys.map(key => PRESERVED_COLLECTION_LABELS[key] || key);
+        const preservedSummary = formatListInSpanish(preservedLabels);
+
+        adminActionsHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                <div class="flex items-start gap-3 text-slate-600">
+                    <i data-lucide="database" class="w-5 h-5 text-slate-500 mt-1"></i>
+                    <div>
+                        <p class="font-semibold text-slate-700">Mantenimiento de datos</p>
+                        <p class="text-sm text-slate-500">Utiliza estas herramientas para depurar la base conservando ${preservedSummary} o eliminar los modelos del visor 3D.</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button data-action="clear-data-only" class="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 text-sm font-semibold transition-colors">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        Limpiar base de datos
+                    </button>
+                    <button data-action="clear-visor3d-models" class="inline-flex items-center gap-2 bg-amber-500 text-white px-4 py-2 rounded-md hover:bg-amber-600 text-sm font-semibold transition-colors">
+                        <i data-lucide="cube" class="w-4 h-4"></i>
+                        Eliminar modelos 3D
+                    </button>
+                </div>
+            </div>`;
+    }
+
+    let tableHTML = `<div class="bg-white p-6 rounded-xl shadow-lg animate-fade-in-up">${adminActionsHTML}
         <div class="flex justify-end mb-4">
             <button data-action="export-pdf" class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 flex items-center text-sm shadow-sm"><i data-lucide="file-text" class="mr-2 h-4 w-4"></i>PDF</button>
             <button data-action="export-excel" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 flex items-center text-sm ml-2 shadow-sm"><i data-lucide="file-spreadsheet" class="mr-2 h-4 w-4"></i>Excel</button>
@@ -2832,7 +2875,7 @@ function renderTaskFilters() {
         { key: 'engineering', label: 'Ingeniería' },
         { key: 'personal', label: 'Mis Tareas' }
     ];
-    if (appState.currentUser.role === 'admin') {
+    if (appState.currentUser.role === 'admin' || appState.currentUser.isSuperAdmin) {
         filters.push({ key: 'all', label: 'Todas' });
     }
     const filterContainer = document.getElementById('task-filters');
@@ -3418,12 +3461,8 @@ onAuthStateChanged(auth, async (user) => {
                     email: user.email,
                     avatarUrl: user.photoURL || `https://api.dicebear.com/8.x/identicon/svg?seed=${encodeURIComponent(user.displayName || user.email)}`,
                     role: userData.role || 'lector',
-                    isSuperAdmin: userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2',
-                    godModeState: (userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2') ? { realRole: userData.role || 'admin', isImpersonating: false } : null
+                    isSuperAdmin: userData.isSuperAdmin || user.uid === 'KTIQRzPBRcOFtBRjoFViZPSsbSq2'
                 };
-                if (appState.currentUser.godModeState) {
-                    appState.godModeState = appState.currentUser.godModeState;
-                }
 
                 const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
                 initTasksModule(appDependencies);
@@ -3452,10 +3491,6 @@ onAuthStateChanged(auth, async (user) => {
                 dom.authContainer.classList.add('hidden');
                 dom.appView.classList.remove('hidden');
                 authWatchdog.log('auth-state:ui-ready');
-
-                if (window.location.pathname === '/visor3d') {
-                    switchView('visor3d');
-                }
 
                 if (!wasAlreadyLoggedIn && !isTestMode) {
                     showToast(`¡Bienvenido de nuevo, ${appState.currentUser.name}!`, 'success');
@@ -3500,61 +3535,14 @@ onAuthStateChanged(auth, async (user) => {
 
 function updateNavForRole() {
     const userManagementLink = document.querySelector('[data-view="user_management"]');
-    const coverMasterLink = document.querySelector('[data-view="cover_master"]');
-    const adminLinks = [userManagementLink, coverMasterLink].filter(Boolean);
+    if (!userManagementLink) return;
 
-    if (adminLinks.length === 0) return;
-
-    const shouldShow = appState.currentUser && appState.currentUser.role === 'admin';
-
-    adminLinks.forEach(link => {
-        link.style.display = shouldShow ? 'flex' : 'none';
-    });
-
-    if (coverMasterLink) {
-        // This targets the single divider after all admin links
-        const divider = coverMasterLink.nextElementSibling;
-        if (divider && divider.matches('.border-t')) {
-            divider.style.display = shouldShow ? 'block' : 'none';
-        }
-    }
+    const shouldShow = appState.currentUser && (appState.currentUser.role === 'admin' || appState.currentUser.isSuperAdmin);
+    userManagementLink.style.display = shouldShow ? 'flex' : 'none';
 }
 
 function renderUserMenu() {
     if (appState.currentUser) {
-        const isGodModeUser = appState.currentUser.isSuperAdmin;
-        let godModeHTML = '';
-
-        if (isGodModeUser) {
-            const roles = ['admin', 'editor', 'lector'];
-            const roleLabels = { admin: 'Admin', editor: 'Editor', lector: 'Lector' };
-
-            const buttonsHTML = roles.map(role => {
-                const isActive = appState.currentUser.role === role && appState.godModeState?.isImpersonating;
-                return `<button data-god-mode-role="${role}" class="god-mode-role-btn w-full text-left flex items-center gap-3 px-2 py-1.5 text-sm rounded-md hover:bg-slate-100 ${isActive ? 'bg-blue-100 text-blue-700 font-bold' : ''}">
-                    <i data-lucide="${isActive ? 'check-circle' : 'circle'}" class="w-4 h-4"></i>
-                    Simular ${roleLabels[role]}
-                </button>`;
-            }).join('');
-
-            godModeHTML = `
-                <div class="border-t border-b bg-yellow-50/50">
-                    <div class="px-4 pt-3 pb-2">
-                        <p class="text-xs font-bold uppercase text-yellow-600 flex items-center gap-2">
-                            <i data-lucide="shield-check" class="w-4 h-4"></i>Modo Dios
-                        </p>
-                    </div>
-                    <div class="p-2 space-y-1">
-                        ${buttonsHTML}
-                        <div class="border-t my-1"></div>
-                        <button data-god-mode-role="real" class="god-mode-role-btn w-full text-left flex items-center gap-3 px-2 py-1.5 text-sm rounded-md font-bold text-yellow-800 hover:bg-yellow-100">
-                           <i data-lucide="user-check" class="w-4 h-4"></i> Volver a Rol Real
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-
         dom.userMenuContainer.innerHTML = `
             <button id="user-menu-button" class="flex items-center space-x-2">
                 <img src="${appState.currentUser.avatarUrl}" alt="Avatar" class="w-10 h-10 rounded-full border-2 border-slate-300">
@@ -3563,7 +3551,6 @@ function renderUserMenu() {
             </button>
             <div id="user-dropdown" class="absolute z-20 right-0 mt-2 w-56 bg-white border rounded-lg shadow-xl hidden dropdown-menu">
                 <div class="p-4 border-b"><p class="font-bold text-slate-800">${appState.currentUser.name}</p><p class="text-sm text-slate-500">${appState.currentUser.email}</p></div>
-                ${godModeHTML}
                 <a href="#" data-view="profile" class="flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="user-circle" class="w-5 h-5 text-slate-500"></i>Mi Perfil</a>
                 <a href="#" id="logout-button" class="flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50"><i data-lucide="log-out" class="w-5 h-5"></i>Cerrar Sesión</a>
             </div>`;
