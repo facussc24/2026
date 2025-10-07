@@ -48,6 +48,88 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const functions = getFunctions(app);
 
+
+// --- Lucide icon helper to avoid runtime crashes when the CDN is slow/unavailable ---
+const pendingLucideIconCalls = Array.isArray(window.__lucideFallbackQueue)
+    ? window.__lucideFallbackQueue
+    : [];
+let lucideReadyPoller = null;
+let lucideWarningLogged = false;
+
+function flushPendingLucideIcons() {
+    const lucideImpl = window.lucide?.createIcons;
+    if (typeof lucideImpl !== 'function' || lucideImpl === createIconsSafe || lucideImpl.__isFallback) {
+        return;
+    }
+
+    while (pendingLucideIconCalls.length) {
+        const options = pendingLucideIconCalls.shift();
+        try {
+            lucideImpl.call(window.lucide, options);
+        } catch (error) {
+            console.error('Error while rendering Lucide icons.', error);
+        }
+    }
+}
+
+function createIconsSafe(options) {
+    const lucideImpl = window.lucide?.createIcons;
+    const isRealImplementation = typeof lucideImpl === 'function'
+        && lucideImpl !== createIconsSafe
+        && !lucideImpl.__isFallback;
+
+    if (isRealImplementation) {
+        try {
+            lucideImpl.call(window.lucide, options);
+        } catch (error) {
+            console.error('Error while rendering Lucide icons.', error);
+        }
+        return;
+    }
+
+    pendingLucideIconCalls.push(options);
+
+    if (!lucideWarningLogged) {
+        console.warn('La librería de iconos Lucide no está disponible todavía. Reintentaremos automáticamente cuando cargue.');
+        lucideWarningLogged = true;
+    }
+
+    if (!lucideReadyPoller) {
+        lucideReadyPoller = setInterval(() => {
+            const implementation = window.lucide?.createIcons;
+            const ready = typeof implementation === 'function'
+                && implementation !== createIconsSafe
+                && !implementation.__isFallback;
+
+            if (!ready) return;
+
+            clearInterval(lucideReadyPoller);
+            lucideReadyPoller = null;
+            flushPendingLucideIcons();
+        }, 150);
+    }
+}
+createIconsSafe.__isFallback = true;
+
+window.addEventListener('load', () => {
+    if (typeof window.lucide?.createIcons === 'function' && window.lucide.createIcons !== createIconsSafe && !window.lucide.createIcons.__isFallback) {
+        flushPendingLucideIcons();
+    }
+});
+
+if (!window.lucide) {
+    window.lucide = {};
+}
+if (!window.lucide.createIcons || window.lucide.createIcons.__isFallback) {
+    window.lucide.createIcons = createIconsSafe;
+}
+if (typeof window.lucide.createIcons === 'function' && window.lucide.createIcons !== createIconsSafe && !window.lucide.createIcons.__isFallback) {
+    flushPendingLucideIcons();
+}
+if (typeof globalThis.lucide === 'undefined') {
+    globalThis.lucide = window.lucide;
+}
+
 // =================================================================================
 // --- CONSTANTES Y CONFIGURACIÓN ---
 // =================================================================================
@@ -406,7 +488,7 @@ function openAvatarSelectionModal() {
     `;
 
     dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
-    lucide.createIcons();
+    createIconsSafe();
 
     const modalElement = document.getElementById(modalId);
     modalElement.addEventListener('click', async (e) => {
@@ -1467,7 +1549,7 @@ export function showToast(message, type = 'success', options = {}) {
         // Update existing toast
         toastElement.className = `toast ${type} show`;
         toastElement.innerHTML = toastContent;
-        lucide.createIcons({ nodes: [toastElement.querySelector('i')] });
+        createIconsSafe({ nodes: [toastElement.querySelector('i')] });
     } else {
         // Create new toast
         const newToastId = `toast-${Date.now()}`;
@@ -1477,7 +1559,7 @@ export function showToast(message, type = 'success', options = {}) {
         toast.innerHTML = toastContent;
 
         dom.toastContainer.appendChild(toast);
-        lucide.createIcons({ nodes: [toast.querySelector('i')] });
+        createIconsSafe({ nodes: [toast.querySelector('i')] });
         // Use a short timeout to allow the element to be in the DOM for the transition to work.
         setTimeout(() => toast.classList.add('show'), 10);
         toastElement = toast;
@@ -1534,7 +1616,7 @@ function renderNotificationCenter() {
             </div>
         </div>
     `;
-    lucide.createIcons();
+    createIconsSafe();
 
     document.getElementById('notification-bell')?.addEventListener('click', () => {
         document.getElementById('notification-dropdown')?.classList.toggle('hidden');
@@ -1558,7 +1640,7 @@ export function showConfirmationModal(title, message, onConfirm) {
             </div>
         </div>`;
     dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
-    lucide.createIcons();
+    createIconsSafe();
     const modalElement = document.getElementById(modalId);
     modalElement.addEventListener('click', e => {
         const action = e.target.closest('button')?.dataset.action;
@@ -1585,7 +1667,7 @@ function showInfoModal(title, htmlContent) {
             </div>
         </div>`;
     dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
-    lucide.createIcons();
+    createIconsSafe();
     const modalElement = document.getElementById(modalId);
     modalElement.addEventListener('click', e => {
         if (e.target.closest('button')?.dataset.action === 'close') {
@@ -1615,7 +1697,7 @@ async function showEcoHistoryModal(ecoId) {
         </div>
     `;
     dom.modalContainer.innerHTML = modalHTML;
-    lucide.createIcons();
+    createIconsSafe();
 
     const modalElement = document.getElementById(modalId);
     const historyContent = modalElement.querySelector('#history-content');
@@ -2041,7 +2123,7 @@ function updateGodModeIndicator() {
             </div>
         `;
         indicator.style.display = 'block';
-        lucide.createIcons();
+        createIconsSafe();
     } else {
         indicator.innerHTML = '';
         indicator.style.display = 'none';
@@ -2192,7 +2274,7 @@ async function runTableLogic(direction = 'first') {
 
     try {
         dom.viewContent.innerHTML = `<div class="text-center py-16 text-gray-500"><i data-lucide="loader" class="animate-spin h-8 w-8 mx-auto"></i><p class="mt-2">Cargando datos...</p></div>`;
-        lucide.createIcons();
+        createIconsSafe();
 
         // Fetch total count only on the first load of a view for efficiency
         if (direction === 'first') {
@@ -2282,7 +2364,7 @@ function renderTable(data, config) {
     </div>
     </div>`;
     dom.viewContent.innerHTML = tableHTML;
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 async function handleSearch() {
@@ -2522,7 +2604,7 @@ async function openFormModal(item = null) {
     </div>`;
     
     dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
-    lucide.createIcons();
+    createIconsSafe();
     const modalElement = document.getElementById(modalId);
     config.fields.forEach(field => {
         const input = modalElement.querySelector(`[name="${field.key}"]`);
@@ -2592,7 +2674,7 @@ async function handleFormSubmit(e, fields, item = null) {
     const originalButtonHTML = saveButton.innerHTML;
     saveButton.disabled = true;
     saveButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5"></i>`;
-    lucide.createIcons();
+    createIconsSafe();
 
     let success = false;
     if (config.dataKey === COLLECTIONS.COVER_MASTER) {
@@ -2633,7 +2715,7 @@ function openDetailsModal(item) {
     const modalHTML = `<div id="details-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in"><div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col m-4 modal-content"><div class="flex justify-between items-center p-5 border-b"><h3 class="text-xl font-bold">Detalles de ${config.singular}</h3><button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button></div><div class="p-6 overflow-y-auto"><div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">${fieldsHTML}</div></div><div class="flex justify-end items-center p-4 border-t bg-gray-50"><button data-action="close" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300 font-semibold">Cerrar</button></div></div></div>`;
     
     dom.modalContainer.innerHTML = modalHTML;
-    lucide.createIcons();
+    createIconsSafe();
     document.getElementById('details-modal').addEventListener('click', e => {
         if (e.target.closest('button')?.dataset.action === 'close') document.getElementById('details-modal').remove();
     });
@@ -2652,7 +2734,7 @@ async function openAssociationSearchModal(searchKey, onSelect) {
     const modalHTML = `<div id="${modalId}" class="fixed inset-0 z-[60] flex items-center justify-center modal-backdrop animate-fade-in"><div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col m-4 modal-content"><div class="flex justify-between items-center p-5 border-b"><h3 class="text-xl font-bold">${title}</h3><button data-action="close" class="text-gray-500 hover:text-gray-800"><i data-lucide="x" class="h-6 w-6"></i></button></div><div class="p-6"><input type="text" id="assoc-search-term" placeholder="Buscar..." class="w-full border-gray-300 rounded-md shadow-sm"></div><div id="assoc-search-results" class="p-6 border-t overflow-y-auto flex-1"></div></div></div>`;
     
     dom.modalContainer.insertAdjacentHTML('beforeend', modalHTML);
-    lucide.createIcons();
+    createIconsSafe();
     const modalElement = document.getElementById(modalId);
     const searchInput = modalElement.querySelector('#assoc-search-term');
     const resultsContainer = modalElement.querySelector('#assoc-search-results');
@@ -2779,7 +2861,7 @@ async function guardarEstructura(button) {
     if (!appState.arbolActivo || !button) return;
     const originalText = button.innerHTML;
     button.innerHTML = `<i data-lucide="loader" class="h-5 w-5 animate-spin"></i><span>Guardando...</span>`;
-    lucide.createIcons();
+    createIconsSafe();
     button.disabled = true;
     try {
         // Ahora, appState.arbolActivo.docId es el ID del documento en la colección 'productos'.
@@ -2798,7 +2880,7 @@ async function guardarEstructura(button) {
         button.innerHTML = `<i data-lucide="check" class="h-5 w-5"></i><span>¡Guardado!</span>`;
         button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
         button.classList.add('bg-green-600');
-        lucide.createIcons();
+        createIconsSafe();
 
         setTimeout(() => {
             button.innerHTML = originalText;
@@ -2886,7 +2968,7 @@ function renderAdminUserList() {
     content += `</div></div>`;
 
     dom.viewContent.innerHTML = content;
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 function setupTaskFilters() {
@@ -2927,7 +3009,7 @@ function fetchAndRenderTasks() {
 
     // Clear board before fetching and show loading indicator
     document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-slate-500"><i data-lucide="loader" class="h-8 w-8 animate-spin mx-auto"></i><p class="mt-2">Cargando tareas...</p></div>`);
-    lucide.createIcons();
+    createIconsSafe();
 
     const handleError = (error) => {
         console.error("Error fetching tasks: ", error);
@@ -2937,7 +3019,7 @@ function fetchAndRenderTasks() {
         }
         showToast(message, "error", 5000);
         document.querySelectorAll('.task-list').forEach(list => list.innerHTML = `<div class="p-8 text-center text-red-500"><i data-lucide="alert-triangle" class="h-8 w-8 mx-auto"></i><p class="mt-2">Error al cargar.</p></div>`);
-        lucide.createIcons();
+        createIconsSafe();
     };
 
     let queryConstraints = [orderBy('createdAt', 'desc')];
@@ -3029,7 +3111,7 @@ function renderTasks(tasks) {
     });
 
     initTasksSortable();
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 function createTaskCard(task) {
@@ -3233,7 +3315,7 @@ async function handleTaskFormSubmit(e) {
     const originalButtonHTML = saveButton.innerHTML;
     saveButton.disabled = true;
     saveButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5"></i>`;
-    lucide.createIcons();
+    createIconsSafe();
 
     let success = false;
     try {
@@ -3495,7 +3577,23 @@ onAuthStateChanged(auth, async (user) => {
             }
 
             // Initialize modules that depend on appState and other core functions
-            const appDependencies = { db, functions, appState, dom, showToast, showConfirmationModal, switchView, checkUserPermission, lucide, seedDatabase, clearDataOnly, clearOtherUsers, openTaskFormModal, openAIAssistantModal, writeBatch };
+            const appDependencies = {
+                db,
+                functions,
+                appState,
+                dom,
+                showToast,
+                showConfirmationModal,
+                switchView,
+                checkUserPermission,
+                lucide: window.lucide ?? null,
+                seedDatabase,
+                clearDataOnly,
+                clearOtherUsers,
+                openTaskFormModal,
+                openAIAssistantModal,
+                writeBatch
+            };
             initTasksModule(appDependencies);
             initLandingPageModule(appDependencies);
 
@@ -3635,13 +3733,13 @@ function renderUserMenu() {
     } else {
         dom.userMenuContainer.innerHTML = '';
     }
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     initAuthModule(auth, db, { showToast });
     initializeAppListeners();
-    lucide.createIcons();
+    createIconsSafe();
 });
 
 // Expose for testing
@@ -3656,7 +3754,7 @@ window.switchView = switchView;
 
 function renderArbolesInitialView() {
     dom.viewContent.innerHTML = `<div class="flex flex-col items-center justify-center h-full bg-white rounded-xl shadow-lg p-6 text-center animate-fade-in-up"><i data-lucide="git-merge" class="h-24 w-24 text-gray-300 mb-6"></i><h3 class="text-2xl font-bold">Gestor de Árboles de Producto</h3><p class="text-gray-500 mt-2 mb-8 max-w-lg">Busque y seleccione el producto principal para cargar o crear su estructura de componentes.</p><button data-action="open-product-search-modal" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 text-lg font-semibold shadow-lg transition-transform transform hover:scale-105"><i data-lucide="search" class="inline-block mr-2 -mt-1"></i>Seleccionar Producto</button></div>`;
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 function renderArbolDetalle(highlightNodeId = null) {
@@ -3734,7 +3832,7 @@ function renderArbolDetalle(highlightNodeId = null) {
     }, true);
 
 
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 function renderArbol(highlightNodeId = null) {
@@ -3751,7 +3849,7 @@ function renderArbol(highlightNodeId = null) {
             nodeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 export function renderNodo(nodo, checkPermissionFunc = checkUserPermission) {
@@ -4156,7 +4254,7 @@ function openProductSearchModalForView(viewType, onProductSelectCallback) {
 
         if (viewType === 'sinoptico') {
             dom.viewContent.innerHTML = `<div class="animate-fade-in-up">${renderSinopticoLayout()}</div>`;
-            lucide.createIcons();
+            createIconsSafe();
             initSinoptico();
         } else if (viewType === 'arboles') {
             handleProductSelect(productId); // This function already handles loading the detail view
@@ -4276,7 +4374,7 @@ function renderCaratula(producto, cliente) {
                 </p>
             </div>`;
     }
-    lucide.createIcons();
+    createIconsSafe();
 }
 
 function openSinopticoEditModal(nodeId) {
@@ -4398,7 +4496,7 @@ function openSinopticoEditModal(nodeId) {
     }
 
     dom.modalContainer.innerHTML = modalHTML;
-    lucide.createIcons();
+    createIconsSafe();
     const modalElement = document.getElementById(modalId);
 
     if (node.tipo === 'insumo') {
@@ -4471,7 +4569,7 @@ async function handleSinopticoFormSubmit(e) {
         const saveButton = form.closest('.modal-content').querySelector('button[type="submit"]');
         saveButton.disabled = true;
         saveButton.innerHTML = `<i data-lucide="loader" class="animate-spin h-5 w-5"></i>`;
-        lucide.createIcons();
+        createIconsSafe();
 
         try {
             const productRef = doc(db, COLLECTIONS.PRODUCTOS, product.docId);
@@ -4514,7 +4612,7 @@ function runSinopticoLogic() {
             <i data-lucide="search" class="inline-block mr-2 -mt-1"></i>Seleccionar Producto
         </button>
     </div>`;
-    lucide.createIcons();
+    createIconsSafe();
 
     // The rest of the logic (initSinoptico, etc.) will be triggered by a click handler
     // that first loads the necessary data.
@@ -4845,7 +4943,7 @@ export function runSinopticoTabularLogic() {
             </div>
         </div>`;
 
-        lucide.createIcons();
+        createIconsSafe();
     };
 
     // --- Event Handlers ---
@@ -4898,7 +4996,7 @@ export function runSinopticoTabularLogic() {
                 if (tableContainer) {
                     const savedScrollY = window.scrollY;
                     tableContainer.innerHTML = `<div class="flex items-center justify-center p-16 text-slate-500"><i data-lucide="loader" class="animate-spin h-8 w-8 mr-3"></i><span>Aplicando filtros...</span></div>`;
-                    lucide.createIcons();
+                    createIconsSafe();
 
                     const processDataPromise = new Promise(resolve => {
                         const product = state.selectedProduct;
@@ -4909,7 +5007,7 @@ export function runSinopticoTabularLogic() {
 
                     Promise.all([new Promise(res => setTimeout(res, 300)), processDataPromise]).then(([_, newTableHTML]) => {
                         tableContainer.innerHTML = newTableHTML;
-                        lucide.createIcons();
+                        createIconsSafe();
                         window.scrollTo(0, savedScrollY);
                     });
                 }
@@ -5013,7 +5111,7 @@ export function runSinopticoTabularLogic() {
                 <i data-lucide="search" class="inline-block mr-2 -mt-1"></i>Seleccionar Producto
             </button>
         </div>`;
-        lucide.createIcons();
+        createIconsSafe();
     };
 
     // --- MAIN LOGIC & CLEANUP ---
@@ -5280,7 +5378,7 @@ function runFlujogramaLogic() {
                 </button>
             </div>
         `;
-        lucide.createIcons();
+        createIconsSafe();
     };
 
     const renderFlujogramaView = () => {
@@ -5462,7 +5560,7 @@ function initSinoptico() {
                 <p class="mt-4 font-medium">No se encontraron resultados.</p>
                 <p class="text-sm">Intente con otro filtro o término de búsqueda.</p>
             </div>`;
-            lucide.createIcons();
+            createIconsSafe();
             return;
         }
         const productsByClient = new Map();
@@ -5491,7 +5589,7 @@ function initSinoptico() {
                 treeContainer.appendChild(clientLi);
             }
         });
-        lucide.createIcons();
+        createIconsSafe();
     }
     
     function buildAndFilterNode(node, searchTerm, isLast) {
@@ -5565,7 +5663,7 @@ function initSinoptico() {
                 const client = appState.collectionsById[COLLECTIONS.CLIENTES].get(clientId);
                 return client ? `<div class="flex items-center gap-2 bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full animate-fade-in"><span>${client.descripcion}</span><button data-id="${clientId}" class="remove-filter-btn p-0.5 hover:bg-blue-200 rounded-full"><i data-lucide="x" class="w-3.5 h-3.5 pointer-events-none"></i></button></div>` : '';
             }).join('');
-        lucide.createIcons();
+        createIconsSafe();
     }
     
     function populateAddClientFilterDropdown() {
@@ -5615,7 +5713,7 @@ function initSinoptico() {
                 <h2 class="text-xl font-bold">Seleccione un elemento</h2>
                 <p class="text-slate-500 mt-2">Haga clic en un ítem del árbol para ver sus detalles.</p>
             </div>`;
-            lucide.createIcons();
+            createIconsSafe();
             return;
         }
     
@@ -5730,7 +5828,7 @@ function initSinoptico() {
         }
         content += `</div>`;
         detailContainer.innerHTML = content;
-        lucide.createIcons();
+        createIconsSafe();
     }
     
 async function getLogoBase64() {
@@ -6379,7 +6477,7 @@ function runProfileLogic() {
             </div>
         </div>
     </div>`;
-    lucide.createIcons();
+    createIconsSafe();
 
     document.getElementById('change-password-form').addEventListener('submit', handleChangePassword);
     document.getElementById('profile-settings-form').addEventListener('submit', handleProfileUpdate);
@@ -6459,7 +6557,7 @@ function handleDeleteAccount() {
             <div class="flex justify-center items-center p-4 border-t bg-gray-50 space-x-4"><button data-action="cancel" class="bg-gray-200 text-gray-800 px-6 py-2 rounded-md hover:bg-gray-300 font-semibold">Cancelar</button><button id="confirm-delete-btn" class="bg-red-600 text-white px-6 py-2 rounded-md font-semibold opacity-50 cursor-not-allowed" disabled>Confirmar Eliminación</button></div>
         </div></div>`;
     dom.modalContainer.innerHTML = modalHTML;
-    lucide.createIcons();
+    createIconsSafe();
     const modalElement = document.getElementById(modalId);
     const confirmInput = document.getElementById('delete-confirm-input');
     const confirmButton = document.getElementById('confirm-delete-btn');
