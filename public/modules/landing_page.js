@@ -1,7 +1,7 @@
 import { collection, getCountFromServer, getDocs, query, where, orderBy, limit, doc, updateDoc, or } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../utils.js';
-import { showPlannerHelpModal, showAIAnalysisModal, showTasksInModal } from './tasks/task.ui.js';
+import { getPlannerHelpModalHTML, getTasksModalHTML } from './tasks/task.templates.js';
 import { completeAndArchiveTask, updateTaskBlockedStatus } from './tasks/task.service.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
@@ -115,7 +115,6 @@ function renderLandingPageHTML() {
                                         <i data-lucide="bot" class="mr-2 h-5 w-5"></i>Asistente de IA
                                     </span>
                                 </button>
-                                <button id="add-new-dashboard-task-btn" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="plus" class="mr-2 h-5 w-5"></i>Nueva Tarea Manual</button>
                             </div>
                         </div>
                     </div>
@@ -265,6 +264,121 @@ function renderTaskCardsHTML(tasks) {
                 </div>
             </div>`;
     }).join('');
+}
+
+function showPlannerHelpModal() {
+    dom.modalContainer.innerHTML = getPlannerHelpModalHTML();
+    const modalElement = document.getElementById('planner-help-modal');
+    if (!modalElement) return;
+
+    const closeModal = () => {
+        modalElement.remove();
+    };
+
+    modalElement.addEventListener('click', (event) => {
+        if (event.target === modalElement || event.target.closest('[data-action="close"]')) {
+            closeModal();
+        }
+    });
+
+    lucide.createIcons();
+}
+
+function showTasksInModal(title, tasks = []) {
+    dom.modalContainer.innerHTML = getTasksModalHTML(title);
+    const modalElement = document.getElementById('tasks-list-modal');
+    if (!modalElement) return;
+
+    const tasksContainer = modalElement.querySelector('#modal-tasks-container');
+    if (!tasksContainer) return;
+
+    const taskMap = new Map(tasks.map(task => [task.docId, { ...task }]));
+
+    const renderModalTasks = () => {
+        if (taskMap.size === 0) {
+            tasksContainer.innerHTML = `<p class="text-center text-slate-500 py-8">No hay tareas para mostrar en esta sección.</p>`;
+            return;
+        }
+
+        tasksContainer.innerHTML = `
+            <div class="space-y-2">
+                ${renderTaskCardsHTML(Array.from(taskMap.values()))}
+            </div>
+        `;
+        lucide.createIcons();
+    };
+
+    const notifyTasksChanged = () => {
+        document.dispatchEvent(new CustomEvent('ai-tasks-updated'));
+    };
+
+    const handleTaskRemoval = (taskId) => {
+        taskMap.delete(taskId);
+        renderModalTasks();
+    };
+
+    tasksContainer.addEventListener('click', async (event) => {
+        const actionButton = event.target.closest('button[data-action]');
+        const taskCard = event.target.closest('.task-card-compact');
+        const taskId = taskCard?.dataset.taskId;
+
+        if (actionButton && taskId) {
+            const action = actionButton.dataset.action;
+            if (action === 'complete-task') {
+                const previousHTML = actionButton.innerHTML;
+                actionButton.disabled = true;
+                actionButton.innerHTML = '<span class="flex items-center gap-1"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Procesando</span>';
+                lucide.createIcons();
+                try {
+                    await completeAndArchiveTask(taskId);
+                    showToast('Tarea completada y archivada.', 'success');
+                    handleTaskRemoval(taskId);
+                    notifyTasksChanged();
+                    await refreshWeeklyTasksView();
+                } catch (error) {
+                    console.error('Error completing task from modal:', error);
+                    showToast('Error al completar la tarea.', 'error');
+                    actionButton.disabled = false;
+                    actionButton.innerHTML = previousHTML;
+                    lucide.createIcons();
+                }
+                return;
+            }
+
+            if (action === 'block-task') {
+                const task = taskMap.get(taskId) || weeklyTasksCache.find(t => t.docId === taskId);
+                if (!task) return;
+                const isBlocked = !task.blocked;
+                try {
+                    await updateTaskBlockedStatus(taskId, isBlocked);
+                    task.blocked = isBlocked;
+                    showToast(isBlocked ? 'Tarea bloqueada.' : 'Tarea desbloqueada.', 'success');
+                    notifyTasksChanged();
+                    await refreshWeeklyTasksView();
+                    handleTaskRemoval(taskId);
+                } catch (error) {
+                    console.error('Error updating task blocked status from modal:', error);
+                    showToast('Error al actualizar la tarea.', 'error');
+                }
+                return;
+            }
+        }
+
+        if (taskCard && taskId && !actionButton) {
+            const task = taskMap.get(taskId) || weeklyTasksCache.find(t => t.docId === taskId);
+            if (task) {
+                await openTaskFormModal(task);
+            }
+        }
+    });
+
+    modalElement.addEventListener('click', (event) => {
+        if (event.target === modalElement || event.target.closest('[data-action="close"]')) {
+            modalElement.remove();
+        }
+    });
+
+    renderModalTasks();
 }
 
 function getRollingMonths(yearOffset = 0) {
@@ -1075,8 +1189,6 @@ function setupActionButtons() {
             showToast('El Asistente IA no está disponible.', 'error');
         }
     });
-
-    document.getElementById('add-new-dashboard-task-btn')?.addEventListener('click', async () => await openTaskFormModal(null, 'todo'));
     document.getElementById('prev-week-btn')?.addEventListener('click', () => { appState.weekOffset--; refreshWeeklyTasksView('prev'); });
     document.getElementById('today-btn')?.addEventListener('click', () => {
         if (appState.weekOffset === 0) {

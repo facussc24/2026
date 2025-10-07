@@ -1,7 +1,6 @@
-import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, or, and, limit, startAfter, writeBatch } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../../utils.js';
-import { getState } from './task.state.js';
 
 // Dependencies to be injected
 let db;
@@ -146,7 +145,7 @@ export async function handleTaskFormSubmit(e) {
     if (isPublicCheckbox) {
         data.isPublic = isPublicCheckbox.checked;
     } else if (!isEditing) {
-        data.isPublic = getState().kanban.activeFilter === 'engineering';
+        data.isPublic = false;
     }
 
     const saveButton = modalElement.querySelector('button[type="submit"]');
@@ -240,78 +239,6 @@ export function subscribeToAllTasks(callback, handleError) {
         callback(allTasks);
     }, handleError);
     return unsubscribe;
-}
-
-export function subscribeToTasks(callback, handleError) {
-    const tasksRef = collection(db, COLLECTIONS.TAREAS);
-    const user = appState.currentUser;
-    const { activeFilter, selectedUserId, priorityFilter, searchTerm } = getState().kanban;
-
-    let conditions = [];
-
-    // User and Role-based filtering
-    if (user.role !== 'admin') {
-        // Non-admins only see tasks assigned to them.
-        conditions.push(where('assigneeUid', '==', user.uid));
-    } else {
-        // Admin filtering logic
-        switch (activeFilter) {
-            case 'personal':
-                conditions.push(or(
-                    where('assigneeUid', '==', user.uid),
-                    where('creatorUid', '==', user.uid)
-                ));
-                break;
-            case 'supervision':
-                if (selectedUserId) {
-                    conditions.push(where('assigneeUid', '==', selectedUserId));
-                }
-                // If no user is selected in supervision, it shows a user list, not tasks.
-                // An empty condition array here is correct.
-                break;
-            case 'engineering':
-                conditions.push(where('isPublic', '==', true));
-                break;
-            // For 'all', no specific user/role filter is added.
-        }
-    }
-
-    // Priority filtering
-    if (priorityFilter !== 'all') {
-        conditions.push(where('priority', '==', priorityFilter));
-    }
-
-    // Search term filtering
-    const trimmedSearch = searchTerm.toLowerCase().trim();
-    if (trimmedSearch) {
-        conditions.push(where('search_keywords', 'array-contains', trimmedSearch));
-    }
-
-    // Build the final query
-    const queryConstraints = [];
-    if (conditions.length > 0) {
-        // Use 'and()' to combine all filter conditions.
-        // Firestore requires that 'or()' queries are not mixed with other 'where' clauses in the same 'and()'.
-        // The current logic correctly separates the 'or' for the 'personal' filter, so this is safe.
-        queryConstraints.push(and(...conditions));
-    }
-    queryConstraints.push(orderBy('createdAt', 'desc'));
-
-    const finalQuery = query(tasksRef, ...queryConstraints);
-
-    const unsubscribe = onSnapshot(finalQuery, (snapshot) => {
-        const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-        callback(tasks);
-    }, (error) => {
-        console.error("Error in subscribeToTasks:", error);
-        if (error.code === 'failed-precondition') {
-            console.error("This error likely means you're missing a Firestore index. Check the browser's developer console for a link to create it automatically.");
-            showToast('Se requiere un índice de base de datos para este filtro. Revisa la consola.', 'error');
-        }
-        handleError(error);
-    });
-
-    return [unsubscribe];
 }
 
 export function subscribeToPaginatedTasks(filters, pagination, callback, handleError) {
