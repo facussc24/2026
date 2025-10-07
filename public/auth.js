@@ -74,11 +74,18 @@ const dom = new Proxy({}, {
 });
 
 let isTransitioning = false;
-export function showAuthScreen(screenName, options = {}) {
-    if (isTransitioning) return;
+let queuedScreen = null;
 
+export function showAuthScreen(screenName, options = {}) {
     const { updateHash = true } = options;
     const normalizedScreen = AUTH_SCREENS.has(screenName) ? screenName : 'login';
+
+    if (isTransitioning) {
+        if (queuedScreen?.screenName !== normalizedScreen) {
+            queuedScreen = { screenName: normalizedScreen, options };
+        }
+        return;
+    }
 
     if (normalizedScreen === currentScreen) return;
 
@@ -130,6 +137,12 @@ export function showAuthScreen(screenName, options = {}) {
         isTransitioning = false;
         const firstInput = panelToShow.querySelector('input:not([type="hidden"])');
         if (firstInput) firstInput.focus();
+
+        if (queuedScreen) {
+            const { screenName: nextScreen, options: nextOptions } = queuedScreen;
+            queuedScreen = null;
+            showAuthScreen(nextScreen, nextOptions);
+        }
     }, transitionDuration);
 
     currentScreen = normalizedScreen;
