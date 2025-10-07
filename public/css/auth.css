@@ -34,6 +34,16 @@
     overflow-y: auto; /* Permite scroll en pantallas pequeñas */
 }
 
+/*
+ * Asegura que el contenedor de autenticación pueda ocultarse cuando
+ * la aplicación agrega la clase utilitaria `hidden`. Sin esta regla,
+ * la declaración `display: flex` anterior ganaba por especificidad y
+ * el panel bloqueaba toda la vista incluso después de iniciar sesión.
+ */
+#auth-container.hidden {
+    display: none !important;
+}
+
 .auth-panel {
     background-color: var(--auth-panel-background);
     padding: var(--auth-panel-padding);
