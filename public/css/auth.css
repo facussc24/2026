@@ -4,73 +4,86 @@
   ==========================================================================
   Este archivo contiene todos los estilos para los paneles de autenticación,
   incluyendo inicio de sesión, registro y restablecimiento de contraseña.
-
-  Organización:
-  1. Estilos del Contenedor Principal
-  2. Estilos de Paneles Individuales (Login, Registro, etc.)
-  3. Estilos de Formularios (Inputs, Labels, Botones)
-  4. Estilos de Enlaces y Texto
-  5. Animaciones y Efectos Visuales
+  Se ha refactorizado para usar CSS moderno, flexbox y variables para
+  mejorar la mantenibilidad y la coherencia visual.
 */
 
-/* --- 1. Estilos del Contenedor Principal --- */
+/* --- Variables de Diseño (Custom Properties) --- */
+:root {
+    --auth-background: #f1f5f9; /* slate-100 */
+    --auth-panel-background: white;
+    --auth-panel-max-width: 28rem; /* 448px */
+    --auth-panel-padding: 2.5rem; /* 40px */
+    --auth-border-radius: 1rem; /* 16px */
+    --auth-box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --auth-primary-color: #2563eb; /* blue-600 */
+    --auth-primary-hover-color: #1d4ed8; /* blue-700 */
+    --auth-text-primary: #1e293b;   /* slate-800 */
+    --auth-text-secondary: #64748b; /* slate-500 */
+    --auth-input-border-color: #cbd5e1; /* slate-300 */
+    --auth-input-focus-ring-color: rgba(59, 130, 246, 0.4);
+}
+
+/* --- 1. Contenedor y Panel Principal --- */
 #auth-container {
-    background-color: #f1f5f9; /* slate-100 */
+    background-color: var(--auth-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    overflow-y: auto; /* Permite scroll en pantallas pequeñas */
 }
 
 .auth-panel {
-    background-color: white;
-    padding: 2.5rem; /* 40px */
-    border-radius: 1.25rem; /* 20px */
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    background-color: var(--auth-panel-background);
+    padding: var(--auth-panel-padding);
+    border-radius: var(--auth-border-radius);
+    box-shadow: var(--auth-box-shadow);
     width: 100%;
-    max-width: 26rem; /* 416px */
-    animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    max-width: var(--auth-panel-max-width);
+    /* Se elimina la animación de entrada inicial para favorecer transiciones más suaves */
 }
 
-/* --- 2. Estilos de Paneles Individuales --- */
-
-/* Logo y Título */
+/* --- 2. Cabecera (Logo y Títulos) --- */
 .auth-header {
     text-align: center;
     margin-bottom: 2rem;
 }
 
 .auth-header .logo-img {
-    height: 3rem; /* 48px */
-    margin-left: auto;
-    margin-right: auto;
+    height: 3rem;
+    margin: 0 auto;
 }
 
 .auth-header .title {
-    font-size: 1.875rem; /* 30px */
-    font-weight: 800; /* extrabold */
-    color: #1e293b; /* slate-800 */
+    font-size: 1.875rem;
+    font-weight: 800;
+    color: var(--auth-text-primary);
     margin-top: 1rem;
 }
 
 .auth-header .subtitle {
-    color: #64748b; /* slate-500 */
+    color: var(--auth-text-secondary);
     margin-top: 0.5rem;
 }
 
-/* --- 3. Estilos de Formularios --- */
+/* --- 3. Estructura de Formularios --- */
 .auth-form {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem; /* 20px */
+    gap: 1.25rem; /* Espaciado coherente entre elementos del formulario */
 }
 
-.auth-form .input-group {
+.input-group {
     display: flex;
     flex-direction: column;
 }
 
 .auth-form label {
-    font-size: 0.875rem; /* 14px */
-    font-weight: 500; /* medium */
-    color: #334155; /* slate-700 */
-    margin-bottom: 0.5rem; /* 8px */
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--auth-text-primary);
+    margin-bottom: 0.5rem;
 }
 
 .auth-form input[type="email"],
@@ -78,9 +91,9 @@
 .auth-form input[type="text"] {
     display: block;
     width: 100%;
-    padding: 0.75rem 1rem; /* 12px 16px */
-    border: 1px solid #cbd5e1; /* slate-300 */
-    border-radius: 0.5rem; /* 8px */
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--auth-input-border-color);
+    border-radius: 0.5rem;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease-in-out;
 }
@@ -88,40 +101,40 @@
 .auth-form input:focus {
     outline: 2px solid transparent;
     outline-offset: 2px;
-    border-color: #3b82f6; /* blue-500 */
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+    border-color: var(--auth-primary-color);
+    box-shadow: 0 0 0 4px var(--auth-input-focus-ring-color);
 }
 
-.auth-form .submit-button {
+/* --- 4. Botones y Enlaces --- */
+.submit-button {
     width: 100%;
-    background-color: #2563eb; /* blue-600 */
+    background-color: var(--auth-primary-color);
     color: white;
-    font-weight: 600; /* semibold */
-    padding: 0.875rem; /* 14px */
-    border-radius: 0.5rem; /* 8px */
+    font-weight: 600;
+    padding: 0.875rem 1rem;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
     transition: background-color 0.2s ease-in-out;
 }
 
-.auth-form .submit-button:hover {
-    background-color: #1d4ed8; /* blue-700 */
+.submit-button:hover {
+    background-color: var(--auth-primary-hover-color);
 }
 
-.auth-form .submit-button:disabled {
-    opacity: 0.5;
+.submit-button:disabled {
+    opacity: 0.6;
     cursor: not-allowed;
 }
 
-/* --- 4. Estilos de Enlaces y Texto --- */
-
 .forgot-password-link {
     text-align: right;
-    font-size: 0.875rem; /* 14px */
-    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
 }
 
 .auth-link {
-    color: #2563eb; /* blue-600 */
-    font-weight: 600; /* semibold */
+    color: var(--auth-primary-color);
+    font-weight: 600;
     text-decoration: none;
 }
 
@@ -132,18 +145,67 @@
 .auth-footer-text {
     text-align: center;
     margin-top: 1.5rem;
-    font-size: 0.875rem; /* 14px */
-    color: #64748b; /* slate-500 */
+    font-size: 0.875rem;
+    color: var(--auth-text-secondary);
 }
 
-/* --- 5. Animaciones y Efectos Visuales --- */
-@keyframes scale-in {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+/* --- 5. Consistencia Visual Adicional --- */
+/*
+  Ajustes para que los paneles de registro y reseteo sean más
+  consistentes con el panel de inicio de sesión.
+*/
+#register-panel .text-center,
+#reset-panel .text-center,
+#verify-email-panel .text-center {
+    margin-bottom: 2rem;
+}
+
+#register-panel .text-center i,
+#reset-panel .text-center i,
+#verify-email-panel .text-center i {
+    height: 4rem; /* 64px */
+    width: 4rem; /* 64px */
+    margin-left: auto;
+    margin-right: auto;
+    color: var(--auth-primary-color);
+}
+
+#register-panel h1,
+#reset-panel h1,
+#verify-email-panel h1 {
+    font-size: 1.5rem; /* 24px */
+    font-weight: 800;
+    color: var(--auth-text-primary);
+    margin-top: 1rem;
+}
+
+#register-panel .text-slate-500,
+#reset-panel .text-slate-500,
+#verify-email-panel .text-slate-500 {
+    color: var(--auth-text-secondary);
+    margin-top: 0.5rem;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#register-panel .auth-form,
+#reset-panel .auth-form {
+    gap: 1.5rem;
+}
+
+#register-panel .text-center.mt-6,
+#reset-panel .text-center.mt-6 {
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+    color: var(--auth-text-secondary);
+}
+
+/* --- 6. Transiciones entre Paneles --- */
+.auth-panel {
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+.auth-panel.hidden {
+    display: none;
 }

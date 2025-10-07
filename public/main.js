@@ -3650,7 +3650,6 @@ if (window.location.protocol === 'file:') {
 }
 
 window.seedDatabase = seedDatabase;
-window.switchView = switchView;
 
 // Expose switchView for Playwright
 window.switchView = switchView;
