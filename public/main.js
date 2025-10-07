@@ -3523,23 +3523,15 @@ onAuthStateChanged(auth, async (user) => {
             await switchView('landing-page');
             console.log("switchView('landing-page') completed.");
 
-            // FIX: Per AGENTS.md, defer UI updates to prevent race conditions with E2E tests.
-            // A longer delay is used for E2E tests to ensure rendering completes before screenshotting.
-            const urlParams = new URLSearchParams(window.location.search);
-            const isE2ETest = urlParams.get('e2e-test') === 'true';
-            const delay = isE2ETest ? 500 : 0;
+            // Hide loading overlay and show the main app view
+            dom.loadingOverlay.style.display = 'none';
+            dom.authContainer.classList.add('hidden');
+            dom.appView.classList.remove('hidden');
 
-            setTimeout(() => {
-                dom.loadingOverlay.style.display = 'none';
-                dom.authContainer.classList.add('hidden');
-                dom.appView.classList.remove('hidden');
-
-                // Path-based routing for /visor3d
-                if (window.location.pathname === '/visor3d') {
-                    switchView('visor3d');
-                }
-
-            }, delay);
+            // Path-based routing for /visor3d
+            if (window.location.pathname === '/visor3d') {
+                switchView('visor3d');
+            }
 
             if (!wasAlreadyLoggedIn && !isTestMode) {
                 showToast(`¡Bienvenido de nuevo, ${appState.currentUser.name}!`, 'success');
