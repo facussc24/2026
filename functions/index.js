@@ -435,30 +435,6 @@ exports.sendTaskAssignmentEmail = functions
     }
   });
 
-// --------------------------------------------------------------------------------
-// DEPRECATED AI FUNCTIONS
-// These functions have been consolidated into the more robust `getAIAssistantPlan`
-// and `executeTaskModificationPlan` functions. They are kept here for reference
-// but should not be used in new development.
-// --------------------------------------------------------------------------------
-/*
-exports.organizeTaskWithAI = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
-    // ... (implementation removed for brevity)
-});
-
-exports.analyzeWeeklyTasks = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
-    // ... (implementation removed for brevity)
-});
-
-exports.refineWeeklyPlan = functions.runWith({timeoutSeconds: 540, memory: '1GB'}).https.onCall(async (data, context) => {
-    // ... (implementation removed for brevity)
-});
-
-exports.executeWeeklyPlan = functions.https.onCall(async (data, context) => {
-    // ... (implementation removed for brevity)
-});
-*/
-
 exports.getTaskSummaryWithAI = functions.https.onCall(async (data, context) => {
     // ... function logic
 });
