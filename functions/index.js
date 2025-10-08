@@ -1781,28 +1781,19 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
     const updateProgress = async (index, status, error = null) => {
         if (!progressRef) return;
 
-        const updatePayload = {
-            [`steps.${index}.status`]: status,
-        };
-
-        if (error) {
-            updatePayload[`steps.${index}.error`] = error;
-        } else {
-            // Explicitly set the error field to null or delete it if you want to clear it.
-            // Using FieldValue.delete() is cleaner if the field should not exist.
-            updatePayload[`steps.${index}.error`] = admin.firestore.FieldValue.delete();
-        }
-
-        // Atomically update the specific step in Firestore.
-        await progressRef.update(updatePayload);
-
-        // Also update the local copy to keep it in sync for the final batch update.
+        // First, update the local array state.
         progressSteps[index].status = status;
         if (error) {
             progressSteps[index].error = error;
         } else if (progressSteps[index].error) {
             delete progressSteps[index].error;
         }
+
+        // Then, overwrite the entire array in Firestore with the updated local copy.
+        // This is safe because _executePlan runs sequentially and is the only writer.
+        await progressRef.update({
+            steps: progressSteps
+        });
     };
 
     let currentStepIndex = null;
