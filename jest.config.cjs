@@ -76,7 +76,6 @@ module.exports = {
 
     // Map CDN import to local package for Jest
     "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js": "marked",
-    "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@25.0.0/dist/tween.esm.js": "<rootDir>/__mocks__/tween.js",
-    "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.es.js": "<rootDir>/__mocks__/dompurify.js"
+    "https://cdn.jsdelivr.net/npm/@tweenjs/tween.js@25.0.0/dist/tween.esm.js": "<rootDir>/__mocks__/tween.js"
   },
 };
