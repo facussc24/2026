@@ -1523,7 +1523,7 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                             });
 
                             if (foundTasks.length > 0) {
-                                foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate, effort: t.effort || 'medium' }));
+                                foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate || null, effort: t.effort || 'medium' }));
                                 const formattedTaskList = foundTasksContext
                                     .map(task => {
                                         const parts = [`Título: ${task.title}`];
