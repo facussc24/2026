@@ -14,8 +14,6 @@ El código que vive dentro de `public/` se organiza por responsabilidad para fac
 - `public/modules/landing_page/`: lógica del planificador semanal y los paneles de tareas del dashboard.
 - `public/modules/user_management/`: utilidades que encapsulan acciones administrativas sobre la colección de usuarios.
 - `public/services/`: servicios compartidos reutilizables (por ejemplo, operaciones sobre productos).
-- `public/archived/`: código legado que se conserva solo como referencia histórica.
-
 Cada módulo documenta sus funciones principales y recibe las dependencias que necesita desde `main.js`, de modo que nuevas funcionalidades puedan ubicarse rápidamente y extenderse sin romper otras secciones.
 
 ## Flujo de Trabajo y Colaboración
