@@ -1780,9 +1780,23 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
 
     const updateProgress = async (index, status, error = null) => {
         if (!progressRef) return;
-        // This is a simplified update for internal execution.
-        // For real-time UI, a more robust update mechanism (like updating the array in place) is needed.
-        // However, for backend-only execution, this is sufficient.
+
+        const updatePayload = {
+            [`steps.${index}.status`]: status,
+        };
+
+        if (error) {
+            updatePayload[`steps.${index}.error`] = error;
+        } else {
+            // Explicitly set the error field to null or delete it if you want to clear it.
+            // Using FieldValue.delete() is cleaner if the field should not exist.
+            updatePayload[`steps.${index}.error`] = admin.firestore.FieldValue.delete();
+        }
+
+        // Atomically update the specific step in Firestore.
+        await progressRef.update(updatePayload);
+
+        // Also update the local copy to keep it in sync for the final batch update.
         progressSteps[index].status = status;
         if (error) {
             progressSteps[index].error = error;
