@@ -807,13 +807,7 @@ export function getTasksTableHTML(tasks, userMap) {
 
         const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00").toLocaleDateString('es-AR') : 'N/A';
 
-        let progress = 0;
-        if (task.subtasks && task.subtasks.length > 0) {
-            const completed = task.subtasks.filter(st => st.completed).length;
-            progress = Math.round((completed / task.subtasks.length) * 100);
-        } else if (task.status === 'done') {
-            progress = 100;
-        }
+        const progress = task.progress || 0;
 
         const safeDocId = escapeAttribute(task.docId || '');
         const safeTitle = escapeText(task.title || '');
@@ -1132,23 +1126,20 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
         `;
     }
 
-    let subtaskProgressHTML = '';
-    if (task.subtasks && task.subtasks.length > 0) {
-        const totalSubtasks = task.subtasks.length;
-        const completedSubtasks = task.subtasks.filter(st => st.completed).length;
-        const progressPercentage = totalSubtasks > 0 ? (completedSubtasks / totalSubtasks) * 100 : 0;
-
-        subtaskProgressHTML = `
+    let progressHTML = '';
+    if (task.progress && parseInt(task.progress, 10) > 0) {
+        const progress = parseInt(task.progress, 10);
+        progressHTML = `
             <div class="mt-3">
                 <div class="flex justify-between items-center mb-1">
                     <span class="text-xs font-semibold text-slate-500 flex items-center">
-                        <i data-lucide="check-square" class="w-3.5 h-3.5 mr-1.5"></i>
-                        Sub-tareas
+                        <i data-lucide="trending-up" class="w-3.5 h-3.5 mr-1.5"></i>
+                        Progreso
                     </span>
-                    <span class="text-xs font-bold text-slate-600">${completedSubtasks} / ${totalSubtasks}</span>
+                    <span class="text-xs font-bold text-slate-600">${progress}%</span>
                 </div>
                 <div class="w-full bg-slate-200 rounded-full h-1.5">
-                    <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style="width: ${progressPercentage}%"></div>
+                    <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
                 </div>
             </div>
         `;
@@ -1179,7 +1170,7 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
 
             ${tagsHTML}
 
-            ${subtaskProgressHTML}
+            ${progressHTML}
 
             <div class="mt-auto pt-3 border-t border-slate-200/80">
                 <div class="flex justify-between items-center text-xs text-slate-500 mb-3">
@@ -1377,9 +1368,17 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                             <label for="task-duedate">Fecha Límite</label>
                             <input type="date" id="task-duedate" name="dueDate" value="${isEditing && task.dueDate ? task.dueDate : (defaultDate || '')}">
                         </div>
+                        <div class="input-group">
+                            <label for="task-enddate">Fecha de Fin</label>
+                            <input type="date" id="task-enddate" name="endDate" value="${isEditing && task.endDate ? task.endDate : ''}">
+                        </div>
                          <div class="input-group">
                             <label for="task-planneddate">Fecha Planificada</label>
                             <input type="date" id="task-planneddate" name="plannedDate" value="${isEditing && task.plannedDate ? task.plannedDate : ''}">
+                        </div>
+                        <div class="input-group md:col-span-3">
+                            <label for="task-progress">Progreso</label>
+                            <input type="range" id="task-progress" name="progress" min="0" max="100" value="${isEditing && task.progress ? task.progress : '0'}" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700">
                         </div>
                     </div>
                 </div>
