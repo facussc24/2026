@@ -144,6 +144,8 @@ export async function handleTaskFormSubmit(e) {
         effort: form.querySelector('[name="effort"]').value,
         startDate: form.querySelector('[name="startDate"]').value,
         dueDate: form.querySelector('[name="dueDate"]').value,
+        endDate: form.querySelector('[name="endDate"]').value,
+        progress: form.querySelector('[name="progress"]').value,
         plannedDate: form.querySelector('[name="plannedDate"]').value,
         updatedAt: new Date(),
         subtasks: modalElement.dataset.subtasks ? JSON.parse(modalElement.dataset.subtasks) : []
