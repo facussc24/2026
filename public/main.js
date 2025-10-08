@@ -14,9 +14,7 @@ import {
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page/index.js';
 import { initUserManagementModule, handleUserDisable } from './modules/user_management/index.js';
-import './modules/tasks_new/index.js';
 import { deleteProductAndOrphanedSubProducts } from './services/product.service.js';
-import { initTasksAPI } from './tasks_api.js';
 
 // Provide a resilient lucide wrapper so UI rendering does not break if the icon
 // library finishes loading after the main bundle.
@@ -71,84 +69,6 @@ const lucide = {
 
 if (typeof window !== 'undefined') {
     scheduleLucideFlush();
-}
-
-const DEFAULT_TASKS_NEW_FEATURE = {
-    enabled: true,
-    visibleForRoles: ['admin'],
-};
-
-function normalizeTasksNewFeatureFlag(value) {
-    if (value === undefined) {
-        return { ...DEFAULT_TASKS_NEW_FEATURE };
-    }
-
-    if (typeof value === 'boolean') {
-        return {
-            ...DEFAULT_TASKS_NEW_FEATURE,
-            enabled: value,
-        };
-    }
-
-    if (value && typeof value === 'object') {
-        const normalized = {
-            ...DEFAULT_TASKS_NEW_FEATURE,
-            ...value,
-        };
-        normalized.enabled = Boolean(normalized.enabled);
-
-        if (Array.isArray(value.visibleForRoles)) {
-            const cleaned = value.visibleForRoles
-                .map(role => (role == null ? '' : String(role).trim()))
-                .filter(Boolean);
-            normalized.visibleForRoles = cleaned.length > 0
-                ? Array.from(new Set(cleaned))
-                : [...DEFAULT_TASKS_NEW_FEATURE.visibleForRoles];
-        } else {
-            normalized.visibleForRoles = [...DEFAULT_TASKS_NEW_FEATURE.visibleForRoles];
-        }
-
-        return normalized;
-    }
-
-    return { ...DEFAULT_TASKS_NEW_FEATURE };
-}
-
-const appConfig = (() => {
-    const existing = typeof window !== 'undefined' && window.appConfig ? window.appConfig : {};
-    const featuresInput = existing.features || {};
-    const features = { ...featuresInput };
-    features.tasksNew = normalizeTasksNewFeatureFlag(featuresInput.tasksNew);
-    const config = { ...existing, features };
-    if (typeof window !== 'undefined') {
-        window.appConfig = config;
-    }
-    return config;
-})();
-
-function getTasksNewFeatureConfig() {
-    return normalizeTasksNewFeatureFlag(appConfig.features?.tasksNew);
-}
-
-function isTasksNewEnabledForRole(role) {
-    const feature = getTasksNewFeatureConfig();
-    if (!feature.enabled) {
-        return false;
-    }
-
-    const allowedRoles = Array.isArray(feature.visibleForRoles)
-        ? feature.visibleForRoles
-        : [];
-
-    if (allowedRoles.length === 0) {
-        return true;
-    }
-
-    if (!role) {
-        return false;
-    }
-
-    return allowedRoles.includes(role);
 }
 
 // NOTA DE SEGURIDAD: La configuración de Firebase no debe estar hardcodeada en el código fuente.
@@ -219,10 +139,6 @@ const viewConfig = {
                 required: true
             }
         ]
-    },
-    'tasks-new': {
-        title: 'Planificador (nuevo)',
-        init: window.TasksNew.init
     },
     roles: {
         title: 'Roles',
@@ -301,8 +217,6 @@ export let appState = {
         totalItems: 0,
     }
 };
-
-initTasksAPI({ appState, db, features: appConfig.features });
 
 export let dom = {
     appView: document.getElementById('app-view'),
@@ -1254,15 +1168,6 @@ async function switchView(viewName, params = null) {
         return;
     }
 
-    if (viewName === 'tasks-new' && !isTasksNewEnabledForRole(getEffectiveRole())) {
-        console.warn('[Navigation] Attempted to access tasks-new without permission.', {
-            role: getEffectiveRole(),
-            feature: getTasksNewFeatureConfig(),
-        });
-        showToast('El planificador (nuevo) está disponible solo para administradores.', 'warning');
-        return;
-    }
-
     if (appState.currentViewCleanup) {
         appState.currentViewCleanup();
         appState.currentViewCleanup = null;
@@ -1294,9 +1199,7 @@ async function switchView(viewName, params = null) {
     dom.viewContent.innerHTML = '';
     dom.headerActions.style.display = 'none';
     dom.searchInput.style.display = 'none';
-
-    let viewCleanup = null;
-
+    
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
     if (viewName === 'landing-page') await runLandingPageLogic();
@@ -1317,17 +1220,8 @@ async function switchView(viewName, params = null) {
             dom.addNewButton.style.display = 'none';
         }
         await runTableLogic();
-    } else if (typeof config?.init === 'function') {
-        const maybeCleanup = await config.init(dom.viewContent, params);
-        if (typeof maybeCleanup === 'function') {
-            viewCleanup = maybeCleanup;
-        }
     }
     dom.searchInput.value = '';
-
-    if (viewCleanup) {
-        appState.currentViewCleanup = viewCleanup;
-    }
 }
 
 
@@ -3487,13 +3381,6 @@ onAuthStateChanged(auth, async (user) => {
                     updateDoc,
                     doc
                 };
-                if (window.TasksNew?.provideDependencies) {
-                    try {
-                        window.TasksNew.provideDependencies({ db, appState });
-                    } catch (error) {
-                        console.warn('[TasksNew] No se pudieron inyectar las dependencias del servicio.', error);
-                    }
-                }
                 initTasksModule(appDependencies);
                 initLandingPageModule(appDependencies);
                 initUserManagementModule(appDependencies);
@@ -3565,23 +3452,11 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function updateNavForRole() {
-    const effectiveRole = getEffectiveRole();
-    const isAdmin = appState.currentUser && effectiveRole === 'admin';
-
     const userManagementLink = document.querySelector('[data-view="user_management"]');
-    if (userManagementLink) {
-        userManagementLink.style.display = isAdmin ? 'flex' : 'none';
-    }
+    if (!userManagementLink) return;
 
-    const adminNavSection = document.getElementById('admin-nav-section');
-    const canSeeTasksNew = isTasksNewEnabledForRole(effectiveRole);
-    if (adminNavSection) {
-        adminNavSection.style.display = canSeeTasksNew ? 'block' : 'none';
-        const tasksNewLink = adminNavSection.querySelector('[data-view="tasks-new"]');
-        if (tasksNewLink) {
-            tasksNewLink.style.display = canSeeTasksNew ? 'flex' : 'none';
-        }
-    }
+    const shouldShow = appState.currentUser && getEffectiveRole() === 'admin';
+    userManagementLink.style.display = shouldShow ? 'flex' : 'none';
 }
 
 async function refreshUIForRoleChange() {

@@ -18,55 +18,6 @@ El código que vive dentro de `public/` se organiza por responsabilidad para fac
 
 Cada módulo documenta sus funciones principales y recibe las dependencias que necesita desde `main.js`, de modo que nuevas funcionalidades puedan ubicarse rápidamente y extenderse sin romper otras secciones.
 
-## Tasks (nuevo) con DayPilot Lite
-
-El planificador "Planificador (nuevo)" vive en `public/modules/tasks_new/` y coexiste con el módulo histórico (`tasks_old`). Su objetivo es ofrecer vistas Calendario y Timeline sobre el mismo origen de datos (`tareas` en Firestore) sin afectar los flujos actuales.
-
-### Arquitectura rápida
-
-- `index.js`: punto de entrada del módulo, administra preferencias, sincroniza rangos y expone `window.TasksNew.init()` / `provideDependencies()`.
-- `calendar_view.js`: instancia `DayPilot.Calendar` en modo semanal y vincula eventos de creación, edición y drag & drop.
-- `scheduler_view.js`: instancia `DayPilot.Scheduler` para la vista tipo timeline con escalas de horas/días/semanas.
-- `tasks_service.js`: capa de datos con validaciones, CRUD sobre Firestore y adaptadores a eventos DayPilot.
-- `tasks_editor.js`: modal reutilizable para crear/editar tareas respetando roles y `previewRole`.
-- `tasks_ui.js`: utilidades puras para tabs, filtros y escalas; libre de side-effects para facilitar tests.
-
-### Dependencia DayPilot Lite
-
-- El bundle original proviene de DayPilot Lite y se versiona en `public/vendor/daypilot/daypilot-all.min.js`. **No debe minificarse ni modificarse**.
-- `public/index.html` incluye el script mediante `<script src="vendor/daypilot/daypilot-all.min.js"></script>` antes de los bundles propios para garantizar que `DayPilot` exista al inicializar las vistas.
-
-### Vistas Calendario / Timeline
-
-- `tasks_new/index.js` crea los contenedores `#tasksnew-calendar` y `#tasksnew-scheduler`, además de tabs y filtros.
-- La vista Calendario trabaja con eventos `{ id, text, start, end, backColor }` generados por `tasks_service.toCalendarEvent()`.
-- La vista Timeline utiliza `{ id, text, start, end, resource, barColor }` y permite ajustar la escala vía selector (Horas/Días/Semanas).
-
-### Esquema de tareas
-
-Los documentos en `tareas` deben respetar:
-
-```text
-id, title, description, start, end, status (todo|inprogress|done),
-priority (low|med|high), assignedTo (uid), resource, color
-```
-
-Las validaciones del servicio requieren `title`, `start` y `end` (con `end > start`). Campos faltantes son completados por el script de migración opcional (`scripts/migrate_tasks_to_new_schema.js`).
-
-### Cómo ejecutar y probar el módulo
-
-1. Iniciar el servidor local habitual (`npm run serve` o el comando preferido del proyecto).
-2. Ingresar con un usuario `admin` (o activar `previewRole = 'admin'`). El menú mostrará la opción **Administración → Planificador (nuevo)**.
-3. Al abrir la vista se cargarán tareas y recursos desde Firestore. Los filtros, tabs y escala se recuerdan en `localStorage` por usuario.
-4. Las pruebas unitarias relevantes se ejecutan con `npx jest tests/tasks_service.spec.js tests/tasks_ui.spec.js`.
-
-### Transición
-
-- `window.TasksAPI` decide en tiempo de ejecución si delega en `tasks_new/tasks_service` o en la API legada dependiendo de la vista activa o si el flag `appConfig.features.tasksNew.enabled` está activo para el rol listado en `visibleForRoles`.
-- El planificador viejo (`tasks_old`) continúa intacto hasta su retiro definitivo; no debe modificarse salvo instrucción explícita.
-- Cambios realizados por la IA u operadores humanos (crear, mover, reasignar) fluyen a ambos módulos gracias a los adaptadores compartidos.
-- La telemetría básica del módulo (`viewsOpened`, `aiCreations`, `errorsCaptured`) se encuentra en memoria y se expone vía `window.TasksNewTelemetry` con logs en consola para entornos de desarrollo.
-
 ## Flujo de Trabajo y Colaboración
 
 Este proyecto sigue un flujo de trabajo colaborativo en el que el desarrollador principal dirige el proyecto y un asistente de IA se encarga de la implementación de código bajo instrucciones específicas. El proceso es el siguiente:
