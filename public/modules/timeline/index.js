@@ -16,6 +16,7 @@ const timelineState = {
 };
 const TASK_BAR_HEIGHT = 22;
 const TASK_BAR_GAP = 8;
+const MIN_BAR_DURATION_DAYS = 3;
 const YEAR_DAY_COLUMN_MIN_WIDTH = 12;
 const MONTH_DAY_COLUMN_MIN_WIDTH = 42;
 const WEEK_DAY_COLUMN_MIN_WIDTH = 140;
@@ -95,8 +96,9 @@ function getTimelinePeriodLabel(context) {
 
 function taskOverlapsRange(task, startDate, endDate) {
     const taskStart = parseDateOnly(task?.startDate);
-    const taskEnd = parseDateOnly(task?.dueDate);
-    if (!taskStart || !taskEnd) return false;
+    if (!taskStart) return false;
+    const taskEnd = getSafeDueDate(task?.startDate, task?.dueDate);
+    if (!taskEnd) return false;
 
     const periodStart = parseDateOnly(startDate);
     const periodEnd = parseDateOnly(endDate);
@@ -186,6 +188,30 @@ function parseDateValue(value) {
     return null;
 }
 
+function addDays(date, amount) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+    const result = new Date(date);
+    result.setDate(result.getDate() + amount);
+    result.setHours(0, 0, 0, 0);
+    return result;
+}
+
+function getSafeDueDate(startDate, dueDate) {
+    const startDateObj = startDate instanceof Date ? new Date(startDate) : parseDateOnly(startDate);
+    const dueDateObj = dueDate instanceof Date ? new Date(dueDate) : parseDateOnly(dueDate);
+    if (dueDateObj) {
+        dueDateObj.setHours(0, 0, 0, 0);
+        return dueDateObj;
+    }
+    if (!startDateObj) return null;
+    return addDays(startDateObj, MIN_BAR_DURATION_DAYS - 1);
+}
+
+function getSafeDueDateISO(startDate, dueDate) {
+    const safeDueDate = getSafeDueDate(startDate, dueDate);
+    return safeDueDate ? safeDueDate.toISOString().split('T')[0] : null;
+}
+
 function getDayOfYear(date) {
     if (!date) return 0;
     const start = new Date(date.getFullYear(), 0, 0);
@@ -239,7 +265,7 @@ function formatDisplayDate(value, options = {}) {
 
 function getTaskDurationLabel(startDate, dueDate) {
     const startDateObj = parseDateOnly(startDate);
-    const dueDateObj = parseDateOnly(dueDate);
+    const dueDateObj = getSafeDueDate(startDate, dueDate);
     if (!startDateObj || !dueDateObj || dueDateObj < startDateObj) {
         return '—';
     }
@@ -251,8 +277,9 @@ function getTaskDurationLabel(startDate, dueDate) {
 }
 
 function getTaskDateRangeLabel(startDate, dueDate) {
+    const safeDueDateISO = getSafeDueDateISO(startDate, dueDate);
     const start = formatDisplayDate(startDate, { includeYear: false });
-    const end = formatDisplayDate(dueDate, { includeYear: false });
+    const end = formatDisplayDate(safeDueDateISO, { includeYear: false });
     if (start === '—' && end === '—') {
         return 'Sin fechas';
     }
@@ -472,18 +499,19 @@ function assignLanesToTasks(tasks, context) {
         const delayDays = overdue ? getTaskDelayDays(t) : 0;
         const assignee = users.get(t.assigneeUid);
         const assigneeName = t.assigneeName || assignee?.name || assignee?.displayName || '';
+        const safeDueDateISO = getSafeDueDateISO(t.startDate, t.dueDate);
         let startDay, endDay, originalStartDay, originalEndDay;
         if (zoomLevel === 'year') {
             const daysInYear = isLeapYear(year) ? 366 : 365;
             originalStartDay = dateToDayOfYear(t.startDate, year);
-            originalEndDay = dateToDayOfYear(t.dueDate, year);
+            originalEndDay = dateToDayOfYear(safeDueDateISO, year);
             startDay = Math.max(1, originalStartDay);
             endDay = Math.min(daysInYear, originalEndDay);
         } else if (zoomLevel === 'month') {
             const month = visibleDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             originalStartDay = dateToDayOfMonth(t.startDate, visibleDate);
-            originalEndDay = dateToDayOfMonth(t.dueDate, visibleDate);
+            originalEndDay = dateToDayOfMonth(safeDueDateISO, visibleDate);
             startDay = Math.max(1, originalStartDay);
             endDay = Math.min(daysInMonth, originalEndDay);
         } else if (zoomLevel === 'week') {
@@ -492,11 +520,21 @@ function assignLanesToTasks(tasks, context) {
             const diff = d.getDate() - day + (day === 0 ? -6 : 1);
             const monday = new Date(d.setDate(diff));
             originalStartDay = dateToDayOfWeek(t.startDate, monday);
-            originalEndDay = dateToDayOfWeek(t.dueDate, monday);
+            originalEndDay = dateToDayOfWeek(safeDueDateISO, monday);
             startDay = Math.max(1, originalStartDay);
             endDay = Math.min(7, originalEndDay);
         }
-        return { ...t, startDay, endDay, originalStartDay, originalEndDay, isOverdue: overdue, delayDays, assigneeName };
+        return {
+            ...t,
+            startDay,
+            endDay,
+            originalStartDay,
+            originalEndDay,
+            isOverdue: overdue,
+            delayDays,
+            assigneeName,
+            effectiveDueDate: safeDueDateISO || null
+        };
     })
     .filter(t => t.startDay && t.endDay && t.endDay >= t.startDay)
     .sort((a, b) => a.startDay - b.startDay);
@@ -784,7 +822,7 @@ function getTaskListHTML(tasks, context) {
         const sliderAttributes = task.isSample ? 'disabled data-sample="true"' : `data-task-id="${task.id}"`;
         const dataAttributes = task.isSample ? `data-task-id="${task.id}" data-sample="true"` : `data-task-id="${task.id}"`;
         const rangeLabel = getTaskDateRangeLabel(task.startDate, task.dueDate);
-        const tooltipRange = `${formatDisplayDate(task.startDate)} → ${formatDisplayDate(task.dueDate)}`;
+        const tooltipRange = `${formatDisplayDate(task.startDate)} → ${formatDisplayDate(task.effectiveDueDate ?? task.dueDate)}`;
         return `
             <div class="task-table-row ${itemStateClasses}" ${dataAttributes} title="${title}">
                 <div class="task-col task-col--main">
@@ -823,7 +861,7 @@ function getTaskBarsHTML(lanedTasks, context) {
     return lanedTasks.map(task => {
         const safeTitle = escapeHTML(task?.title ?? '');
         const safeStartDate = escapeHTML(task?.startDate ?? '');
-        const safeDueDate = escapeHTML(task?.dueDate ?? '');
+        const safeDueDate = escapeHTML(task?.effectiveDueDate ?? task?.dueDate ?? '');
         const dateSegment = safeStartDate || safeDueDate ? ` (${safeStartDate} - ${safeDueDate})` : '';
         const fullTitle = `${safeTitle}${dateSegment}`;
         const leftPercent = ((task.startDay - 1) / daysInPeriod) * 100;
@@ -1208,11 +1246,17 @@ function renderAnnualSummary(tasks, year) {
     }
 
     const tasksWithDates = tasks
-        .map(task => ({
-            ...task,
-            startDateObj: parseDateOnly(task.startDate),
-            dueDateObj: parseDateOnly(task.dueDate)
-        }))
+        .map(task => {
+            const startDateObj = parseDateOnly(task.startDate);
+            const dueDateObj = getSafeDueDate(task.startDate, task.dueDate);
+            const effectiveDueDate = dueDateObj ? dueDateObj.toISOString().split('T')[0] : null;
+            return {
+                ...task,
+                startDateObj,
+                dueDateObj,
+                effectiveDueDate
+            };
+        })
         .filter(task => task.startDateObj && task.dueDateObj && task.dueDateObj >= task.startDateObj);
 
     const yearStart = new Date(year, 0, 1);
@@ -1268,7 +1312,7 @@ function renderAnnualSummary(tasks, year) {
                     </div>
                     <div class="summary-meta-row">
                         <span class="summary-chip">Inicio ${formatDisplayDate(task.startDate)}</span>
-                        <span class="summary-chip">Fin ${formatDisplayDate(task.dueDate)}</span>
+                        <span class="summary-chip">Fin ${formatDisplayDate(task.effectiveDueDate)}</span>
                         <span class="summary-chip">${durationLabel}</span>
                     </div>
                 </td>
@@ -1976,3 +2020,13 @@ export function runTimelineLogic() {
     timelineState.statusFilter = timelineState.statusFilter || 'all';
     renderTimeline();
 }
+
+export {
+    assignLanesToTasks,
+    getTaskDurationLabel,
+    getTaskDateRangeLabel,
+    taskOverlapsRange,
+    MIN_BAR_DURATION_DAYS,
+    getSafeDueDate,
+    getSafeDueDateISO
+};
