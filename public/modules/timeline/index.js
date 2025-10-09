@@ -811,7 +811,11 @@ function getTaskBarsHTML(lanedTasks, context) {
     const daysInPeriod = zoomLevel === 'year' ? (isLeapYear(year) ? 366 : 365) : zoomLevel === 'month' ? new Date(year, month + 1, 0).getDate() : 7;
 
     return lanedTasks.map(task => {
-        const fullTitle = `${task.title} (${task.startDate} - ${task.dueDate})`;
+        const safeTitle = escapeHTML(task?.title ?? '');
+        const safeStartDate = escapeHTML(task?.startDate ?? '');
+        const safeDueDate = escapeHTML(task?.dueDate ?? '');
+        const dateSegment = safeStartDate || safeDueDate ? ` (${safeStartDate} - ${safeDueDate})` : '';
+        const fullTitle = `${safeTitle}${dateSegment}`;
         const leftPercent = ((task.startDay - 1) / daysInPeriod) * 100;
         const widthPercent = ((task.endDay - task.startDay + 1) / daysInPeriod) * 100;
         const topPosition = task.laneIndex * (TASK_BAR_HEIGHT + TASK_BAR_GAP) + TASK_BAR_GAP;
@@ -826,7 +830,7 @@ function getTaskBarsHTML(lanedTasks, context) {
         const overdueLabel = task.isOverdue && task.delayDays
             ? `<span class="task-bar-alert"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>${task.delayDays}d</span>`
             : '';
-        return `<div class="${barClasses}" data-task-id="${task.id}" data-overdue="${task.isOverdue ? 'true' : 'false'}" style="left: ${leftPercent}%; width: ${widthPercent}%; top: ${topPosition}px;" title="${fullTitle}"><div class="task-bar-progress" style="width: ${progress}%;"></div><span class="task-bar-label">${task.title}</span>${overdueLabel}</div>`;
+        return `<div class="${barClasses}" data-task-id="${task.id}" data-overdue="${task.isOverdue ? 'true' : 'false'}" style="left: ${leftPercent}%; width: ${widthPercent}%; top: ${topPosition}px;" title="${fullTitle}"><div class="task-bar-progress" style="width: ${progress}%;"></div><span class="task-bar-label">${safeTitle}</span>${overdueLabel}</div>`;
     }).join('');
 }
 
