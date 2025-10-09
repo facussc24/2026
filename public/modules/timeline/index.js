@@ -629,7 +629,12 @@ async function fetchTimelineTasks(range) {
     try {
         const { startDate, endDate } = range;
         const tasksRef = collection(db, 'tareas');
-        const q = query(tasksRef, where("startDate", "<=", endDate), orderBy("startDate", "asc"));
+        const q = query(
+            tasksRef,
+            where('showInPlanning', '==', true),
+            where("startDate", "<=", endDate),
+            orderBy("startDate", "asc")
+        );
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
