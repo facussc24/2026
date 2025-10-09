@@ -1,8 +1,10 @@
 import { appState, dom } from '../../main.js';
-import { getDocs, collection, query, orderBy, where, doc, updateDoc, addDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getDocs, collection, query, orderBy, where, doc, updateDoc, addDoc, deleteDoc, Timestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // Module-level variables
 let db;
+let unsubscribeTasks = null;
+let unsubscribeKeyDates = null;
 const timelineState = {
     zoomLevel: 'year', // 'year', 'month', 'week'
     visibleDate: new Date(),
@@ -31,6 +33,20 @@ const SUMMARY_STATUS_FILTERS = [
     { value: 'done', label: 'Completadas' },
     { value: 'overdue', label: 'Atrasadas' }
 ];
+
+function handleAssigneeFilterChange(event) {
+    if (!event?.target) return;
+    timelineState.assigneeFilter = event.target.value;
+    renderTimeline();
+}
+
+function attachAssigneeFilterListener() {
+    const filterSelect = document.getElementById('timeline-assignee-filter');
+    if (!filterSelect) return;
+    filterSelect.value = timelineState.assigneeFilter;
+    filterSelect.removeEventListener('change', handleAssigneeFilterChange);
+    filterSelect.addEventListener('change', handleAssigneeFilterChange);
+}
 
 function escapeHTML(value) {
     if (typeof value !== 'string') {
@@ -681,23 +697,64 @@ function getGridLinesHTML(zoomLevel, date) {
     return linesHTML;
 }
 
+function formatTimelineTasksFromDocs(docs, range) {
+    if (!Array.isArray(docs) || !range) return [];
+    const { startDate, endDate } = range;
+    return docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(task => !task.archived && taskOverlapsRange(task, startDate, endDate));
+}
+
+function subscribeTimelineTasks(range, callback) {
+    if (typeof unsubscribeTasks === 'function') {
+        unsubscribeTasks();
+        unsubscribeTasks = null;
+    }
+    if (!db || !range || typeof callback !== 'function') {
+        return null;
+    }
+    const { endDate } = range;
+    const tasksRef = collection(db, 'tareas');
+    const endBoundary = parseDateOnly(endDate);
+    const constraints = [where('showInPlanning', '==', true)];
+    if (endBoundary) {
+        const boundary = new Date(endBoundary.getTime());
+        boundary.setHours(23, 59, 59, 999);
+        constraints.push(where('startDate', '<=', Timestamp.fromDate(boundary)));
+    }
+    constraints.push(orderBy('startDate', 'asc'));
+    const q = query(tasksRef, ...constraints);
+    unsubscribeTasks = onSnapshot(q, (snapshot) => {
+        try {
+            const tasks = formatTimelineTasksFromDocs(snapshot.docs, range);
+            callback(tasks);
+        } catch (callbackError) {
+            console.error('Error processing timeline tasks snapshot:', callbackError);
+        }
+    }, (error) => {
+        console.error('Error subscribing to timeline tasks:', error);
+        window.showToast('Error al cargar las tareas.', 'error');
+        callback([]);
+    });
+    return unsubscribeTasks;
+}
+
 async function fetchTimelineTasks(range) {
     if (!db || !range) return [];
     try {
-        const { startDate, endDate } = range;
+        const { endDate } = range;
         const tasksRef = collection(db, 'tareas');
         const endBoundary = parseDateOnly(endDate);
         const constraints = [where('showInPlanning', '==', true)];
         if (endBoundary) {
-            endBoundary.setHours(23, 59, 59, 999);
-            constraints.push(where('startDate', '<=', Timestamp.fromDate(endBoundary)));
+            const boundary = new Date(endBoundary.getTime());
+            boundary.setHours(23, 59, 59, 999);
+            constraints.push(where('startDate', '<=', Timestamp.fromDate(boundary)));
         }
         constraints.push(orderBy('startDate', 'asc'));
         const q = query(tasksRef, ...constraints);
         const querySnapshot = await getDocs(q);
-        return querySnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() }))
-            .filter(task => !task.archived && taskOverlapsRange(task, startDate, endDate));
+        return formatTimelineTasksFromDocs(querySnapshot.docs, range);
     } catch (error) {
         console.error("Error fetching timeline tasks:", error);
         window.showToast("Error al cargar las tareas.", "error");
@@ -717,6 +774,42 @@ async function fetchSummaryTasks(year) {
     }
 }
 
+function formatPlanningKeyDatesFromDocs(docs) {
+    if (!Array.isArray(docs)) return [];
+    return docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+function subscribePlanningKeyDates(range, callback) {
+    if (typeof unsubscribeKeyDates === 'function') {
+        unsubscribeKeyDates();
+        unsubscribeKeyDates = null;
+    }
+    if (!db || !range || typeof callback !== 'function') {
+        return null;
+    }
+    const { startDate, endDate } = range;
+    const keyDatesRef = collection(db, 'planning_key_dates');
+    const keyDatesQuery = query(
+        keyDatesRef,
+        where('date', '>=', startDate),
+        where('date', '<=', endDate),
+        orderBy('date', 'asc')
+    );
+    unsubscribeKeyDates = onSnapshot(keyDatesQuery, (snapshot) => {
+        try {
+            const keyDates = formatPlanningKeyDatesFromDocs(snapshot.docs);
+            callback(keyDates);
+        } catch (callbackError) {
+            console.error('Error processing planning key dates snapshot:', callbackError);
+        }
+    }, (error) => {
+        console.error('Error subscribing to planning key dates:', error);
+        window.showToast('No se pudieron cargar las fechas clave del planning.', 'error');
+        callback([]);
+    });
+    return unsubscribeKeyDates;
+}
+
 async function fetchKeyDates(range) {
     if (!db || !range) return [];
     try {
@@ -729,7 +822,7 @@ async function fetchKeyDates(range) {
             orderBy('date', 'asc')
         );
         const snapshot = await getDocs(keyDatesQuery);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        return formatPlanningKeyDatesFromDocs(snapshot.docs);
     } catch (error) {
         console.error('Error fetching planning key dates:', error);
         window.showToast('No se pudieron cargar las fechas clave del planning.', 'error');
@@ -1375,6 +1468,17 @@ export function initTimelineModule(app) {
     db = app.db;
 }
 
+export function destroyTimelineModule() {
+    if (typeof unsubscribeTasks === 'function') {
+        unsubscribeTasks();
+        unsubscribeTasks = null;
+    }
+    if (typeof unsubscribeKeyDates === 'function') {
+        unsubscribeKeyDates();
+        unsubscribeKeyDates = null;
+    }
+}
+
 function updateTimelineDateLabel() {
     const label = document.getElementById('timeline-date-label');
     if (!label) return;
@@ -1412,7 +1516,7 @@ async function populateTimelinePeriod() {
     const { zoomLevel, visibleDate } = timelineState;
     const timeContext = { zoomLevel, visibleDate };
     if (!taskList || !timescale || !gridContent) {
-        return { fetchedTasks: [], lanedTasks: [], keyDates: [], timeContext };
+        return;
     }
 
     taskList.innerHTML = `<div class="timeline-loading"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Cargando tareas...</span></div>`;
@@ -1420,85 +1524,125 @@ async function populateTimelinePeriod() {
     gridContent.innerHTML = `<div class="timeline-loading vertical"><i data-lucide="loader-2" class="w-6 h-6 animate-spin"></i><span>Cargando planning...</span></div>`;
     if (window.lucide) window.lucide.createIcons();
 
+    destroyTimelineModule();
+
     const range = getPeriodRange(zoomLevel, visibleDate);
     timelineState.currentRange = range;
-    const tasks = await fetchTimelineTasks(range);
-    const keyDates = await fetchKeyDates(range);
+    timelineState.keyDates = [];
 
-    const displayTasks = tasks.length > 0 ? tasks : buildSamplePlanningTasks(range);
-    timelineState.usingSampleData = tasks.length === 0;
-    timelineState.lastFetchedTasks = displayTasks;
+    let latestTasks = [];
+    let latestKeyDates = [];
 
-    const assigneeOptions = getAssigneeOptions(displayTasks);
-    const availableFilters = new Set(assigneeOptions.map(option => option.value));
-    if (timelineState.assigneeFilter !== 'all' && !availableFilters.has(timelineState.assigneeFilter)) {
-        timelineState.assigneeFilter = 'all';
-    }
-    const filteredTasks = filterTasksByAssignee(displayTasks, timelineState.assigneeFilter);
-    const { lanedTasks, totalLanes } = assignLanesToTasks(filteredTasks, timeContext);
+    return new Promise((resolve) => {
+        let initialResolved = false;
 
-    const optionsMarkup = renderAssigneeSelectOptions(assigneeOptions, timelineState.assigneeFilter);
-    const totalCount = displayTasks.length;
-    const filteredCount = filteredTasks.length;
-    const countLabel = timelineState.assigneeFilter === 'all'
-        ? filteredCount
-        : `${filteredCount} de ${totalCount}`;
-    const demoPill = timelineState.usingSampleData
-        ? '<span class="task-demo-pill subtle">Vista previa con datos de ejemplo</span>'
-        : '';
+        const completeInitialRender = () => {
+            if (!initialResolved) {
+                initialResolved = true;
+                resolve();
+            }
+        };
 
-    taskList.innerHTML = `
-        <div class="timeline-task-list-inner">
-            <div class="timeline-task-list-header">
-                <div class="task-header-top">
-                    <div class="task-header-info">
-                        <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300">Tareas (${countLabel})</h3>
-                        <div class="task-list-legend text-[11px] text-slate-500 dark:text-slate-400">Arrastrá para mover · Estirá los extremos para ajustar fechas</div>
+        const updateView = async () => {
+            const displayTasks = latestTasks.length > 0 ? latestTasks : buildSamplePlanningTasks(range);
+            timelineState.usingSampleData = latestTasks.length === 0;
+            timelineState.lastFetchedTasks = displayTasks;
+            timelineState.keyDates = latestKeyDates;
+
+            const assigneeOptions = getAssigneeOptions(displayTasks);
+            const availableFilters = new Set(assigneeOptions.map(option => option.value));
+            if (timelineState.assigneeFilter !== 'all' && !availableFilters.has(timelineState.assigneeFilter)) {
+                timelineState.assigneeFilter = 'all';
+            }
+
+            const filteredTasks = filterTasksByAssignee(displayTasks, timelineState.assigneeFilter);
+            const { lanedTasks, totalLanes } = assignLanesToTasks(filteredTasks, timeContext);
+
+            const optionsMarkup = renderAssigneeSelectOptions(assigneeOptions, timelineState.assigneeFilter);
+            const totalCount = displayTasks.length;
+            const filteredCount = filteredTasks.length;
+            const countLabel = timelineState.assigneeFilter === 'all'
+                ? filteredCount
+                : `${filteredCount} de ${totalCount}`;
+            const demoPill = timelineState.usingSampleData
+                ? '<span class="task-demo-pill subtle">Vista previa con datos de ejemplo</span>'
+                : '';
+
+            taskList.innerHTML = `
+                <div class="timeline-task-list-inner">
+                    <div class="timeline-task-list-header">
+                        <div class="task-header-top">
+                            <div class="task-header-info">
+                                <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300">Tareas (${countLabel})</h3>
+                                <div class="task-list-legend text-[11px] text-slate-500 dark:text-slate-400">Arrastrá para mover · Estirá los extremos para ajustar fechas</div>
+                            </div>
+                            <div class="task-header-actions">
+                                ${demoPill}
+                                <label class="task-filter">
+                                    <span>Responsable</span>
+                                    <select id="timeline-assignee-filter" class="task-filter-select">${optionsMarkup}</select>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="task-table-head">
+                            <span>Trabajo</span>
+                            <span>Avance</span>
+                        </div>
                     </div>
-                    <div class="task-header-actions">
-                        ${demoPill}
-                        <label class="task-filter">
-                            <span>Responsable</span>
-                            <select id="timeline-assignee-filter" class="task-filter-select">${optionsMarkup}</select>
-                        </label>
-                    </div>
+                    <div class="timeline-task-list-body">${getTaskListHTML(lanedTasks, timeContext)}</div>
                 </div>
-                <div class="task-table-head">
-                    <span>Trabajo</span>
-                    <span>Avance</span>
-                </div>
-            </div>
-            <div class="timeline-task-list-body">${getTaskListHTML(lanedTasks, timeContext)}</div>
-        </div>
-    `;
+            `;
 
-    timescale.innerHTML = getTimelineScaleHTML(zoomLevel, visibleDate) + getKeyDateTrackHTML(keyDates, timeContext);
-    gridContent.innerHTML = getGridLinesHTML(zoomLevel, visibleDate) + getKeyDateMarkersHTML(keyDates, timeContext) + getTaskBarsHTML(lanedTasks, timeContext);
+            timescale.innerHTML = getTimelineScaleHTML(zoomLevel, visibleDate) + getKeyDateTrackHTML(latestKeyDates, timeContext);
+            gridContent.innerHTML = getGridLinesHTML(zoomLevel, visibleDate) + getKeyDateMarkersHTML(latestKeyDates, timeContext) + getTaskBarsHTML(lanedTasks, timeContext);
 
-    const lanes = Math.max(totalLanes, 1);
-    const laneHeight = TASK_BAR_HEIGHT + TASK_BAR_GAP;
-    gridContent.style.minHeight = `${lanes * laneHeight + TASK_BAR_GAP * 2}px`;
+            const lanes = Math.max(totalLanes, 1);
+            const laneHeight = TASK_BAR_HEIGHT + TASK_BAR_GAP;
+            gridContent.style.minHeight = `${lanes * laneHeight + TASK_BAR_GAP * 2}px`;
 
-    let minWidth = '1400px';
-    if (zoomLevel === 'year') {
-        const totalDays = isLeapYear(visibleDate.getFullYear()) ? 366 : 365;
-        minWidth = `${Math.max(totalDays * YEAR_DAY_COLUMN_MIN_WIDTH, 1600)}px`;
-    } else if (zoomLevel === 'month') {
-        const daysInMonth = new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 0).getDate();
-        minWidth = `${Math.max(daysInMonth * MONTH_DAY_COLUMN_MIN_WIDTH, 960)}px`;
-    } else if (zoomLevel === 'week') {
-        minWidth = `${Math.max(7 * WEEK_DAY_COLUMN_MIN_WIDTH, 980)}px`;
-    }
-    gridContent.style.minWidth = minWidth;
-    const scaleContent = timescale.querySelector('.timescale-day-track, .timescale-month-track, .timescale-week-track');
-    if (scaleContent) {
-        scaleContent.style.minWidth = minWidth;
-    }
+            let minWidth = '1400px';
+            if (zoomLevel === 'year') {
+                const totalDays = isLeapYear(visibleDate.getFullYear()) ? 366 : 365;
+                minWidth = `${Math.max(totalDays * YEAR_DAY_COLUMN_MIN_WIDTH, 1600)}px`;
+            } else if (zoomLevel === 'month') {
+                const daysInMonth = new Date(visibleDate.getFullYear(), visibleDate.getMonth() + 1, 0).getDate();
+                minWidth = `${Math.max(daysInMonth * MONTH_DAY_COLUMN_MIN_WIDTH, 960)}px`;
+            } else if (zoomLevel === 'week') {
+                minWidth = `${Math.max(7 * WEEK_DAY_COLUMN_MIN_WIDTH, 980)}px`;
+            }
+            gridContent.style.minWidth = minWidth;
+            const scaleContent = timescale.querySelector('.timescale-day-track, .timescale-month-track, .timescale-week-track');
+            if (scaleContent) {
+                scaleContent.style.minWidth = minWidth;
+            }
 
-    setupTimelineInteractions(lanedTasks, timeContext);
-    setupTaskProgressControls(lanedTasks);
-    if (window.lucide) window.lucide.createIcons();
-    return { fetchedTasks: displayTasks, lanedTasks, keyDates, timeContext };
+            setupTimelineInteractions(lanedTasks, timeContext);
+            setupTaskProgressControls(lanedTasks);
+            attachAssigneeFilterListener();
+
+            if (window.lucide) window.lucide.createIcons();
+
+            await updateTimelineSummary(displayTasks);
+            updateTimelineInsights(lanedTasks, timeContext);
+            renderKeyDatesPanel(latestKeyDates, timeContext);
+
+            completeInitialRender();
+        };
+
+        const tasksUnsubscriber = subscribeTimelineTasks(range, (tasks) => {
+            latestTasks = Array.isArray(tasks) ? tasks : [];
+            void updateView();
+        });
+
+        const keyDatesUnsubscriber = subscribePlanningKeyDates(range, (keyDatesData) => {
+            latestKeyDates = Array.isArray(keyDatesData) ? keyDatesData : [];
+            void updateView();
+        });
+
+        if (!tasksUnsubscriber || !keyDatesUnsubscriber) {
+            void updateView();
+        }
+    });
 }
 
 function updateTimelineInsights(tasks = [], context = timelineState) {
@@ -2017,11 +2161,6 @@ async function renderTimeline() {
         await updateTimelineSummary();
     });
 
-    document.getElementById('timeline-assignee-filter')?.addEventListener('change', (event) => {
-        timelineState.assigneeFilter = event.target.value;
-        renderTimeline();
-    });
-
     document.getElementById('timeline-add-key-date')?.addEventListener('click', () => {
         const range = getPeriodRange(timelineState.zoomLevel, timelineState.visibleDate);
         openKeyDateModal(range);
@@ -2030,13 +2169,12 @@ async function renderTimeline() {
     updateZoomButtons();
     updateTimelineDateLabel();
 
-    const { fetchedTasks, lanedTasks, keyDates, timeContext } = await populateTimelinePeriod();
-    updateTimelineInsights(lanedTasks, timeContext);
-    renderKeyDatesPanel(keyDates, timeContext);
-    await updateTimelineSummary(fetchedTasks);
+    await populateTimelinePeriod();
 }
 
 export function runTimelineLogic() {
+    destroyTimelineModule();
+    appState.currentViewCleanup = destroyTimelineModule;
     timelineState.visibleDate = new Date();
     timelineState.zoomLevel = 'year';
     timelineState.summaryYear = timelineState.visibleDate.getFullYear();
