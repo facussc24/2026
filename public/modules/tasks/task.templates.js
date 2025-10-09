@@ -1377,6 +1377,12 @@ export function getTaskFormModalHTML(task, defaultStatus, selectedUid, defaultDa
                             <input type="date" id="task-planneddate" name="plannedDate" value="${isEditing && task.plannedDate ? task.plannedDate : ''}">
                         </div>
                         <div class="input-group md:col-span-3">
+                            <label for="task-show-in-planning" class="flex items-center gap-3 cursor-pointer text-sm font-medium text-slate-700">
+                                <input type="checkbox" id="task-show-in-planning" name="showInPlanning" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300" ${isEditing && task.showInPlanning ? 'checked' : ''}>
+                                <span>Mostrar en planning</span>
+                            </label>
+                        </div>
+                        <div class="input-group md:col-span-3">
                             <label for="task-progress">Progreso</label>
                             <input type="range" id="task-progress" name="progress" min="0" max="100" value="${isEditing && task.progress ? task.progress : '0'}" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700">
                         </div>

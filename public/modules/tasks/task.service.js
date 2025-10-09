@@ -159,11 +159,14 @@ export async function handleTaskFormSubmit(e) {
     // Create unified search keywords
     const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);
     let tags = [];
+    let existingTaskData = null;
     if (isEditing) {
         try {
-            const taskDoc = await getDoc(doc(db, COLLECTIONS.TAREAS, taskId));
+            const taskRef = doc(db, COLLECTIONS.TAREAS, taskId);
+            const taskDoc = await getDoc(taskRef);
             if (taskDoc.exists()) {
-                tags = taskDoc.data().tags || [];
+                existingTaskData = taskDoc.data();
+                tags = existingTaskData.tags || [];
             }
         } catch (e) {
             console.error("Could not fetch existing task to preserve tags:", e);
@@ -177,6 +180,15 @@ export async function handleTaskFormSubmit(e) {
         data.isPublic = isPublicCheckbox.checked;
     } else if (!isEditing) {
         data.isPublic = false;
+    }
+
+    const showInPlanningCheckbox = form.querySelector('[name="showInPlanning"]');
+    if (showInPlanningCheckbox) {
+        data.showInPlanning = !!showInPlanningCheckbox.checked;
+    } else if (isEditing && existingTaskData) {
+        data.showInPlanning = !!existingTaskData.showInPlanning;
+    } else if (!isEditing) {
+        data.showInPlanning = false;
     }
 
     const saveButton = modalElement.querySelector('button[type="submit"]');
@@ -228,6 +240,12 @@ export async function createTask(taskData) {
         updatedAt: new Date(),
         status: 'todo' // Default status for new tasks
     };
+
+    if (typeof data.showInPlanning === 'undefined') {
+        data.showInPlanning = false;
+    } else {
+        data.showInPlanning = !!data.showInPlanning;
+    }
 
     // Create unified search keywords
     const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);
