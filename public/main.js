@@ -14,6 +14,7 @@ import {
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page/index.js';
 import { initUserManagementModule, handleUserDisable } from './modules/user_management/index.js';
+import { initTimelineModule, runTimelineLogic } from './modules/timeline/index.js';
 import { deleteProductAndOrphanedSubProducts } from './services/product.service.js';
 
 // Provide a resilient lucide wrapper so UI rendering does not break if the icon
@@ -116,6 +117,7 @@ const PREDEFINED_AVATARS = [
 // --- Configuración de Vistas ---
 const viewConfig = {
     'landing-page': { title: 'Página Principal', singular: 'Página Principal' },
+    'timeline': { title: 'Timeline', singular: 'Timeline' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
     user_management: {
         title: 'Gestión de Usuarios',
@@ -1203,6 +1205,7 @@ async function switchView(viewName, params = null) {
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
     if (viewName === 'landing-page') await runLandingPageLogic();
+    else if (viewName === 'timeline') await runTimelineLogic();
     else if (viewName === 'profile') await runProfileLogic();
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
@@ -3384,6 +3387,7 @@ onAuthStateChanged(auth, async (user) => {
                 initTasksModule(appDependencies);
                 initLandingPageModule(appDependencies);
                 initUserManagementModule(appDependencies);
+                initTimelineModule(appDependencies);
                 authWatchdog.log('auth-state:modules-initialized');
 
                 if (!isTestMode) {
@@ -3599,6 +3603,9 @@ window.seedDatabase = seedDatabase;
 
 // Expose switchView for Playwright
 window.switchView = switchView;
+
+// Expose openTaskFormModal for Playwright testing
+window.openTaskFormModal = openTaskFormModal;
 
 function renderArbolesInitialView() {
     dom.viewContent.innerHTML = `<div class="flex flex-col items-center justify-center h-full bg-white rounded-xl shadow-lg p-6 text-center animate-fade-in-up"><i data-lucide="git-merge" class="h-24 w-24 text-gray-300 mb-6"></i><h3 class="text-2xl font-bold">Gestor de Árboles de Producto</h3><p class="text-gray-500 mt-2 mb-8 max-w-lg">Busque y seleccione el producto principal para cargar o crear su estructura de componentes.</p><button data-action="open-product-search-modal" class="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 text-lg font-semibold shadow-lg transition-transform transform hover:scale-105"><i data-lucide="search" class="inline-block mr-2 -mt-1"></i>Seleccionar Producto</button></div>`;
