@@ -409,11 +409,16 @@ function dayOfWeekToDate(day, weekStartDate) {
     return date.toISOString().split('T')[0];
 }
 
-function pixelsToDays(pixelValue, totalWidth, daysInPeriod) {
+function pixelsToDays(pixelValue, totalWidth, daysInPeriod, options = {}) {
+    const { enforcePositiveMinimum = false } = options;
     if (totalWidth === 0) return 0;
     const pixelsPerDay = totalWidth / daysInPeriod;
     if (pixelsPerDay === 0) return 0;
-    return Math.round(pixelValue / pixelsPerDay);
+    const days = Math.round(pixelValue / pixelsPerDay);
+    if (enforcePositiveMinimum && pixelValue > 0) {
+        return Math.max(1, days);
+    }
+    return days;
 }
 
 async function updateTaskDates(taskId, newStartDate, newEndDate) {
@@ -942,7 +947,13 @@ function setupTimelineInteractions(lanedTasks, context) {
                     const x = parseFloat(target.getAttribute('data-x')) || 0;
                     const dayOffset = pixelsToDays(x, gridContent.offsetWidth, daysInPeriod);
                     const widthInPixels = event.rect.width;
-                    const durationInDays = pixelsToDays(widthInPixels, gridContent.offsetWidth, daysInPeriod);
+                    const rawDurationInDays = pixelsToDays(
+                        widthInPixels,
+                        gridContent.offsetWidth,
+                        daysInPeriod,
+                        { enforcePositiveMinimum: true }
+                    );
+                    const durationInDays = Math.max(1, rawDurationInDays);
 
                     const newStartDay = task.originalStartDay + dayOffset;
                     const newEndDay = newStartDay + durationInDays - 1;
