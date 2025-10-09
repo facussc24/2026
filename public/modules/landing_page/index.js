@@ -13,7 +13,7 @@ import { collection, getDocs, query, where, orderBy, limit, doc, updateDoc, or }
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../../utils.js';
 import { getPlannerHelpModalHTML, getTasksModalHTML } from '../tasks/task.templates.js';
-import { completeAndArchiveTask, updateTaskBlockedStatus } from '../tasks/task.service.js';
+import { completeAndArchiveTask, updateTaskBlockedStatus, updateTaskStatus } from '../tasks/task.service.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -59,6 +59,9 @@ let monthlyViewState = {
 
 let monthWeekBucketsCache = new Map();
 let isPlannerTransitioning = false;
+const dailyViewState = {
+    selectedDate: getLocalISODate()
+};
 
 // --- 2. UI RENDERING ---
 
@@ -86,7 +89,7 @@ function renderLandingPageHTML() {
                 <div class="bg-card-light dark:bg-card-dark p-6 rounded-lg shadow-sm">
                     <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between mb-4">
                         <div class="flex items-center gap-2">
-                             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Planificador Semanal</h3>
+                             <h3 class="text-xl font-bold text-slate-800 dark:text-slate-200">Planificador de Tareas</h3>
                              <button id="show-planner-help-btn" class="p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400" title="Ayuda sobre el planificador">
                                  <i data-lucide="help-circle" class="w-5 h-5"></i>
                              </button>
@@ -96,6 +99,7 @@ function renderLandingPageHTML() {
                                 <div id="week-display" class="font-semibold text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-3 py-1 rounded-full"></div>
                                 <div id="planner-view-toggle" class="inline-flex rounded-full bg-slate-200 dark:bg-slate-700 p-1">
                                     <button data-view-mode="weekly" class="planner-toggle-btn px-4 py-1.5 text-sm font-semibold rounded-full transition-colors">Semanal</button>
+                                    <button data-view-mode="daily" class="planner-toggle-btn px-4 py-1.5 text-sm font-semibold rounded-full transition-colors">Diaria</button>
                                     <button data-view-mode="monthly" class="planner-toggle-btn px-4 py-1.5 text-sm font-semibold rounded-full transition-colors">Mensual</button>
                                 </div>
                             </div>
@@ -120,6 +124,71 @@ function renderLandingPageHTML() {
                             <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span>Baja</div>
                         </div>
                         <div id="weekly-tasks-container" class="grid grid-cols-1 lg:grid-cols-7 gap-6 min-h-[400px]"></div>
+                    </div>
+                    <div id="daily-view-container" class="hidden">
+                        <div class="space-y-6">
+                            <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                                <div>
+                                    <h4 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Planificación diaria</h4>
+                                    <p id="daily-date-label" class="text-sm text-slate-500 dark:text-slate-400"></p>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <div class="inline-flex rounded-full bg-slate-200 dark:bg-slate-700 p-1">
+                                        <button id="daily-prev-day-btn" class="px-3 py-1.5 rounded-full hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200" title="Día anterior"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                                        <button id="daily-today-btn" class="px-4 py-1.5 rounded-full hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200" title="Volver a Hoy">Hoy</button>
+                                        <button id="daily-next-day-btn" class="px-3 py-1.5 rounded-full hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-200" title="Día siguiente"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                                    </div>
+                                    <input type="date" id="daily-date-picker" class="px-3 py-1.5 rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-600 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 p-5 shadow-sm flex flex-col justify-between gap-4">
+                                    <div class="flex items-center justify-between">
+                                        <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">Grado de avance</p>
+                                        <span id="daily-progress-percentage" class="text-lg font-bold text-emerald-600 dark:text-emerald-400">0%</span>
+                                    </div>
+                                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div id="daily-progress-bar" class="h-3 bg-emerald-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <p id="daily-progress-summary" class="text-xs text-slate-500 dark:text-slate-400">No hay tareas planificadas.</p>
+                                        <p class="text-[11px] text-slate-400 dark:text-slate-500">Arrastrá las tareas entre columnas para actualizar su estado diario.</p>
+                                    </div>
+                                </div>
+                                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4" id="daily-columns-container">
+                                    <div class="daily-column rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 p-4" data-status="todo">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                                                <i data-lucide="list-todo" class="w-4 h-4 text-yellow-500"></i>
+                                                <span class="text-sm font-semibold">Por hacer</span>
+                                            </div>
+                                            <span id="daily-count-todo" class="text-xs font-semibold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">0</span>
+                                        </div>
+                                        <div class="daily-task-list space-y-2 min-h-[220px]" data-status="todo" id="daily-list-todo"></div>
+                                    </div>
+                                    <div class="daily-column rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 p-4" data-status="inprogress">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                                                <i data-lucide="timer" class="w-4 h-4 text-blue-500"></i>
+                                                <span class="text-sm font-semibold">En progreso</span>
+                                            </div>
+                                            <span id="daily-count-inprogress" class="text-xs font-semibold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">0</span>
+                                        </div>
+                                        <div class="daily-task-list space-y-2 min-h-[220px]" data-status="inprogress" id="daily-list-inprogress"></div>
+                                    </div>
+                                    <div class="daily-column rounded-2xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 p-4" data-status="done">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <div class="flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                                                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+                                                <span class="text-sm font-semibold">Completadas</span>
+                                            </div>
+                                            <span id="daily-count-done" class="text-xs font-semibold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full">0</span>
+                                        </div>
+                                        <div class="daily-task-list space-y-2 min-h-[220px]" data-status="done" id="daily-list-done"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div id="monthly-view-container" class="hidden">
                         <div class="space-y-6">
@@ -214,6 +283,74 @@ function getWeekDateRange(returnFullWeek = false) {
     return { start: format(monday), end: format(friday) };
 }
 
+function getLocalISODate(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getDailyDateLabel(dateString) {
+    if (!dateString) return '';
+    const date = new Date(`${dateString}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    const label = date.toLocaleDateString('es-AR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+    });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function updateDailyDateUI() {
+    const labelElement = document.getElementById('daily-date-label');
+    const picker = document.getElementById('daily-date-picker');
+    if (labelElement) {
+        labelElement.textContent = getDailyDateLabel(dailyViewState.selectedDate);
+    }
+    if (picker && picker.value !== dailyViewState.selectedDate) {
+        picker.value = dailyViewState.selectedDate;
+    }
+}
+
+function setDailyViewDate(newDate) {
+    if (!newDate) return;
+    dailyViewState.selectedDate = newDate;
+    updateDailyDateUI();
+    renderDailyView(weeklyTasksCache);
+}
+
+function adjustDailyViewDate(offsetDays) {
+    const baseDate = new Date(`${dailyViewState.selectedDate}T00:00:00`);
+    if (Number.isNaN(baseDate.getTime())) {
+        setDailyViewDate(getLocalISODate());
+        return;
+    }
+    baseDate.setDate(baseDate.getDate() + offsetDays);
+    setDailyViewDate(getLocalISODate(baseDate));
+}
+
+function sortTasksForDailyColumn(tasks = []) {
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    return [...tasks].sort((a, b) => {
+        const priorityDiff = (priorityOrder[a.priority || 'medium'] ?? 1) - (priorityOrder[b.priority || 'medium'] ?? 1);
+        if (priorityDiff !== 0) return priorityDiff;
+        if (a.dueDate && b.dueDate) {
+            return a.dueDate.localeCompare(b.dueDate);
+        }
+        if (a.dueDate) return -1;
+        if (b.dueDate) return 1;
+        return (a.title || '').localeCompare(b.title || '');
+    });
+}
+
+const DAILY_STATUS_CONFIG = [
+    { key: 'todo', listId: 'daily-list-todo', countId: 'daily-count-todo', label: 'Por hacer' },
+    { key: 'inprogress', listId: 'daily-list-inprogress', countId: 'daily-count-inprogress', label: 'En progreso' },
+    { key: 'done', listId: 'daily-list-done', countId: 'daily-count-done', label: 'Completadas' }
+];
+
 function renderTaskCardsHTML(tasks) {
     if (!tasks || tasks.length === 0) {
         return `<p class="text-xs text-slate-400 dark:text-slate-500 text-center pt-4">No hay tareas</p>`;
@@ -223,9 +360,10 @@ function renderTaskCardsHTML(tasks) {
     return tasks.map(task => {
         const assignee = users.get(task.assigneeUid);
         const style = priorityStyles[task.priority || 'medium'];
-        const canDrag = getActiveRole() === 'admin' || appState.currentUser.uid === task.assigneeUid;
+        const isCompleted = task.status === 'done' || task.isArchived;
+        const canDrag = (getActiveRole() === 'admin' || appState.currentUser.uid === task.assigneeUid) && !task.isArchived;
         const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
-        const canComplete = canDrag || appState.currentUser.uid === task.creatorUid;
+        const canComplete = !isCompleted && (canDrag || appState.currentUser.uid === task.creatorUid);
         const completeButton = canComplete ? `<button data-action="complete-task" title="Marcar como completada" class="complete-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><i data-lucide="check" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
         const blockButton = canComplete ? `<button data-action="block-task" title="Bloquear Tarea" class="block-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-orange-100 text-orange-600 hover:bg-orange-200"><i data-lucide="lock" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
 
@@ -591,8 +729,16 @@ function updatePlannerViewToggleButtons() {
 function ensurePlannerContainersVisibility() {
     const weeklyContainer = document.getElementById('weekly-view-container');
     const monthlyContainer = document.getElementById('monthly-view-container');
+    const dailyContainer = document.getElementById('daily-view-container');
     if (weeklyContainer) {
         weeklyContainer.classList.toggle('hidden', appState.plannerViewMode !== 'weekly');
+    }
+    if (dailyContainer) {
+        const isDaily = appState.plannerViewMode === 'daily';
+        dailyContainer.classList.toggle('hidden', !isDaily);
+        if (isDaily) {
+            renderDailyView(weeklyTasksCache);
+        }
     }
     if (monthlyContainer) {
         monthlyContainer.classList.toggle('hidden', appState.plannerViewMode !== 'monthly');
@@ -627,18 +773,25 @@ function updateMonthlySectionsVisibility() {
 }
 
 function setPlannerViewMode(mode) {
-    if (!['weekly', 'monthly'].includes(mode)) return;
+    if (!['weekly', 'daily', 'monthly'].includes(mode)) return;
     if (appState.plannerViewMode === mode) return;
     appState.plannerViewMode = mode;
     if (mode === 'monthly') {
         monthlyViewState.viewPhase = 'months';
         monthlyViewState.selectedMonthKey = null;
         monthlyViewState.selectedWeekIndex = null;
+    } else if (mode === 'daily') {
+        if (!dailyViewState.selectedDate) {
+            dailyViewState.selectedDate = getLocalISODate();
+        }
     }
     ensurePlannerContainersVisibility();
     updatePlannerViewToggleButtons();
     if (mode === 'monthly') {
-        updateMonthlyView(weeklyTasksCache);
+        const activeTasks = (weeklyTasksCache || []).filter(task => task.status !== 'done');
+        updateMonthlyView(activeTasks);
+    } else if (mode === 'daily') {
+        renderDailyView(weeklyTasksCache);
     }
 }
 
@@ -975,6 +1128,110 @@ function renderTaskColumn(title, tasks, attributes, isToday = false, taskCount =
         </div>`;
 }
 
+function renderDailyView(tasks = []) {
+    const container = document.getElementById('daily-view-container');
+    if (!container) return;
+
+    updateDailyDateUI();
+
+    const selectedDate = dailyViewState.selectedDate;
+    const safeTasks = Array.isArray(tasks) ? tasks : [];
+    const tasksForDay = safeTasks.filter(task => {
+        if (!task || task.isArchived) return false;
+        return task.plannedDate === selectedDate;
+    });
+
+    const groupedTasks = {
+        todo: [],
+        inprogress: [],
+        done: []
+    };
+
+    tasksForDay.forEach(task => {
+        const statusKey = (task.status || 'todo').toLowerCase();
+        if (groupedTasks[statusKey]) {
+            groupedTasks[statusKey].push(task);
+        } else {
+            groupedTasks.todo.push(task);
+        }
+    });
+
+    const totalTasks = tasksForDay.length;
+    const doneCount = groupedTasks.done.length;
+    const inProgressCount = groupedTasks.inprogress.length;
+    const progress = totalTasks === 0 ? 0 : Math.round((doneCount / totalTasks) * 100);
+
+    const progressBar = document.getElementById('daily-progress-bar');
+    if (progressBar) {
+        progressBar.style.width = `${progress}%`;
+    }
+    const progressLabel = document.getElementById('daily-progress-percentage');
+    if (progressLabel) {
+        progressLabel.textContent = `${progress}%`;
+    }
+    const summaryElement = document.getElementById('daily-progress-summary');
+    if (summaryElement) {
+        summaryElement.textContent = totalTasks === 0
+            ? 'No hay tareas planificadas.'
+            : `${doneCount} de ${totalTasks} tareas completadas · ${inProgressCount} en progreso.`;
+    }
+
+    DAILY_STATUS_CONFIG.forEach(config => {
+        const listElement = document.getElementById(config.listId);
+        const countElement = document.getElementById(config.countId);
+        if (countElement) {
+            countElement.textContent = groupedTasks[config.key]?.length.toString() ?? '0';
+        }
+        if (listElement) {
+            const sortedTasks = sortTasksForDailyColumn(groupedTasks[config.key]);
+            listElement.innerHTML = renderTaskCardsHTML(sortedTasks);
+        }
+    });
+
+    lucide.createIcons();
+    initDailySortable();
+}
+
+function initDailySortable() {
+    const lists = document.querySelectorAll('.daily-task-list');
+    if (lists.length === 0 || typeof Sortable === 'undefined') return;
+
+    lists.forEach(list => {
+        if (list.sortableInstance) {
+            list.sortableInstance.destroy();
+        }
+
+        list.sortableInstance = new Sortable(list, {
+            group: 'daily-planning',
+            animation: 150,
+            filter: '.no-drag',
+            preventOnFilter: true,
+            ghostClass: 'sortable-ghost-custom',
+            onEnd: async (evt) => {
+                const taskId = evt?.item?.dataset?.taskId;
+                const fromStatus = evt?.from?.dataset?.status;
+                const toStatus = evt?.to?.dataset?.status;
+
+                if (!taskId || !toStatus || toStatus === fromStatus || evt.item.classList.contains('no-drag')) {
+                    renderDailyView(weeklyTasksCache);
+                    return;
+                }
+
+                try {
+                    await updateTaskStatus(taskId, toStatus);
+                    const statusLabel = DAILY_STATUS_CONFIG.find(config => config.key === toStatus)?.label || 'nuevo estado';
+                    showToast(`Tarea movida a "${statusLabel}".`, 'success');
+                } catch (error) {
+                    console.error('Error updating daily task status:', error);
+                    showToast('Error al actualizar el estado de la tarea.', 'error');
+                } finally {
+                    refreshWeeklyTasksView('jump');
+                }
+            }
+        });
+    });
+}
+
 function initWeeklyTasksSortable() {
     const taskLists = document.querySelectorAll('.task-list');
     if (taskLists.length === 0) return;
@@ -1084,8 +1341,10 @@ async function fetchWeeklyTasks() {
 
     try {
         const querySnapshot = await getDocs(q);
-        // Filter for pending tasks on the client side.
-        return querySnapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })).filter(task => task.status !== 'done');
+        // Filter out archived tasks on the client side.
+        return querySnapshot.docs
+            .map(doc => ({ ...doc.data(), docId: doc.id }))
+            .filter(task => !task.isArchived);
     } catch (error) {
         console.error("Error fetching weekly tasks:", error);
         if (error.code === 'failed-precondition') {
@@ -1108,7 +1367,7 @@ async function fetchWeeklyTasks() {
                 });
             });
 
-            return Array.from(dedupedTasks.values()).filter(task => task.status !== 'done');
+            return Array.from(dedupedTasks.values()).filter(task => !task.isArchived);
         } else {
             showToast('Error al cargar las tareas.', 'error');
         }
@@ -1126,6 +1385,15 @@ function setupActionButtons() {
                 setPlannerViewMode(mode);
             }
         });
+    });
+    document.getElementById('daily-prev-day-btn')?.addEventListener('click', () => adjustDailyViewDate(-1));
+    document.getElementById('daily-next-day-btn')?.addEventListener('click', () => adjustDailyViewDate(1));
+    document.getElementById('daily-today-btn')?.addEventListener('click', () => setDailyViewDate(getLocalISODate()));
+    document.getElementById('daily-date-picker')?.addEventListener('change', (event) => {
+        const value = event.target.value;
+        if (value) {
+            setDailyViewDate(value);
+        }
     });
     document.getElementById('monthly-prev-year-btn')?.addEventListener('click', () => {
         monthlyViewState.yearOffset--;
@@ -1211,11 +1479,13 @@ async function refreshWeeklyTasksView(direction = 'next') {
     const fetchAndRenderTasks = async () => {
         const tasks = await fetchWeeklyTasks();
         weeklyTasksCache = tasks;
-        renderWeeklyTasks(tasks);
-        updateMonthlyView(tasks);
+        const activeTasks = tasks.filter(task => task.status !== 'done');
+        renderWeeklyTasks(activeTasks);
+        updateMonthlyView(activeTasks);
+        renderDailyView(tasks);
     };
 
-    if (appState.plannerViewMode === 'monthly') {
+    if (appState.plannerViewMode === 'monthly' || appState.plannerViewMode === 'daily') {
         try {
             await fetchAndRenderTasks();
         } catch (error) {
@@ -1266,7 +1536,10 @@ export async function runLandingPageLogic() {
     monthlyViewState.selectedMonthKey = null;
     monthlyViewState.selectedWeekIndex = null;
     monthlyViewState.viewPhase = 'months';
+    dailyViewState.selectedDate = getLocalISODate();
     renderLandingPageHTML();
+    updateDailyDateUI();
+    renderDailyView([]);
     ensurePlannerContainersVisibility();
     updatePlannerViewToggleButtons();
     updateMonthlyYearLabel();

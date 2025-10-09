@@ -117,7 +117,7 @@ const PREDEFINED_AVATARS = [
 // --- Configuración de Vistas ---
 const viewConfig = {
     'landing-page': { title: 'Página Principal', singular: 'Página Principal' },
-    'timeline': { title: 'Timeline', singular: 'Timeline' },
+    'timeline': { title: 'Planning', singular: 'Planning' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
     user_management: {
         title: 'Gestión de Usuarios',
