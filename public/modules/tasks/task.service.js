@@ -10,7 +10,7 @@
  * @module modules/tasks/task.service
  */
 
-import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, startAfter } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, startAfter, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../../utils.js';
 
@@ -20,6 +20,39 @@ let functions;
 let appState;
 let showToast;
 let lucide;
+
+function convertDateInputToTimestamp(value) {
+    if (!value) {
+        return null;
+    }
+    if (value instanceof Timestamp) {
+        return value;
+    }
+    if (value instanceof Date) {
+        const clone = new Date(value.getTime());
+        clone.setHours(0, 0, 0, 0);
+        return Timestamp.fromDate(clone);
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const parsed = new Date(trimmed.includes('T') ? trimmed : `${trimmed}T00:00:00`);
+        if (!Number.isNaN(parsed.getTime())) {
+            parsed.setHours(0, 0, 0, 0);
+            return Timestamp.fromDate(parsed);
+        }
+    }
+    if (value && typeof value.toDate === 'function') {
+        const converted = value.toDate();
+        if (converted instanceof Date && !Number.isNaN(converted.getTime())) {
+            converted.setHours(0, 0, 0, 0);
+            return Timestamp.fromDate(converted);
+        }
+    }
+    return null;
+}
 
 /**
  * Stores shared dependencies so the service functions can interact with
@@ -156,6 +189,10 @@ export async function handleTaskFormSubmit(e) {
         return;
     }
 
+    ['startDate', 'dueDate', 'endDate'].forEach(field => {
+        data[field] = convertDateInputToTimestamp(data[field]);
+    });
+
     // Create unified search keywords
     const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);
     let tags = [];
@@ -246,6 +283,12 @@ export async function createTask(taskData) {
     } else {
         data.showInPlanning = !!data.showInPlanning;
     }
+
+    ['startDate', 'dueDate', 'endDate'].forEach(field => {
+        if (Object.prototype.hasOwnProperty.call(data, field)) {
+            data[field] = convertDateInputToTimestamp(data[field]);
+        }
+    });
 
     // Create unified search keywords
     const titleKeywords = data.title.toLowerCase().split(' ').filter(w => w.length > 2);

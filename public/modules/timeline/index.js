@@ -1,5 +1,5 @@
 import { appState, dom } from '../../main.js';
-import { getDocs, collection, query, orderBy, where, doc, updateDoc, addDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getDocs, collection, query, orderBy, where, doc, updateDoc, addDoc, deleteDoc, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // Module-level variables
 let db;
@@ -45,9 +45,8 @@ function escapeHTML(value) {
 }
 
 function normalizeToDateOnly(date) {
-    if (!date) return null;
-    const normalized = new Date(date);
-    if (Number.isNaN(normalized.getTime())) return null;
+    const normalized = parseDateValue(date);
+    if (!normalized) return null;
     normalized.setHours(0, 0, 0, 0);
     return normalized;
 }
@@ -164,28 +163,50 @@ function isLeapYear(year) {
     return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
 }
 
-function parseDateOnly(value) {
+function coerceToDate(value) {
     if (!value) return null;
-    const date = new Date(`${value}T00:00:00`);
-    return Number.isNaN(date.getTime()) ? null : date;
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
+    }
+    if (value instanceof Timestamp) {
+        const converted = value.toDate();
+        return Number.isNaN(converted?.getTime?.()) ? null : new Date(converted.getTime());
+    }
+    if (value && typeof value.toDate === 'function') {
+        try {
+            const converted = value.toDate();
+            return converted instanceof Date && !Number.isNaN(converted.getTime())
+                ? new Date(converted.getTime())
+                : null;
+        } catch (error) {
+            return null;
+        }
+    }
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const isoCandidate = new Date(trimmed.includes('T') ? trimmed : `${trimmed}T00:00:00`);
+        if (!Number.isNaN(isoCandidate.getTime())) {
+            return isoCandidate;
+        }
+        const fallback = new Date(trimmed);
+        return Number.isNaN(fallback.getTime()) ? null : fallback;
+    }
+    return null;
+}
+
+function parseDateOnly(value) {
+    const date = coerceToDate(value);
+    if (!date) return null;
+    const normalized = new Date(date.getTime());
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
 }
 
 function parseDateValue(value) {
-    if (!value) return null;
-    if (value instanceof Date) {
-        return value;
-    }
-    if (typeof value === 'string') {
-        const parsed = new Date(value);
-        if (!Number.isNaN(parsed.getTime())) {
-            return parsed;
-        }
-        return parseDateOnly(value);
-    }
-    if (value && typeof value.toDate === 'function') {
-        return value.toDate();
-    }
-    return null;
+    return coerceToDate(value);
 }
 
 function addDays(date, amount) {
@@ -197,8 +218,8 @@ function addDays(date, amount) {
 }
 
 function getSafeDueDate(startDate, dueDate) {
-    const startDateObj = startDate instanceof Date ? new Date(startDate) : parseDateOnly(startDate);
-    const dueDateObj = dueDate instanceof Date ? new Date(dueDate) : parseDateOnly(dueDate);
+    const startDateObj = parseDateOnly(startDate);
+    const dueDateObj = parseDateOnly(dueDate);
     if (dueDateObj) {
         dueDateObj.setHours(0, 0, 0, 0);
         return dueDateObj;
@@ -247,7 +268,7 @@ function calculatePlanSegment(year, startDate, endDate) {
 
 function formatDisplayDate(value, options = {}) {
     const { includeYear = true } = options;
-    const date = typeof value === 'string' ? parseDateOnly(value) : parseDateValue(value);
+    const date = parseDateValue(value);
     if (!date) return '—';
     const formatOptions = { day: '2-digit', month: 'short' };
     if (includeYear) {
@@ -385,39 +406,31 @@ function getWeekRangeString(date) {
     else return `${format(monday)}, ${monday.getFullYear()} - ${format(sunday)}, ${sunday.getFullYear()}`;
 }
 
-function dateToDayOfYear(dateStr, year) {
-    if (!dateStr) return 0;
-    try {
-        const date = new Date(dateStr + 'T00:00:00');
-        if (isNaN(date)) return 0;
-        const start = new Date(year, 0, 0);
-        const diff = date - start;
-        const oneDay = 1000 * 60 * 60 * 24;
-        return Math.floor(diff / oneDay);
-    } catch (e) { return 0; }
+function dateToDayOfYear(value, year) {
+    const date = parseDateOnly(value);
+    if (!date || date.getFullYear() !== year) return 0;
+    const start = new Date(year, 0, 0);
+    const diff = date - start;
+    const oneDay = 1000 * 60 * 60 * 24;
+    return Math.floor(diff / oneDay);
 }
 
-function dateToDayOfMonth(dateStr, dateInMonth) {
-    if (!dateStr) return 0;
-    try {
-        const date = new Date(dateStr + 'T00:00:00');
-        if (isNaN(date) || date.getFullYear() !== dateInMonth.getFullYear() || date.getMonth() !== dateInMonth.getMonth()) return 0;
-        return date.getDate();
-    } catch (e) { return 0; }
+function dateToDayOfMonth(value, dateInMonth) {
+    const date = parseDateOnly(value);
+    if (!date) return 0;
+    if (date.getFullYear() !== dateInMonth.getFullYear() || date.getMonth() !== dateInMonth.getMonth()) return 0;
+    return date.getDate();
 }
 
-function dateToDayOfWeek(dateStr, weekStartDate) {
-    if (!dateStr) return 0;
-    try {
-        const date = new Date(dateStr + 'T00:00:00');
-        if (isNaN(date)) return 0;
-        const normalizedWeekStart = new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), weekStartDate.getDate());
-        const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-        const diff = normalizedDate - normalizedWeekStart;
-        const oneDay = 1000 * 60 * 60 * 24;
-        const dayIndex = Math.floor(diff / oneDay);
-        return dayIndex + 1;
-    } catch (e) { return 0; }
+function dateToDayOfWeek(value, weekStartDate) {
+    const date = parseDateOnly(value);
+    if (!date) return 0;
+    const normalizedWeekStart = parseDateOnly(weekStartDate);
+    if (!normalizedWeekStart) return 0;
+    const diff = date - normalizedWeekStart;
+    const oneDay = 1000 * 60 * 60 * 24;
+    const dayIndex = Math.floor(diff / oneDay);
+    return dayIndex + 1;
 }
 
 function dayOfYearToDate(day, year) {
@@ -458,7 +471,13 @@ async function updateTaskDates(taskId, newStartDate, newEndDate) {
     const toastId = window.showToast('Guardando cambios...', 'loading', { duration: 0 });
     try {
         const taskRef = doc(db, 'tareas', taskId);
-        await updateDoc(taskRef, { startDate: newStartDate, dueDate: newEndDate });
+        const startDateObj = parseDateOnly(newStartDate);
+        const endDateObj = parseDateOnly(newEndDate);
+        await updateDoc(taskRef, {
+            startDate: startDateObj ? Timestamp.fromDate(startDateObj) : null,
+            dueDate: endDateObj ? Timestamp.fromDate(endDateObj) : null,
+            endDate: endDateObj ? Timestamp.fromDate(endDateObj) : null
+        });
         window.showToast('Tarea actualizada.', 'success', { toastId });
         return true;
     } catch (error) {
@@ -667,12 +686,14 @@ async function fetchTimelineTasks(range) {
     try {
         const { startDate, endDate } = range;
         const tasksRef = collection(db, 'tareas');
-        const q = query(
-            tasksRef,
-            where('showInPlanning', '==', true),
-            where("startDate", "<=", endDate),
-            orderBy("startDate", "asc")
-        );
+        const endBoundary = parseDateOnly(endDate);
+        const constraints = [where('showInPlanning', '==', true)];
+        if (endBoundary) {
+            endBoundary.setHours(23, 59, 59, 999);
+            constraints.push(where('startDate', '<=', Timestamp.fromDate(endBoundary)));
+        }
+        constraints.push(orderBy('startDate', 'asc'));
+        const q = query(tasksRef, ...constraints);
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() }))
@@ -860,9 +881,11 @@ function getTaskBarsHTML(lanedTasks, context) {
 
     return lanedTasks.map(task => {
         const safeTitle = escapeHTML(task?.title ?? '');
-        const safeStartDate = escapeHTML(task?.startDate ?? '');
-        const safeDueDate = escapeHTML(task?.effectiveDueDate ?? task?.dueDate ?? '');
-        const dateSegment = safeStartDate || safeDueDate ? ` (${safeStartDate} - ${safeDueDate})` : '';
+        const startLabel = formatDateForInput(task?.startDate) || '';
+        const endLabel = formatDateForInput(task?.effectiveDueDate ?? task?.dueDate) || '';
+        const dateSegment = startLabel || endLabel
+            ? ` (${escapeHTML(startLabel || '—')} - ${escapeHTML(endLabel || '—')})`
+            : '';
         const fullTitle = `${safeTitle}${dateSegment}`;
         const leftPercent = ((task.startDay - 1) / daysInPeriod) * 100;
         const widthPercent = ((task.endDay - task.startDay + 1) / daysInPeriod) * 100;
