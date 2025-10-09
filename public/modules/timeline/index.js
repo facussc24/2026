@@ -1,10 +1,20 @@
 import { appState, dom } from '../../main.js';
-import { getDocs, collection, query, orderBy, where, doc, updateDoc, addDoc, deleteDoc, Timestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getDocs, collection, query, orderBy, where, doc, updateDoc as firebaseUpdateDoc, addDoc, deleteDoc, Timestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 
 // Module-level variables
 let db;
 let unsubscribeTasks = null;
 let unsubscribeKeyDates = null;
+let openTaskFormModalRef = null;
+let showConfirmationModalRef = null;
+let updateDocFn = firebaseUpdateDoc;
+let modalCloseObserver = null;
+let currentLanedTasks = [];
+let taskListHandlersBound = false;
+let gridHandlersBound = false;
+let containerHoverHandlersBound = false;
+let isSyncingScroll = false;
+let scrollHandlersBound = false;
 const timelineState = {
     zoomLevel: 'year', // 'year', 'month', 'week'
     visibleDate: new Date(),
@@ -33,6 +43,215 @@ const SUMMARY_STATUS_FILTERS = [
     { value: 'done', label: 'Completadas' },
     { value: 'overdue', label: 'Atrasadas' }
 ];
+
+function attachTaskModalCloseObserver() {
+    if (!dom?.modalContainer) return;
+    if (modalCloseObserver) {
+        modalCloseObserver.disconnect();
+        modalCloseObserver = null;
+    }
+    modalCloseObserver = new MutationObserver(() => {
+        if (!dom.modalContainer.querySelector('#task-form-modal')) {
+            if (modalCloseObserver) {
+                modalCloseObserver.disconnect();
+                modalCloseObserver = null;
+            }
+            renderTimeline();
+        }
+    });
+    modalCloseObserver.observe(dom.modalContainer, { childList: true });
+}
+
+function prefillTaskModalDates(startDate, dueDate) {
+    if (!startDate && !dueDate) return;
+    const applyPrefill = () => {
+        const modal = document.getElementById('task-form-modal');
+        if (!modal) return;
+        if (startDate) {
+            const startInput = modal.querySelector('#task-startdate');
+            if (startInput) startInput.value = startDate;
+        }
+        if (dueDate) {
+            const dueInput = modal.querySelector('#task-duedate');
+            if (dueInput) dueInput.value = dueDate;
+            const endInput = modal.querySelector('#task-enddate');
+            if (endInput) endInput.value = dueDate;
+        }
+    };
+    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+        window.requestAnimationFrame(applyPrefill);
+    } else {
+        setTimeout(applyPrefill, 0);
+    }
+}
+
+async function openTaskModal(task = null, options = {}) {
+    const { status = 'todo', assigneeUid = null, startDate = null, dueDate = null } = options;
+    if (typeof openTaskFormModalRef !== 'function') return;
+    await openTaskFormModalRef(task, status, assigneeUid, startDate || null);
+    prefillTaskModalDates(startDate, dueDate);
+    attachTaskModalCloseObserver();
+}
+
+function findTaskById(taskId) {
+    if (!taskId) return null;
+    const lanedMatch = currentLanedTasks.find(task => task?.id === taskId);
+    if (lanedMatch) return lanedMatch;
+    if (Array.isArray(timelineState.lastFetchedTasks)) {
+        return timelineState.lastFetchedTasks.find(task => task?.id === taskId) || null;
+    }
+    return null;
+}
+
+async function openTaskForEditing(taskId) {
+    const task = findTaskById(taskId);
+    if (!task) return;
+    if (task.isSample) {
+        window.showToast('Los datos de ejemplo no se pueden editar.', 'info');
+        return;
+    }
+    const normalizedTask = normalizeTaskForModal(task);
+    await openTaskModal(normalizedTask, {
+        status: normalizedTask.status || 'todo',
+        assigneeUid: normalizedTask.assigneeUid || null
+    });
+}
+
+function confirmAndDeleteTask(task) {
+    if (!task) return;
+    if (task.isSample) {
+        window.showToast('Los datos de ejemplo no se pueden eliminar.', 'info');
+        return;
+    }
+    const docId = task.docId || task.id;
+    if (!db || !docId) return;
+    const safeTitle = escapeHTML(task.title || 'Tarea sin título');
+    const executeDeletion = async () => {
+        const toastId = window.showToast('Eliminando tarea...', 'loading', { duration: 0 });
+        try {
+            await deleteDoc(doc(db, 'tareas', docId));
+            window.showToast('Tarea eliminada.', 'success', { toastId });
+            renderTimeline();
+        } catch (error) {
+            console.error('Error deleting task from planning:', error);
+            window.showToast('No se pudo eliminar la tarea.', 'error', { toastId });
+        }
+    };
+    if (typeof showConfirmationModalRef === 'function') {
+        showConfirmationModalRef(
+            'Eliminar tarea',
+            `¿Querés eliminar "${safeTitle}" del planning?`,
+            () => { void executeDeletion(); }
+        );
+    } else if (window.confirm(`¿Querés eliminar "${task.title || 'Tarea sin título'}" del planning?`)) {
+        void executeDeletion();
+    }
+}
+
+function handleTaskListClick(event) {
+    const row = event.target.closest('.task-table-row');
+    if (!row) return;
+    if (event.target.closest('.task-progress-controls')) return;
+    if (event.target.closest('.task-progress-slider')) return;
+    const taskId = row.dataset.taskId;
+    if (!taskId) return;
+    void openTaskForEditing(taskId);
+}
+
+function handleTaskListContextMenu(event) {
+    const row = event.target.closest('.task-table-row');
+    if (!row) return;
+    const taskId = row.dataset.taskId;
+    if (!taskId) return;
+    event.preventDefault();
+    const task = findTaskById(taskId);
+    confirmAndDeleteTask(task);
+}
+
+function handleTaskBarClick(event) {
+    const bar = event.target.closest('.task-bar');
+    if (!bar) return;
+    if (bar.dataset.dragging === 'true' || bar.dataset.resizing === 'true') {
+        return;
+    }
+    const taskId = bar.dataset.taskId;
+    if (!taskId) return;
+    void openTaskForEditing(taskId);
+}
+
+function handleTaskBarContextMenu(event) {
+    const bar = event.target.closest('.task-bar');
+    if (!bar) return;
+    const taskId = bar.dataset.taskId;
+    if (!taskId) return;
+    event.preventDefault();
+    const task = findTaskById(taskId);
+    confirmAndDeleteTask(task);
+}
+
+function handleTaskHoverEnter(event) {
+    const target = event.target.closest('[data-task-id]');
+    if (!target) return;
+    const taskId = target.dataset.taskId;
+    if (!taskId) return;
+    document.querySelectorAll(`[data-task-id="${taskId}"]`).forEach(el => el.classList.add('highlight'));
+}
+
+function handleTaskHoverLeave(event) {
+    const target = event.target.closest('[data-task-id]');
+    if (!target) return;
+    const taskId = target.dataset.taskId;
+    if (!taskId) return;
+    document.querySelectorAll(`[data-task-id="${taskId}"]`).forEach(el => el.classList.remove('highlight'));
+}
+
+function handleTimelineGridDoubleClick(event) {
+    const gridContent = event.currentTarget;
+    if (!gridContent) return;
+    if (event.target.closest('.task-bar')) return;
+    const context = { zoomLevel: timelineState.zoomLevel, visibleDate: timelineState.visibleDate };
+    const daysInPeriod = getDaysInPeriod(context);
+    if (daysInPeriod <= 0) return;
+    const rect = gridContent.getBoundingClientRect();
+    const totalWidth = gridContent.offsetWidth || rect.width;
+    if (!totalWidth) return;
+    const rawX = event.clientX - rect.left;
+    const clampedX = Math.max(0, Math.min(rawX, totalWidth));
+    let dayOffset = pixelsToDays(clampedX, totalWidth, daysInPeriod);
+    dayOffset = Math.max(0, Math.min(dayOffset, daysInPeriod - 1));
+    const activeRange = timelineState.currentRange || getPeriodRange(timelineState.zoomLevel, timelineState.visibleDate);
+    const rangeStart = parseDateOnly(activeRange?.startDate);
+    const rangeEnd = parseDateOnly(activeRange?.endDate);
+    if (!rangeStart) return;
+    const startDateObj = addDays(rangeStart, dayOffset) || rangeStart;
+    let dueDateObj = addDays(startDateObj, Math.max(MIN_BAR_DURATION_DAYS - 1, 0)) || startDateObj;
+    if (rangeEnd && dueDateObj > rangeEnd) {
+        dueDateObj = new Date(rangeEnd.getTime());
+    }
+    const startDate = startDateObj.toISOString().split('T')[0];
+    const dueDate = dueDateObj.toISOString().split('T')[0];
+    void openTaskModal(null, { status: 'todo', startDate, dueDate });
+}
+
+function onTaskListScroll() {
+    const taskList = document.querySelector('.timeline-task-list');
+    const taskGrid = document.querySelector('.timeline-grid');
+    if (!taskList || !taskGrid) return;
+    if (isSyncingScroll) return;
+    isSyncingScroll = true;
+    taskGrid.scrollTop = taskList.scrollTop;
+    setTimeout(() => { isSyncingScroll = false; }, 50);
+}
+
+function onTaskGridScroll() {
+    const taskList = document.querySelector('.timeline-task-list');
+    const taskGrid = document.querySelector('.timeline-grid');
+    if (!taskList || !taskGrid) return;
+    if (isSyncingScroll) return;
+    isSyncingScroll = true;
+    taskList.scrollTop = taskGrid.scrollTop;
+    setTimeout(() => { isSyncingScroll = false; }, 50);
+}
 
 function handleAssigneeFilterChange(event) {
     if (!event?.target) return;
@@ -489,7 +708,7 @@ async function updateTaskDates(taskId, newStartDate, newEndDate) {
         const taskRef = doc(db, 'tareas', taskId);
         const startDateObj = parseDateOnly(newStartDate);
         const endDateObj = parseDateOnly(newEndDate);
-        await updateDoc(taskRef, {
+        await updateDocFn(taskRef, {
             startDate: startDateObj ? Timestamp.fromDate(startDateObj) : null,
             dueDate: endDateObj ? Timestamp.fromDate(endDateObj) : null,
             endDate: endDateObj ? Timestamp.fromDate(endDateObj) : null
@@ -513,7 +732,7 @@ async function updateTaskProgress(taskId, progressValue) {
     const toastId = window.showToast('Actualizando progreso...', 'loading', { duration: 0 });
     try {
         const taskRef = doc(db, 'tareas', taskId);
-        await updateDoc(taskRef, { progress: progressValue });
+        await updateDocFn(taskRef, { progress: progressValue });
         window.showToast('Progreso actualizado.', 'success', { toastId });
         return true;
     } catch (error) {
@@ -1002,32 +1221,60 @@ function setupTimelineInteractions(lanedTasks, context) {
     const taskList = document.querySelector('.timeline-task-list');
     const taskGrid = document.querySelector('.timeline-grid');
     const container = document.querySelector('.timeline-container');
-    if (!taskList || !taskGrid || !container) return;
+    const gridContent = document.querySelector('.timeline-grid-content');
+    if (!taskList || !taskGrid || !container || !gridContent) return;
 
-    let isSyncingScroll = false;
-    taskList.addEventListener('scroll', () => { if (!isSyncingScroll) { isSyncingScroll = true; taskGrid.scrollTop = taskList.scrollTop; setTimeout(() => isSyncingScroll = false, 50); } });
-    taskGrid.addEventListener('scroll', () => { if (!isSyncingScroll) { isSyncingScroll = true; taskList.scrollTop = taskGrid.scrollTop; setTimeout(() => isSyncingScroll = false, 50); } });
-    container.addEventListener('mouseover', e => { const target = e.target.closest('[data-task-id]'); if (target) { const taskId = target.dataset.taskId; document.querySelectorAll(`[data-task-id="${taskId}"]`).forEach(el => el.classList.add('highlight')); } });
-    container.addEventListener('mouseout', e => { const target = e.target.closest('[data-task-id]'); if (target) { const taskId = target.dataset.taskId; document.querySelectorAll(`[data-task-id="${taskId}"]`).forEach(el => el.classList.remove('highlight')); } });
+    currentLanedTasks = Array.isArray(lanedTasks) ? lanedTasks : [];
+
+    if (!scrollHandlersBound) {
+        taskList.addEventListener('scroll', onTaskListScroll);
+        taskGrid.addEventListener('scroll', onTaskGridScroll);
+        scrollHandlersBound = true;
+    }
+
+    if (!containerHoverHandlersBound) {
+        container.addEventListener('mouseover', handleTaskHoverEnter);
+        container.addEventListener('mouseout', handleTaskHoverLeave);
+        containerHoverHandlersBound = true;
+    }
+
+    if (!taskListHandlersBound) {
+        taskList.addEventListener('click', handleTaskListClick);
+        taskList.addEventListener('contextmenu', handleTaskListContextMenu);
+        taskListHandlersBound = true;
+    }
+
+    if (!gridHandlersBound) {
+        gridContent.addEventListener('dblclick', handleTimelineGridDoubleClick);
+        gridContent.addEventListener('click', handleTaskBarClick);
+        gridContent.addEventListener('contextmenu', handleTaskBarContextMenu);
+        gridHandlersBound = true;
+    }
 
     if (window.interact) {
         const { zoomLevel, visibleDate } = context;
         const year = visibleDate.getFullYear();
         const month = visibleDate.getMonth();
-        const daysInPeriod = zoomLevel === 'year' ? (isLeapYear(year) ? 366 : 365) : zoomLevel === 'month' ? new Date(year, month + 1, 0).getDate() : 7;
+        const daysInPeriod = zoomLevel === 'year'
+            ? (isLeapYear(year) ? 366 : 365)
+            : zoomLevel === 'month'
+                ? new Date(year, month + 1, 0).getDate()
+                : 7;
+
+        const tasksForDrag = Array.isArray(lanedTasks) ? lanedTasks : [];
 
         const dateFromDay = (day) => {
             if (zoomLevel === 'year') {
                 return dayOfYearToDate(day, year);
-            } else if (zoomLevel === 'month') {
-                return dayOfMonthToDate(day, month, year);
-            } else { // week
-                const d = new Date(visibleDate);
-                const dayOfWeek = d.getDay();
-                const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                const monday = new Date(d.setDate(diff));
-                return dayOfWeekToDate(day, monday);
             }
+            if (zoomLevel === 'month') {
+                return dayOfMonthToDate(day, month, year);
+            }
+            const d = new Date(visibleDate);
+            const dayOfWeek = d.getDay();
+            const diff = d.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+            const monday = new Date(d.setDate(diff));
+            return dayOfWeekToDate(day, monday);
         };
 
         window.interact('.task-bar').draggable({
@@ -1035,23 +1282,23 @@ function setupTimelineInteractions(lanedTasks, context) {
                 move(event) {
                     const target = event.target;
                     const taskId = target.dataset.taskId;
-                    const task = lanedTasks.find(t => t.id === taskId);
+                    const task = tasksForDrag.find(t => t.id === taskId);
                     if (!task || task.isSample) {
                         event?.interaction?.stop();
                         target.style.transform = '';
                         target.removeAttribute('data-x');
                         return;
                     }
+                    target.dataset.dragging = 'true';
                     const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
                     target.style.transform = `translate(${x}px, 0px)`;
                     target.setAttribute('data-x', x);
                 },
                 async end(event) {
                     const target = event.target;
-                    const gridContent = document.querySelector('.timeline-grid-content');
-                    if (!gridContent) return;
                     const taskId = target.dataset.taskId;
-                    const task = lanedTasks.find(t => t.id === taskId);
+                    const task = tasksForDrag.find(t => t.id === taskId);
+                    target.removeAttribute('data-dragging');
                     if (!task || task.isSample) {
                         target.style.transform = '';
                         target.removeAttribute('data-x');
@@ -1069,6 +1316,10 @@ function setupTimelineInteractions(lanedTasks, context) {
                     const newEndDate = dateFromDay(newEndDay);
 
                     const success = await updateTaskDates(taskId, newStartDate, newEndDate);
+                    if (!success) {
+                        target.style.transform = '';
+                        target.removeAttribute('data-x');
+                    }
                     renderTimeline();
                 }
             }
@@ -1078,13 +1329,14 @@ function setupTimelineInteractions(lanedTasks, context) {
                 move(event) {
                     const target = event.target;
                     const taskId = target.dataset.taskId;
-                    const task = lanedTasks.find(t => t.id === taskId);
+                    const task = tasksForDrag.find(t => t.id === taskId);
                     if (!task || task.isSample) {
                         event?.interaction?.stop();
                         target.style.transform = '';
                         target.removeAttribute('data-x');
                         return;
                     }
+                    target.dataset.resizing = 'true';
                     let x = (parseFloat(target.getAttribute('data-x')) || 0);
                     target.style.width = `${event.rect.width}px`;
                     x += event.deltaRect.left;
@@ -1093,10 +1345,9 @@ function setupTimelineInteractions(lanedTasks, context) {
                 },
                 async end(event) {
                     const target = event.target;
-                    const gridContent = document.querySelector('.timeline-grid-content');
-                    if (!gridContent) return;
                     const taskId = target.dataset.taskId;
-                    const task = lanedTasks.find(t => t.id === taskId);
+                    const task = tasksForDrag.find(t => t.id === taskId);
+                    target.removeAttribute('data-resizing');
                     if (!task || task.isSample) {
                         target.style.transform = '';
                         target.removeAttribute('data-x');
@@ -1121,11 +1372,53 @@ function setupTimelineInteractions(lanedTasks, context) {
                     const newEndDate = dateFromDay(newEndDay);
 
                     const success = await updateTaskDates(taskId, newStartDate, newEndDate);
+                    if (!success) {
+                        target.style.transform = '';
+                        target.removeAttribute('data-x');
+                    }
                     renderTimeline();
                 }
             }
         });
     }
+}
+
+function detachTimelineInteractions() {
+    const taskList = document.querySelector('.timeline-task-list');
+    const taskGrid = document.querySelector('.timeline-grid');
+    const container = document.querySelector('.timeline-container');
+    const gridContent = document.querySelector('.timeline-grid-content');
+
+    if (taskList && taskListHandlersBound) {
+        taskList.removeEventListener('click', handleTaskListClick);
+        taskList.removeEventListener('contextmenu', handleTaskListContextMenu);
+        taskListHandlersBound = false;
+    }
+
+    if (taskList && scrollHandlersBound) {
+        taskList.removeEventListener('scroll', onTaskListScroll);
+    }
+
+    if (taskGrid && scrollHandlersBound) {
+        taskGrid.removeEventListener('scroll', onTaskGridScroll);
+    }
+
+    scrollHandlersBound = false;
+
+    if (container && containerHoverHandlersBound) {
+        container.removeEventListener('mouseover', handleTaskHoverEnter);
+        container.removeEventListener('mouseout', handleTaskHoverLeave);
+        containerHoverHandlersBound = false;
+    }
+
+    if (gridContent && gridHandlersBound) {
+        gridContent.removeEventListener('dblclick', handleTimelineGridDoubleClick);
+        gridContent.removeEventListener('click', handleTaskBarClick);
+        gridContent.removeEventListener('contextmenu', handleTaskBarContextMenu);
+        gridHandlersBound = false;
+    }
+
+    currentLanedTasks = [];
 }
 
 function setupTaskProgressControls(lanedTasks = []) {
@@ -1251,6 +1544,22 @@ function formatDateForInput(value) {
     const parsed = parseDateOnly(value) || parseDateValue(value);
     if (!parsed || Number.isNaN(parsed.getTime())) return '';
     return parsed.toISOString().split('T')[0];
+}
+
+function normalizeTaskForModal(task) {
+    if (!task) return null;
+    const startDate = formatDateForInput(task.startDate) || task.startDate || '';
+    const dueSource = task.dueDate ?? task.endDate ?? null;
+    const dueDate = formatDateForInput(dueSource) || dueSource || '';
+    const endSource = task.endDate ?? task.dueDate ?? dueSource;
+    const endDate = formatDateForInput(endSource) || endSource || '';
+    return {
+        ...task,
+        docId: task.docId || task.id,
+        startDate,
+        dueDate,
+        endDate
+    };
 }
 
 function closeModalById(modalId) {
@@ -1465,10 +1774,18 @@ function renderAnnualSummary(tasks, year) {
 }
 
 export function initTimelineModule(app) {
-    db = app.db;
+    db = app?.db || null;
+    openTaskFormModalRef = typeof app?.openTaskFormModal === 'function' ? app.openTaskFormModal : null;
+    showConfirmationModalRef = typeof app?.showConfirmationModal === 'function' ? app.showConfirmationModal : null;
+    updateDocFn = typeof app?.updateDoc === 'function' ? app.updateDoc : firebaseUpdateDoc;
 }
 
 export function destroyTimelineModule() {
+    detachTimelineInteractions();
+    if (modalCloseObserver) {
+        modalCloseObserver.disconnect();
+        modalCloseObserver = null;
+    }
     if (typeof unsubscribeTasks === 'function') {
         unsubscribeTasks();
         unsubscribeTasks = null;
@@ -1477,6 +1794,10 @@ export function destroyTimelineModule() {
         unsubscribeKeyDates();
         unsubscribeKeyDates = null;
     }
+    openTaskFormModalRef = null;
+    showConfirmationModalRef = null;
+    updateDocFn = firebaseUpdateDoc;
+    currentLanedTasks = [];
 }
 
 function updateTimelineDateLabel() {
@@ -1577,6 +1898,10 @@ async function populateTimelinePeriod() {
                                 <div class="task-list-legend text-[11px] text-slate-500 dark:text-slate-400">Arrastrá para mover · Estirá los extremos para ajustar fechas</div>
                             </div>
                             <div class="task-header-actions">
+                                <button type="button" data-action="timeline-add-task" class="timeline-add-task-btn inline-flex items-center gap-2 rounded-full bg-blue-600 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                    <span>+ Tarea</span>
+                                </button>
                                 ${demoPill}
                                 <label class="task-filter">
                                     <span>Responsable</span>
@@ -1592,6 +1917,19 @@ async function populateTimelinePeriod() {
                     <div class="timeline-task-list-body">${getTaskListHTML(lanedTasks, timeContext)}</div>
                 </div>
             `;
+
+            const addTaskButton = taskList.querySelector('[data-action="timeline-add-task"]');
+            if (addTaskButton) {
+                addTaskButton.addEventListener('click', () => {
+                    const defaultDate = range?.startDate || formatDateForInput(new Date());
+                    void openTaskModal(null, {
+                        status: 'todo',
+                        assigneeUid: null,
+                        startDate: defaultDate,
+                        dueDate: defaultDate
+                    });
+                });
+            }
 
             timescale.innerHTML = getTimelineScaleHTML(zoomLevel, visibleDate) + getKeyDateTrackHTML(latestKeyDates, timeContext);
             gridContent.innerHTML = getGridLinesHTML(zoomLevel, visibleDate) + getKeyDateMarkersHTML(latestKeyDates, timeContext) + getTaskBarsHTML(lanedTasks, timeContext);
