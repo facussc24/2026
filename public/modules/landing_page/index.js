@@ -14,6 +14,7 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { COLLECTIONS } from '../../utils.js';
 import { getPlannerHelpModalHTML, getTasksModalHTML } from '../tasks/task.templates.js';
 import { completeAndArchiveTask, updateTaskBlockedStatus, updateTaskStatus } from '../tasks/task.service.js';
+import { formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE } from '../../utils/task-status.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -336,11 +337,13 @@ function sortTasksForDailyColumn(tasks = []) {
     return [...tasks].sort((a, b) => {
         const priorityDiff = (priorityOrder[a.priority || 'medium'] ?? 1) - (priorityOrder[b.priority || 'medium'] ?? 1);
         if (priorityDiff !== 0) return priorityDiff;
-        if (a.dueDate && b.dueDate) {
-            return a.dueDate.localeCompare(b.dueDate);
+        const aEndTime = a.schedule?.planEndDate instanceof Date ? a.schedule.planEndDate.getTime() : (a.dueDate ? new Date(`${a.dueDate}T00:00:00`).getTime() : null);
+        const bEndTime = b.schedule?.planEndDate instanceof Date ? b.schedule.planEndDate.getTime() : (b.dueDate ? new Date(`${b.dueDate}T00:00:00`).getTime() : null);
+        if (Number.isFinite(aEndTime) && Number.isFinite(bEndTime)) {
+            return aEndTime - bEndTime;
         }
-        if (a.dueDate) return -1;
-        if (b.dueDate) return 1;
+        if (Number.isFinite(aEndTime)) return -1;
+        if (Number.isFinite(bEndTime)) return 1;
         return (a.title || '').localeCompare(b.title || '');
     });
 }
@@ -359,40 +362,77 @@ function renderTaskCardsHTML(tasks) {
     const priorityStyles = { high: 'bg-red-500', medium: 'bg-yellow-500', low: 'bg-green-500' };
     return tasks.map(task => {
         const assignee = users.get(task.assigneeUid);
-        const style = priorityStyles[task.priority || 'medium'];
-        const isCompleted = task.status === 'done' || task.isArchived;
+        const priorityClass = priorityStyles[task.priority || 'medium'];
         const canDrag = (getActiveRole() === 'admin' || appState.currentUser.uid === task.assigneeUid) && !task.isArchived;
         const dragClass = canDrag ? 'cursor-grab' : 'no-drag';
+        const isCompleted = task.status === 'done' || task.isArchived;
         const canComplete = !isCompleted && (canDrag || appState.currentUser.uid === task.creatorUid);
         const completeButton = canComplete ? `<button data-action="complete-task" title="Marcar como completada" class="complete-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-green-100 text-green-600 hover:bg-green-200"><i data-lucide="check" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
-        const blockButton = canComplete ? `<button data-action="block-task" title="Bloquear Tarea" class="block-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-orange-100 text-orange-600 hover:bg-orange-200"><i data-lucide="lock" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
-
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        let dueDateHTML = '';
-        if (task.dueDate) {
-            const dueDate = new Date(task.dueDate + 'T00:00:00');
-            const isOverdue = dueDate < today;
-            const dateClass = isOverdue ? 'text-red-600 font-bold' : 'text-slate-500';
-            dueDateHTML = `<span class="flex items-center gap-1.5 font-medium ${dateClass}" title="Fecha Límite: ${task.dueDate}"><i data-lucide="calendar-check" class="w-3.5 h-3.5"></i><span>${dueDate.toLocaleDateString('es-AR')}</span></span>`;
-        }
-        const datesHTML = dueDateHTML ? `<div class="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-600/60 flex items-center justify-end text-xs">${dueDateHTML}</div>` : '';
-
+        const blockButton = canComplete ? `<button data-action="block-task" title="Bloquear tarea" class="block-task-btn opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full bg-orange-100 text-orange-600 hover:bg-orange-200"><i data-lucide="lock" class="w-3.5 h-3.5 pointer-events-none"></i></button>` : '';
+        const schedule = task.schedule || {};
+        const stateDisplay = getTaskStateDisplay(schedule);
+        const state = stateDisplay.state;
+        const tooltip = formatTaskScheduleTooltip(task, schedule);
+        const stateChip = getTaskStateChipHTML(schedule, { tooltip });
+        const progressValueRaw = Number.isFinite(schedule.progressPercent)
+            ? schedule.progressPercent
+            : Number.isFinite(Number.parseFloat(task.progress))
+                ? Number.parseFloat(task.progress)
+                : 0;
+        const progressValue = Math.max(0, Math.min(100, Math.round(progressValueRaw)));
+        const plannedProgressRaw = Number.isFinite(schedule.plannedProgressPercent)
+            ? schedule.plannedProgressPercent
+            : Number.isFinite(schedule.plannedProgress)
+                ? schedule.plannedProgress * 100
+                : progressValue;
+        const plannedProgressValue = Math.max(0, Math.min(100, Math.round(plannedProgressRaw)));
+        const deltaPoints = Number.isFinite(schedule.deltaPercentagePoints)
+            ? schedule.deltaPercentagePoints
+            : ((Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : progressValue) - plannedProgressValue);
+        const deltaLabel = `${formatSignedPoints(deltaPoints)} pp`;
+        const planPercentLabel = schedule.hasPlanRange ? `Plan ${plannedProgressValue}%` : 'Plan —';
+        const planRangeLabel = schedule.hasPlanRange ? formatPlannedRange(schedule) : 'Sin plan';
+        const delayBadge = state === TASK_STATE.DELAYED
+            ? `<span class="task-delay-indicator" data-task-state="${state}">${schedule.atrasoDias ? `+${schedule.atrasoDias}d` : 'Atraso'}</span>`
+            : '';
         const efforts = {
             low: { label: 'Bajo', icon: 'battery-low' },
             medium: { label: 'Medio', icon: 'battery-medium' },
             high: { label: 'Alto', icon: 'battery-full' }
         };
         const effortInfo = efforts[task.effort || 'low'];
-        const effortIcon = effortInfo ? `<span title="Esfuerzo: ${effortInfo.label}"><i data-lucide="${effortInfo.icon}" class="w-4 h-4 text-slate-500 dark:text-slate-400"></i></span>` : '';
+        const effortIcon = effortInfo
+            ? `<span title="Esfuerzo: ${effortInfo.label}"><i data-lucide="${effortInfo.icon}" class="w-4 h-4 text-slate-500 dark:text-slate-400"></i></span>`
+            : '';
+        const assigneeLabel = assignee ? assignee.name.split(' ')[0] : 'N/A';
 
         return `
-            <div class="task-card-compact group border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}" data-task-id="${task.docId}" data-assignee-uid="${task.assigneeUid}">
-                <div class="flex items-start justify-between"><p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p><span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${style}" title="Prioridad: ${task.priority}"></span></div>
-                ${datesHTML}
-                <div class="flex items-end justify-between mt-1">
+            <div class="task-card-compact group border bg-white/80 dark:bg-slate-700/80 rounded-md p-2 mb-2 shadow-sm hover:shadow-lg hover:border-blue-500 transition-all duration-200 ${dragClass}" data-task-id="${task.docId}" data-assignee-uid="${task.assigneeUid}" data-task-state="${state}" title="${tooltip}">
+                <div class="flex items-start justify-between">
+                    <p class="font-semibold text-xs text-slate-700 dark:text-slate-200 leading-tight flex-grow pr-2">${task.title}</p>
+                    <span class="w-3 h-3 rounded-full flex-shrink-0 mt-0.5 ${priorityClass}" title="Prioridad: ${task.priority || 'medium'}"></span>
+                </div>
+                <div class="flex items-center justify-between mt-1">
+                    ${stateChip}
+                    ${delayBadge}
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mt-1" title="Rango planificado">
+                    <span class="font-semibold">${planRangeLabel}</span>
+                    <span>${schedule.planDurationDays ? `${schedule.planDurationDays}d` : ''}</span>
+                </div>
+                <div class="mt-2">
+                    <div class="task-card-progress" data-task-state="${state}">
+                        <span class="task-plan-marker" style="left: ${plannedProgressValue}%;"></span>
+                        <div class="task-card-progress-fill" style="width: ${progressValue}%;"></div>
+                    </div>
+                    <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>${planPercentLabel}</span>
+                        <span class="task-delta-indicator" data-task-state="${state}">Δ ${deltaLabel}</span>
+                    </div>
+                </div>
+                <div class="flex items-end justify-between mt-2">
                     <div class="flex items-center gap-2">${completeButton}${blockButton}${effortIcon}</div>
-                    <span class="text-right text-[11px] text-slate-500 dark:text-slate-400">${assignee ? assignee.name.split(' ')[0] : 'N/A'}</span>
+                    <span class="text-right text-[11px] text-slate-500 dark:text-slate-400">${assigneeLabel}</span>
                 </div>
             </div>`;
     }).join('');
@@ -1039,11 +1079,13 @@ function renderWeeklyTasks(tasks) {
     tasks.forEach(task => {
         if (task.blocked) { blockedTasks.push(task); return; }
 
-        const isOverdue = task.dueDate && task.dueDate < todayStr;
-        if (isOverdue) { overdueTasks.push(task); }
+        const schedule = task.schedule || {};
+        const state = schedule.state || TASK_STATE.ON_TIME;
+        const isDelayed = state === TASK_STATE.DELAYED;
+        if (isDelayed) { overdueTasks.push(task); }
 
         if (!task.plannedDate) {
-            if (!isOverdue) { unscheduledTasks.push(task); }
+            if (!isDelayed) { unscheduledTasks.push(task); }
             return;
         }
 

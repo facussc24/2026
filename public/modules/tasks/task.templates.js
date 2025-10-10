@@ -11,6 +11,7 @@
 
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 import DOMPurify from "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.es.js";
+import { formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE } from '../../utils/task-status.js';
 
 /**
  * Builds the empty state block used across task dashboards.
@@ -930,12 +931,16 @@ export function getTaskTableFiltersHTML(currentUser, users) {
 
 export function getMyPendingTasksWidgetHTML(tasks) {
     return tasks.map(task => {
-        const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00") : null;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const isOverdue = dueDate && dueDate < today;
-        const dateClass = isOverdue ? 'text-red-500 font-semibold' : 'text-slate-500';
-        const dueDateStr = dueDate ? `Vence: ${dueDate.toLocaleDateString('es-AR')}` : 'Sin fecha';
+        const schedule = task.schedule || {};
+        const stateDisplay = getTaskStateDisplay(schedule);
+        const state = stateDisplay.state;
+        const tooltip = formatTaskScheduleTooltip(task, schedule);
+        const stateChip = getTaskStateChipHTML(schedule, { tooltip, textType: 'label' });
+        const delayBadge = state === TASK_STATE.DELAYED
+            ? `<span class="task-delay-indicator" data-task-state="${state}">${schedule.atrasoDias ? `+${schedule.atrasoDias}d` : 'Atraso'}</span>`
+            : '';
+        const planRangeLabel = schedule.hasPlanRange ? formatPlannedRange(schedule) : 'Sin plan';
+        const safePlanRange = escapeText(planRangeLabel);
 
         const priorityClasses = {
             high: 'border-red-500',
@@ -945,13 +950,16 @@ export function getMyPendingTasksWidgetHTML(tasks) {
         const priorityBorder = priorityClasses[task.priority] || 'border-slate-300';
         const safeDocId = escapeAttribute(task.docId || '');
         const safeTitle = escapeText(task.title || '');
-        const safeDueDateStr = escapeText(dueDateStr);
 
         return `
-            <div class="p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border-l-4 ${priorityBorder} cursor-pointer" data-action="view-task" data-task-id="${safeDocId}">
+            <div class="p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border-l-4 ${priorityBorder} cursor-pointer" data-action="view-task" data-task-id="${safeDocId}" data-task-state="${state}" title="${escapeAttribute(tooltip)}">
                 <div class="flex justify-between items-center">
                     <p class="font-bold text-slate-800 text-sm">${safeTitle}</p>
-                    <span class="text-xs ${dateClass}">${safeDueDateStr}</span>
+                    ${stateChip}
+                </div>
+                <div class="flex justify-between items-center text-[11px] text-slate-500 mt-1">
+                    <span>${safePlanRange}</span>
+                    ${delayBadge}
                 </div>
             </div>
         `;
@@ -1089,13 +1097,33 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     const effort = efforts[task.effort] || efforts.low;
 
 
-    const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00") : null;
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const isOverdue = dueDate && dueDate < today;
-    const dueDateStr = dueDate ? dueDate.toLocaleDateString('es-AR') : 'Sin fecha';
-    const urgencyClass = isOverdue ? 'border-red-600 bg-red-50/50' : 'border-slate-200';
-    const dateClass = isOverdue ? 'text-red-600 font-bold' : 'text-slate-500';
+    const schedule = task.schedule || {};
+    const stateDisplay = getTaskStateDisplay(schedule);
+    const state = stateDisplay.state;
+    const tooltip = formatTaskScheduleTooltip(task, schedule);
+    const stateChip = getTaskStateChipHTML(schedule, { tooltip });
+    const progressValueRaw = Number.isFinite(schedule.progressPercent)
+        ? schedule.progressPercent
+        : Number.isFinite(Number.parseFloat(task.progress))
+            ? Number.parseFloat(task.progress)
+            : 0;
+    const progressValue = Math.max(0, Math.min(100, Math.round(progressValueRaw)));
+    const plannedProgressRaw = Number.isFinite(schedule.plannedProgressPercent)
+        ? schedule.plannedProgressPercent
+        : Number.isFinite(schedule.plannedProgress)
+            ? schedule.plannedProgress * 100
+            : progressValue;
+    const plannedProgressValue = Math.max(0, Math.min(100, Math.round(plannedProgressRaw)));
+    const deltaPoints = Number.isFinite(schedule.deltaPercentagePoints)
+        ? schedule.deltaPercentagePoints
+        : ((Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : progressValue) - plannedProgressValue);
+    const deltaLabel = `${formatSignedPoints(deltaPoints)} pp`;
+    const planPercentLabel = schedule.hasPlanRange ? `Plan ${plannedProgressValue}%` : 'Plan —';
+    const planRangeLabel = schedule.hasPlanRange ? formatPlannedRange(schedule, { includeYear: true }) : 'Sin plan';
+    const planDurationLabel = schedule.planDurationDays ? `${schedule.planDurationDays}d` : '';
+    const delayBadge = state === TASK_STATE.DELAYED
+        ? `<span class="task-delay-indicator" data-task-state="${state}">${schedule.atrasoDias ? `+${schedule.atrasoDias}d` : 'Atraso'}</span>`
+        : '';
 
     const creationDate = task.createdAt?.seconds ? new Date(task.createdAt.seconds * 1000) : null;
     const creationDateStr = creationDate ? creationDate.toLocaleDateString('es-AR') : 'N/A';
@@ -1103,7 +1131,7 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     const safeTaskId = escapeAttribute(task.docId || '');
     const safeTitle = escapeText(task.title || '');
     const safeDescription = sanitizeRichText(task.description || '');
-    const safeDueDateStr = escapeText(dueDateStr);
+    const safePlanRange = escapeText(planRangeLabel);
 
     const taskTypeIcon = task.isPublic
         ? `<span title="Tarea de Ingeniería (Pública)"><i data-lucide="briefcase" class="w-4 h-4 text-slate-400"></i></span>`
@@ -1126,24 +1154,22 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
         `;
     }
 
-    let progressHTML = '';
-    if (task.progress && parseInt(task.progress, 10) > 0) {
-        const progress = parseInt(task.progress, 10);
-        progressHTML = `
-            <div class="mt-3">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="text-xs font-semibold text-slate-500 flex items-center">
-                        <i data-lucide="trending-up" class="w-3.5 h-3.5 mr-1.5"></i>
-                        Progreso
-                    </span>
-                    <span class="text-xs font-bold text-slate-600">${progress}%</span>
-                </div>
-                <div class="w-full bg-slate-200 rounded-full h-1.5">
-                    <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
-                </div>
+    const scheduleProgressHTML = `
+        <div class="space-y-2 mt-3">
+            <div class="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
+                <span class="font-semibold">${safePlanRange}</span>
+                <span>${planDurationLabel}</span>
             </div>
-        `;
-    }
+            <div class="task-card-progress" data-task-state="${state}">
+                <span class="task-plan-marker" style="left: ${plannedProgressValue}%;"></span>
+                <div class="task-card-progress-fill" style="width: ${progressValue}%;"></div>
+            </div>
+            <div class="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
+                <span>${escapeText(planPercentLabel)}</span>
+                <span class="task-delta-indicator" data-task-state="${state}">Δ ${escapeText(deltaLabel)}</span>
+            </div>
+        </div>
+    `;
     const dragClass = checkUserPermission('edit', task) ? '' : 'no-drag';
 
     let assigneeAvatarHTML = '<div class="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center" title="No asignada"><i data-lucide="user-x" class="w-4 h-4 text-gray-500"></i></div>';
@@ -1160,17 +1186,22 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
     }
 
     return `
-        <div class="task-card bg-white rounded-lg p-4 shadow-sm border ${urgencyClass} cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${safeTaskId}">
+        <div class="task-card bg-white rounded-lg p-4 shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${safeTaskId}" data-task-state="${state}" title="${escapeAttribute(tooltip)}">
             <div class="flex justify-between items-start gap-2 mb-2">
                 <h4 class="font-bold text-slate-800 flex-grow">${safeTitle}</h4>
                 ${taskTypeIcon}
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                ${stateChip}
+                ${delayBadge}
             </div>
 
             <p class="text-sm text-slate-600 break-words flex-grow mb-3">${safeDescription}</p>
 
             ${tagsHTML}
 
-            ${progressHTML}
+            ${scheduleProgressHTML}
 
             <div class="mt-auto pt-3 border-t border-slate-200/80">
                 <div class="flex justify-between items-center text-xs text-slate-500 mb-3">
@@ -1181,8 +1212,11 @@ export function getTaskCardHTML(task, assignee, checkUserPermission) {
                         </span>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="flex items-center gap-1.5 font-medium ${dateClass}" title="Fecha de entrega">
-                            <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> ${safeDueDateStr}
+                        <span class="flex items-center gap-1.5 font-medium" title="Fecha de creación">
+                            <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> ${creationDateStr}
+                        </span>
+                        <span class="flex items-center gap-1.5 font-medium" title="Avance real">
+                            <i data-lucide="trending-up" class="w-3.5 h-3.5"></i> ${progressValue}%
                         </span>
                     </div>
                 </div>
