@@ -1,6 +1,6 @@
 import { appState, dom } from '../../main.js';
 import { getDocs, collection, query, orderBy, where, doc, updateDoc as firebaseUpdateDoc, addDoc, deleteDoc, Timestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { augmentTaskWithSchedule, augmentTasksWithSchedule, formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE, TASK_STATE_CONFIG, TASK_STATE_SEQUENCE } from '../../utils/task-status.js';
+import { augmentTaskWithSchedule, augmentTasksWithSchedule, formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE, TASK_STATE_CONFIG } from '../../utils/task-status.js';
 
 // Module-level variables
 let db;
@@ -1160,8 +1160,16 @@ function getTaskListHTML(tasks, context) {
         const durationLabel = getTaskDurationLabel(planStartISO, planEndISO);
         const progressValue = Math.round(Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : getTaskProgressValue(task));
         const sampleBadge = task.isSample ? '<span class="task-demo-pill">Ejemplo</span>' : '';
-        const sliderAttributes = task.isSample ? 'disabled data-sample="true"' : `data-task-id="${task.id}"`;
         const dataAttributes = task.isSample ? `data-task-id="${task.id}" data-sample="true"` : `data-task-id="${task.id}"`;
+        const sliderLabel = task.isSample
+            ? `Progreso de ejemplo para ${title}`
+            : `Actualizar avance de ${title}`;
+        let sliderAttributes;
+        if (task.isSample) {
+            sliderAttributes = `data-task-id="${task.id}" data-sample="true" disabled aria-label="${sliderLabel}"`;
+        } else {
+            sliderAttributes = `data-task-id="${task.id}" aria-label="${sliderLabel}"`;
+        }
         const rangeLabel = schedule.hasPlanRange
             ? formatPlannedRange(schedule)
             : getTaskDateRangeLabel(planStartISO, planEndISO);
@@ -1185,6 +1193,7 @@ function getTaskListHTML(tasks, context) {
             : ((Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : progressValue) - plannedProgressValue);
         const deltaLabel = `${formatSignedPoints(deltaPointsRaw)} pp`;
         const planProgressLabel = schedule.hasPlanRange ? `Plan ${plannedProgressValue}%` : 'Plan —';
+
         return `
             <div class="task-table-row ${task.isSample ? 'sample' : ''}" ${dataAttributes} data-task-state="${state}" title="${title}">
                 <div class="task-col task-col--main">
@@ -1207,18 +1216,20 @@ function getTaskListHTML(tasks, context) {
                     ${state === TASK_STATE.DELAYED ? `<span class="task-delay-indicator" data-task-state="${state}">${delayDays > 0 ? `+${delayDays}d` : 'Atraso'}</span>` : ''}
                 </div>
                 <div class="task-col task-col--progress">
-                    <div class="task-progress-display" title="${tooltipText}">
+                    <div class="task-progress-indicator" title="${tooltipText}">
                         <div class="task-progress-bar">
                             <span class="task-plan-marker" style="left: ${plannedProgressValue}%;"></span>
                             <div class="task-progress-fill" style="width: ${progressValue}%;"></div>
                         </div>
                         <span class="task-progress-value">${progressValue}%</span>
                     </div>
-                    <div class="task-progress-controls">
+                    <div class="task-progress-meta">
                         <span class="task-plan-progress-label">${planProgressLabel}</span>
-                        <input type="range" min="0" max="100" value="${progressValue}" class="task-progress-slider" ${sliderAttributes}>
                         <span class="task-duration">${durationLabel}</span>
                         <span class="task-delta-indicator" data-task-state="${state}" title="Diferencia versus plan">Δ ${deltaLabel}</span>
+                    </div>
+                    <div class="task-progress-controls">
+                        <input type="range" min="0" max="100" value="${progressValue}" class="task-progress-slider" ${sliderAttributes.trim()}>
                     </div>
                 </div>
             </div>
@@ -1974,26 +1985,38 @@ async function populateTimelinePeriod() {
             const demoPill = timelineState.usingSampleData
                 ? '<span class="task-demo-pill subtle">Vista previa con datos de ejemplo</span>'
                 : '';
-            const legendStateChips = TASK_STATE_SEQUENCE.map(stateKey => {
-                const sampleSchedule = stateKey === TASK_STATE.DELAYED
-                    ? { state: stateKey, atrasoDias: 3 }
-                    : { state: stateKey };
-                return getTaskStateChipHTML(sampleSchedule, { textType: 'label' });
-            }).join('');
-            const legendPlanChip = `
-                <span class="legend-chip legend-chip-plan">
-                    <span class="legend-chip-bar" data-task-state="${TASK_STATE.ON_TIME}">
-                        <span class="task-plan-marker" style="left: 65%;"></span>
-                        <span class="task-bar-progress" style="width: 45%;"></span>
-                    </span>
-                    <span class="legend-chip-label">Plan vs avance</span>
-                </span>
-            `;
-            const legendSampleChip = `
-                <span class="legend-chip legend-chip-sample">
-                    <span class="legend-sample-pill">Demo</span>
-                    <span class="legend-chip-label">Tarea de ejemplo</span>
-                </span>
+            const legendMarkup = `
+                <div class="task-list-legend" aria-label="Referencias de estado">
+                    <span class="task-list-legend-text">Arrastrá para mover · Estirá los extremos para ajustar fechas</span>
+                    <div class="task-status-legend" role="list">
+                        <span class="legend-chip" role="listitem">
+                            <span class="task-bar task-bar--legend" data-task-state="${TASK_STATE.ON_TIME}">
+                                <span class="task-plan-marker" style="left: 50%;"></span>
+                            </span>
+                            <span class="legend-chip-label">Plan</span>
+                        </span>
+                        <span class="legend-chip" role="listitem">
+                            <span class="task-bar task-bar--legend" data-task-state="${TASK_STATE.COMPLETED}">
+                                <span class="task-plan-marker" style="left: 65%;"></span>
+                                <span class="task-bar-progress" style="width: 65%;"></span>
+                            </span>
+                            <span class="legend-chip-label">Progreso real</span>
+                        </span>
+                        <span class="legend-chip" role="listitem">
+                            <span class="task-bar task-bar--legend" data-task-state="${TASK_STATE.DELAYED}">
+                                <span class="task-plan-marker" style="left: 85%;"></span>
+                                <span class="task-bar-progress" style="width: 35%;"></span>
+                            </span>
+                            <span class="legend-chip-label">Atraso</span>
+                        </span>
+                        <span class="legend-chip legend-chip-sample" role="listitem">
+                            <span class="task-bar task-bar--legend sample" data-sample="true">
+                                <span class="task-bar-progress" style="width: 40%;"></span>
+                            </span>
+                            <span class="legend-chip-label">Muestra</span>
+                        </span>
+                    </div>
+                </div>
             `;
 
             taskList.innerHTML = `
@@ -2002,14 +2025,7 @@ async function populateTimelinePeriod() {
                         <div class="task-header-top">
                             <div class="task-header-info">
                                 <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-300">Tareas (${countLabel})</h3>
-                                <div class="task-list-legend">
-                                    <span class="task-list-legend-text">Arrastrá para mover · Estirá los extremos para ajustar fechas</span>
-                                    <div class="task-status-legend" aria-hidden="true">
-                                        ${legendStateChips}
-                                        ${legendPlanChip}
-                                        ${legendSampleChip}
-                                    </div>
-                                </div>
+                                ${legendMarkup}
                             </div>
                             <div class="task-header-actions">
                                 <button type="button" data-action="timeline-add-task" class="timeline-add-task-btn inline-flex items-center gap-2 rounded-full bg-blue-600 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -2024,7 +2040,7 @@ async function populateTimelinePeriod() {
                             </div>
                         </div>
                         <div class="task-table-head">
-                            <span>Trabajo</span>
+                            <span>Nombre</span>
                             <span>Inicio</span>
                             <span>Fin</span>
                             <span>Plazo / Avance</span>
@@ -2246,36 +2262,34 @@ async function renderTimeline() {
             .dark .timeline-date-button { background: rgba(30,41,59,0.85); color: rgba(226,232,240,0.9); border-color: rgba(71,85,105,0.55); }
             .dark .timeline-date-button:hover { border-color: rgba(96,165,250,0.6); box-shadow: 0 0 0 3px rgba(96,165,250,0.22); }
             .timeline-date-input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
-            .timeline-container { display: grid; grid-template-columns: minmax(640px, 760px) minmax(640px, 1fr); background: linear-gradient(135deg, rgba(248,250,252,0.9), rgba(226,232,240,0.75)); border-radius: 1.5rem; overflow: hidden; }
+            .timeline-container { --task-list-min-width: 760px; display: grid; grid-template-columns: minmax(var(--task-list-min-width), 880px) minmax(640px, 1fr); background: linear-gradient(135deg, rgba(248,250,252,0.9), rgba(226,232,240,0.75)); border-radius: 1.5rem; overflow: hidden; }
             .dark .timeline-container { background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,41,59,0.88)); }
-            .timeline-task-list { position: relative; overflow-y: auto; max-height: 480px; min-width: 640px; width: 100%; }
-            .timeline-task-list-inner { min-height: 100%; min-width: 640px; width: 100%; }
+            .timeline-task-list { position: relative; overflow-y: auto; max-height: 480px; min-width: var(--task-list-min-width); width: 100%; }
+            .timeline-task-list-inner { min-height: 100%; min-width: var(--task-list-min-width); width: 100%; --task-table-columns: minmax(280px, 2.2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(280px, 2fr); }
             .timeline-task-list-header { position: sticky; top: 0; z-index: 3; padding: 0.85rem 1.25rem; background: rgba(255,255,255,0.94); border-bottom: 1px solid rgba(148,163,184,0.18); backdrop-filter: blur(6px); display: flex; flex-direction: column; gap: 0.65rem; }
             .dark .timeline-task-list-header { background: rgba(15,23,42,0.92); border-bottom-color: rgba(71,85,105,0.4); }
-            .task-list-legend { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; color: rgba(71,85,105,0.7); }
+            .task-list-legend { display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; color: rgba(71,85,105,0.7); }
             .dark .task-list-legend { color: rgba(148,163,184,0.7); }
-            .task-list-legend-text { line-height: 1.3; }
-            .task-status-legend { display: flex; flex-wrap: wrap; gap: 0.45rem 0.65rem; align-items: center; }
-            .legend-chip { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.55rem 0.2rem 0.4rem; border-radius: 999px; background: rgba(226,232,240,0.55); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; color: rgba(71,85,105,0.78); }
-            .legend-chip .task-state-chip { margin: 0; }
-            .dark .legend-chip { background: rgba(51,65,85,0.7); color: rgba(203,213,225,0.82); }
-            .legend-chip-plan { display: inline-flex; align-items: center; gap: 0.5rem; }
-            .legend-chip-sample { display: inline-flex; align-items: center; gap: 0.5rem; }
-            .legend-chip-bar { position: relative; display: inline-flex; align-items: center; justify-content: flex-start; width: 44px; height: 12px; border-radius: 999px; background: rgba(226,232,240,0.85); border: 1px dashed rgba(148,163,184,0.4); overflow: hidden; }
-            .dark .legend-chip-bar { background: rgba(30,41,59,0.82); border-color: rgba(71,85,105,0.45); }
-            .legend-chip-bar .task-bar-progress { position: absolute; inset: 0; border-radius: inherit; width: 45%; }
-            .legend-chip-bar[data-task-state="completed"] { background: rgba(209,250,229,0.6); border-style: solid; border-color: rgba(16,185,129,0.45); }
-            .dark .legend-chip-bar[data-task-state="completed"] { background: rgba(6,78,59,0.55); border-color: rgba(16,185,129,0.55); }
-            .legend-chip-bar[data-task-state="on_time"] { background: rgba(191,219,254,0.65); border-style: solid; border-color: rgba(37,99,235,0.45); }
-            .dark .legend-chip-bar[data-task-state="on_time"] { background: rgba(30,64,175,0.5); border-color: rgba(59,130,246,0.55); }
-            .legend-chip-bar[data-task-state="at_risk"] { background: rgba(253,230,138,0.65); border-style: solid; border-color: rgba(217,119,6,0.45); }
-            .dark .legend-chip-bar[data-task-state="at_risk"] { background: rgba(133,77,14,0.55); border-color: rgba(217,119,6,0.55); }
-            .legend-chip-bar[data-task-state="delayed"] { background: rgba(254,226,226,0.7); border-style: solid; border-color: rgba(220,38,38,0.5); }
-            .dark .legend-chip-bar[data-task-state="delayed"] { background: rgba(127,29,29,0.6); border-color: rgba(220,38,38,0.6); }
-            .legend-sample-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 14px; border-radius: 999px; border: 1px dashed rgba(148,163,184,0.55); background: rgba(148,163,184,0.25); font-weight: 700; font-size: 0.55rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 0.35rem; }
-            .dark .legend-sample-pill { border-color: rgba(148,163,184,0.45); background: rgba(71,85,105,0.4); }
+            .task-list-legend-text { line-height: 1.35; }
+            .task-status-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: center; }
+            .legend-chip { display: inline-flex; align-items: center; gap: 0.45rem; padding: 0.25rem 0.65rem 0.25rem 0.4rem; border-radius: 999px; background: rgba(226,232,240,0.6); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; color: rgba(71,85,105,0.8); }
+            .dark .legend-chip { background: rgba(51,65,85,0.7); color: rgba(203,213,225,0.85); }
             .legend-chip-label { white-space: nowrap; }
-            .timeline-task-list-body { padding: 0.9rem 1.15rem 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; }
+            .task-bar--legend { position: relative; display: inline-flex; align-items: center; justify-content: flex-start; width: 54px; height: 14px; border-radius: 999px; padding: 0; margin: 0; box-shadow: none; cursor: default; transform: none; }
+            .timeline-task-list-header .task-bar--legend { background: rgba(226,232,240,0.85); border: 1px solid rgba(148,163,184,0.45); }
+            .dark .timeline-task-list-header .task-bar--legend { background: rgba(30,41,59,0.78); border-color: rgba(71,85,105,0.55); }
+            .task-bar--legend.sample { background: linear-gradient(135deg, rgba(148,163,184,0.55), rgba(100,116,139,0.45)); border-style: dashed; border-color: rgba(148,163,184,0.5); }
+            .dark .task-bar--legend.sample { background: linear-gradient(135deg, rgba(71,85,105,0.65), rgba(51,65,85,0.5)); border-color: rgba(148,163,184,0.45); }
+            .task-bar--legend .task-bar-progress { position: absolute; inset: 0; border-radius: inherit; }
+            .task-bar--legend .task-plan-marker { position: absolute; top: 50%; width: 6px; height: 6px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(15,23,42,0.95); box-shadow: 0 0 0 1px rgba(255,255,255,0.75); }
+            .dark .task-bar--legend .task-plan-marker { background: rgba(226,232,240,0.95); box-shadow: 0 0 0 1px rgba(15,23,42,0.65); }
+            .task-bar--legend[data-task-state="completed"] { background: rgba(209,250,229,0.7); border: 1px solid rgba(16,185,129,0.45); }
+            .dark .task-bar--legend[data-task-state="completed"] { background: rgba(6,78,59,0.58); border-color: rgba(16,185,129,0.55); }
+            .task-bar--legend[data-task-state="on_time"] { background: rgba(191,219,254,0.65); border: 1px solid rgba(37,99,235,0.45); }
+            .dark .task-bar--legend[data-task-state="on_time"] { background: rgba(30,64,175,0.55); border-color: rgba(59,130,246,0.6); }
+            .task-bar--legend[data-task-state="delayed"] { background: rgba(254,226,226,0.75); border: 1px solid rgba(220,38,38,0.5); }
+            .dark .task-bar--legend[data-task-state="delayed"] { background: rgba(127,29,29,0.6); border-color: rgba(220,38,38,0.6); }
+.timeline-task-list-body { padding: 0.9rem 1.15rem 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; }
             .task-header-top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.85rem; }
             .task-header-info { display: flex; flex-direction: column; gap: 0.35rem; }
             .task-header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem; }
@@ -2288,21 +2302,21 @@ async function renderTimeline() {
             .task-demo-pill.subtle { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.35); color: rgba(30,64,175,0.75); }
             .dark .task-demo-pill { background: rgba(37,99,235,0.25); color: rgba(191,219,254,0.85); }
             .dark .task-demo-pill.subtle { background: rgba(30,64,175,0.35); border-color: rgba(96,165,250,0.45); }
-            .task-table-head { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(220px, 1.5fr); gap: 0.6rem; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(71,85,105,0.7); }
+            .task-table-head { display: grid; grid-template-columns: var(--task-table-columns); gap: 0.75rem; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(71,85,105,0.7); }
             .task-table-head span:nth-child(2),
             .task-table-head span:nth-child(3) { text-align: center; }
             .task-table-head span:nth-child(4) { text-align: right; }
             .dark .task-table-head { color: rgba(148,163,184,0.75); }
-            .task-table-row { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(220px, 1.5fr); align-items: stretch; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.2); background: rgba(255,255,255,0.78); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+            .task-table-row { display: grid; grid-template-columns: var(--task-table-columns); align-items: stretch; gap: 0.85rem; padding: 0.6rem 0.85rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.2); background: rgba(255,255,255,0.78); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
             .task-table-row:hover { border-color: rgba(59,130,246,0.35); box-shadow: 0 10px 20px -20px rgba(59,130,246,0.45); }
             .task-table-row.highlight { border-color: rgba(59,130,246,0.55); box-shadow: 0 0 0 2px rgba(59,130,246,0.25); }
             .task-table-row.sample { border-style: dashed; }
             .dark .task-table-row { background: rgba(15,23,42,0.78); border-color: rgba(71,85,105,0.45); }
             .dark .task-table-row:hover { border-color: rgba(96,165,250,0.5); box-shadow: 0 12px 26px -24px rgba(37,99,235,0.45); }
-            .task-col { display: flex; flex-direction: column; justify-content: center; gap: 0.25rem; min-width: 0; }
-            .task-col--main { justify-content: flex-start; gap: 0.35rem; }
-            .task-col--date { align-items: center; justify-content: center; text-align: center; gap: 0.2rem; }
-            .task-col--progress { align-items: stretch; justify-content: center; gap: 0.45rem; text-align: right; }
+            .task-col { display: flex; flex-direction: column; justify-content: center; gap: 0.3rem; min-width: 0; }
+            .task-col--main { justify-content: flex-start; align-items: flex-start; gap: 0.4rem; }
+            .task-col--date { align-items: center; justify-content: center; text-align: center; gap: 0.25rem; }
+            .task-col--progress { align-items: flex-end; justify-content: flex-start; gap: 0.55rem; text-align: right; }
             .task-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
             .task-title { font-size: 0.78rem; font-weight: 600; color: rgb(30,41,59); line-height: 1.3; }
             .dark .task-title { color: rgb(226,232,240); }
@@ -2316,8 +2330,8 @@ async function renderTimeline() {
             .dark .task-date-year { color: rgba(148,163,184,0.7); }
             .task-duration { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(71,85,105,0.75); }
             .dark .task-duration { color: rgba(148,163,184,0.75); }
-            .task-progress-display { display: flex; align-items: center; gap: 0.55rem; }
-            .task-progress-bar { flex: 1; height: 0.4rem; border-radius: 999px; background: rgba(226,232,240,0.75); overflow: hidden; position: relative; }
+            .task-progress-indicator { display: flex; align-items: center; gap: 0.6rem; width: 100%; justify-content: flex-end; }
+            .task-progress-bar { flex: 1; min-width: 140px; height: 0.45rem; border-radius: 999px; background: rgba(226,232,240,0.75); overflow: hidden; position: relative; }
             .dark .task-progress-bar { background: rgba(51,65,85,0.85); }
             .task-table-row[data-task-state="completed"] .task-progress-bar { background: rgba(209,250,229,0.55); border: 1px solid rgba(16,185,129,0.35); }
             .dark .task-table-row[data-task-state="completed"] .task-progress-bar { background: rgba(6,78,59,0.6); border-color: rgba(16,185,129,0.45); }
@@ -2327,11 +2341,23 @@ async function renderTimeline() {
             .dark .task-table-row[data-task-state="at_risk"] .task-progress-bar { background: rgba(133,77,14,0.55); border-color: rgba(217,119,6,0.5); }
             .task-table-row[data-task-state="delayed"] .task-progress-bar { background: rgba(254,226,226,0.6); border: 1px solid rgba(220,38,38,0.45); }
             .dark .task-table-row[data-task-state="delayed"] .task-progress-bar { background: rgba(127,29,29,0.55); border-color: rgba(220,38,38,0.55); }
-            .task-progress-fill { position: absolute; inset: 0; width: 0; transition: width 0.35s ease; border-radius: inherit; }
-            .task-progress-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.45rem; row-gap: 0.3rem; }
-            .task-plan-progress-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(71,85,105,0.72); min-width: 72px; }
+            .task-plan-marker { position: absolute; top: 50%; width: 8px; height: 8px; border-radius: 999px; transform: translate(-50%, -50%); background: rgba(15,23,42,0.95); box-shadow: 0 0 0 1px rgba(255,255,255,0.75); z-index: 2; }
+            .dark .task-plan-marker { background: rgba(226,232,240,0.95); box-shadow: 0 0 0 1px rgba(15,23,42,0.65); }
+            .task-progress-fill { position: absolute; inset: 0; width: 0; transition: width 0.35s ease; border-radius: inherit; background: linear-gradient(90deg, rgba(59,130,246,0.85), rgba(56,189,248,0.85)); }
+            .task-table-row[data-task-state="completed"] .task-progress-fill { background: linear-gradient(90deg, rgba(16,185,129,0.85), rgba(5,150,105,0.85)); }
+            .task-table-row[data-task-state="at_risk"] .task-progress-fill { background: linear-gradient(90deg, rgba(217,119,6,0.85), rgba(251,191,36,0.85)); }
+            .task-table-row[data-task-state="delayed"] .task-progress-fill { background: linear-gradient(90deg, rgba(225,29,72,0.85), rgba(248,113,113,0.85)); }
+            .task-progress-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.35rem; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(71,85,105,0.7); }
+            .dark .task-progress-meta { color: rgba(148,163,184,0.75); }
+            .task-plan-progress-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(71,85,105,0.72); min-width: 72px; text-align: right; }
             .dark .task-plan-progress-label { color: rgba(148,163,184,0.75); }
-            .task-progress-slider { -webkit-appearance: none; appearance: none; height: 2px; flex: 1; min-width: 0; border-radius: 999px; background: linear-gradient(90deg, rgba(59,130,246,0.85), rgba(56,189,248,0.85)); outline: none; cursor: pointer; transition: filter 0.2s ease; }
+            .task-delta-indicator { display: inline-flex; align-items: center; justify-content: center; padding: 0.1rem 0.5rem; border-radius: 999px; background: rgba(226,232,240,0.6); color: rgba(71,85,105,0.85); font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; }
+            .task-delta-indicator[data-task-state="on_time"] { background: rgba(191,219,254,0.55); color: rgba(37,99,235,0.95); }
+            .task-delta-indicator[data-task-state="at_risk"] { background: rgba(253,230,138,0.6); color: rgba(180,83,9,0.95); }
+            .task-delta-indicator[data-task-state="delayed"] { background: rgba(254,226,226,0.7); color: rgba(185,28,28,0.95); }
+            .dark .task-delta-indicator { background: rgba(51,65,85,0.7); color: rgba(203,213,225,0.88); }
+            .task-progress-controls { display: flex; align-items: center; justify-content: flex-end; gap: 0.65rem; width: 100%; }
+            .task-progress-slider { -webkit-appearance: none; appearance: none; height: 2px; flex: 1; min-width: 140px; max-width: 260px; border-radius: 999px; background: linear-gradient(90deg, rgba(59,130,246,0.85), rgba(56,189,248,0.85)); outline: none; cursor: pointer; transition: filter 0.2s ease; }
             .task-progress-slider:hover { filter: brightness(1.08); }
             .task-progress-slider:disabled { cursor: not-allowed; opacity: 0.6; }
             .task-progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid rgba(59,130,246,0.9); box-shadow: 0 4px 10px -6px rgba(59,130,246,0.6); }
@@ -2344,7 +2370,8 @@ async function renderTimeline() {
             .dark .task-table-row[data-task-state="at_risk"] .task-progress-value { color: rgba(253,224,71,0.95); }
             .task-table-row[data-task-state="delayed"] .task-progress-value { color: rgba(185,28,28,0.95); }
             .dark .task-table-row[data-task-state="delayed"] .task-progress-value { color: rgba(254,202,202,0.95); }
-            .task-progress-controls .task-duration { white-space: nowrap; }
+            .task-delay-indicator { display: inline-flex; align-items: center; justify-content: center; padding: 0.12rem 0.5rem; border-radius: 999px; font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: rgba(254,226,226,0.85); color: rgba(185,28,28,0.95); }
+            .dark .task-delay-indicator { background: rgba(127,29,29,0.65); color: rgba(254,226,226,0.95); }
             .summary-table { width: 100%; min-width: 620px; border-collapse: separate; border-spacing: 0; }
             .summary-table thead { background: rgba(241,245,249,0.85); }
             .dark .summary-table thead { background: rgba(30,41,59,0.82); }
