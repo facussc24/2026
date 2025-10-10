@@ -1,5 +1,6 @@
 import { appState, dom } from '../../main.js';
 import { getDocs, collection, query, orderBy, where, doc, updateDoc as firebaseUpdateDoc, addDoc, deleteDoc, Timestamp, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { augmentTaskWithSchedule, augmentTasksWithSchedule, formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE, TASK_STATE_CONFIG, TASK_STATE_SEQUENCE } from '../../utils/task-status.js';
 
 // Module-level variables
 let db;
@@ -38,10 +39,10 @@ const MONTH_ABBREVIATIONS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "A
 const MILLISECONDS_IN_DAY = 24 * 60 * 60 * 1000;
 const SUMMARY_STATUS_FILTERS = [
     { value: 'all', label: 'Todas' },
-    { value: 'todo', label: 'Pendientes' },
-    { value: 'inprogress', label: 'En progreso' },
-    { value: 'done', label: 'Completadas' },
-    { value: 'overdue', label: 'Atrasadas' }
+    { value: TASK_STATE.COMPLETED, label: 'Completadas' },
+    { value: TASK_STATE.ON_TIME, label: 'A tiempo' },
+    { value: TASK_STATE.AT_RISK, label: 'En riesgo' },
+    { value: TASK_STATE.DELAYED, label: 'Atrasadas' }
 ];
 
 function attachTaskModalCloseObserver() {
@@ -619,13 +620,13 @@ function buildSamplePlanningTasks(range) {
             isSample: true
         };
     };
-    return [
+    return augmentTasksWithSchedule([
         createTask(1, 'Lanzamiento campaña Q1', 10, 35, 65, 'Equipo Comercial'),
         createTask(2, 'Implementar nuevo CRM', 50, 70, 35, 'Operaciones', 'todo'),
         createTask(3, 'Auditoría de procesos', 110, 28, 90, 'Calidad', 'done'),
         createTask(4, 'Despliegue regional', 170, 90, 20, 'Expansión'),
         createTask(5, 'Capacitación de ventas', 260, 30, 10, 'Recursos Humanos')
-    ];
+    ]);
 }
 
 function getWeekRangeString(date) {
@@ -748,24 +749,31 @@ function assignLanesToTasks(tasks, context) {
     const year = visibleDate.getFullYear();
     const users = appState?.collectionsById?.usuarios || new Map();
 
-    const processedTasks = tasks.map(t => {
-        const overdue = isTaskOverdue(t);
-        const delayDays = overdue ? getTaskDelayDays(t) : 0;
-        const assignee = users.get(t.assigneeUid);
-        const assigneeName = t.assigneeName || assignee?.name || assignee?.displayName || '';
-        const safeDueDateISO = getSafeDueDateISO(t.startDate, t.dueDate);
+    const processedTasks = tasks.map(task => {
+        const enriched = task.schedule ? task : augmentTaskWithSchedule(task);
+        const schedule = enriched.schedule || {};
+        const assignee = users.get(enriched.assigneeUid);
+        const assigneeName = enriched.assigneeName || assignee?.name || assignee?.displayName || '';
+
+        const planStartISO = schedule.planStartDate
+            ? schedule.planStartDate.toISOString().split('T')[0]
+            : enriched.startDate;
+        const planEndISO = schedule.planEndDate
+            ? schedule.planEndDate.toISOString().split('T')[0]
+            : getSafeDueDateISO(enriched.startDate, enriched.dueDate);
+
         let startDay, endDay, originalStartDay, originalEndDay;
         if (zoomLevel === 'year') {
             const daysInYear = isLeapYear(year) ? 366 : 365;
-            originalStartDay = dateToDayOfYear(t.startDate, year);
-            originalEndDay = dateToDayOfYear(safeDueDateISO, year);
+            originalStartDay = dateToDayOfYear(planStartISO, year);
+            originalEndDay = dateToDayOfYear(planEndISO, year);
             startDay = Math.max(1, originalStartDay);
             endDay = Math.min(daysInYear, originalEndDay);
         } else if (zoomLevel === 'month') {
             const month = visibleDate.getMonth();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            originalStartDay = dateToDayOfMonth(t.startDate, visibleDate);
-            originalEndDay = dateToDayOfMonth(safeDueDateISO, visibleDate);
+            originalStartDay = dateToDayOfMonth(planStartISO, visibleDate);
+            originalEndDay = dateToDayOfMonth(planEndISO, visibleDate);
             startDay = Math.max(1, originalStartDay);
             endDay = Math.min(daysInMonth, originalEndDay);
         } else if (zoomLevel === 'week') {
@@ -773,21 +781,19 @@ function assignLanesToTasks(tasks, context) {
             const day = d.getDay();
             const diff = d.getDate() - day + (day === 0 ? -6 : 1);
             const monday = new Date(d.setDate(diff));
-            originalStartDay = dateToDayOfWeek(t.startDate, monday);
-            originalEndDay = dateToDayOfWeek(safeDueDateISO, monday);
+            originalStartDay = dateToDayOfWeek(planStartISO, monday);
+            originalEndDay = dateToDayOfWeek(planEndISO, monday);
             startDay = Math.max(1, originalStartDay);
             endDay = Math.min(7, originalEndDay);
         }
         return {
-            ...t,
+            ...enriched,
             startDay,
             endDay,
             originalStartDay,
             originalEndDay,
-            isOverdue: overdue,
-            delayDays,
             assigneeName,
-            effectiveDueDate: safeDueDateISO || null
+            effectiveDueDate: planEndISO || null
         };
     })
     .filter(t => t.startDay && t.endDay && t.endDay >= t.startDay)
@@ -919,9 +925,10 @@ function getGridLinesHTML(zoomLevel, date) {
 function formatTimelineTasksFromDocs(docs, range) {
     if (!Array.isArray(docs) || !range) return [];
     const { startDate, endDate } = range;
-    return docs
+    const tasks = docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(task => !task.archived && taskOverlapsRange(task, startDate, endDate));
+    return augmentTasksWithSchedule(tasks);
 }
 
 function subscribeTimelineTasks(range, callback) {
@@ -1144,36 +1151,51 @@ function getTaskListHTML(tasks, context) {
     }
     const sortedTasks = [...tasks].sort((a, b) => a.startDay - b.startDay);
     return sortedTasks.map(task => {
+        const schedule = task.schedule || {};
+        const stateDisplay = getTaskStateDisplay(schedule);
+        const state = stateDisplay.state;
         const title = escapeHTML(task.title || 'Tarea sin título');
-        const durationLabel = getTaskDurationLabel(task.startDate, task.dueDate);
-        const progressValue = getTaskProgressValue(task);
-        const overdueNotice = task.isOverdue
-            ? `<span class="task-alert-pill"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>${task.delayDays ? `${task.delayDays}d` : 'Atrasada'}</span>`
-            : '';
+        const planStartISO = schedule.planStartDate ? schedule.planStartDate.toISOString().split('T')[0] : task.startDate;
+        const planEndISO = schedule.planEndDate ? schedule.planEndDate.toISOString().split('T')[0] : (task.effectiveDueDate ?? task.dueDate);
+        const durationLabel = getTaskDurationLabel(planStartISO, planEndISO);
+        const progressValue = Math.round(Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : getTaskProgressValue(task));
         const sampleBadge = task.isSample ? '<span class="task-demo-pill">Ejemplo</span>' : '';
-        const itemStateClasses = [task.isOverdue ? 'overdue' : '', task.isSample ? 'sample' : ''].join(' ').trim();
         const sliderAttributes = task.isSample ? 'disabled data-sample="true"' : `data-task-id="${task.id}"`;
         const dataAttributes = task.isSample ? `data-task-id="${task.id}" data-sample="true"` : `data-task-id="${task.id}"`;
-        const effectiveDueDate = task.effectiveDueDate ?? task.dueDate;
-        const tooltipRange = `${formatDisplayDate(task.startDate)} → ${formatDisplayDate(effectiveDueDate)}`;
-        const rangeLabel = getTaskDateRangeLabel(task.startDate, task.dueDate);
-        const startLabel = formatDisplayDate(task.startDate, { includeYear: false });
-        const startFullLabel = formatDisplayDate(task.startDate);
-        const startYear = parseDateValue(task.startDate)?.getFullYear();
-        const dueLabel = formatDisplayDate(effectiveDueDate, { includeYear: false });
-        const dueFullLabel = formatDisplayDate(effectiveDueDate);
-        const dueYear = parseDateValue(effectiveDueDate)?.getFullYear();
+        const rangeLabel = schedule.hasPlanRange
+            ? formatPlannedRange(schedule)
+            : getTaskDateRangeLabel(planStartISO, planEndISO);
+        const startLabel = formatDisplayDate(planStartISO, { includeYear: false });
+        const startFullLabel = formatDisplayDate(planStartISO);
+        const startYear = parseDateValue(planStartISO)?.getFullYear();
+        const dueLabel = formatDisplayDate(planEndISO, { includeYear: false });
+        const dueFullLabel = formatDisplayDate(planEndISO);
+        const dueYear = parseDateValue(planEndISO)?.getFullYear();
+        const tooltipText = formatTaskScheduleTooltip(task, schedule);
+        const delayDays = schedule.atrasoDias ?? 0;
+        const chipHTML = getTaskStateChipHTML(schedule, { tooltip: tooltipText });
+        const plannedProgressRaw = Number.isFinite(schedule.plannedProgressPercent)
+            ? schedule.plannedProgressPercent
+            : Number.isFinite(schedule.plannedProgress)
+                ? schedule.plannedProgress * 100
+                : progressValue;
+        const plannedProgressValue = Math.max(0, Math.min(100, Math.round(plannedProgressRaw)));
+        const deltaPointsRaw = Number.isFinite(schedule.deltaPercentagePoints)
+            ? schedule.deltaPercentagePoints
+            : ((Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : progressValue) - plannedProgressValue);
+        const deltaLabel = `${formatSignedPoints(deltaPointsRaw)} pp`;
+        const planProgressLabel = schedule.hasPlanRange ? `Plan ${plannedProgressValue}%` : 'Plan —';
         return `
-            <div class="task-table-row ${itemStateClasses}" ${dataAttributes} title="${title}">
+            <div class="task-table-row ${task.isSample ? 'sample' : ''}" ${dataAttributes} data-task-state="${state}" title="${title}">
                 <div class="task-col task-col--main">
                     <div class="task-title-row">
                         <p class="task-title" title="${title}">${title}</p>
                         ${sampleBadge}
                     </div>
-                    <div class="task-meta-line" title="${tooltipRange}">
+                    <div class="task-meta-line" title="${tooltipText}">
                         <span class="task-date-range">${rangeLabel}</span>
+                        ${chipHTML}
                     </div>
-                    ${overdueNotice ? `<div class="task-alert">${overdueNotice}</div>` : ''}
                 </div>
                 <div class="task-col task-col--date" title="Inicio: ${startFullLabel}">
                     <span class="task-date-value">${startLabel}</span>
@@ -1182,18 +1204,21 @@ function getTaskListHTML(tasks, context) {
                 <div class="task-col task-col--date" title="Fin: ${dueFullLabel}">
                     <span class="task-date-value">${dueLabel}</span>
                     ${dueYear ? `<span class="task-date-year">${dueYear}</span>` : ''}
-                    ${task.isOverdue ? `<span class="task-delay-indicator">${task.delayDays ? `+${task.delayDays}d` : 'Atraso'}</span>` : ''}
+                    ${state === TASK_STATE.DELAYED ? `<span class="task-delay-indicator" data-task-state="${state}">${delayDays > 0 ? `+${delayDays}d` : 'Atraso'}</span>` : ''}
                 </div>
                 <div class="task-col task-col--progress">
-                    <div class="task-progress-display" title="${tooltipRange}">
+                    <div class="task-progress-display" title="${tooltipText}">
                         <div class="task-progress-bar">
+                            <span class="task-plan-marker" style="left: ${plannedProgressValue}%;"></span>
                             <div class="task-progress-fill" style="width: ${progressValue}%;"></div>
                         </div>
                         <span class="task-progress-value">${progressValue}%</span>
                     </div>
                     <div class="task-progress-controls">
+                        <span class="task-plan-progress-label">${planProgressLabel}</span>
                         <input type="range" min="0" max="100" value="${progressValue}" class="task-progress-slider" ${sliderAttributes}>
                         <span class="task-duration">${durationLabel}</span>
+                        <span class="task-delta-indicator" data-task-state="${state}" title="Diferencia versus plan">Δ ${deltaLabel}</span>
                     </div>
                 </div>
             </div>
@@ -1209,28 +1234,41 @@ function getTaskBarsHTML(lanedTasks, context) {
     const daysInPeriod = zoomLevel === 'year' ? (isLeapYear(year) ? 366 : 365) : zoomLevel === 'month' ? new Date(year, month + 1, 0).getDate() : 7;
 
     return lanedTasks.map(task => {
+        const schedule = task.schedule || {};
+        const stateDisplay = getTaskStateDisplay(schedule);
+        const state = stateDisplay.state;
         const safeTitle = escapeHTML(task?.title ?? '');
-        const startLabel = formatDateForInput(task?.startDate) || '';
-        const endLabel = formatDateForInput(task?.effectiveDueDate ?? task?.dueDate) || '';
+        const startLabel = schedule.planStartDate
+            ? schedule.planStartDate.toISOString().split('T')[0]
+            : (formatDateForInput(task?.startDate) || '');
+        const endLabel = schedule.planEndDate
+            ? schedule.planEndDate.toISOString().split('T')[0]
+            : (formatDateForInput(task?.effectiveDueDate ?? task?.dueDate) || '');
         const dateSegment = startLabel || endLabel
             ? ` (${escapeHTML(startLabel || '—')} - ${escapeHTML(endLabel || '—')})`
             : '';
-        const fullTitle = `${safeTitle}${dateSegment}`;
+        const tooltipText = formatTaskScheduleTooltip(task, schedule);
         const leftPercent = ((task.startDay - 1) / daysInPeriod) * 100;
         const widthPercent = ((task.endDay - task.startDay + 1) / daysInPeriod) * 100;
         const topPosition = task.laneIndex * (TASK_BAR_HEIGHT + TASK_BAR_GAP) + TASK_BAR_GAP;
-        let progress = 0;
-        if (task.subtasks && task.subtasks.length > 0) {
-            const completed = task.subtasks.filter(st => st.completed).length;
-            progress = (completed / task.subtasks.length) * 100;
-        } else {
-            progress = getTaskProgressValue(task);
-        }
-        const barClasses = `task-bar${task.isOverdue ? ' overdue' : ''}${task.isSample ? ' sample' : ''}`;
-        const overdueLabel = task.isOverdue && task.delayDays
-            ? `<span class="task-bar-alert"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>${task.delayDays}d</span>`
+        const progress = Math.max(0, Math.min(100, Math.round(Number.isFinite(schedule.progressPercent)
+            ? schedule.progressPercent
+            : getTaskProgressValue(task))));
+        const plannedProgressRaw = Number.isFinite(schedule.plannedProgressPercent)
+            ? schedule.plannedProgressPercent
+            : Number.isFinite(schedule.plannedProgress)
+                ? schedule.plannedProgress * 100
+                : progress;
+        const plannedProgressValue = Math.max(0, Math.min(100, Math.round(plannedProgressRaw)));
+        const barClasses = `task-bar${task.isSample ? ' sample' : ''}`;
+        const iconMarkup = stateDisplay.icon ? `<i data-lucide="${stateDisplay.icon}" class="w-3 h-3"></i>` : '';
+        const badgeLabel = state === TASK_STATE.DELAYED
+            ? `${iconMarkup}${schedule.atrasoDias ? ` +${schedule.atrasoDias}d` : ' Atraso'}`.trim()
             : '';
-        return `<div class="${barClasses}" data-task-id="${task.id}" data-overdue="${task.isOverdue ? 'true' : 'false'}" style="left: ${leftPercent}%; width: ${widthPercent}%; top: ${topPosition}px;" title="${fullTitle}"><div class="task-bar-progress" style="width: ${progress}%;"></div><span class="task-bar-label">${safeTitle}</span>${overdueLabel}</div>`;
+        const alertBadge = state === TASK_STATE.DELAYED
+            ? `<span class="task-bar-alert" data-task-state="${state}">${badgeLabel}</span>`
+            : '';
+        return `<div class="${barClasses}" data-task-id="${task.id}" data-task-state="${state}" style="left: ${leftPercent}%; width: ${widthPercent}%; top: ${topPosition}px;" title="${tooltipText}"><span class="task-plan-marker" style="left: ${plannedProgressValue}%;"></span><div class="task-bar-progress" style="width: ${progress}%;"></div><span class="task-bar-label">${safeTitle}</span>${alertBadge}</div>`;
     }).join('');
 }
 
@@ -1689,38 +1727,50 @@ function renderAnnualSummary(tasks, year) {
 
     const tasksWithDates = tasks
         .map(task => {
-            const startDateObj = parseDateOnly(task.startDate);
-            const dueDateObj = getSafeDueDate(task.startDate, task.dueDate);
-            const effectiveDueDate = dueDateObj ? dueDateObj.toISOString().split('T')[0] : null;
+            const schedule = task.schedule || {};
+            const planStartDateObj = schedule.planStartDate ? new Date(schedule.planStartDate) : parseDateOnly(task.startDate);
+            const planEndDateObj = schedule.planEndDate ? new Date(schedule.planEndDate) : getSafeDueDate(task.startDate, task.dueDate);
+            const planStartISO = planStartDateObj ? planStartDateObj.toISOString().split('T')[0] : null;
+            const planEndISO = planEndDateObj ? planEndDateObj.toISOString().split('T')[0] : null;
             return {
                 ...task,
-                startDateObj,
-                dueDateObj,
-                effectiveDueDate
+                schedule,
+                planStartDateObj,
+                planEndDateObj,
+                planStartISO,
+                planEndISO
             };
         })
-        .filter(task => task.startDateObj && task.dueDateObj && task.dueDateObj >= task.startDateObj);
+        .filter(task => task.planStartDateObj && task.planEndDateObj && task.planEndDateObj >= task.planStartDateObj);
 
     const yearStart = new Date(year, 0, 1);
     const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
-    const relevantTasks = tasksWithDates.filter(task => task.dueDateObj >= yearStart && task.startDateObj <= yearEnd);
+    const relevantTasks = tasksWithDates.filter(task => task.planEndDateObj >= yearStart && task.planStartDateObj <= yearEnd);
 
     const filteredByStatus = relevantTasks.filter(task => {
         if (timelineState.statusFilter === 'all') return true;
-        if (timelineState.statusFilter === 'overdue') return isTaskOverdue(task);
-        return task.status === timelineState.statusFilter;
+        return task.schedule?.state === timelineState.statusFilter;
     });
     const filteredTasks = filterTasksByAssignee(filteredByStatus, timelineState.assigneeFilter);
     if (countLabel) {
         const baseText = `${relevantTasks.length} tareas con planificación en ${year}.`;
-        if (timelineState.statusFilter === 'overdue') {
-            countLabel.textContent = `${filteredTasks.length} atrasadas de ${relevantTasks.length} programadas en ${year}.`;
-        } else if (filteredTasks.length === relevantTasks.length && timelineState.assigneeFilter === 'all') {
-            countLabel.textContent = baseText;
-        } else if (timelineState.assigneeFilter !== 'all' && filteredTasks.length > 0) {
-            countLabel.textContent = `${filteredTasks.length} coinciden con los filtros de estado y responsable.`;
+        if (timelineState.statusFilter === 'all') {
+            if (filteredTasks.length === relevantTasks.length && timelineState.assigneeFilter === 'all') {
+                countLabel.textContent = baseText;
+            } else if (timelineState.assigneeFilter !== 'all' && filteredTasks.length > 0) {
+                countLabel.textContent = `${filteredTasks.length} coinciden con los filtros de estado y responsable.`;
+            } else {
+                countLabel.textContent = `${filteredTasks.length} de ${relevantTasks.length} coinciden con los filtros aplicados.`;
+            }
         } else {
-            countLabel.textContent = `${filteredTasks.length} de ${relevantTasks.length} coinciden con los filtros aplicados.`;
+            const config = TASK_STATE_CONFIG[timelineState.statusFilter];
+            if (config) {
+                const label = config.label.toLowerCase();
+                const plural = filteredTasks.length === 1 ? '' : 's';
+                countLabel.textContent = `${filteredTasks.length} ${label}${plural} de ${relevantTasks.length} planificadas en ${year}.`;
+            } else {
+                countLabel.textContent = baseText;
+            }
         }
     }
 
@@ -1731,36 +1781,55 @@ function renderAnnualSummary(tasks, year) {
     }
 
     const sortedTasks = filteredTasks.sort((a, b) => {
-        if (a.startDateObj.getTime() === b.startDateObj.getTime()) {
+        if (a.planStartDateObj.getTime() === b.planStartDateObj.getTime()) {
             return (a.title || '').localeCompare(b.title || '');
         }
-        return a.startDateObj - b.startDateObj;
+        return a.planStartDateObj - b.planStartDateObj;
     });
 
     const rowsHTML = sortedTasks.map(task => {
-        const isOverdue = task.isOverdue || isTaskOverdue(task);
-        const delayDays = isOverdue ? getTaskDelayDays(task) : 0;
-        const progressValue = getTaskProgressValue(task);
-        const overdueBadge = isOverdue
-            ? `<span class="summary-chip danger"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>Atrasada${delayDays ? ` · ${delayDays}d` : ''}</span>`
+        const schedule = task.schedule || {};
+        const stateDisplay = getTaskStateDisplay(schedule);
+        const state = stateDisplay.state;
+        const progressValue = Math.round(Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : getTaskProgressValue(task));
+        const plannedProgressRaw = Number.isFinite(schedule.plannedProgressPercent)
+            ? schedule.plannedProgressPercent
+            : Number.isFinite(schedule.plannedProgress)
+                ? schedule.plannedProgress * 100
+                : progressValue;
+        const plannedProgressValue = Math.max(0, Math.min(100, Math.round(plannedProgressRaw)));
+        const deltaPointsRaw = Number.isFinite(schedule.deltaPercentagePoints)
+            ? schedule.deltaPercentagePoints
+            : ((Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : progressValue) - plannedProgressValue);
+        const deltaLabel = `${formatSignedPoints(deltaPointsRaw)} pp`;
+        const planProgressLabel = schedule.hasPlanRange ? `Plan ${plannedProgressValue}%` : 'Plan —';
+        const stateChip = getTaskStateChipHTML(schedule, { tooltip: formatTaskScheduleTooltip(task, schedule), textType: 'chip' });
+        const delayChip = state === TASK_STATE.DELAYED
+            ? `<span class="summary-chip" data-task-state="${state}">Atraso ${(schedule.atrasoDias ?? 0)}d</span>`
             : '';
-        const durationLabel = getTaskDurationLabel(task.startDate, task.dueDate);
+        const durationLabel = getTaskDurationLabel(task.planStartISO, task.planEndISO);
         return `
-            <tr class="summary-row ${isOverdue ? 'overdue' : ''}">
+            <tr class="summary-row" data-task-state="${state}">
                 <td class="summary-col-main">
                     <div class="summary-title-row">
                         <p class="summary-task-title" title="${escapeHTML(task.title || 'Tarea sin título')}">${escapeHTML(task.title || 'Tarea sin título')}</p>
-                        ${overdueBadge}
+                        ${stateChip}
                     </div>
                     <div class="summary-meta-row">
-                        <span class="summary-chip">Inicio ${formatDisplayDate(task.startDate)}</span>
-                        <span class="summary-chip">Fin ${formatDisplayDate(task.effectiveDueDate)}</span>
+                        <span class="summary-chip">Inicio ${formatDisplayDate(task.planStartISO)}</span>
+                        <span class="summary-chip">Fin ${formatDisplayDate(task.planEndISO)}</span>
                         <span class="summary-chip">${durationLabel}</span>
+                        ${delayChip}
                     </div>
                 </td>
                 <td class="summary-col-progress">
-                    <div class="summary-progress-bar">
+                    <div class="summary-progress-bar" data-task-state="${state}">
+                        <span class="task-plan-marker" style="left: ${plannedProgressValue}%;"></span>
                         <div class="summary-progress-fill" style="width: ${progressValue}%;"></div>
+                    </div>
+                    <div class="summary-progress-meta">
+                        <span class="summary-plan-label">${planProgressLabel}</span>
+                        <span class="summary-delta" data-task-state="${state}" title="Diferencia versus plan">Δ ${deltaLabel}</span>
                     </div>
                     <span class="summary-progress-value">${progressValue}%</span>
                 </td>
@@ -1905,6 +1974,27 @@ async function populateTimelinePeriod() {
             const demoPill = timelineState.usingSampleData
                 ? '<span class="task-demo-pill subtle">Vista previa con datos de ejemplo</span>'
                 : '';
+            const legendStateChips = TASK_STATE_SEQUENCE.map(stateKey => {
+                const sampleSchedule = stateKey === TASK_STATE.DELAYED
+                    ? { state: stateKey, atrasoDias: 3 }
+                    : { state: stateKey };
+                return getTaskStateChipHTML(sampleSchedule, { textType: 'label' });
+            }).join('');
+            const legendPlanChip = `
+                <span class="legend-chip legend-chip-plan">
+                    <span class="legend-chip-bar" data-task-state="${TASK_STATE.ON_TIME}">
+                        <span class="task-plan-marker" style="left: 65%;"></span>
+                        <span class="task-bar-progress" style="width: 45%;"></span>
+                    </span>
+                    <span class="legend-chip-label">Plan vs avance</span>
+                </span>
+            `;
+            const legendSampleChip = `
+                <span class="legend-chip legend-chip-sample">
+                    <span class="legend-sample-pill">Demo</span>
+                    <span class="legend-chip-label">Tarea de ejemplo</span>
+                </span>
+            `;
 
             taskList.innerHTML = `
                 <div class="timeline-task-list-inner">
@@ -1915,24 +2005,9 @@ async function populateTimelinePeriod() {
                                 <div class="task-list-legend">
                                     <span class="task-list-legend-text">Arrastrá para mover · Estirá los extremos para ajustar fechas</span>
                                     <div class="task-status-legend" aria-hidden="true">
-                                        <span class="legend-chip">
-                                            <span class="legend-chip-color task-bar"></span>
-                                            <span class="legend-chip-label">Plan</span>
-                                        </span>
-                                        <span class="legend-chip">
-                                            <span class="legend-chip-color task-bar legend-chip-progress">
-                                                <span class="task-bar-progress"></span>
-                                            </span>
-                                            <span class="legend-chip-label">Progreso real</span>
-                                        </span>
-                                        <span class="legend-chip">
-                                            <span class="legend-chip-color task-bar overdue"></span>
-                                            <span class="legend-chip-label">Atraso</span>
-                                        </span>
-                                        <span class="legend-chip">
-                                            <span class="legend-chip-color task-bar sample"></span>
-                                            <span class="legend-chip-label">Muestra</span>
-                                        </span>
+                                        ${legendStateChips}
+                                        ${legendPlanChip}
+                                        ${legendSampleChip}
                                     </div>
                                 </div>
                             </div>
@@ -2046,10 +2121,15 @@ function updateTimelineInsights(tasks = [], context = timelineState) {
     const doneCount = tasks.filter(task => task.status === 'done').length;
     const inProgressCount = tasks.filter(task => task.status === 'inprogress').length;
     const todoCount = tasks.filter(task => task.status !== 'done' && task.status !== 'inprogress').length;
-    const overdueTasks = tasks.filter(task => task.isOverdue || isTaskOverdue(task));
+    const overdueTasks = tasks.filter(task => (task.schedule?.state ?? TASK_STATE.ON_TIME) === TASK_STATE.DELAYED);
     const overdueCount = overdueTasks.length;
-    const maxDelay = overdueTasks.reduce((acc, task) => Math.max(acc, task.delayDays || getTaskDelayDays(task)), 0);
-    const averageProgress = Math.round(tasks.reduce((acc, task) => acc + getTaskProgressValue(task), 0) / total);
+    const maxDelay = overdueTasks.reduce((acc, task) => Math.max(acc, task.schedule?.atrasoDias ?? 0), 0);
+    const averageProgress = Math.round(tasks.reduce((acc, task) => {
+        if (Number.isFinite(task.schedule?.progressPercent)) {
+            return acc + task.schedule.progressPercent;
+        }
+        return acc + getTaskProgressValue(task);
+    }, 0) / total);
     const completionRate = Math.round((doneCount / total) * 100);
     const periodLabel = getTimelinePeriodLabel(context);
 
@@ -2177,14 +2257,23 @@ async function renderTimeline() {
             .task-list-legend-text { line-height: 1.3; }
             .task-status-legend { display: flex; flex-wrap: wrap; gap: 0.45rem 0.65rem; align-items: center; }
             .legend-chip { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.55rem 0.2rem 0.4rem; border-radius: 999px; background: rgba(226,232,240,0.55); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; color: rgba(71,85,105,0.78); }
+            .legend-chip .task-state-chip { margin: 0; }
             .dark .legend-chip { background: rgba(51,65,85,0.7); color: rgba(203,213,225,0.82); }
-            .legend-chip-color { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 12px; border-radius: 999px; overflow: hidden; }
-            .task-status-legend .task-bar { position: relative; width: 100%; height: 100%; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: inherit; box-shadow: none; cursor: default; background: linear-gradient(135deg, rgba(37,99,235,0.92), rgba(59,130,246,0.85)); color: transparent; border: 1px solid transparent; }
-            .task-status-legend .task-bar.sample { background: linear-gradient(135deg, rgba(148,163,184,0.65), rgba(100,116,139,0.55)); border: 1px dashed rgba(148,163,184,0.5); }
-            .dark .task-status-legend .task-bar.sample { background: linear-gradient(135deg, rgba(71,85,105,0.75), rgba(51,65,85,0.65)); border-color: rgba(148,163,184,0.45); }
-            .task-status-legend .task-bar.overdue { background: linear-gradient(135deg, rgba(244,63,94,0.95), rgba(225,29,72,0.9)); }
-            .task-status-legend .task-bar-progress { position: absolute; inset: 0; border-radius: inherit; background: rgba(16,185,129,0.88); width: 65%; }
-            .task-status-legend .task-bar.overdue .task-bar-progress { background: rgba(254,202,202,0.95); }
+            .legend-chip-plan { display: inline-flex; align-items: center; gap: 0.5rem; }
+            .legend-chip-sample { display: inline-flex; align-items: center; gap: 0.5rem; }
+            .legend-chip-bar { position: relative; display: inline-flex; align-items: center; justify-content: flex-start; width: 44px; height: 12px; border-radius: 999px; background: rgba(226,232,240,0.85); border: 1px dashed rgba(148,163,184,0.4); overflow: hidden; }
+            .dark .legend-chip-bar { background: rgba(30,41,59,0.82); border-color: rgba(71,85,105,0.45); }
+            .legend-chip-bar .task-bar-progress { position: absolute; inset: 0; border-radius: inherit; width: 45%; }
+            .legend-chip-bar[data-task-state="completed"] { background: rgba(209,250,229,0.6); border-style: solid; border-color: rgba(16,185,129,0.45); }
+            .dark .legend-chip-bar[data-task-state="completed"] { background: rgba(6,78,59,0.55); border-color: rgba(16,185,129,0.55); }
+            .legend-chip-bar[data-task-state="on_time"] { background: rgba(191,219,254,0.65); border-style: solid; border-color: rgba(37,99,235,0.45); }
+            .dark .legend-chip-bar[data-task-state="on_time"] { background: rgba(30,64,175,0.5); border-color: rgba(59,130,246,0.55); }
+            .legend-chip-bar[data-task-state="at_risk"] { background: rgba(253,230,138,0.65); border-style: solid; border-color: rgba(217,119,6,0.45); }
+            .dark .legend-chip-bar[data-task-state="at_risk"] { background: rgba(133,77,14,0.55); border-color: rgba(217,119,6,0.55); }
+            .legend-chip-bar[data-task-state="delayed"] { background: rgba(254,226,226,0.7); border-style: solid; border-color: rgba(220,38,38,0.5); }
+            .dark .legend-chip-bar[data-task-state="delayed"] { background: rgba(127,29,29,0.6); border-color: rgba(220,38,38,0.6); }
+            .legend-sample-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 14px; border-radius: 999px; border: 1px dashed rgba(148,163,184,0.55); background: rgba(148,163,184,0.25); font-weight: 700; font-size: 0.55rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 0.35rem; }
+            .dark .legend-sample-pill { border-color: rgba(148,163,184,0.45); background: rgba(71,85,105,0.4); }
             .legend-chip-label { white-space: nowrap; }
             .timeline-task-list-body { padding: 0.9rem 1.15rem 1.15rem; display: flex; flex-direction: column; gap: 0.45rem; }
             .task-header-top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.85rem; }
@@ -2207,11 +2296,9 @@ async function renderTimeline() {
             .task-table-row { display: grid; grid-template-columns: minmax(200px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(220px, 1.5fr); align-items: stretch; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 0.75rem; border: 1px solid rgba(148,163,184,0.2); background: rgba(255,255,255,0.78); transition: border-color 0.2s ease, box-shadow 0.2s ease; }
             .task-table-row:hover { border-color: rgba(59,130,246,0.35); box-shadow: 0 10px 20px -20px rgba(59,130,246,0.45); }
             .task-table-row.highlight { border-color: rgba(59,130,246,0.55); box-shadow: 0 0 0 2px rgba(59,130,246,0.25); }
-            .task-table-row.overdue { border-color: rgba(248,113,113,0.55); background: rgba(254,226,226,0.55); }
             .task-table-row.sample { border-style: dashed; }
             .dark .task-table-row { background: rgba(15,23,42,0.78); border-color: rgba(71,85,105,0.45); }
             .dark .task-table-row:hover { border-color: rgba(96,165,250,0.5); box-shadow: 0 12px 26px -24px rgba(37,99,235,0.45); }
-            .dark .task-table-row.overdue { background: rgba(76,5,25,0.6); border-color: rgba(225,29,72,0.55); }
             .task-col { display: flex; flex-direction: column; justify-content: center; gap: 0.25rem; min-width: 0; }
             .task-col--main { justify-content: flex-start; gap: 0.35rem; }
             .task-col--date { align-items: center; justify-content: center; text-align: center; gap: 0.2rem; }
@@ -2227,26 +2314,36 @@ async function renderTimeline() {
             .dark .task-date-value { color: rgba(226,232,240,0.85); }
             .task-date-year { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(71,85,105,0.7); }
             .dark .task-date-year { color: rgba(148,163,184,0.7); }
-            .task-delay-indicator { display: inline-flex; align-items: center; justify-content: center; padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; background: rgba(254,226,226,0.9); color: rgba(190,18,60,0.9); }
-            .dark .task-delay-indicator { background: rgba(136,19,55,0.7); color: rgba(254,226,226,0.92); }
             .task-duration { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(71,85,105,0.75); }
             .dark .task-duration { color: rgba(148,163,184,0.75); }
-            .task-alert { margin-top: 0.25rem; }
-            .task-alert-pill { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.18rem 0.5rem; border-radius: 999px; font-size: 0.6rem; font-weight: 700; background: rgba(254,226,226,0.9); color: rgba(190,18,60,0.9); letter-spacing: 0.06em; text-transform: uppercase; }
-            .dark .task-alert-pill { background: rgba(127,29,29,0.65); color: rgba(254,226,226,0.9); }
             .task-progress-display { display: flex; align-items: center; gap: 0.55rem; }
             .task-progress-bar { flex: 1; height: 0.4rem; border-radius: 999px; background: rgba(226,232,240,0.75); overflow: hidden; position: relative; }
             .dark .task-progress-bar { background: rgba(51,65,85,0.85); }
-            .task-progress-fill { position: absolute; inset: 0; width: 0; background: linear-gradient(135deg, rgba(16,185,129,0.95), rgba(5,150,105,0.9)); transition: width 0.35s ease; border-radius: inherit; }
-            .task-table-row.overdue .task-progress-fill { background: linear-gradient(135deg, rgba(244,63,94,0.95), rgba(225,29,72,0.9)); }
+            .task-table-row[data-task-state="completed"] .task-progress-bar { background: rgba(209,250,229,0.55); border: 1px solid rgba(16,185,129,0.35); }
+            .dark .task-table-row[data-task-state="completed"] .task-progress-bar { background: rgba(6,78,59,0.6); border-color: rgba(16,185,129,0.45); }
+            .task-table-row[data-task-state="on_time"] .task-progress-bar { background: rgba(191,219,254,0.55); border: 1px solid rgba(37,99,235,0.35); }
+            .dark .task-table-row[data-task-state="on_time"] .task-progress-bar { background: rgba(30,64,175,0.5); border-color: rgba(59,130,246,0.45); }
+            .task-table-row[data-task-state="at_risk"] .task-progress-bar { background: rgba(253,230,138,0.55); border: 1px solid rgba(217,119,6,0.4); }
+            .dark .task-table-row[data-task-state="at_risk"] .task-progress-bar { background: rgba(133,77,14,0.55); border-color: rgba(217,119,6,0.5); }
+            .task-table-row[data-task-state="delayed"] .task-progress-bar { background: rgba(254,226,226,0.6); border: 1px solid rgba(220,38,38,0.45); }
+            .dark .task-table-row[data-task-state="delayed"] .task-progress-bar { background: rgba(127,29,29,0.55); border-color: rgba(220,38,38,0.55); }
+            .task-progress-fill { position: absolute; inset: 0; width: 0; transition: width 0.35s ease; border-radius: inherit; }
             .task-progress-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.45rem; row-gap: 0.3rem; }
+            .task-plan-progress-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(71,85,105,0.72); min-width: 72px; }
+            .dark .task-plan-progress-label { color: rgba(148,163,184,0.75); }
             .task-progress-slider { -webkit-appearance: none; appearance: none; height: 2px; flex: 1; min-width: 0; border-radius: 999px; background: linear-gradient(90deg, rgba(59,130,246,0.85), rgba(56,189,248,0.85)); outline: none; cursor: pointer; transition: filter 0.2s ease; }
             .task-progress-slider:hover { filter: brightness(1.08); }
             .task-progress-slider:disabled { cursor: not-allowed; opacity: 0.6; }
             .task-progress-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid rgba(59,130,246,0.9); box-shadow: 0 4px 10px -6px rgba(59,130,246,0.6); }
             .task-progress-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid rgba(59,130,246,0.9); box-shadow: 0 4px 10px -6px rgba(59,130,246,0.6); }
-            .task-progress-value { font-size: 0.64rem; font-weight: 700; color: rgba(37,99,235,0.9); min-width: 2.4rem; text-align: right; letter-spacing: 0.04em; flex-shrink: 0; }
+            .task-progress-value { font-size: 0.64rem; font-weight: 700; min-width: 2.4rem; text-align: right; letter-spacing: 0.04em; flex-shrink: 0; color: rgba(37,99,235,0.9); }
             .dark .task-progress-value { color: rgba(191,219,254,0.9); }
+            .task-table-row[data-task-state="completed"] .task-progress-value { color: rgba(5,122,85,0.95); }
+            .dark .task-table-row[data-task-state="completed"] .task-progress-value { color: rgba(167,243,208,0.95); }
+            .task-table-row[data-task-state="at_risk"] .task-progress-value { color: rgba(217,119,6,0.95); }
+            .dark .task-table-row[data-task-state="at_risk"] .task-progress-value { color: rgba(253,224,71,0.95); }
+            .task-table-row[data-task-state="delayed"] .task-progress-value { color: rgba(185,28,28,0.95); }
+            .dark .task-table-row[data-task-state="delayed"] .task-progress-value { color: rgba(254,202,202,0.95); }
             .task-progress-controls .task-duration { white-space: nowrap; }
             .summary-table { width: 100%; min-width: 620px; border-collapse: separate; border-spacing: 0; }
             .summary-table thead { background: rgba(241,245,249,0.85); }
@@ -2259,8 +2356,6 @@ async function renderTimeline() {
             .summary-row:last-child { border-bottom: none; }
             .summary-row:hover { background: rgba(59,130,246,0.08); }
             .dark .summary-row:hover { background: rgba(37,99,235,0.18); }
-            .summary-row.overdue { background: rgba(254,226,226,0.55); }
-            .dark .summary-row.overdue { background: rgba(76,5,25,0.5); }
             .summary-col-main { padding: 0.75rem 0.5rem 0.75rem 0; }
             .summary-col-progress { padding: 0.75rem 0 0.75rem 0.5rem; width: 180px; text-align: right; }
             .summary-title-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
@@ -2269,12 +2364,26 @@ async function renderTimeline() {
             .summary-meta-row { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }
             .summary-chip { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.65rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 999px; background: rgba(241,245,249,0.9); color: rgba(71,85,105,0.82); text-transform: uppercase; letter-spacing: 0.06em; }
             .dark .summary-chip { background: rgba(51,65,85,0.78); color: rgba(203,213,225,0.85); }
-            .summary-chip.danger { background: rgba(254,226,226,0.9); color: rgba(190,18,60,0.9); }
-            .dark .summary-chip.danger { background: rgba(127,29,29,0.65); color: rgba(254,226,226,0.9); }
+            .summary-chip[data-task-state="delayed"] { background: rgba(254,226,226,0.92); color: rgba(185,28,28,0.95); }
+            .dark .summary-chip[data-task-state="delayed"] { background: rgba(127,29,29,0.7); color: rgba(254,226,226,0.95); }
             .summary-progress-bar { position: relative; height: 0.45rem; border-radius: 999px; background: rgba(226,232,240,0.8); overflow: hidden; box-shadow: inset 0 2px 4px -2px rgba(15,23,42,0.4); margin-bottom: 0.35rem; }
             .dark .summary-progress-bar { background: rgba(51,65,85,0.85); box-shadow: inset 0 2px 4px -2px rgba(15,23,42,0.7); }
-            .summary-progress-fill { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(135deg, rgba(16,185,129,0.95), rgba(5,150,105,0.9)); }
-            .summary-row.overdue .summary-progress-fill { background: linear-gradient(135deg, rgba(244,63,94,0.95), rgba(225,29,72,0.9)); }
+            .summary-progress-bar[data-task-state="completed"] { background: rgba(209,250,229,0.55); box-shadow: inset 0 2px 4px -2px rgba(4,120,87,0.35); border: 1px solid rgba(16,185,129,0.35); }
+            .dark .summary-progress-bar[data-task-state="completed"] { background: rgba(6,78,59,0.55); border-color: rgba(16,185,129,0.45); box-shadow: inset 0 2px 4px -2px rgba(5,150,105,0.45); }
+            .summary-progress-bar[data-task-state="on_time"] { background: rgba(191,219,254,0.55); border: 1px solid rgba(37,99,235,0.35); box-shadow: inset 0 2px 4px -2px rgba(37,99,235,0.35); }
+            .dark .summary-progress-bar[data-task-state="on_time"] { background: rgba(30,64,175,0.45); border-color: rgba(59,130,246,0.45); box-shadow: inset 0 2px 4px -2px rgba(59,130,246,0.45); }
+            .summary-progress-bar[data-task-state="at_risk"] { background: rgba(253,230,138,0.55); border: 1px solid rgba(217,119,6,0.4); box-shadow: inset 0 2px 4px -2px rgba(217,119,6,0.45); }
+            .dark .summary-progress-bar[data-task-state="at_risk"] { background: rgba(133,77,14,0.55); border-color: rgba(217,119,6,0.55); box-shadow: inset 0 2px 4px -2px rgba(217,119,6,0.55); }
+            .summary-progress-bar[data-task-state="delayed"] { background: rgba(254,226,226,0.6); border: 1px solid rgba(220,38,38,0.45); box-shadow: inset 0 2px 4px -2px rgba(220,38,38,0.45); }
+            .dark .summary-progress-bar[data-task-state="delayed"] { background: rgba(127,29,29,0.55); border-color: rgba(220,38,38,0.6); box-shadow: inset 0 2px 4px -2px rgba(225,29,72,0.5); }
+            .summary-progress-fill { position: absolute; inset: 0; border-radius: inherit; }
+            .summary-progress-meta { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(71,85,105,0.75); margin-bottom: 0.35rem; }
+            .dark .summary-progress-meta { color: rgba(148,163,184,0.75); }
+            .summary-plan-label { font-weight: 700; }
+            .summary-delta { font-weight: 700; }
+            .summary-delta[data-task-state="on_time"] { color: rgba(37,99,235,0.95); }
+            .summary-delta[data-task-state="at_risk"] { color: rgba(217,119,6,0.95); }
+            .summary-delta[data-task-state="delayed"] { color: rgba(185,28,28,0.95); }
             .summary-progress-value { font-size: 0.7rem; font-weight: 700; color: rgba(37,99,235,0.9); }
             .dark .summary-progress-value { color: rgba(191,219,254,0.9); }
             .summary-demo-note { margin-top: 0.75rem; font-size: 0.7rem; font-style: italic; color: rgba(71,85,105,0.75); }
@@ -2318,19 +2427,24 @@ async function renderTimeline() {
             .dark .timeline-grid-content .today-marker { background: rgba(96,165,250,0.9); }
             .timeline-grid-content .today-marker .today-label { position: absolute; top: 8px; left: 6px; font-size: 10px; background: rgba(59,130,246,0.95); color: #fff; padding: 2px 6px; border-radius: 999px; box-shadow: 0 8px 14px -8px rgba(59,130,246,0.45); }
             .dark .timeline-grid-content .today-marker .today-label { background: rgba(96,165,250,0.95); }
-            .timeline-grid-content .task-bar { position: absolute; height: 22px; border-radius: 11px; background: linear-gradient(135deg, rgba(37,99,235,0.92), rgba(59,130,246,0.85)); color: #fff; font-weight: 600; display: flex; align-items: center; justify-content: center; padding: 0 10px; cursor: grab; box-shadow: 0 12px 26px -18px rgba(30,64,175,0.6); transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease; }
+            .timeline-grid-content .task-bar { position: absolute; height: 22px; border-radius: 11px; display: flex; align-items: center; justify-content: center; padding: 0 10px; cursor: grab; font-weight: 600; color: rgba(30,41,59,0.92); background: rgba(226,232,240,0.9); border: 1px solid rgba(148,163,184,0.45); box-shadow: 0 12px 24px -18px rgba(148,163,184,0.65); transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease; }
+            .dark .timeline-grid-content .task-bar { background: rgba(30,41,59,0.85); border-color: rgba(71,85,105,0.6); color: rgba(226,232,240,0.9); box-shadow: 0 12px 24px -18px rgba(15,23,42,0.75); }
             .timeline-grid-content .task-bar.sample { background: linear-gradient(135deg, rgba(148,163,184,0.65), rgba(100,116,139,0.55)); color: rgba(15,23,42,0.85); cursor: default; box-shadow: 0 10px 22px -18px rgba(15,23,42,0.4); border: 1px dashed rgba(148,163,184,0.5); }
             .dark .timeline-grid-content .task-bar.sample { color: rgba(226,232,240,0.85); border-color: rgba(148,163,184,0.45); background: linear-gradient(135deg, rgba(71,85,105,0.75), rgba(51,65,85,0.65)); }
             .timeline-grid-content .task-bar.sample:hover { filter: none; box-shadow: 0 10px 22px -18px rgba(15,23,42,0.4); }
             .timeline-grid-content .task-bar:hover { box-shadow: 0 14px 30px -18px rgba(30,64,175,0.75); filter: brightness(1.05); }
             .timeline-grid-content .task-bar.highlight { box-shadow: 0 0 0 3px rgba(59,130,246,0.4), 0 14px 32px -18px rgba(30,64,175,0.7); filter: saturate(1.15); }
-            .timeline-grid-content .task-bar.overdue { background: linear-gradient(135deg, rgba(244,63,94,0.95), rgba(225,29,72,0.9)); box-shadow: 0 14px 30px -18px rgba(190,18,60,0.65); }
-            .timeline-grid-content .task-bar.overdue:hover { box-shadow: 0 16px 32px -18px rgba(190,18,60,0.75); filter: brightness(1.02); }
-            .timeline-grid-content .task-bar-progress { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(16,185,129,0.88); border-radius: inherit; z-index: 1; }
-            .timeline-grid-content .task-bar.overdue .task-bar-progress { background: rgba(254,202,202,0.95); }
+            .timeline-grid-content .task-bar[data-task-state="completed"] { background: rgba(209,250,229,0.75); border-color: rgba(16,185,129,0.55); color: rgba(4,120,87,0.95); box-shadow: 0 14px 28px -18px rgba(5,150,105,0.5); }
+            .dark .timeline-grid-content .task-bar[data-task-state="completed"] { background: rgba(6,78,59,0.6); border-color: rgba(16,185,129,0.6); color: rgba(209,250,229,0.95); box-shadow: 0 14px 28px -18px rgba(16,185,129,0.45); }
+            .timeline-grid-content .task-bar[data-task-state="on_time"] { background: rgba(191,219,254,0.75); border-color: rgba(37,99,235,0.55); color: rgba(29,78,216,0.95); box-shadow: 0 14px 30px -18px rgba(30,64,175,0.55); }
+            .dark .timeline-grid-content .task-bar[data-task-state="on_time"] { background: rgba(30,64,175,0.55); border-color: rgba(59,130,246,0.55); color: rgba(191,219,254,0.95); box-shadow: 0 14px 30px -18px rgba(30,64,175,0.65); }
+            .timeline-grid-content .task-bar[data-task-state="at_risk"] { background: rgba(253,230,138,0.75); border-color: rgba(217,119,6,0.55); color: rgba(180,83,9,0.95); box-shadow: 0 14px 30px -18px rgba(217,119,6,0.55); }
+            .dark .timeline-grid-content .task-bar[data-task-state="at_risk"] { background: rgba(133,77,14,0.6); border-color: rgba(217,119,6,0.6); color: rgba(253,224,71,0.95); box-shadow: 0 14px 30px -18px rgba(217,119,6,0.65); }
+            .timeline-grid-content .task-bar[data-task-state="delayed"] { background: rgba(254,226,226,0.78); border-color: rgba(220,38,38,0.6); color: rgba(185,28,28,0.98); box-shadow: 0 14px 32px -18px rgba(190,18,60,0.6); }
+            .dark .timeline-grid-content .task-bar[data-task-state="delayed"] { background: rgba(127,29,29,0.65); border-color: rgba(220,38,38,0.65); color: rgba(254,226,226,0.98); box-shadow: 0 16px 32px -18px rgba(225,29,72,0.65); }
+            .timeline-grid-content .task-bar-progress { position: absolute; left: 0; top: 0; bottom: 0; border-radius: inherit; z-index: 1; }
             .timeline-grid-content .task-bar-label { position: relative; z-index: 3; font-size: 0.72rem; letter-spacing: 0.01em; white-space: nowrap; pointer-events: none; }
-            .timeline-grid-content .task-bar-alert { position: absolute; top: -18px; right: 16px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 0.65rem; font-weight: 600; background: rgba(254,226,226,0.95); color: rgba(190,18,60,1); box-shadow: 0 10px 20px -16px rgba(190,18,60,0.55); }
-            .dark .timeline-grid-content .task-bar-alert { background: rgba(136,19,55,0.85); color: rgba(254,226,226,0.95); box-shadow: 0 10px 20px -16px rgba(225,29,72,0.55); }
+            .timeline-grid-content .task-bar-alert { position: absolute; top: -18px; right: 16px; }
             .timeline-loading { display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: rgba(100,116,139,1); font-size: 0.875rem; padding: 1.5rem; }
             .timeline-loading.vertical { flex-direction: column; min-height: 220px; }
             .dark .timeline-loading { color: rgba(148,163,184,0.85); }

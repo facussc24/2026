@@ -13,6 +13,7 @@
 import { collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, onSnapshot, orderBy, limit, startAfter, Timestamp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { COLLECTIONS } from '../../utils.js';
+import { augmentTasksWithSchedule } from '../../utils/task-status.js';
 
 // Dependencies to be injected
 let db;
@@ -76,7 +77,8 @@ export function initTaskService(dependencies) {
 export async function fetchAllTasks() {
     const tasksQuery = query(collection(db, COLLECTIONS.TAREAS));
     const snapshot = await getDocs(tasksQuery);
-    return snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+    const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+    return augmentTasksWithSchedule(tasks);
 }
 
 /**
@@ -367,7 +369,7 @@ export function subscribeToAllTasks(callback, handleError) {
     const q = query(tasksRef, orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
         const allTasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
-        callback(allTasks);
+        callback(augmentTasksWithSchedule(allTasks));
     }, handleError);
     return unsubscribe;
 }
@@ -411,7 +413,7 @@ export function subscribeToPaginatedTasks(filters, pagination, callback, handleE
     const q = query(tasksRef, ...queryConstraints);
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-        const tasks = snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+        const tasks = augmentTasksWithSchedule(snapshot.docs.map(doc => ({ ...doc.data(), docId: doc.id })));
         const newLastVisible = snapshot.docs[snapshot.docs.length - 1];
 
         callback({

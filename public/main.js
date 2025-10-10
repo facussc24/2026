@@ -16,6 +16,7 @@ import { initLandingPageModule, runLandingPageLogic } from './modules/landing_pa
 import { initUserManagementModule, handleUserDisable } from './modules/user_management/index.js';
 import { initTimelineModule, runTimelineLogic } from './modules/timeline/index.js';
 import { deleteProductAndOrphanedSubProducts } from './services/product.service.js';
+import { formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE } from './utils/task-status.js';
 
 // Provide a resilient lucide wrapper so UI rendering does not break if the icon
 // library finishes loading after the main bundle.
@@ -2904,13 +2905,33 @@ function createTaskCard(task) {
     };
     const priority = priorities[task.priority] || priorities.medium;
 
-    const dueDate = task.dueDate ? new Date(task.dueDate + "T00:00:00") : null;
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const isOverdue = dueDate && dueDate < today;
-    const dueDateStr = dueDate ? dueDate.toLocaleDateString('es-AR') : 'Sin fecha';
-    const urgencyClass = isOverdue ? 'border-red-400 bg-red-50/50' : 'border-slate-200';
-    const dateClass = isOverdue ? 'text-red-600 font-bold' : 'text-slate-500';
+    const schedule = task.schedule || {};
+    const stateDisplay = getTaskStateDisplay(schedule);
+    const state = stateDisplay.state;
+    const tooltip = formatTaskScheduleTooltip(task, schedule);
+    const stateChip = getTaskStateChipHTML(schedule, { tooltip });
+    const progressValueRaw = Number.isFinite(schedule.progressPercent)
+        ? schedule.progressPercent
+        : Number.isFinite(Number.parseFloat(task.progress))
+            ? Number.parseFloat(task.progress)
+            : 0;
+    const progressValue = Math.max(0, Math.min(100, Math.round(progressValueRaw)));
+    const plannedProgressRaw = Number.isFinite(schedule.plannedProgressPercent)
+        ? schedule.plannedProgressPercent
+        : Number.isFinite(schedule.plannedProgress)
+            ? schedule.plannedProgress * 100
+            : progressValue;
+    const plannedProgressValue = Math.max(0, Math.min(100, Math.round(plannedProgressRaw)));
+    const deltaPoints = Number.isFinite(schedule.deltaPercentagePoints)
+        ? schedule.deltaPercentagePoints
+        : ((Number.isFinite(schedule.progressPercent) ? schedule.progressPercent : progressValue) - plannedProgressValue);
+    const deltaLabel = `${formatSignedPoints(deltaPoints)} pp`;
+    const planPercentLabel = schedule.hasPlanRange ? `Plan ${plannedProgressValue}%` : 'Plan —';
+    const planRangeLabel = schedule.hasPlanRange ? formatPlannedRange(schedule, { includeYear: true }) : 'Sin plan';
+    const planDurationLabel = schedule.planDurationDays ? `${schedule.planDurationDays}d` : '';
+    const delayBadge = state === TASK_STATE.DELAYED
+        ? `<span class="task-delay-indicator" data-task-state="${state}">${schedule.atrasoDias ? `+${schedule.atrasoDias}d` : 'Atraso'}</span>`
+        : '';
 
     const creationDate = task.createdAt?.seconds ? new Date(task.createdAt.seconds * 1000) : null;
     const creationDateStr = creationDate ? creationDate.toLocaleDateString('es-AR') : 'N/A';
@@ -2954,13 +2975,33 @@ function createTaskCard(task) {
     const dragClass = checkUserPermission('edit', task) ? '' : 'no-drag';
 
     return `
-        <div class="task-card bg-white rounded-lg p-4 shadow-sm border ${urgencyClass} cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col gap-3 ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${task.docId}">
+        <div class="task-card bg-white rounded-lg p-4 shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:border-blue-400 animate-fade-in-up flex flex-col gap-3 ${dragClass} transition-transform transform hover:-translate-y-1" data-task-id="${task.docId}" data-task-state="${state}" title="${tooltip}">
             <div class="flex justify-between items-start gap-2">
                 <h4 class="font-bold text-slate-800 flex-grow">${task.title}</h4>
                 ${taskTypeIcon}
             </div>
 
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                ${stateChip}
+                ${delayBadge}
+            </div>
+
             <p class="text-sm text-slate-600 break-words flex-grow">${task.description || ''}</p>
+
+            <div class="space-y-2">
+                <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span class="font-semibold">${planRangeLabel}</span>
+                    <span>${planDurationLabel}</span>
+                </div>
+                <div class="task-card-progress" data-task-state="${state}">
+                    <span class="task-plan-marker" style="left: ${plannedProgressValue}%;"></span>
+                    <div class="task-card-progress-fill" style="width: ${progressValue}%;"></div>
+                </div>
+                <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span>${planPercentLabel}</span>
+                    <span class="task-delta-indicator" data-task-state="${state}">Δ ${deltaLabel}</span>
+                </div>
+            </div>
 
             ${subtaskProgressHTML}
 
@@ -2971,8 +3012,8 @@ function createTaskCard(task) {
                         <span class="flex items-center gap-1.5 font-medium" title="Fecha de creación">
                             <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i> ${creationDateStr}
                         </span>
-                        <span class="flex items-center gap-1.5 font-medium ${dateClass}" title="Fecha de entrega">
-                            <i data-lucide="calendar-check" class="w-3.5 h-3.5"></i> ${dueDateStr}
+                        <span class="flex items-center gap-1.5 font-medium" title="Avance real">
+                            <i data-lucide="trending-up" class="w-3.5 h-3.5"></i> ${progressValue}%
                         </span>
                     </div>
                 </div>
