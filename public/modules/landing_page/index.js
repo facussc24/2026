@@ -14,7 +14,7 @@ import { httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebas
 import { COLLECTIONS } from '../../utils.js';
 import { getPlannerHelpModalHTML, getTasksModalHTML } from '../tasks/task.templates.js';
 import { completeAndArchiveTask, updateTaskBlockedStatus, updateTaskStatus } from '../tasks/task.service.js';
-import { formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE } from '../../utils/task-status.js';
+import { augmentTasksWithSchedule, formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE } from '../../utils/task-status.js';
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
 
 
@@ -1384,9 +1384,11 @@ async function fetchWeeklyTasks() {
     try {
         const querySnapshot = await getDocs(q);
         // Filter out archived tasks on the client side.
-        return querySnapshot.docs
+        const tasks = querySnapshot.docs
             .map(doc => ({ ...doc.data(), docId: doc.id }))
             .filter(task => !task.isArchived);
+
+        return augmentTasksWithSchedule(tasks);
     } catch (error) {
         console.error("Error fetching weekly tasks:", error);
         if (error.code === 'failed-precondition') {
@@ -1409,7 +1411,8 @@ async function fetchWeeklyTasks() {
                 });
             });
 
-            return Array.from(dedupedTasks.values()).filter(task => !task.isArchived);
+            const tasks = Array.from(dedupedTasks.values()).filter(task => !task.isArchived);
+            return augmentTasksWithSchedule(tasks);
         } else {
             showToast('Error al cargar las tareas.', 'error');
         }
