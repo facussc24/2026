@@ -3645,6 +3645,7 @@ window.seedDatabase = seedDatabase;
 // Expose switchView for Playwright
 window.switchView = switchView;
 
+
 // Expose openTaskFormModal for Playwright testing
 window.openTaskFormModal = openTaskFormModal;
 

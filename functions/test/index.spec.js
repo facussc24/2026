@@ -145,7 +145,7 @@ describe('aiAgentJobRunner', () => {
 
         // 3. Assertions
         // Check that the job status was updated to RUNNING and then COMPLETED
-        expect(mockJobRef.update).toHaveBeenCalledWith({ status: 'RUNNING' });
+        expect(mockJobRef.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'RUNNING' }));
 
         // Get the final update call to check the executionPlan
         const finalUpdateCall = mockJobRef.update.mock.calls.find(call => call[0].status === 'AWAITING_CONFIRMATION');

@@ -373,6 +373,14 @@ export function openAIAssistantModal() {
         const loadingBubble = document.getElementById('ai-loading-bubble');
         if (!jobData) return;
 
+        // Update status text if available
+        if (jobData.status === 'RUNNING' && jobData.statusText) {
+            const statusTextEl = document.getElementById('ai-loading-status-text');
+            if (statusTextEl) {
+                statusTextEl.textContent = jobData.statusText;
+            }
+        }
+
         const isPlanReady = jobData.status === 'COMPLETED' || jobData.status === 'AWAITING_CONFIRMATION';
 
         if (isPlanReady) {
@@ -487,10 +495,24 @@ export function openAIAssistantModal() {
 
     // A single, delegated event listener for all actions within the modal.
     modalElement.addEventListener('click', async (e) => {
-        const button = e.target.closest('button[data-action]');
+        const button = e.target.closest('button');
         if (!button) return;
 
+        // Handle accordion toggle for thought process
+        if (button.id === 'thought-process-accordion-btn') {
+            const content = modalElement.querySelector('#thought-process-content');
+            const icon = button.querySelector('i[data-lucide]');
+            if (content && icon) {
+                const isVisible = content.style.display !== 'none';
+                content.style.display = isVisible ? 'none' : 'block';
+                icon.classList.toggle('rotate-180', !isVisible);
+            }
+            return;
+        }
+
         const action = button.dataset.action;
+        if (!action) return;
+
 
         if (action === 'close') {
             closeModal();
