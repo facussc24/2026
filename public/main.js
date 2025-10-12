@@ -14,7 +14,7 @@ import {
 } from './modules/tasks/tasks.js';
 import { initLandingPageModule, runLandingPageLogic } from './modules/landing_page/index.js';
 import { initUserManagementModule, handleUserDisable } from './modules/user_management/index.js';
-import { initTimelineModule, runTimelineLogic } from './modules/timeline/index.js';
+import { initPlanningModule, runPlanningLogic } from './modules/planning/index.js';
 import { deleteProductAndOrphanedSubProducts } from './services/product.service.js';
 import { formatPlannedRange, formatSignedPoints, formatTaskScheduleTooltip, getTaskStateChipHTML, getTaskStateDisplay, TASK_STATE } from './utils/task-status.js';
 
@@ -118,7 +118,7 @@ const PREDEFINED_AVATARS = [
 // --- Configuración de Vistas ---
 const viewConfig = {
     'landing-page': { title: 'Página Principal', singular: 'Página Principal' },
-    'timeline': { title: 'Planning', singular: 'Planning' },
+    'planning': { title: 'Planning', singular: 'Planning' },
     profile: { title: 'Mi Perfil', singular: 'Mi Perfil' },
     user_management: {
         title: 'Gestión de Usuarios',
@@ -1206,7 +1206,7 @@ async function switchView(viewName, params = null) {
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
     if (viewName === 'landing-page') await runLandingPageLogic();
-    else if (viewName === 'timeline') await runTimelineLogic();
+    else if (viewName === 'planning') await runPlanningLogic();
     else if (viewName === 'profile') await runProfileLogic();
     else if (config?.dataKey) {
         dom.headerActions.style.display = 'flex';
@@ -3428,7 +3428,7 @@ onAuthStateChanged(auth, async (user) => {
                 initTasksModule(appDependencies);
                 initLandingPageModule(appDependencies);
                 initUserManagementModule(appDependencies);
-                initTimelineModule(appDependencies);
+                initPlanningModule(appDependencies);
                 authWatchdog.log('auth-state:modules-initialized');
 
                 if (!isTestMode) {

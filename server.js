@@ -1,22 +1,9 @@
 import http from 'http';
 import handler from 'serve-handler';
 
-const server = http.createServer(async (request, response) => {
-  // Fallback to the static file handler for all other requests
+const server = http.createServer((request, response) => {
   return handler(request, response, {
-    "public": "public",
-    "rewrites": [
-      { "source": "**", "destination": "/index.html" }
-    ],
-    "headers": [
-      {
-        "source" : "**",
-        "headers" : [{
-          "key" : "Access-Control-Allow-Origin",
-          "value" : "*"
-        }]
-      }
-    ]
+    public: 'public',
   });
 });
 
