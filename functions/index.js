@@ -597,6 +597,41 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
         }
     }
 
+    const CONVERSATION_SUMMARY_THRESHOLD = 8;
+    if (conversationHistory.length > CONVERSATION_SUMMARY_THRESHOLD) {
+        try {
+            console.log(`Conversation ${conversationId} exceeds threshold of ${CONVERSATION_SUMMARY_THRESHOLD}, attempting summarization.`);
+            const {VertexAI} = require("@google-cloud/vertexai");
+            const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
+            const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+
+            const turnsToSummarizeCount = conversationHistory.length - 4; // Keep the last 2 exchanges
+            const historyToSummarize = conversationHistory.slice(0, turnsToSummarizeCount);
+            const recentHistory = conversationHistory.slice(turnsToSummarizeCount);
+
+            const summaryPrompt = `Summarize the following conversation between a user and a project management assistant. The user's goal is to manage their tasks. The summary should be concise, in Spanish, and capture the key decisions, tasks mentioned, and the overall context. This summary will provide context to the assistant for future turns. Do not add any preamble like "Here is the summary".
+
+Conversation to summarize:
+${JSON.stringify(historyToSummarize, null, 2)}`;
+
+            const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }] });
+            const summaryText = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (summaryText) {
+                conversationHistory = [
+                    { role: 'model', parts: [{ text: `Contexto previo (resumen): ${summaryText}` }] },
+                    ...recentHistory
+                ];
+                console.log(`Successfully summarized conversation ${conversationId}. New length: ${conversationHistory.length}`);
+            } else {
+                 console.warn(`Summarization of conversation ${conversationId} failed: model did not return valid text.`);
+            }
+        } catch(e) {
+            console.error(`Error during conversation summarization for ${conversationId}:`, e);
+            // If summarization fails, proceed with the full history as a fallback.
+        }
+    }
+
     if (!conversationId) {
         const newConversationRef = conversationsRef.doc();
         await newConversationRef.set({
@@ -770,6 +805,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     answer: { type: 'string', required: true }
                 },
                 review_and_summarize_plan: {},
+                critique_plan: {},
                 finish: {},
                 no_op: {}
             };
@@ -858,6 +894,11 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     parameters: {}
                 },
                 {
+                    id: 'critique_plan',
+                    description: 'Analyzes the current execution plan for logical errors, overloaded days, or other issues. Returns a list of suggestions for improvement. This MUST be called before "review_and_summarize_plan".',
+                    parameters: {}
+                },
+                {
                     id: 'find_tasks',
                     description: 'Finds tasks based on a property filter. Supports searching by `title` for partial matches, and suffixes for advanced queries: `_lte` (less/equal), `_gte` (greater/equal), `_ne` (not equal). Example: `{"title": "PWA", "status_ne": "done"}` finds all unfinished tasks containing "PWA". Returns a JSON object like `{\\"tasks\\": [...]}`.',
                     parameters: {
@@ -910,13 +951,15 @@ You are 'Gestión PRO', an elite, autonomous project management assistant. Your 
 *   **Hide IDs:** Never show internal IDs to the user. Use human-readable fields like titles and dates.
 
 ## 3. Plan Finalization & Task Attributes
-*   **Mandatory Summary:** You **MUST** call \`review_and_summarize_plan\` as the final step before \`finish\`. The summary must be a clear, bulleted list of staged actions.
+*   **Reflect & Critique:** Before summarizing, you **MUST** call \`critique_plan\` to analyze your own plan for errors. If issues are found, you must correct them using your tools (e.g., \`update_task\`).
+*   **Mandatory Summary:** After a successful critique, you **MUST** call \`review_and_summarize_plan\` as the final step before \`finish\`. The summary must be a clear, bulleted list of staged actions.
 *   **No Action:** If the user's request does not require any changes (e.g., "gracias"), call the \`no_op\` tool to finish gracefully.
 *   **Priority & Effort:** Use priority \`high\` only for explicitly urgent tasks. Default effort to \`medium\` unless specified otherwise. Keep daily planned effort below 8 points (low=1, medium=3, high=5).
 *   **Subtasks:** Declare subtasks within the \`create_task\` call using the \`subtasks\` array. They always start as 'pending'.
 
 # Context Data
 *   **Today's Date:** ${currentDate}
+*   **Conversation Summary:** Your conversation history may include a summary of previous turns. Use this summary as context for the current request.
 *   **Existing Tasks:** ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, effort: t.effort || 'medium', dependsOn: t.dependsOn || [], blocks: t.blocks || []})))}
 *   **Found Tasks (from \`find_tasks\`):** ${JSON.stringify(foundTasksContext)}
 *   **Available Users for assignment:** ${JSON.stringify(allUsers.map(u => u.email))}
@@ -1015,6 +1058,15 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                     try {
                         // Tool execution logic remains the same
                         switch (tool_code.tool_id) {
+                            case 'critique_plan': {
+                                const sanitySuggestions = await exports.analyzePlanSanity({ plan: executionPlan, tasks });
+                                if (sanitySuggestions.suggestions.length > 0) {
+                                    toolResult = `Critique found issues: ${sanitySuggestions.suggestions.join('. ')}`;
+                                } else {
+                                    toolResult = 'OK. No issues found in the plan.';
+                                }
+                                break;
+                            }
                             case 'review_and_summarize_plan':
                                 if (executionPlan.length === 0) {
                                 summary = "No se realizaron cambios.";
@@ -1047,6 +1099,22 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                             toolResult = `OK. Plan summarized accurately from execution plan.`;
                             break;
                         case 'create_task': {
+                            const effortCost = { high: 5, medium: 3, low: 1 };
+                            const dailyEffortLimit = 8;
+                            const plannedDate = tool_code.parameters.plannedDate;
+                            const newEffort = effortCost[tool_code.parameters.effort] || 3;
+
+                            const effortOnDate = tasks.reduce((total, task) => {
+                                if (task.plannedDate === plannedDate) {
+                                    return total + (effortCost[task.effort] || 3);
+                                }
+                                return total;
+                            }, 0);
+
+                            if (effortOnDate + newEffort > dailyEffortLimit) {
+                                toolResult = `Error: Cannot add task on ${plannedDate} as it would exceed the daily effort limit of ${dailyEffortLimit}. Current effort is ${effortOnDate}. Please choose another date.`;
+                                break;
+                            }
                             const tempId = generateTemporaryTaskId(currentJobId);
                             const taskPayload = { ...tool_code.parameters };
                             const allowedPriorities = ['low', 'medium', 'high'];
@@ -1298,6 +1366,25 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                         case 'update_task': {
                             const { task_id: update_task_id, updates } = tool_code.parameters;
                             const taskToUpdate = tasks.find(t => t.docId === update_task_id);
+
+                            if (updates.plannedDate && taskToUpdate) {
+                                const effortCost = { high: 5, medium: 3, low: 1 };
+                                const dailyEffortLimit = 8;
+                                const plannedDate = updates.plannedDate;
+                                const taskEffort = effortCost[updates.effort || taskToUpdate.effort] || 3;
+
+                                const effortOnDate = tasks.reduce((total, task) => {
+                                    if (task.plannedDate === plannedDate && task.docId !== update_task_id) {
+                                        return total + (effortCost[task.effort] || 3);
+                                    }
+                                    return total;
+                                }, 0);
+
+                                if (effortOnDate + taskEffort > dailyEffortLimit) {
+                                    toolResult = `Error: Cannot move task to ${plannedDate} as it would exceed the daily effort limit of ${dailyEffortLimit}. Current effort on that day is ${effortOnDate}. Please choose another date.`;
+                                    break;
+                                }
+                            }
                             if (taskToUpdate) {
                                 const updateTaskTitle = taskToUpdate.title || 'Tarea sin título';
                                 const updatePayload = { ...updates };
@@ -1700,10 +1787,7 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
         }
     });
 
-exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
-    if (!context.auth) {
-        throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
-    }
+const analyzePlanSanity = (data) => {
 
     const { plan, tasks } = data;
     if (!plan || !tasks || !Array.isArray(plan) || !Array.isArray(tasks)) {
@@ -1772,7 +1856,8 @@ exports.analyzePlanSanity = functions.https.onCall(async (data, context) => {
     });
 
     return { suggestions };
-});
+};
+exports.analyzePlanSanity = analyzePlanSanity;
 
 
 /**
