@@ -230,7 +230,7 @@ export function getAILoadingMessageHTML() {
                 <div class="p-4 rounded-xl shadow-md bg-white dark:bg-slate-700">
                     <div class="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                         <i data-lucide="loader-circle" class="w-5 h-5 animate-spin"></i>
-                        <span class="font-medium text-sm">Pensando...</span>
+                        <span id="ai-loading-status-text" class="font-medium text-sm">Pensando...</span>
                     </div>
                 </div>
             </div>

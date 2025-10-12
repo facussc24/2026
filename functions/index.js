@@ -738,7 +738,7 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         };
 
         try {
-            await jobRef.update({ status: 'RUNNING' });
+            await jobRef.update({ status: 'RUNNING', statusText: 'Iniciando el asistente...' });
 
                 let noProgressCounter = 0;
                 let lastToolCall = null;
@@ -947,7 +947,10 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 
 ## 2. Dependencies & Queries
 *   **Dependencies:** To make Task B depend on Task A, call \`create_dependency\` with \`dependent_task_id: B_id\` and \`prerequisite_task_id: A_id\`. The system auto-unblocks tasks upon prerequisite completion.
-*   **Answering Questions:** For informational questions (who, what, when, etc.), use your tools to gather data, then deliver a concise, final answer with the \`answer_question\` tool, starting your response with "Respuesta:".
+*   **Answering Questions:** If the user asks a question (e.g., "what," "which," "are there"), you **MUST** follow this sequence:
+    1.  First, use tools like \`find_tasks\` to gather the necessary information.
+    2.  After gathering the data, formulate a final, conclusive thought that begins with "Respuesta:".
+    3.  Finally, call the \`answer_question\` tool with your formulated answer. This is your final step.
 *   **Hide IDs:** Never show internal IDs to the user. Use human-readable fields like titles and dates.
 
 ## 3. Plan Finalization & Task Attributes
@@ -1001,6 +1004,9 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
 
             let i = 0;
             const maxIterations = 15;
+
+            await jobRef.update({ statusText: 'Analizando tu petición...' });
+
             while (i < maxIterations) {
                 i++;
                 let agentResponse;
@@ -1092,37 +1098,40 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                                 }
                                 break;
                             }
-                            case 'review_and_summarize_plan':
+                            case 'review_and_summarize_plan': {
                                 if (executionPlan.length === 0) {
-                                summary = "No se realizaron cambios.";
-                            } else {
-                                const summaryPoints = executionPlan.map(action => {
-                                    if (action.action === 'CREATE') {
-                                        return `* Crear la tarea: "${action.task.title}"`;
-                                    }
-                                    if (action.action === 'UPDATE') {
-                                        return `* Actualizar la tarea: "${action.originalTitle}"`;
-                                    }
-                                    if (action.action === 'DELETE') {
-                                        return `* Eliminar la tarea: "${action.originalTitle}"`;
-                                    }
-                                    return '* Realizar una acción desconocida.';
-                                });
-                                if (explicitDateCorrections.length > 0) {
-                                    const correctionPoints = explicitDateCorrections.map(correction => {
-                                        const taskTitle = correction.taskTitle || 'tarea';
-                                        const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
-                                        return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
+                                    // If no actions were taken, use the last thought as a summary.
+                                    const lastThought = thinkingSteps[thinkingSteps.length - 1]?.thought || "No se realizaron cambios, pero he completado la revisión.";
+                                    summary = lastThought.startsWith("Respuesta:") ? lastThought : "No se realizaron cambios.";
+                                } else {
+                                    const summaryPoints = executionPlan.map(action => {
+                                        if (action.action === 'CREATE') {
+                                            return `* Crear la tarea: "${action.task.title}"`;
+                                        }
+                                        if (action.action === 'UPDATE') {
+                                            return `* Actualizar la tarea: "${action.originalTitle}"`;
+                                        }
+                                        if (action.action === 'DELETE') {
+                                            return `* Eliminar la tarea: "${action.originalTitle}"`;
+                                        }
+                                        return '* Realizar una acción desconocida.';
                                     });
-                                    if (correctionPoints.length > 0) {
-                                        summaryPoints.push(...correctionPoints);
-                                        hasExplicitDateCorrectionInSummary = true;
+                                     if (explicitDateCorrections.length > 0) {
+                                        const correctionPoints = explicitDateCorrections.map(correction => {
+                                            const taskTitle = correction.taskTitle || 'tarea';
+                                            const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
+                                            return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
+                                        });
+                                        if (correctionPoints.length > 0) {
+                                            summaryPoints.push(...correctionPoints);
+                                            hasExplicitDateCorrectionInSummary = true;
+                                        }
                                     }
+                                    summary = summaryPoints.join('\n');
                                 }
-                                summary = summaryPoints.join('\n');
+                                toolResult = `OK. Plan summarized accurately from execution plan.`;
+                                break;
                             }
-                            toolResult = `OK. Plan summarized accurately from execution plan.`;
-                            break;
                         case 'create_task': {
                             if (userPrompt.toLowerCase().includes('planning')) {
                                 tool_code.parameters.isProjectTask = true;
@@ -1714,6 +1723,8 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                     conversationHistory.push({ role: 'user', parts: [{ text: `Contexto de tareas encontradas: ${JSON.stringify(foundTasksContext)}` }] });
                 }
             }
+
+            await jobRef.update({ statusText: 'Generando plan y resumen...' });
 
             const weekendAdjustmentMessages = executionPlan.reduce((messages, action) => {
                 const adjustment = action?.adjustments?.plannedDate;
