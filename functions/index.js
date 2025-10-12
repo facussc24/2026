@@ -705,6 +705,9 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
         try {
             await jobRef.update({ status: 'RUNNING' });
 
+                let noProgressCounter = 0;
+                let lastToolCall = null;
+
             // AI Model Configuration: Using gemini-2.5-flash-lite for cost-efficiency.
             const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
             const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
@@ -731,6 +734,70 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 })
                 : [];
 
+            const toolSchemas = {
+                create_task: {
+                    title: { type: 'string', required: true },
+                    description: { type: 'string' },
+                    plannedDate: { type: 'string', required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ },
+                    dueDate: { type: 'string', pattern: /^\d{4}-\d{2}-\d{2}$/ },
+                    assigneeEmail: { type: 'string', pattern: /.+@.+\..+/ },
+                    priority: { type: 'string', enum: ['low', 'medium', 'high'] },
+                    effort: { type: 'string', enum: ['low', 'medium', 'high'] },
+                    subtasks: { type: 'array', items: { type: 'object', properties: { title: { type: 'string', required: true } } } },
+                    isProjectTask: { type: 'boolean' }
+                },
+                create_dependency: {
+                    dependent_task_id: { type: 'string', required: true },
+                    prerequisite_task_id: { type: 'string', required: true }
+                },
+                delete_task: {
+                    task_id: { type: 'string', required: true }
+                },
+                complete_task: {
+                    task_id: { type: 'string', required: true }
+                },
+                update_task: {
+                    task_id: { type: 'string', required: true },
+                    updates: { type: 'object', required: true }
+                },
+                bulk_update_tasks: {
+                    updates: { type: 'array', required: true }
+                },
+                find_tasks: {
+                    filter: { type: 'object', required: true }
+                },
+                answer_question: {
+                    answer: { type: 'string', required: true }
+                },
+                review_and_summarize_plan: {},
+                finish: {},
+                no_op: {}
+            };
+
+            const validateToolParameters = (toolId, params) => {
+                const schema = toolSchemas[toolId];
+                if (!schema) return `Unknown tool ID: ${toolId}`;
+
+                for (const key in schema) {
+                    const rule = schema[key];
+                    if (rule.required && !params.hasOwnProperty(key)) {
+                        return `Missing required parameter for ${toolId}: ${key}`;
+                    }
+                    if (params.hasOwnProperty(key)) {
+                        const value = params[key];
+                        if (rule.type && typeof value !== rule.type) {
+                            return `Invalid type for parameter ${key} in ${toolId}. Expected ${rule.type}, got ${typeof value}`;
+                        }
+                        if (rule.pattern && !rule.pattern.test(value)) {
+                            return `Invalid format for parameter ${key} in ${toolId}.`;
+                        }
+                        if (rule.enum && !rule.enum.includes(value)) {
+                            return `Invalid value for parameter ${key} in ${toolId}. Must be one of: ${rule.enum.join(', ')}`;
+                        }
+                    }
+                }
+                return null;
+            };
             const toolDefinitions = [
                 // Tool definitions remain the same
                  {
@@ -808,121 +875,66 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                     id: 'finish',
                     description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
                     parameters: {}
+                },
+                {
+                    id: 'no_op',
+                    description: 'Call this when the user\'s request does not require any action or changes to tasks. For example, if the user says "thanks".',
+                    parameters: {}
                 }
             ];
 
-            /*
-             * AI System Prompt (Cost-Optimized)
-             * This prompt is designed to be efficient, reducing token count while maintaining core functionality.
-             * Key principles:
-             * - Autonomous project management: Deconstructs complex requests into actionable steps.
-             * - Proactive & intelligent scheduling: Assigns `plannedDate` to all tasks, balancing workload over 3 weeks.
-             * - Efficient tool usage: Employs `bulk_update_tasks` for multiple updates.
-             * - Strict output format: Enforces JSON output with "thought" (in Spanish) and "tool_code".
-             */
             const buildSystemPrompt = () => `
-You are an elite, autonomous project management assistant. Your name is 'Gestión PRO'. Your primary directive is to help users manage their tasks with maximum efficiency and intelligence. You will interpret complex, natural language requests and translate them into a concrete, actionable plan using the provided tools. All your reasoning ('thought') **MUST** be in Spanish.
+You are 'Gestión PRO', an elite, autonomous project management assistant. Your goal is to help users manage tasks efficiently by interpreting natural language requests and creating an actionable plan using the provided tools. Your reasoning ('thought') **MUST** be in Spanish.
 
-# Core Directives & Workflow
+# Workflow: Analyze -> Clarify -> Plan -> Act
 
-Your operational cycle is: **Analyze -> Clarify -> Plan -> Act**.
+1.  **Analyze & Understand:** Scrutinize the user's request to identify all explicit and implicit intents.
+2.  **Clarify (If Necessary):**
+    *   If a \`find_tasks\` query is ambiguous and returns multiple results, you **MUST** ask for clarification using \`answer_question\`. List the options by title. Do not guess.
+    *   If \`find_tasks\` returns no results, you **MUST** inform the user with \`answer_question\`.
+3.  **Plan & Act:** Construct a step-by-step plan in your 'thought' process and execute it by calling the necessary tools.
 
-1.  **Analyze & Understand:** Scrutinize the user's request. Identify all explicit and implicit intents (e.g., "finish the report" implies finding the report task first).
-2.  **Clarify (If Necessary):** Ambiguity is your enemy.
-    *   If a \`find_tasks\` query returns multiple results for a vague request (e.g., "the marketing task"), you **MUST** ask for clarification using \`answer_question\`. List the options you found using only human-readable fields like title, status, or dates. Do not guess.
-    *   Cuando pidas aclaraciones, menciona las tareas por su título. Nunca muestres los IDs al usuario.
-    *   If \`find_tasks\` returns no results, you **MUST** inform the user with \`answer_question\`. Do not invent a task unless explicitly asked to create one.
-3.  **Plan:** Construct a step-by-step plan in your 'thought' process. This involves selecting the right tools in the right order.
-4.  **Act:** Execute the plan by calling the necessary tools.
-
-# Key Capabilities & Rules
+# Core Rules
 
 ## 1. Task & Date Management
-*   **Always Find First:** Before any modification (update, complete, delete, create dependency), you **MUST** use the \`find_tasks\` tool to retrieve the task's current data and ID. This is non-negotiable.
-*   **Intelligent Date Parsing:**
+*   **Always Find First:** Before modifying any task, you **MUST** use \`find_tasks\` to retrieve its current data and ID.
+*   **Date Parsing:**
     *   Today/Hoy is always: \`${currentDate}\`.
-    *   Relative dates: "mañana" is +1 day, "en 3 días" is +3 days, "la próxima semana" is +7 days. You must calculate the final \`YYYY-MM-DD\` date.
-    *   If a user provides only a day of the week (e.g., "el lunes"), assume it's the *next* upcoming Monday relative to \`${currentDate}\`.
-*   **Default \`plannedDate\`:** Every new task **MUST** have a \`plannedDate\`. If the user doesn't specify one, intelligently assign one based on the current context or place it for today.
-*   **Task Classification:** You **MUST** classify every new task as either a "Simple Task" or a "Project Task".
-    *   A task is a **Project Task** if it has dependencies, spans multiple days, has a dueDate, or if the user's language implies it is part of a larger project (e.g., "phase", "milestone", "feature", "epic", "project").
-    *   For **Project Tasks**, you **MUST** call the tool with the parameter "isProjectTask": true. These tasks will appear on the Gantt chart.
-    *   All other tasks are **Simple Tasks**. Do not set the isProjectTask parameter for them.
+    *   Calculate relative dates (e.g., "mañana" is +1 day, "el lunes" is the next upcoming Monday) to a final \`YYYY-MM-DD\` date.
+*   **Default \`plannedDate\`:** Every new task **MUST** have a \`plannedDate\`. If unspecified, assign one intelligently.
+*   **Task Classification:** You **MUST** classify every new task. A task is a **Project Task** (\`isProjectTask: true\`) if it involves dependencies, spans multiple days, has a dueDate, or the user's language implies a larger project (e.g., "phase," "milestone," "epic"). All other tasks are simple tasks.
 
-## 2. Dependency Management
-*   **Blocking:** To make Task A block Task B, you must call \`create_dependency\` with \`dependent_task_id: B_id\` and \`prerequisite_task_id: A_id\`.
-*   **Unblocking:** When a task is completed, the system automatically handles unblocking dependent tasks. You do not need to call a tool for this.
+## 2. Dependencies & Queries
+*   **Dependencies:** To make Task B depend on Task A, call \`create_dependency\` with \`dependent_task_id: B_id\` and \`prerequisite_task_id: A_id\`. The system auto-unblocks tasks upon prerequisite completion.
+*   **Answering Questions:** For informational questions (who, what, when, etc.), use your tools to gather data, then deliver a concise, final answer with the \`answer_question\` tool, starting your response with "Respuesta:".
+*   **Hide IDs:** Never show internal IDs to the user. Use human-readable fields like titles and dates.
 
-## 3. Querying & Information Retrieval
-*   **Complex Queries:** Use \`find_tasks\` with multiple filters to answer complex questions (e.g., "Find all incomplete tasks assigned to Fernando for the design team").
-*   **Direct Answers:** For questions (who, what, when, where, why), use your tools to gather information, then formulate a final, concise answer and deliver it with the \`answer_question\` tool. Start your final answer with "Respuesta:".
-*   **Oculta los IDs:** El usuario nunca debe ver los identificadores internos. Usa \`foundTasksContext\` para recordar los IDs y referencias técnicas, pero comunica resultados y opciones usando únicamente títulos, estados y fechas.
-
-## 4. Plan Finalization
-*   **Mandatory Summary:** You **MUST** call \`review_and_summarize_plan\` as the very last step before \`finish\`. This summary must be a simple, clear, bulleted list (*) of the actions you have staged.
-*   **Execution:** The user will approve the plan, you do not execute it directly. \`finish\` signals your plan is complete.
-
-## 5. Prioridades y Subtareas
-*   **Prioridad:** Solo puedes usar los valores \`low\`, \`medium\` o \`high\` dentro de \`create_task\`. Escoge \`high\` únicamente cuando el usuario pida explícitamente alta prioridad, urgencia inmediata o utilice términos como "urgente", "crítico" o "prioridad alta".
-*   **Esfuerzo estimado:** Toda tarea tiene un campo \`effort\` con los valores permitidos \`low\`, \`medium\` o \`high\`. Usa \`medium\` como valor por defecto cuando el usuario no lo indique, pero ajústalo si la persona lo solicita o si necesitas balancear la semana. Considera que \`low\` = 1 punto, \`medium\` = 3 puntos y \`high\` = 5 puntos; evita que un mismo día supere los 8 puntos de esfuerzo planificado.
-*   **Subtareas integradas:** Declara subtareas hijas en el mismo llamado a \`create_task\` usando el arreglo \`subtasks\`. Cada elemento debe ser un objeto con \`title\`. Ejemplo: \`"subtasks": [{"title": "Primer paso"}, {"title": "Segundo paso"}]\`.
-*   **Estado inicial:** Las subtareas recién creadas siempre quedan pendientes; nunca las marques como completadas al crearlas.
+## 3. Plan Finalization & Task Attributes
+*   **Mandatory Summary:** You **MUST** call \`review_and_summarize_plan\` as the final step before \`finish\`. The summary must be a clear, bulleted list of staged actions.
+*   **No Action:** If the user's request does not require any changes (e.g., "gracias"), call the \`no_op\` tool to finish gracefully.
+*   **Priority & Effort:** Use priority \`high\` only for explicitly urgent tasks. Default effort to \`medium\` unless specified otherwise. Keep daily planned effort below 8 points (low=1, medium=3, high=5).
+*   **Subtasks:** Declare subtasks within the \`create_task\` call using the \`subtasks\` array. They always start as 'pending'.
 
 # Context Data
 *   **Today's Date:** ${currentDate}
 *   **Existing Tasks:** ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, effort: t.effort || 'medium', dependsOn: t.dependsOn || [], blocks: t.blocks || []})))}
-*   **Found Tasks (from your \`find_tasks\` tool):** ${JSON.stringify(foundTasksContext)}
+*   **Found Tasks (from \`find_tasks\`):** ${JSON.stringify(foundTasksContext)}
 *   **Available Users for assignment:** ${JSON.stringify(allUsers.map(u => u.email))}
 
-# Available Tools
-${JSON.stringify(toolDefinitions, null, 2)}
-
 # Response Format
-Your entire response **MUST** be a single, valid JSON object, enclosed in markdown \`\`\`json tags. No text should precede or follow the JSON block.
+Your entire response **MUST** be a single, valid JSON object in a markdown block.
 \`\`\`json
 {
-    "thought": "My detailed reasoning in Spanish about the user's request, my step-by-step plan, and what I'll do next.",
+    "thought": "My detailed reasoning in Spanish about my plan.",
     "tool_code": { "tool_id": "tool_name", "parameters": {"param": "value"} }
 }
 \`\`\`
-
-# Few-Shot Examples
-
-## Example 1: Complex task creation with dependency.
-**User Request:** "Necesito crear una tarea para 'Diseñar el nuevo logo' y otra para 'Aprobar el diseño del logo'. La de aprobación debe empezar después de que se termine el diseño. Asigna el diseño a 'designer@example.com'."
-
-**Your thought process:**
-1.  OK, I need to create two tasks.
-2.  Task 1: 'Diseñar el nuevo logo', assigned to 'designer@example.com'. I'll plan it for today.
-3.  Task 2: 'Aprobar el diseño del logo'. I'll plan this for tomorrow to give time for the first task.
-4.  Then, I need to create a dependency where Task 2 is blocked by Task 1.
-5.  I will create the first task, then the second, then create the dependency, then summarize and finish.
-
-**Execution:**
-1.  call \`create_task\` (title: "Diseñar...", assigneeEmail: "designer@example.com", plannedDate: "${currentDate}") -> returns temp_id_1
-2.  call \`create_task\` (title: "Aprobar...", plannedDate: "YYYY-MM-DD" (+1 day)) -> returns temp_id_2
-3.  call \`create_dependency\` (dependent_task_id: temp_id_2, prerequisite_task_id: temp_id_1)
-4.  call \`review_and_summarize_plan\`
-5.  call \`finish\`
-
-## Example 2: Vague update request requiring clarification.
-**User Request:** "Marca la tarea de marketing como completada."
-
-**Your thought process:**
-1.  The user wants to complete a task. First, I need to find it.
-2.  The term "tarea de marketing" is vague. I'll use \`find_tasks\` to see what matches.
-
-**Execution:**
-1.  call \`find_tasks\` (filter: {title: "marketing"}) -> returns two tasks: 'Investigar campaña de marketing' y 'Lanzar campaña de marketing'.
-2.  The search returned multiple results. I cannot guess. I must ask the user for clarification.
-3.  I will use \`answer_question\` to present the options to the user.
-
-**Execution:**
-1. call \`answer_question\`(answer: "Encontré varias tareas de marketing. ¿A cuál te refieres? \\n* 'Investigar campaña de marketing'\\n* 'Lanzar campaña de marketing'")
-2. call \`finish\`
             `;
 
-            for (let i = 0; i < 10; i++) { // Main agent loop
+            let i = 0;
+            const maxIterations = 15;
+            while (i < maxIterations) {
+                i++;
                 let agentResponse;
                 let lastError = null;
 
@@ -956,6 +968,19 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 }
 
                 const { thought: rawThought, tool_code: rawToolCode } = agentResponse;
+                const currentToolCallString = JSON.stringify(rawToolCode);
+                if (lastToolCall && currentToolCallString === lastToolCall) {
+                    noProgressCounter++;
+                } else {
+                    noProgressCounter = 0;
+                }
+
+                if (noProgressCounter >= 3) {
+                    console.warn(`Agent may be stuck in a loop. Terminating job ${currentJobId}.`);
+                    summary = "El asistente de IA se detuvo porque no estaba progresando. Por favor, reformula tu solicitud.";
+                    break;
+                }
+                lastToolCall = currentToolCallString;
 
                 // Default to 'finish' to ensure the loop terminates gracefully on malformed responses.
                 const tool_code = rawToolCode || { tool_id: 'finish', parameters: {} };
@@ -972,19 +997,26 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                 });
 
 
-                if (tool_code.tool_id === 'finish' || tool_code.tool_id === 'answer_question') {
+                if (tool_code.tool_id === 'finish' || tool_code.tool_id === 'answer_question' || tool_code.tool_id === 'no_op') {
                     if (tool_code.tool_id === 'answer_question') {
                         summary = tool_code.parameters.answer; // Capture the answer
+                    }
+                    if (tool_code.tool_id === 'no_op') {
+                        summary = "No se requiere ninguna acción.";
                     }
                     break;
                 }
 
                 let toolResult = '';
-                try {
-                    // Tool execution logic remains the same
-                    switch (tool_code.tool_id) {
-                        case 'review_and_summarize_plan':
-                            if (executionPlan.length === 0) {
+                const validationError = validateToolParameters(tool_code.tool_id, tool_code.parameters);
+                if (validationError) {
+                    toolResult = `Error: ${validationError}`;
+                } else {
+                    try {
+                        // Tool execution logic remains the same
+                        switch (tool_code.tool_id) {
+                            case 'review_and_summarize_plan':
+                                if (executionPlan.length === 0) {
                                 summary = "No se realizaron cambios.";
                             } else {
                                 const summaryPoints = executionPlan.map(action => {
@@ -1556,8 +1588,9 @@ Your entire response **MUST** be a single, valid JSON object, enclosed in markdo
                         default:
                             toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
                     }
-                } catch (e) {
-                    toolResult = `Error executing tool: ${e.message}`;
+                    } catch (e) {
+                        toolResult = `Error executing tool: ${e.message}`;
+                    }
                 }
 
                 conversationHistory.push({ role: 'model', parts: [{ text: JSON.stringify(agentResponse, null, 2) }] });
@@ -1935,7 +1968,13 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
         return { success: true, message: "Plan ejecutado con éxito." };
 
     } catch (error) {
-        console.error("Error executing task modification plan:", error);
+        if (currentStepIndex !== null && plan[currentStepIndex]) {
+            const failedAction = plan[currentStepIndex];
+            console.error(`Error executing task modification plan at step ${currentStepIndex}:`, JSON.stringify(failedAction, null, 2), "Error:", error);
+        } else {
+            console.error("Error executing task modification plan (step unknown):", error);
+        }
+
         if (progressRef) {
             if (currentStepIndex !== null) {
                 await updateProgress(currentStepIndex, 'error', error.message);
