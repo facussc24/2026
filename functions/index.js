@@ -1099,7 +1099,9 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                             toolResult = `OK. Plan summarized accurately from execution plan.`;
                             break;
                         case 'create_task': {
-                            tool_code.parameters.isProjectTask = true;
+                            if (userPrompt.toLowerCase().includes('planning')) {
+                                tool_code.parameters.isProjectTask = true;
+                            }
                             const effortCost = { high: 5, medium: 3, low: 1 };
                             const dailyEffortLimit = 8;
                             const plannedDate = tool_code.parameters.plannedDate;
@@ -1956,6 +1958,13 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     isProjectTask: action.task.isProjectTask || false
                 };
 
+                if (taskData.isProjectTask && taskData.plannedDate) {
+                    taskData.startDate = taskData.plannedDate;
+                    if (!taskData.dueDate) {
+                        taskData.dueDate = taskData.plannedDate;
+                    }
+                }
+
                 const explicitOverride = action?.metadata?.explicitDateOverride;
                 const hasExplicitOverride = Boolean(explicitOverride?.isoDate);
                 if (hasExplicitOverride) {
@@ -1994,6 +2003,14 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
                 const resolvedUpdates = {...action.updates};
+
+                if (resolvedUpdates.isProjectTask && resolvedUpdates.plannedDate) {
+                    resolvedUpdates.startDate = resolvedUpdates.plannedDate;
+                    if (!resolvedUpdates.dueDate) {
+                        resolvedUpdates.dueDate = resolvedUpdates.plannedDate;
+                    }
+                }
+
                 if (typeof resolvedUpdates.isProjectTask !== 'boolean') {
                     delete resolvedUpdates.isProjectTask;
                 }
