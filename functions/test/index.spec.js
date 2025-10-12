@@ -198,7 +198,7 @@ describe('aiAgentJobRunner', () => {
                                         parameters: {
                                             title: 'Tarea Prioritaria',
                                             plannedDate: currentDate,
-                                            priority: 'HIGH',
+                                            priority: 'high',
                                             subtasks: [
                                                 { title: 'Preparar informe', completed: true },
                                                 { title: 'Revisar informe' },
