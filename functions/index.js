@@ -1751,7 +1751,7 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                 status: jobStatus,
                 thoughtProcess: finalThoughtProcessDisplay,
                 executionPlan,
-                summary,
+                summary: summary || "No se generó un resumen.",
                 awaitingUserConfirmation: planRequiresConfirmation,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 conversationHistory,
