@@ -576,7 +576,7 @@ exports.startAIAgentJob = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
-    let { userPrompt, tasks, conversationId } = data; // Now accepts an optional conversationId
+    let { userPrompt, tasks, conversationId, currentView } = data; // Now accepts an optional conversationId
     if (!userPrompt || !tasks) {
         throw new functions.https.HttpsError("invalid-argument", "The 'userPrompt' and 'tasks' are required.");
     }
@@ -678,6 +678,7 @@ ${JSON.stringify(historyToSummarize, null, 2)}`;
             timeZone: userTimeZone,
             sanitySuggestions,
             explicitDatesFromUser,
+            currentView,
         };
         await jobRef.set(jobData);
         return { jobId: jobRef.id, conversationId: conversationId, isFromCache: true };
@@ -688,6 +689,7 @@ ${JSON.stringify(historyToSummarize, null, 2)}`;
         status: 'PENDING',
         userPrompt,
         tasks,
+        currentView,
         allUsers,
         creatorUid: context.auth.uid,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -932,7 +934,7 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 1.  **Analyze & Understand:** Scrutinize the user's request to identify all explicit and implicit intents. Deconstruct complex requests into a logical sequence of tool calls.
 2.  **Clarify (If Necessary):**
     *   If a \`find_tasks\` query is ambiguous and returns multiple results, you **MUST** ask for clarification using \`answer_question\`. List the options by title. Do not guess.
-    *   If \`find_tasks\` returns no results, you **MUST** inform the user with \`answer_question\`.
+    *   If \`find_tasks\` returns no results, you **MUST** inform the user with \`answer_question\` and then **stop** by calling the \`finish\` tool.
 3.  **Plan & Act:** Construct a step-by-step plan in your 'thought' process and execute it by calling the necessary tools.
 
 # Core Rules
@@ -987,6 +989,7 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 
 # Context Data
 *   **Today's Date:** ${currentDate}
+*   **User's Current View:** ${jobData.currentView || 'unknown'}. If the view is 'planning', you MUST use the filter \`{ "isProjectTask": true }\` when calling \`find_tasks\` to find tasks relevant to this view.
 *   **Conversation Summary:** Your conversation history may include a summary of previous turns. Use this summary as context for the current request.
 *   **Existing Tasks:** ${JSON.stringify(tasks.map(t => ({id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, effort: t.effort || 'medium', dependsOn: t.dependsOn || [], blocks: t.blocks || []})))}
 *   **Found Tasks (from \`find_tasks\`):** ${JSON.stringify(foundTasksContext)}
@@ -1657,6 +1660,7 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                             break;
                         case 'find_tasks': {
                             const { filter } = tool_code.parameters;
+                            console.log(`[aiAgentJobRunner] Executing find_tasks with filter:`, JSON.stringify(filter, null, 2));
                             const filterKeys = Object.keys(filter);
                             const foundTasks = tasks.filter(t => {
                                 return filterKeys.every(key => {

@@ -343,7 +343,7 @@ export async function openTaskFormModal(task = null, defaultStatus = 'todo', def
 /**
  * Displays the AI assistant modal and initializes the conversation shell.
  */
-export function openAIAssistantModal() {
+export function openAIAssistantModal({ currentView = 'unknown' } = {}) {
     dom.modalContainer.innerHTML = getAIChatModalHTML();
     const modalElement = document.getElementById('ai-assistant-modal');
     const messagesContainer = document.getElementById('ai-chat-messages');
@@ -460,7 +460,12 @@ export function openAIAssistantModal() {
         try {
             const startJobFn = httpsCallable(functions, 'startAIAgentJob');
             const allTasks = await fetchAllTasks();
-            const result = await startJobFn({ userPrompt: prompt, tasks: allTasks, conversationId });
+            const result = await startJobFn({
+                userPrompt: prompt,
+                tasks: allTasks,
+                conversationId,
+                currentView: appState.currentView // Pass the current view
+            });
 
             const newJobId = result.data.jobId;
             conversationId = result.data.conversationId; // Update conversationId from backend

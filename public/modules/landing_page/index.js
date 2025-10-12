@@ -1476,7 +1476,7 @@ function setupActionButtons() {
     });
     document.getElementById('ai-assistant-btn')?.addEventListener('click', () => {
         if (openAIAssistantModal) {
-            openAIAssistantModal();
+            openAIAssistantModal({ currentView: appState.currentView });
         } else {
             showToast('El Asistente IA no está disponible.', 'error');
         }
