@@ -1,4 +1,4 @@
-import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { openAIAssistantModal } from '../tasks/tasks.js';
 
 let db;
@@ -6,6 +6,21 @@ let db;
 export function initPlanningModule(appDependencies) {
     db = appDependencies.db;
     console.log('Planning module initialized with Firestore');
+}
+
+// Helper function to wait for an element to be available in the DOM
+function waitForElement(selector) {
+    return new Promise(resolve => {
+        const check = () => {
+            const element = document.querySelector(selector);
+            if (element) {
+                resolve(element);
+            } else {
+                requestAnimationFrame(check);
+            }
+        };
+        check();
+    });
 }
 
 export async function runPlanningLogic() {
@@ -23,8 +38,16 @@ export async function runPlanningLogic() {
         const html = await response.text();
         viewContent.innerHTML = html;
 
-        // Now that the HTML is injected, we can safely run the Gantt App logic
+        // Wait for a key element from the injected HTML to be present
+        await waitForElement('#modal-overlay');
+
+        // Now that the HTML is injected and confirmed, we can safely run the Gantt App logic
         GanttApp();
+
+        // Re-render icons for the newly injected content
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
 
     } catch (error) {
         console.error('Error loading planning module:', error);
@@ -62,12 +85,14 @@ function GanttApp() {
     const getCssVar = (name) => parseInt(getComputedStyle(document.documentElement).getPropertyValue(name), 10);
     const setCssVar = (name, val) => document.documentElement.style.setProperty(name, val);
 
-    function saveState() { localStorage.setItem('ganttAppState', JSON.stringify({ tasks: state.tasks, milestones: state.milestones })); }
-    function loadState() {
-        const savedData = localStorage.getItem('ganttAppState');
+// Milestones are still managed in local storage for this version.
+function saveMilestoneState() {
+    localStorage.setItem('ganttMilestoneState', JSON.stringify({ milestones: state.milestones }));
+}
+function loadMilestoneState() {
+    const savedData = localStorage.getItem('ganttMilestoneState');
         if (savedData) {
             const parsed = JSON.parse(savedData);
-            state.tasks = parsed.tasks || state.tasks;
             state.milestones = parsed.milestones || state.milestones;
         }
     }
@@ -431,7 +456,7 @@ function GanttApp() {
         return wrap;
     }
 
-    function createProgressDragHandler(handle, task, barEl, progressEl, labelEl) {
+    async function createProgressDragHandler(handle, task, barEl, progressEl, labelEl) {
         handle.addEventListener('mousedown', e => {
             e.stopPropagation();
             document.body.style.cursor = 'ew-resize';
@@ -442,18 +467,26 @@ function GanttApp() {
             const moveHandler = (ev) => {
                 const newWidth = ev.clientX - barRect.left;
                 const newProgress = Math.round(Math.max(0, Math.min(100, (newWidth / barRect.width) * 100)));
-                task.progress = newProgress;
+                // task.progress = newProgress; // The onSnapshot listener will update the state
                 progressEl.style.width = `${newProgress}%`;
                 labelEl.textContent = `${newProgress}%`;
                 handle.style.left = `${newProgress}%`;
             };
 
-            const upHandler = () => {
+            const upHandler = async () => {
                 document.removeEventListener('mousemove', moveHandler);
                 document.removeEventListener('mouseup', upHandler, true);
                 document.body.style.cursor = 'default';
                 document.body.style.userSelect = 'auto';
-                saveState();
+
+                const finalProgress = parseInt(progressEl.style.width, 10);
+                const taskRef = doc(db, "tareas", task.id);
+                try {
+                    await updateDoc(taskRef, { progress: finalProgress });
+                } catch (error) {
+                    console.error("Error updating progress:", error);
+                    render(); // Re-render to revert optimistic update
+                }
             };
 
             document.addEventListener('mousemove', moveHandler);
@@ -483,11 +516,17 @@ function GanttApp() {
                 if (endLabel) endLabel.textContent = indexToDate(end).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
             }
 
-            function commitDates(start, end) {
-                task.start = indexToDate(start).toISOString().slice(0, 10);
-                task.end = indexToDate(end).toISOString().slice(0, 10);
-                saveState();
-                render();
+            async function commitDates(start, end) {
+                const newStart = indexToDate(start).toISOString().slice(0, 10);
+                const newEnd = indexToDate(end).toISOString().slice(0, 10);
+
+                const taskRef = doc(db, "tareas", task.id);
+                try {
+                    await updateDoc(taskRef, { startDate: newStart, dueDate: newEnd });
+                } catch (error) {
+                    console.error("Error updating task dates:", error);
+                    render(); // Re-render to show original state if update fails
+                }
             }
 
             const moveHandler = (ev) => {
@@ -569,7 +608,7 @@ function GanttApp() {
                 document.body.style.userSelect = 'auto';
                 const finalIndex = Math.round(el.offsetLeft / state.view.dayWidth);
                 milestone.date = indexToDate(finalIndex).toISOString().slice(0, 10);
-                saveState();
+                saveMilestoneState();
                 render();
             };
 
@@ -645,12 +684,14 @@ function GanttApp() {
         return svg;
     }
 
-    function handleDeleteDependency(fromId, toId) {
-        const toTask = state.tasks.find(t => t.id === toId);
-        if (toTask && toTask.dependencies) {
-            toTask.dependencies = toTask.dependencies.filter(id => id !== fromId);
-            saveState();
-            render();
+    async function handleDeleteDependency(fromId, toId) {
+        const toTaskRef = doc(db, "tareas", toId);
+        try {
+            await updateDoc(toTaskRef, {
+                dependsOn: arrayRemove(fromId)
+            });
+        } catch (error) {
+            console.error("Error removing dependency: ", error);
         }
     }
 
@@ -708,7 +749,7 @@ function GanttApp() {
     }
 
     async function handleAddTask() {
-        const todayStr = new Date().toISOString().slice(0,10);
+        const todayStr = new Date().toISOString().slice(0, 10);
         const result = await showModal({
             title: 'Nueva Tarea',
             content: `
@@ -733,21 +774,39 @@ function GanttApp() {
                 alert('La fecha de fin no puede ser anterior a la de inicio.');
                 return;
             }
-            state.tasks.push({ id: Date.now(), name: result.name, start: result.start, end: result.end, dependencies: [], progress: 0 });
-            saveState();
-            render();
+            try {
+                await addDoc(collection(db, "tareas"), {
+                    title: result.name,
+                    startDate: result.start,
+                    dueDate: result.end,
+                    isProjectTask: true, // This is crucial for it to appear in the planning view
+                    status: "Pendiente",
+                    progress: 0,
+                    dependsOn: []
+                });
+            } catch (error) {
+                console.error("Error adding task: ", error);
+                alert("No se pudo crear la tarea.");
+            }
         }
     }
 
-    function handleDeleteTask(taskId) {
-        state.tasks = state.tasks.filter(t => t.id !== taskId);
-        state.tasks.forEach(t => {
-            if (t.dependencies) {
-                t.dependencies = t.dependencies.filter(depId => depId !== taskId);
-            }
+    async function handleDeleteTask(taskId) {
+        // First, remove the dependency from any other tasks
+        const tasksToUpdate = state.tasks.filter(t => t.dependencies?.includes(taskId));
+        const updatePromises = tasksToUpdate.map(t => {
+            const taskRef = doc(db, "tareas", t.id);
+            return updateDoc(taskRef, {
+                dependsOn: arrayRemove(taskId)
+            });
         });
-        saveState();
-        render();
+
+        try {
+            await Promise.all(updatePromises);
+            await deleteDoc(doc(db, "tareas", taskId));
+        } catch (error) {
+            console.error("Error deleting task and updating dependencies:", error);
+        }
     }
 
     function handleEditTaskName(task, cardElement) {
@@ -762,13 +821,20 @@ function GanttApp() {
         input.focus();
         input.select();
 
-        const saveChanges = () => {
+        const saveChanges = async () => {
             const newName = input.value.trim();
             if (newName && newName !== originalText) {
-                task.name = newName;
-                saveState();
+                const taskRef = doc(db, "tareas", task.id);
+                try {
+                    await updateDoc(taskRef, { title: newName });
+                } catch (error) {
+                    console.error("Error updating task name:", error);
+                    // Revert UI change if Firestore update fails
+                    titleP.textContent = originalText;
+                }
+            } else {
+                 titleP.textContent = originalText;
             }
-            titleP.textContent = task.name;
             input.replaceWith(titleP);
         };
         const keydownHandler = (e) => {
@@ -796,14 +862,14 @@ function GanttApp() {
         });
         if (result && result.name && result.date) {
             state.milestones.push({ id: `m${Date.now()}`, name: result.name, date: result.date });
-            saveState();
+            saveMilestoneState();
             render();
         }
     }
 
     function handleDeleteMilestone(milestoneId) {
         state.milestones = state.milestones.filter(m => m.id !== milestoneId);
-        saveState();
+        saveMilestoneState();
         render();
     }
 
@@ -824,7 +890,7 @@ function GanttApp() {
             const newName = input.value.trim();
             if (newName && newName !== milestone.name) {
                 milestone.name = newName;
-                saveState();
+                saveMilestoneState();
             }
             labelSpan.textContent = milestone.name;
             labelSpan.style.display = 'inline';
@@ -846,61 +912,37 @@ function GanttApp() {
     }
 
     function setupTaskListDnD() {
-        let draggedItem = null;
-        state.dom.taskList.addEventListener('dragstart', (e) => {
-            draggedItem = e.target;
-            setTimeout(() => e.target.classList.add('dragging'), 0);
-        });
-        state.dom.taskList.addEventListener('dragend', (e) => {
-            draggedItem?.classList.remove('dragging');
-            draggedItem = null;
-            saveState();
-            render();
-        });
-        state.dom.taskList.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            if (!draggedItem) return;
-
-            const afterElement = [...state.dom.taskList.querySelectorAll('.task-card:not(.dragging)')].reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                const offset = e.clientY - box.top - box.height / 2;
-                return (offset < 0 && offset > closest.offset) ? { offset, element: child } : closest;
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
-
-            if (afterElement == null) {
-                state.dom.taskList.appendChild(draggedItem);
-            } else {
-                state.dom.taskList.insertBefore(draggedItem, afterElement);
-            }
-            const newOrderedIds = [...state.dom.taskList.querySelectorAll('.task-card')].map(card => parseInt(card.dataset.taskId, 10));
-            state.tasks.sort((a, b) => newOrderedIds.indexOf(a.id) - newOrderedIds.indexOf(b.id));
-        });
+        // Drag and drop for task re-ordering is disabled when using Firestore real-time updates
+        // as the order is determined by the data source. A specific order field would be needed.
+        // This functionality could be re-enabled by adding an 'order' field to the Firestore documents
+        // and updating it on drop.
+        return;
     }
 
-    function handleDependencyClick(e) {
+    async function handleDependencyClick(e) {
         const { taskId, side } = e.target.dataset;
         if (!state.linking) {
-            if (side === 'start') return;
-            state.linking = { fromTaskId: parseInt(taskId), fromEl: e.target };
+            if (side === 'start') return; // Cannot create dependency from a task's start
+            state.linking = { fromTaskId: taskId, fromEl: e.target };
             e.target.classList.add('linking-from');
             document.body.classList.add('is-linking');
             createLinkingPreview();
         } else {
-            if (side === 'end' || parseInt(taskId) === state.linking.fromTaskId) {
+            if (side === 'end' || taskId === state.linking.fromTaskId) {
                 cancelLinking();
                 return;
             }
-            const fromTask = state.tasks.find(t => t.id === state.linking.fromTaskId);
-            const toTask = state.tasks.find(t => t.id === parseInt(taskId));
-            if (toTask && fromTask) {
-                if (!toTask.dependencies) toTask.dependencies = [];
-                if (!toTask.dependencies.includes(fromTask.id)) {
-                    toTask.dependencies.push(fromTask.id);
-                    saveState();
-                }
+
+            const toTaskRef = doc(db, "tareas", taskId);
+            try {
+                await updateDoc(toTaskRef, {
+                    dependsOn: arrayUnion(state.linking.fromTaskId)
+                });
+            } catch (error) {
+                console.error("Error creating dependency: ", error);
+            } finally {
+                cancelLinking();
             }
-            cancelLinking();
-            render();
         }
     }
 
@@ -946,6 +988,7 @@ function GanttApp() {
         domIds.forEach(id => state.dom[id] = $(id));
 
         cacheModalDomElements();
+        loadMilestoneState(); // Load milestones from local storage
         buildMonthPicker();
         attachEventListeners();
 
@@ -965,8 +1008,10 @@ function GanttApp() {
                 });
             });
             state.tasks = tasks;
+            // The render is now triggered by the onSnapshot listener, ensuring UI is always in sync with DB
             render();
-            handleGoToToday();
+        }, (error) => {
+            console.error("Error fetching real-time tasks:", error);
         });
     }
 
