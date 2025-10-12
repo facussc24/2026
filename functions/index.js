@@ -744,7 +744,8 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                         "assigneeEmail": "string (optional)",
                         "priority": "string (optional: low|medium|high)",
                         "effort": "string (optional: low|medium|high)",
-                        "subtasks": "array (optional, each item: { title: string, completed?: boolean })"
+                        "subtasks": "array (optional, each item: { title: string, completed?: boolean })",
+                        "isProjectTask": "boolean (optional, default: false)"
                     }
                 },
                 {
@@ -771,10 +772,10 @@ exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.do
                 },
                 {
                     id: 'update_task',
-                    description: 'Updates properties of an existing task. Use this to change the plannedDate, title, description, assignee, or other attributes.',
+                    description: 'Updates properties of an existing task. Use this to change the plannedDate, title, description, assignee, or other attributes. The `updates` object can include `isProjectTask`.',
                     parameters: {
                         task_id: 'string',
-                        updates: 'object' // Can include assigneeEmail
+                        updates: 'object' // Can include assigneeEmail, isProjectTask
                     }
                 },
                 {
@@ -843,6 +844,10 @@ Your operational cycle is: **Analyze -> Clarify -> Plan -> Act**.
     *   Relative dates: "mañana" is +1 day, "en 3 días" is +3 days, "la próxima semana" is +7 days. You must calculate the final \`YYYY-MM-DD\` date.
     *   If a user provides only a day of the week (e.g., "el lunes"), assume it's the *next* upcoming Monday relative to \`${currentDate}\`.
 *   **Default \`plannedDate\`:** Every new task **MUST** have a \`plannedDate\`. If the user doesn't specify one, intelligently assign one based on the current context or place it for today.
+*   **Task Classification:** You **MUST** classify every new task as either a "Simple Task" or a "Project Task".
+    *   A task is a **Project Task** if it has dependencies, spans multiple days, has a `dueDate`, or if the user's language implies it is part of a larger project (e.g., "phase", "milestone", "feature", "epic", "project").
+    *   For **Project Tasks**, you **MUST** call the tool with the parameter `"isProjectTask": true`. These tasks will appear on the Gantt chart.
+    *   All other tasks are **Simple Tasks**. Do not set the `isProjectTask` parameter for them.
 
 ## 2. Dependency Management
 *   **Blocking:** To make Task A block Task B, you must call \`create_dependency\` with \`dependent_task_id: B_id\` and \`prerequisite_task_id: A_id\`.
@@ -1828,7 +1833,8 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     ...action.task,
                     creatorUid: creatorUid, // Use the provided creatorUid
                     createdAt: new Date(),
-                    status: 'todo'
+                    status: 'todo',
+                    isProjectTask: action.task.isProjectTask || false
                 };
 
                 const explicitOverride = action?.metadata?.explicitDateOverride;
@@ -1869,6 +1875,9 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
                 const resolvedUpdates = {...action.updates};
+                if (typeof resolvedUpdates.isProjectTask !== 'boolean') {
+                    delete resolvedUpdates.isProjectTask;
+                }
                 const explicitOverride = action?.metadata?.explicitDateOverride;
                 const hasExplicitOverride = Boolean(explicitOverride?.isoDate) && Object.prototype.hasOwnProperty.call(resolvedUpdates, 'plannedDate');
                 if (hasExplicitOverride) {

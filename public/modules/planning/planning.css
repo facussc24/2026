@@ -1,0 +1,93 @@
+@layer base {
+  :root {
+    /* Palette */
+    --primary-color: #3b82f6;
+    --accent-red: #ef4444;
+    --accent-yellow: #f59e0b;
+    --background-light: #f9fafb;
+    --background-dark: #0b1120;
+    --border-light: #e5e7eb;
+    --border-dark: #374151;
+    --text-light: #1f2937;
+    --text-dark: #f9fafb;
+    --header-light: #ffffff;
+    --header-dark: #111827;
+    --cell-light: #ffffff;
+    --cell-dark: #1f2937;
+    --task-bg-light: #f3f4f6;
+    --task-bg-dark: #0f172a;
+    --bar-color-plan: #60a5fa;
+    --bar-color-progress: #22c55e; /* verde para progreso */
+    /* Layout */
+    --left-col: 280px;
+    --day-width: 18px;
+    --row-height: 40px;
+    --days-font-size: 10px;
+  }
+  body.is-linking { cursor: crosshair; }
+  @keyframes pulse { 50% { opacity: 0.6; } }
+}
+@layer utilities {
+  /* ... Utility classes ... */
+}
+@layer components {
+  .timeline-grid { display: grid; grid-template-columns: var(--left-col) 1fr; }
+  .bars-grid { display: grid; grid-auto-rows: var(--row-height); position: relative; }
+  .task-bar { width: 100%; height: 18px; border-radius: 9999px; background: linear-gradient(180deg, #93c5fd 0%, #60a5fa 60%, #3b82f6 100%); position: relative; border: 1px solid rgba(59,130,246,.6); box-shadow: inset 0 -1px 0 rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.15); }
+  .task-bar-progress { position: absolute; left: 0; top: 0; bottom: 0; border-top-left-radius: 9999px; border-bottom-left-radius: 9999px; background: var(--bar-color-progress); }
+  .current-day-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent-red); opacity: 0.9; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  .month-divider { border-right: 1px solid var(--border-light); }
+  .year-divider { border-right: 2px solid #9ca3af; }
+  .week-divider { border-right: 1px dashed #cbd5e1; }
+  .day-cell { border-right: 1px solid var(--border-light); font-size: var(--days-font-size); }
+  .can-drag { cursor: grab; }
+  .can-drag:active { cursor: grabbing; }
+  .kw-cell { font-variant-numeric: tabular-nums; }
+  .task-card { min-height: var(--row-height); position: relative; cursor: grab; transition: background-color .2s ease, box-shadow .2s ease; }
+  .task-card.highlighted { background-color: #e0f2fe; box-shadow: 0 0 0 2px var(--primary-color) inset; }
+  .task-card.dragging { opacity: 0.5; background: #e0f2fe; }
+  .row-guides { position:absolute; inset:0; pointer-events:none; z-index:0; background-image:repeating-linear-gradient(to bottom, var(--border-light) 0 1px, transparent 1px var(--row-height)); }
+  .endpoint-label{position:absolute;top:-14px;font-size:10px;line-height:1;background:#f8fafc;border:1px solid var(--border-light);color:#64748b;padding:0 3px;border-radius:4px;white-space:nowrap;transform:translateX(-50%);pointer-events:none;transition:opacity .15s ease}
+  .handle{position:absolute;top:50%;width:16px;height:24px;background:rgba(255,255,255,0.7);border:2px solid var(--primary-color);border-radius:6px;transform:translateY(-50%);cursor:ew-resize;opacity:0;transition:all .15s ease; z-index: 11;}
+  .task-bar-wrap:hover .handle { opacity: 0.8; }
+  .handle:hover { background: var(--primary-color); border-color: white; transform: translateY(-50%) scale(1.1); }
+  .handle.left{left:-10px}
+  .handle.right{right:-10px}
+  .bar-movable{cursor:grab}
+  .bar-movable:active{cursor:grabbing}
+  .progress-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px;font-weight:600;color:#064e3b;background:rgba(255,255,255,.7);padding:0 4px;border-radius:4px;line-height:1;pointer-events:none}
+  .progress-handle { position: absolute; top: 50%; width: 10px; height: 20px; background-color: white; border: 2px solid #16a34a; border-radius: 4px; transform: translate(-50%, -50%); cursor: ew-resize; z-index: 12; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .15s ease; }
+  .progress-handle:hover { transform: translate(-50%, -50%) scale(1.15); }
+  .milestones-layer{position:absolute;inset:0;z-index:5;pointer-events:none}
+  .milestone{position:absolute;top:0;bottom:0;width:2px;background:var(--accent-yellow);box-shadow:0 0 0 1px rgba(0,0,0,.06);pointer-events:auto;cursor:ew-resize}
+  .milestone .label{position:absolute;top:4px;left:50%;transform:translateX(-50%);background:#fff7ed;color:#92400e;border:1px solid #fed7aa;border-radius:6px;padding:2px 6px;font-size:11px;white-space:nowrap;cursor:grab; display: flex; align-items: center; gap: 4px; }
+  .milestone .label:active{cursor:grabbing}
+  .milestone .label .delete-btn { visibility: hidden; opacity: 0; transition: all .15s ease; }
+  .milestone .label:hover .delete-btn { visibility: visible; opacity: 1; }
+  .weekend-layer{position:absolute;inset:0;z-index:1;pointer-events:none;display:grid}
+  .weekend{background:rgba(100,116,139,.12)}
+  .today-marker { position: absolute; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; pointer-events: none; z-index: 4; }
+  .today-marker .label { background: var(--accent-red); color: white; padding: 2px 6px; font-size: 11px; font-weight: 600; border-radius: 4px; transform: translateX(-50%); position: absolute; top: 2px; left: 1px; box-shadow: 0 1px 3px rgba(0,0,0,.2); z-index: 5;}
+  .today-marker .label::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border-width: 4px; border-style: solid; border-color: var(--accent-red) transparent transparent transparent; }
+
+  /* Dependency Layers */
+  .dependencies-layer, .linking-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; overflow: visible; }
+  .dep-path { stroke: #4f46e5; stroke-width: 1.5; fill: none; transition: stroke .15s ease; }
+  .dep-path.warning { stroke: var(--accent-red); }
+  .dep-group:hover .dep-path { stroke-width: 2.5; }
+  .dep-delete-btn { cursor: pointer; opacity: 0; transition: opacity .15s ease; pointer-events: all; }
+  .dep-group:hover .dep-delete-btn { opacity: 1; }
+  .linking-path { stroke: #4f46e5; stroke-width: 1.5; stroke-dasharray: 4; fill: none; }
+
+  /* Dependency Handles */
+  .dep-handle { position: absolute; top: 50%; width: 14px; height: 14px; background: white; border: 2px solid #60a5fa; border-radius: 50%; cursor: crosshair; opacity: 0; transition: all .15s ease; z-index: 10; pointer-events: all; }
+  .task-bar-wrap:hover .dep-handle { opacity: 1; }
+  .dep-handle:hover { transform: scale(1.1); background-color: #dbeafe; }
+  .dep-handle.start { left: 0px; transform: translate(-50%, -180%); }
+  .dep-handle.end { right: 0px; transform: translate(50%, -180%); }
+  .dep-handle.linking-from { background-color: #3b82f6; }
+
+  /* Modal Styles */
+  #modal-overlay { transition: opacity 0.2s ease-in-out; }
+  #modal-box { transition: all 0.2s ease-in-out; }
+}
