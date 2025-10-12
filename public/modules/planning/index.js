@@ -3,12 +3,12 @@ import { openAIAssistantModal } from '../tasks/tasks.js';
 
 let db;
 
-export function initPlanningModule(app) {
-    db = getFirestore(app);
+export function initPlanningModule(appDependencies) {
+    db = appDependencies.db;
     console.log('Planning module initialized with Firestore');
 }
 
-export async function runPlanningLogic(app) {
+export async function runPlanningLogic() {
     const viewContent = document.getElementById('view-content');
     if (!viewContent) {
         console.error('View content element not found');
