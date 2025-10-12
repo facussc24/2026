@@ -1958,10 +1958,10 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     isProjectTask: action.task.isProjectTask || false
                 };
 
-                if (taskData.isProjectTask && taskData.plannedDate) {
-                    taskData.startDate = taskData.plannedDate;
-                    if (!taskData.dueDate) {
-                        taskData.dueDate = taskData.plannedDate;
+                // --- Defensive Programming: Prevent undefined values ---
+                for (const key in taskData) {
+                    if (taskData[key] === undefined) {
+                        delete taskData[key];
                     }
                 }
 
@@ -1988,6 +1988,15 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     taskData.plannedDate = explicitOverride.isoDate;
                 }
 
+                // --- Final Date Derivation ---
+                // This runs *after* all overrides and normalizations.
+                if (taskData.isProjectTask && taskData.plannedDate) {
+                    taskData.startDate = taskData.plannedDate;
+                    if (!taskData.dueDate) {
+                        taskData.dueDate = taskData.plannedDate;
+                    }
+                }
+
                 batch.set(newTaskRef, taskData);
                 tempIdToRealIdMap.set(action.docId, newTaskRef.id);
                 await updateProgress(i, 'completed');
@@ -2003,13 +2012,6 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
                 const resolvedUpdates = {...action.updates};
-
-                if (resolvedUpdates.isProjectTask && resolvedUpdates.plannedDate) {
-                    resolvedUpdates.startDate = resolvedUpdates.plannedDate;
-                    if (!resolvedUpdates.dueDate) {
-                        resolvedUpdates.dueDate = resolvedUpdates.plannedDate;
-                    }
-                }
 
                 if (typeof resolvedUpdates.isProjectTask !== 'boolean') {
                     delete resolvedUpdates.isProjectTask;
@@ -2037,9 +2039,23 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                     resolvedUpdates.plannedDate = explicitOverride.isoDate;
                 }
 
+                // --- Final Date Derivation ---
+                // This runs *after* all overrides and normalizations.
+                if (resolvedUpdates.isProjectTask && resolvedUpdates.plannedDate) {
+                    resolvedUpdates.startDate = resolvedUpdates.plannedDate;
+                    // Only set dueDate if it's not already being updated to something else.
+                    if (!resolvedUpdates.dueDate) {
+                        resolvedUpdates.dueDate = resolvedUpdates.plannedDate;
+                    }
+                }
+
                 const finalUpdates = {};
                 for (const key in resolvedUpdates) {
                     const value = resolvedUpdates[key];
+                    // --- Defensive Programming: Prevent undefined values ---
+                    if (value === undefined) {
+                        continue; // Skip undefined values to prevent Firestore errors
+                    }
                     if (key === 'dependsOn' || key === 'blocks') {
                         const resolvedIds = value.map(id => tempIdToRealIdMap.get(id) || id);
                         finalUpdates[key] = admin.firestore.FieldValue.arrayUnion(...resolvedIds);
