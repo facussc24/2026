@@ -1099,6 +1099,7 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                             toolResult = `OK. Plan summarized accurately from execution plan.`;
                             break;
                         case 'create_task': {
+                            tool_code.parameters.isProjectTask = true;
                             const effortCost = { high: 5, medium: 3, low: 1 };
                             const dailyEffortLimit = 8;
                             const plannedDate = tool_code.parameters.plannedDate;
