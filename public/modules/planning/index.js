@@ -1047,8 +1047,12 @@ function loadMilestoneState() {
         state.dom.btnPrevMonth.addEventListener('click', () => handleMonthNav(-1));
         state.dom.btnNextMonth.addEventListener('click', () => handleMonthNav(1));
 
-        state.dom.addTaskBtn.addEventListener('click', handleAddTask);
-        state.dom.addMilestoneBtn.addEventListener('click', handleAddMilestone);
+        if (state.dom.addTaskBtn) {
+            state.dom.addTaskBtn.addEventListener('click', handleAddTask);
+        }
+        if (state.dom.addMilestoneBtn) {
+            state.dom.addMilestoneBtn.addEventListener('click', handleAddMilestone);
+        }
         state.dom.btnGoToday.addEventListener('click', handleGoToToday);
 
         setupTaskListDnD();
