@@ -221,14 +221,10 @@ export async function handleTaskFormSubmit(e) {
         data.isPublic = false;
     }
 
-    const showInPlanningCheckbox = form.querySelector('[name="showInPlanning"]');
-    if (showInPlanningCheckbox) {
-        data.showInPlanning = !!showInPlanningCheckbox.checked;
-    } else if (isEditing && existingTaskData) {
-        data.showInPlanning = !!existingTaskData.showInPlanning;
-    } else if (!isEditing) {
-        data.showInPlanning = false;
-    }
+    // Explicitly handle the 'isProjectTask' checkbox.
+    // Unchecked checkboxes are not included in form data, so we must handle the false case.
+    const isProjectTaskCheckbox = form.querySelector('[name="isProjectTask"]');
+    data.isProjectTask = !!isProjectTaskCheckbox?.checked;
 
     const saveButton = modalElement.querySelector('button[type="submit"]');
     const originalButtonHTML = saveButton.innerHTML;

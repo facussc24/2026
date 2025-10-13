@@ -1,5 +1,5 @@
 import { getFirestore, collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { openAIAssistantModal, openTaskFormModal } from '../tasks/tasks.js';
+import { openAIAssistantModal } from '../tasks/tasks.js';
 
 let db;
 
@@ -221,11 +221,6 @@ function loadMilestoneState() {
             card.setAttribute('draggable', true);
             card.dataset.taskId = t.id;
 
-            // Add click event listener to open the task detail modal
-            card.addEventListener('click', () => {
-                openTaskFormModal(t.id);
-            });
-
             if (!t.start || !t.end) card.classList.add('opacity-60');
 
             const title = document.createElement('p');
@@ -419,26 +414,20 @@ function loadMilestoneState() {
         bar.append(progress, pLabel, progressHandle);
 
         const startLabel = document.createElement('div');
-        startLabel.className = 'endpoint-label'; // No longer starts hidden
+        startLabel.className = 'endpoint-label opacity-0';
         startLabel.textContent = s.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' });
 
         const endLabel = document.createElement('div');
-        endLabel.className = 'endpoint-label'; // No longer starts hidden
+        endLabel.className = 'endpoint-label opacity-0';
         endLabel.style.left = '100%';
         endLabel.textContent = e.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' });
 
-        // Hide labels if the view is too zoomed out, otherwise show them.
-        const areLabelsVisible = state.view.dayWidth >= 20;
-        [startLabel, endLabel].forEach(el => el.style.opacity = areLabelsVisible ? 1 : 0);
-
         wrap.addEventListener('mouseenter', () => {
-            // Always show labels on hover, regardless of zoom level.
             [startLabel, endLabel].forEach(el => el.style.opacity = 1);
             document.querySelector(`.task-card[data-task-id='${task.id}']`)?.classList.add('highlighted');
         });
         wrap.addEventListener('mouseleave', () => {
-             // On mouse leave, revert to visibility based on zoom level.
-             [startLabel, endLabel].forEach(el => el.style.opacity = areLabelsVisible ? 1 : 0);
+             if (state.view.dayWidth < 18) { [startLabel, endLabel].forEach(el => el.style.opacity = 0); }
              document.querySelector(`.task-card[data-task-id='${task.id}']`)?.classList.remove('highlighted');
         });
 
