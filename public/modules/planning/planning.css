@@ -55,7 +55,7 @@
   .handle.right{right:-10px}
   .bar-movable{cursor:grab}
   .bar-movable:active{cursor:grabbing}
-  .progress-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px;font-weight:600;color:white;text-shadow:0 1px 1px rgba(0,0,0,.3);background:rgba(0,0,0,.2);padding:0 4px;border-radius:4px;line-height:1;pointer-events:none}
+  .progress-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px;font-weight:600;color:white;text-shadow:0 1px 1px rgba(0,0,0,.3);background:rgba(0,0,0,.2);padding:0 4px;border-radius:4px;line-height:1;pointer-events:none; z-index: 10;}
   .progress-handle { position: absolute; top: 50%; width: 10px; height: 20px; background-color: white; border: 2px solid #16a34a; border-radius: 4px; transform: translate(-50%, -50%); cursor: ew-resize; z-index: 12; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .15s ease; }
   .progress-handle:hover { transform: translate(-50%, -50%) scale(1.15); }
   .milestones-layer{position:absolute;inset:0;z-index:5;pointer-events:none}
