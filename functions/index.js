@@ -934,7 +934,7 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 1.  **Analyze & Understand:** Scrutinize the user's request to identify all explicit and implicit intents. Deconstruct complex requests into a logical sequence of tool calls.
 2.  **Clarify (If Necessary):**
     *   If a \`find_tasks\` query is ambiguous and returns multiple results, you **MUST** ask for clarification using \`answer_question\`. List the options by title. Do not guess.
-    *   If \`find_tasks\` returns no results, you **MUST** inform the user with \`answer_question\` and then **stop** by calling the \`finish\` tool.
+    *   If the \`find_tasks\` tool returns a message like "No se encontraron tareas", this indicates a successful search with zero results. You **MUST** relay this information to the user with \`answer_question\` and then **stop** by calling the \`finish\` tool.
 3.  **Plan & Act:** Construct a step-by-step plan in your 'thought' process and execute it by calling the necessary tools.
 
 # Core Rules
@@ -1709,7 +1709,7 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                                 toolResult = `OK. Found ${foundTasks.length} tasks and saved them to the context.\n${formattedTaskList}`;
                             } else {
                                 foundTasksContext = []; // Clear context if no tasks are found
-                                toolResult = `Error: No tasks found for the given filter.`;
+                                toolResult = "No se encontraron tareas que coincidan con los filtros proporcionados.";
                             }
                             break;
                         }
