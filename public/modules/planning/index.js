@@ -1,5 +1,5 @@
 import { getFirestore, collection, query, where, onSnapshot, addDoc, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-import { openAIAssistantModal } from '../tasks/tasks.js';
+import { openAIAssistantModal, openTaskFormModal } from '../tasks/tasks.js';
 
 let db;
 
@@ -220,6 +220,11 @@ function loadMilestoneState() {
             card.className = 'p-2 rounded-md border border-border-light bg-cell-light shadow-sm task-card flex flex-col justify-center transition-shadow';
             card.setAttribute('draggable', true);
             card.dataset.taskId = t.id;
+
+            // Add click event listener to open the task detail modal
+            card.addEventListener('click', () => {
+                openTaskFormModal(t.id);
+            });
 
             if (!t.start || !t.end) card.classList.add('opacity-60');
 
