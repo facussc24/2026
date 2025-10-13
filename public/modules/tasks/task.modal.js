@@ -180,7 +180,7 @@ function initComments(modalElement, task) {
                             <p class="font-bold text-sm text-slate-800">${author.name}</p>
                             <p class="text-xs text-slate-400">${timestamp}</p>
                         </div>
-                        <p class="text-sm text-slate-600 mt-1 whitespace-pre-wrap">${comment.text}</p>
+                        <p class="text-sm text-slate-600 mt-1 whitespace-pre-wrap">${comment.text || ''}</p>
                     </div>
                 </div>
             `;
@@ -362,6 +362,15 @@ export async function openTaskFormModal(taskOrId = null, defaultStatus = 'todo',
     const subtaskManager = initSubtasks(modalElement, task);
     const commentsUnsubscribe = initComments(modalElement, task);
     initModalEventListeners(modalElement, task, commentsUnsubscribe);
+
+    // Logic to update the progress value label in real-time
+    const progressSlider = modalElement.querySelector('#task-progress');
+    const progressValueLabel = modalElement.querySelector('#task-progress-value');
+    if (progressSlider && progressValueLabel) {
+        progressSlider.addEventListener('input', () => {
+            progressValueLabel.textContent = `${progressSlider.value}%`;
+        });
+    }
 }
 
 /**
