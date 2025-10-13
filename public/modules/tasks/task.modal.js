@@ -10,7 +10,7 @@
  */
 
 import { marked } from "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js";
-import { collection, onSnapshot, query, orderBy, addDoc, doc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+import { collection, onSnapshot, query, orderBy, addDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-functions.js";
 import { checkUserPermission, getEffectiveRole, showConfirmationModal, showToast } from '../../main.js';
 import { handleTaskFormSubmit, deleteTask, createTask, fetchAllTasks } from './task.service.js';
@@ -277,8 +277,32 @@ function initModalEventListeners(modalElement, task, commentsUnsubscribe) {
  * @param {string|null} [defaultAssigneeUid=null] - User ID to prefill as assignee.
  * @param {string|null} [defaultDate=null] - ISO date string to seed date fields.
  */
-export async function openTaskFormModal(task = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
-    const isEditing = task !== null;
+export async function openTaskFormModal(taskOrId = null, defaultStatus = 'todo', defaultAssigneeUid = null, defaultDate = null) {
+    let task = null;
+    const isEditing = taskOrId !== null;
+
+    if (isEditing) {
+        const taskId = typeof taskOrId === 'string' ? taskOrId : taskOrId.docId;
+        if (!taskId) {
+            showToast('Error: No se pudo identificar la tarea.', 'error');
+            return;
+        }
+
+        try {
+            const taskRef = doc(db, 'tareas', taskId);
+            const taskSnap = await getDoc(taskRef);
+            if (!taskSnap.exists()) {
+                showToast('Error: La tarea que intentas abrir ya no existe.', 'error');
+                return;
+            }
+            task = { ...taskSnap.data(), docId: taskSnap.id };
+        } catch (error) {
+            console.error("Error fetching full task details:", error);
+            showToast('Error al cargar los detalles completos de la tarea.', 'error');
+            return;
+        }
+    }
+
     const isAdmin = getEffectiveRole() === 'admin';
 
     // Enrich task object with dependency details for the modal view
