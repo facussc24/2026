@@ -414,20 +414,26 @@ function loadMilestoneState() {
         bar.append(progress, pLabel, progressHandle);
 
         const startLabel = document.createElement('div');
-        startLabel.className = 'endpoint-label opacity-0';
+        startLabel.className = 'endpoint-label'; // No longer starts hidden
         startLabel.textContent = s.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' });
 
         const endLabel = document.createElement('div');
-        endLabel.className = 'endpoint-label opacity-0';
+        endLabel.className = 'endpoint-label'; // No longer starts hidden
         endLabel.style.left = '100%';
         endLabel.textContent = e.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' });
 
+        // Hide labels if the view is too zoomed out, otherwise show them.
+        const areLabelsVisible = state.view.dayWidth >= 20;
+        [startLabel, endLabel].forEach(el => el.style.opacity = areLabelsVisible ? 1 : 0);
+
         wrap.addEventListener('mouseenter', () => {
+            // Always show labels on hover, regardless of zoom level.
             [startLabel, endLabel].forEach(el => el.style.opacity = 1);
             document.querySelector(`.task-card[data-task-id='${task.id}']`)?.classList.add('highlighted');
         });
         wrap.addEventListener('mouseleave', () => {
-             if (state.view.dayWidth < 18) { [startLabel, endLabel].forEach(el => el.style.opacity = 0); }
+             // On mouse leave, revert to visibility based on zoom level.
+             [startLabel, endLabel].forEach(el => el.style.opacity = areLabelsVisible ? 1 : 0);
              document.querySelector(`.task-card[data-task-id='${task.id}']`)?.classList.remove('highlighted');
         });
 
