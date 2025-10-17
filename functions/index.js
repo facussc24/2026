@@ -1479,8 +1479,14 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
 
 exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.document('ai_agent_jobs/{jobId}')
     .onCreate(async (snap, context) => {
+        const jobData = snap.data();
+        if (jobData.status !== 'PENDING') {
+            console.log(`Job ${context.params.jobId} created with status ${jobData.status}. Skipping runner.`);
+            return;
+        }
+
         try {
-            await _runAgentLogic(snap.data(), snap.ref, context.params.jobId);
+            await _runAgentLogic(jobData, snap.ref, context.params.jobId);
         } catch (error) {
             console.error(`Error running AI agent job ${context.params.jobId}:`, error);
             await snap.ref.update({
@@ -1714,16 +1720,18 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
 
-                // --- SECURITY CHECK ---
-                const taskSnap = await taskRef.get();
-                if (!taskSnap.exists) {
-                    // Throw an error that will be caught by the main try...catch block
-                    throw new Error(`Security check failed: Task with ID ${realDocId} not found for modification.`);
-                }
-                const taskData = taskSnap.data();
-                if (taskData.creatorUid !== creatorUid) {
-                    // Throw a specific permission error
-                    throw new Error(`Permission denied. You do not have permission to modify the task: "${taskData.title || realDocId}".`);
+                // --- SECURITY CHECK (only for existing tasks) ---
+                if (!tempIdToRealIdMap.has(action.docId)) {
+                    const taskSnap = await taskRef.get();
+                    if (!taskSnap.exists) {
+                        // Throw an error that will be caught by the main try...catch block
+                        throw new Error(`Security check failed: Task with ID ${realDocId} not found for modification.`);
+                    }
+                    const taskData = taskSnap.data();
+                    if (taskData.creatorUid !== creatorUid) {
+                        // Throw a specific permission error
+                        throw new Error(`Permission denied. You do not have permission to modify the task: "${taskData.title || realDocId}".`);
+                    }
                 }
                 // --- END SECURITY CHECK ---
 
