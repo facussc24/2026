@@ -712,221 +712,84 @@ ${JSON.stringify(historyToSummarize, null, 2)}`;
 });
 
 
-exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.document('ai_agent_jobs/{jobId}')
-    .onCreate(async (snap, context) => {
-        const jobRef = snap.ref;
-        const jobData = snap.data();
-        const currentJobId = context?.params?.jobId;
-        let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext, timeZone, sanitySuggestions = [], explicitDatesFromUser = [] } = jobData;
+const _runAgentLogic = async (jobData, jobRef, currentJobId) => {
+    let { userPrompt, tasks, allUsers, currentDate, conversationHistory, executionPlan, thinkingSteps, summary, conversationId, foundTasksContext, timeZone, sanitySuggestions = [], explicitDatesFromUser = [] } = jobData;
+    const effectiveTimeZone = timeZone || DEFAULT_AI_TIME_ZONE;
+    currentDate = currentDate || getCurrentDateForUserTZ({ timeZone: effectiveTimeZone });
+    conversationHistory = Array.isArray(conversationHistory) ? conversationHistory : [];
+    const explicitDateQueue = Array.isArray(explicitDatesFromUser) ? [...explicitDatesFromUser] : [];
+    const explicitDateCorrections = [];
+    let hasExplicitDateCorrectionInSummary = false;
 
-        const effectiveTimeZone = timeZone || DEFAULT_AI_TIME_ZONE;
-        currentDate = currentDate || getCurrentDateForUserTZ({ timeZone: effectiveTimeZone });
+    const consumeNextExplicitDate = () => {
+        if (!explicitDateQueue.length) return null;
+        const next = explicitDateQueue.shift();
+        return (next && next.isoDate) ? next : null;
+    };
 
-        conversationHistory = Array.isArray(conversationHistory) ? conversationHistory : [];
+    await jobRef.update({ status: 'RUNNING', statusText: 'Iniciando el asistente...' });
+    let noProgressCounter = 0;
+    let lastToolCall = null;
 
-        const explicitDateQueue = Array.isArray(explicitDatesFromUser) ? [...explicitDatesFromUser] : [];
-        const explicitDateCorrections = [];
-        let hasExplicitDateCorrectionInSummary = false;
+    const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
+    const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-        const consumeNextExplicitDate = () => {
-            if (!explicitDateQueue.length) {
-                return null;
+    const allowedEfforts = ['low', 'medium', 'high'];
+    const normalizeEffortValue = (value) => {
+        if (typeof value !== 'string') return null;
+        const normalized = value.trim().toLowerCase();
+        return allowedEfforts.includes(normalized) ? normalized : null;
+    };
+
+    const effortHumanLabels = { low: 'Bajo', medium: 'Medio', high: 'Alto' };
+    tasks = Array.isArray(tasks) ? tasks.map(task => ({ ...task, effort: normalizeEffortValue(task?.effort) || 'medium' })) : [];
+
+    const toolSchemas = {
+        create_task: {
+            title: { type: 'string', required: true },
+            description: { type: 'string' },
+            plannedDate: { type: 'string', required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ },
+            dueDate: { type: 'string', pattern: /^\d{4}-\d{2}-\d{2}$/ },
+            assigneeEmail: { type: 'string', pattern: /.+@.+\..+/ },
+            priority: { type: 'string', enum: ['low', 'medium', 'high'] },
+            effort: { type: 'string', enum: ['low', 'medium', 'high'] },
+            subtasks: { type: 'array', items: { type: 'object', properties: { title: { type: 'string', required: true } } } },
+            isProjectTask: { type: 'boolean' }
+        },
+        create_dependency: { dependent_task_id: { type: 'string', required: true }, prerequisite_task_id: { type: 'string', required: true } },
+        delete_task: { task_id: { type: 'string', required: true } },
+        complete_task: { task_id: { type: 'string', required: true } },
+        update_task: { task_id: { type: 'string', required: true }, updates: { type: 'object', required: true } },
+        bulk_update_tasks: { updates: { type: 'array', required: true } },
+        find_tasks: { filter: { type: 'object', required: true } },
+        answer_question: { answer: { type: 'string', required: true } },
+        review_and_summarize_plan: {},
+        critique_plan: {},
+        finish: {},
+        no_op: {}
+    };
+
+    const validateToolParameters = (toolId, params) => {
+        const schema = toolSchemas[toolId];
+        if (!schema) return `Unknown tool ID: ${toolId}`;
+        for (const key in schema) {
+            const rule = schema[key];
+            if (rule.required && !params.hasOwnProperty(key)) return `Missing required parameter for ${toolId}: ${key}`;
+            if (params.hasOwnProperty(key)) {
+                const value = params[key];
+                if (rule.type === 'array' && !Array.isArray(value)) {
+                    return `Invalid type for parameter ${key} in ${toolId}. Expected array, got ${typeof value}`;
+                }
+                if (rule.type && rule.type !== 'array' && typeof value !== rule.type) {
+                    return `Invalid type for parameter ${key} in ${toolId}. Expected ${rule.type}, got ${typeof value}`;
+                }
+                if (rule.pattern && !rule.pattern.test(value)) return `Invalid format for parameter ${key} in ${toolId}.`;
+                if (rule.enum && !rule.enum.includes(value)) return `Invalid value for parameter ${key} in ${toolId}. Must be one of: ${rule.enum.join(', ')}`;
             }
-            const next = explicitDateQueue.shift();
-            if (!next || !next.isoDate) {
-                return null;
-            }
-            return next;
-        };
-
-        try {
-            await jobRef.update({ status: 'RUNNING', statusText: 'Iniciando el asistente...' });
-
-                let noProgressCounter = 0;
-                let lastToolCall = null;
-
-            // AI Model Configuration: Using gemini-2.5-flash-lite for cost-efficiency.
-            const vertexAI = new VertexAI({ project: process.env.GCLOUD_PROJECT, location: "us-central1" });
-            const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
-
-            const allowedEfforts = ['low', 'medium', 'high'];
-            const normalizeEffortValue = (value) => {
-                if (typeof value !== 'string') {
-                    return null;
-                }
-                const normalized = value.trim().toLowerCase();
-                return allowedEfforts.includes(normalized) ? normalized : null;
-            };
-
-            const effortHumanLabels = {
-                low: 'Bajo',
-                medium: 'Medio',
-                high: 'Alto',
-            };
-
-            tasks = Array.isArray(tasks)
-                ? tasks.map(task => {
-                    const normalized = normalizeEffortValue(task?.effort);
-                    return { ...task, effort: normalized || 'medium' };
-                })
-                : [];
-
-            const toolSchemas = {
-                create_task: {
-                    title: { type: 'string', required: true },
-                    description: { type: 'string' },
-                    plannedDate: { type: 'string', required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ },
-                    dueDate: { type: 'string', pattern: /^\d{4}-\d{2}-\d{2}$/ },
-                    assigneeEmail: { type: 'string', pattern: /.+@.+\..+/ },
-                    priority: { type: 'string', enum: ['low', 'medium', 'high'] },
-                    effort: { type: 'string', enum: ['low', 'medium', 'high'] },
-                    subtasks: { type: 'array', items: { type: 'object', properties: { title: { type: 'string', required: true } } } },
-                    isProjectTask: { type: 'boolean' }
-                },
-                create_dependency: {
-                    dependent_task_id: { type: 'string', required: true },
-                    prerequisite_task_id: { type: 'string', required: true }
-                },
-                delete_task: {
-                    task_id: { type: 'string', required: true }
-                },
-                complete_task: {
-                    task_id: { type: 'string', required: true }
-                },
-                update_task: {
-                    task_id: { type: 'string', required: true },
-                    updates: { type: 'object', required: true }
-                },
-                bulk_update_tasks: {
-                    updates: { type: 'array', required: true }
-                },
-                find_tasks: {
-                    filter: { type: 'object', required: true }
-                },
-                answer_question: {
-                    answer: { type: 'string', required: true }
-                },
-                review_and_summarize_plan: {},
-                critique_plan: {},
-                finish: {},
-                no_op: {}
-            };
-
-            const validateToolParameters = (toolId, params) => {
-                const schema = toolSchemas[toolId];
-                if (!schema) return `Unknown tool ID: ${toolId}`;
-
-                for (const key in schema) {
-                    const rule = schema[key];
-                    if (rule.required && !params.hasOwnProperty(key)) {
-                        return `Missing required parameter for ${toolId}: ${key}`;
-                    }
-                    if (params.hasOwnProperty(key)) {
-                        const value = params[key];
-                        if (rule.type && typeof value !== rule.type) {
-                            return `Invalid type for parameter ${key} in ${toolId}. Expected ${rule.type}, got ${typeof value}`;
-                        }
-                        if (rule.pattern && !rule.pattern.test(value)) {
-                            return `Invalid format for parameter ${key} in ${toolId}.`;
-                        }
-                        if (rule.enum && !rule.enum.includes(value)) {
-                            return `Invalid value for parameter ${key} in ${toolId}. Must be one of: ${rule.enum.join(', ')}`;
-                        }
-                    }
-                }
-                return null;
-            };
-            const toolDefinitions = [
-                // Tool definitions remain the same
-                 {
-                    "id": "create_task",
-                    "description": "Creates a new task. You MUST determine the best `plannedDate` by analyzing the user's current schedule. Only set a `dueDate` if a specific deadline is mentioned. Can be assigned to a user by providing their email.",
-                    "parameters": {
-                        "title": "string",
-                        "description": "string (optional)",
-                        "plannedDate": "string (YYYY-MM-DD)",
-                        "dueDate": "string (YYYY-MM-DD, optional)",
-                        "assigneeEmail": "string (optional)",
-                        "priority": "string (optional: low|medium|high)",
-                        "effort": "string (optional: low|medium|high)",
-                        "subtasks": "array (optional, each item: { title: string, completed?: boolean })",
-                        "isProjectTask": "boolean (optional, default: false)"
-                    }
-                },
-                {
-                    id: 'create_dependency',
-                    description: 'Creates a dependency between two tasks. The first task will be blocked until the second one is complete.',
-                    parameters: {
-                        dependent_task_id: 'string',
-                        prerequisite_task_id: 'string'
-                    }
-                },
-                {
-                    id: 'delete_task',
-                    description: 'Deletes an existing task using its ID.',
-                    parameters: {
-                        task_id: 'string'
-                    }
-                },
-                {
-                    id: 'complete_task',
-                    description: "Marks an existing task as 'done' using its ID.",
-                    parameters: {
-                        task_id: 'string'
-                    }
-                },
-                {
-                    id: 'update_task',
-                    description: 'Updates properties of an existing task. Use this to change the plannedDate, title, description, assignee, or other attributes. The `updates` object can include `isProjectTask`.',
-                    parameters: {
-                        task_id: 'string',
-                        updates: 'object' // Can include assigneeEmail, isProjectTask
-                    }
-                },
-                {
-                    id: 'bulk_update_tasks',
-                    description: 'Updates multiple tasks in a single operation. Provide a list of task IDs and the corresponding updates for each.',
-                    parameters: {
-                        updates: 'array'
-                    }
-                },
-                 {
-                    id: 'review_and_summarize_plan',
-                    description: 'Call this as your final step before using "finish". It reviews the execution plan you have constructed and generates an accurate, bulleted-point summary for the user. It takes no parameters.',
-                    parameters: {}
-                },
-                {
-                    id: 'critique_plan',
-                    description: 'Analyzes the current execution plan for logical errors, overloaded days, or other issues. Returns a list of suggestions for improvement. This MUST be called before "review_and_summarize_plan".',
-                    parameters: {}
-                },
-                {
-                    id: 'find_tasks',
-                    description: 'Finds tasks based on a property filter. Supports searching by `title` for partial matches, and suffixes for advanced queries: `_lte` (less/equal), `_gte` (greater/equal), `_ne` (not equal). Example: `{"title": "PWA", "status_ne": "done"}` finds all unfinished tasks containing "PWA". Returns a JSON object like `{\\"tasks\\": [...]}`.',
-                    parameters: {
-                        filter: 'object'
-                    }
-                },
-                 {
-                    id: 'answer_question',
-                    description: 'Use this tool to provide a direct, final answer to a user\'s question. This should be used when the user is asking for information, not for creating or modifying tasks. The provided answer will be shown directly to the user.',
-                    parameters: {
-                        answer: 'string'
-                    }
-                },
-                {
-                    id: 'finish',
-                    description: 'Call this when you have a complete plan and all tasks and dependencies have been created.',
-                    parameters: {}
-                },
-                {
-                    id: 'no_op',
-                    description: 'Call this when the user\'s request does not require any action or changes to tasks. For example, if the user says "thanks".',
-                    parameters: {}
-                }
-            ];
-
-            const buildSystemPrompt = () => `
+        }
+        return null;
+    };
+    const buildSystemPrompt = () => `
 You are 'Barack', an elite, autonomous project management assistant. Your goal is to help users manage tasks efficiently by interpreting natural language requests and creating an actionable plan using the provided tools. Your reasoning ('thought') **MUST** be in Spanish.
 
 # Workflow: Analyze -> Clarify -> Plan -> Act
@@ -962,6 +825,11 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 *   **Priority & Effort:** Use priority \`high\` only for explicitly urgent tasks. Default effort to \`medium\` unless specified otherwise. Keep daily planned effort below 8 points (low=1, medium=3, high=5).
 *   **Subtasks:** Declare subtasks within the \`create_task\` call using the \`subtasks\` array. They always start as 'pending'.
 
+## 4. Error Handling
+*   **Analyze Tool Errors:** When a tool returns an error message (e.g., "Observation: Error..."), you **MUST** analyze it. Do not ignore errors.
+*   **Permission Errors:** If an error contains "Permission denied," it means you are not authorized to perform that action. You **MUST NOT** retry. Your only action should be to inform the user about the permission error using the \`answer_question\` tool and then call \`finish\`.
+*   **Execution Errors:** For other errors (e.g., invalid parameters, task not found), analyze the message. If you can fix it (e.g., by finding the correct task ID first), do so. If the error is due to a vague user request, ask for clarification. Do not blindly repeat the failing command.
+
 # Few-shot Examples (How to Reason)
 
 ## Example 1: Complex Update
@@ -990,9 +858,9 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 ## Example 3: Ambiguous Creation
 *   **User:** "crea una tarea para mañana"
 *   **Correct Thought Process:**
-    1.  **Analyze:** El usuario quiere usar la herramienta `create_task`. Sin embargo, falta un parámetro obligatorio: `title`.
+    1.  **Analyze:** El usuario quiere usar la herramienta 'create_task'. Sin embargo, falta un parámetro obligatorio: 'title'.
     2.  **Clarify:** Mis reglas me dicen que si faltan parámetros obligatorios para una acción, debo preguntar. No debo inventarme un título.
-    3.  **Act:** Llamaré a `answer_question` para pedir la información que falta. Mi pensamiento final empezará con "Respuesta:" y luego llamaré a la herramienta.
+    3.  **Act:** Llamaré a 'answer_question' para pedir la información que falta. Mi pensamiento final empezará con "Respuesta:" y luego llamaré a la herramienta.
 
 # Context Data
 *   **Today's Date:** ${currentDate}
@@ -1012,833 +880,506 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
 \`\`\`
             `;
 
-            let i = 0;
-            const maxIterations = 15;
+    let i = 0;
+    const maxIterations = 15;
+    await jobRef.update({ statusText: 'Analizando tu petición...' });
 
-            await jobRef.update({ statusText: 'Analizando tu petición...' });
+    while (i < maxIterations) {
+        i++;
+        let agentResponse;
+        let lastError = null;
 
-            while (i < maxIterations) {
-                i++;
-                let agentResponse;
-                let lastError = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const systemPrompt = buildSystemPrompt();
+                let prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
+                if (attempt > 0) prompt += `\n\n**Previous Attempt Failed:** Your last response was not valid JSON. Please ensure your entire response is a single, valid JSON object as requested in the system prompt.`;
+                const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+                const responseText = result.response.candidates[0].content.parts[0].text;
+                const jsonMatch = responseText.match(/{[\s\S]*}/);
+                if (!jsonMatch) throw new Error("Response did not contain a JSON object.");
+                agentResponse = JSON.parse(jsonMatch[0]);
+                lastError = null;
+                break;
+            } catch (e) {
+                lastError = e;
+                console.warn(`Attempt ${attempt + 1} failed: ${e.message}`);
+                if (attempt === 2) throw new Error(`Agent did not return valid JSON after 3 attempts. Last error: ${lastError.message}`);
+            }
+        }
 
-                // Inner loop for retrying the model call on JSON parsing errors
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        const systemPrompt = buildSystemPrompt();
-                        let prompt = `${systemPrompt}\n\n**Conversation History:**\n${JSON.stringify(conversationHistory, null, 2)}`;
-                        if (attempt > 0) {
-                            prompt += `\n\n**Previous Attempt Failed:** Your last response was not valid JSON. Please ensure your entire response is a single, valid JSON object as requested in the system prompt.`;
-                        }
+        const { thought: rawThought, tool_code: rawToolCode } = agentResponse;
+        const currentToolCallString = JSON.stringify(rawToolCode);
+        if (lastToolCall && currentToolCallString === lastToolCall) noProgressCounter++;
+        else noProgressCounter = 0;
 
-                        const result = await generativeModel.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
-                        const responseText = result.response.candidates[0].content.parts[0].text;
-                        const jsonMatch = responseText.match(/{[\s\S]*}/);
+        if (noProgressCounter >= 3) {
+            console.warn(`Agent may be stuck in a loop. Terminating job ${currentJobId}.`);
+            summary = "El asistente de IA se detuvo porque no estaba progresando. Por favor, reformula tu solicitud.";
+            break;
+        }
+        lastToolCall = currentToolCallString;
+        const tool_code = rawToolCode || { tool_id: 'finish', parameters: {} };
+        const thought = rawThought || (tool_code.tool_id === 'finish' ? 'Plan execution has been completed.' : `Preparing to execute tool: ${tool_code.tool_id}.`);
 
-                        if (!jsonMatch) {
-                            throw new Error("Response did not contain a JSON object.");
-                        }
+        thinkingSteps.push({ thought, tool_code: tool_code.tool_id });
+        await jobRef.update({
+            thinkingSteps: admin.firestore.FieldValue.arrayUnion({ thought, tool_code: tool_code.tool_id, timestamp: new Date() }),
+            foundTasksContext,
+        });
 
-                        agentResponse = JSON.parse(jsonMatch[0]);
-                        lastError = null; // Clear error on success
-                        break; // Exit retry loop on success
-                    } catch (e) {
-                        lastError = e;
-                        console.warn(`Attempt ${attempt + 1} failed: ${e.message}`);
-                        if (attempt === 2) {
-                             throw new Error(`Agent did not return valid JSON after 3 attempts. Last error: ${lastError.message}`);
-                        }
+        if (tool_code.tool_id === 'finish' || tool_code.tool_id === 'answer_question' || tool_code.tool_id === 'no_op') {
+            if (tool_code.tool_id === 'answer_question') summary = tool_code.parameters.answer;
+            if (tool_code.tool_id === 'no_op') summary = "No se requiere ninguna acción.";
+            break;
+        }
+
+        let toolResult = '';
+        try {
+            const validationError = validateToolParameters(tool_code.tool_id, tool_code.parameters);
+            if (validationError) {
+                toolResult = `Error: ${validationError}`;
+            } else {
+                switch (tool_code.tool_id) {
+                    case 'critique_plan': {
+                        const sanitySuggestions = await exports.analyzePlanSanity({ plan: executionPlan, tasks });
+                        toolResult = sanitySuggestions.suggestions.length > 0 ? `Critique found issues: ${sanitySuggestions.suggestions.join('. ')}` : 'OK. No issues found in the plan.';
+                        break;
                     }
-                }
-
-                const { thought: rawThought, tool_code: rawToolCode } = agentResponse;
-                const currentToolCallString = JSON.stringify(rawToolCode);
-                if (lastToolCall && currentToolCallString === lastToolCall) {
-                    noProgressCounter++;
-                } else {
-                    noProgressCounter = 0;
-                }
-
-                if (noProgressCounter >= 3) {
-                    console.warn(`Agent may be stuck in a loop. Terminating job ${currentJobId}.`);
-                    summary = "El asistente de IA se detuvo porque no estaba progresando. Por favor, reformula tu solicitud.";
-                    break;
-                }
-                lastToolCall = currentToolCallString;
-
-                // Default to 'finish' to ensure the loop terminates gracefully on malformed responses.
-                const tool_code = rawToolCode || { tool_id: 'finish', parameters: {} };
-
-                // Provide a more contextual default thought if it's missing.
-                const thought = rawThought || (tool_code.tool_id === 'finish'
-                    ? 'Plan execution has been completed.'
-                    : `Preparing to execute tool: ${tool_code.tool_id}.`);
-
-                thinkingSteps.push({ thought, tool_code: tool_code.tool_id });
-                await jobRef.update({
-                    thinkingSteps: admin.firestore.FieldValue.arrayUnion({ thought, tool_code: tool_code.tool_id, timestamp: new Date() }),
-                    foundTasksContext,
-                });
-
-
-                if (tool_code.tool_id === 'finish' || tool_code.tool_id === 'answer_question' || tool_code.tool_id === 'no_op') {
-                    if (tool_code.tool_id === 'answer_question') {
-                        summary = tool_code.parameters.answer; // Capture the answer
-                    }
-                    if (tool_code.tool_id === 'no_op') {
-                        summary = "No se requiere ninguna acción.";
-                    }
-                    break;
-                }
-
-                let toolResult = '';
-                const validationError = validateToolParameters(tool_code.tool_id, tool_code.parameters);
-                if (validationError) {
-                    toolResult = `Error: ${validationError}`;
-                } else {
-                    try {
-                        // Tool execution logic remains the same
-                        switch (tool_code.tool_id) {
-                            case 'critique_plan': {
-                                const sanitySuggestions = await exports.analyzePlanSanity({ plan: executionPlan, tasks });
-                                if (sanitySuggestions.suggestions.length > 0) {
-                                    toolResult = `Critique found issues: ${sanitySuggestions.suggestions.join('. ')}`;
-                                } else {
-                                    toolResult = 'OK. No issues found in the plan.';
+                    case 'review_and_summarize_plan': {
+                        if (executionPlan.length === 0) {
+                            const lastThought = thinkingSteps[thinkingSteps.length - 1]?.thought || "No se realizaron cambios, pero he completado la revisión.";
+                            summary = lastThought.startsWith("Respuesta:") ? lastThought : "No se realizaron cambios.";
+                        } else {
+                            const summaryPoints = executionPlan.map(action => {
+                                if (action.action === 'CREATE') return `* Crear la tarea: "${action.task.title}"`;
+                                if (action.action === 'UPDATE') return `* Actualizar la tarea: "${action.originalTitle}"`;
+                                if (action.action === 'DELETE') return `* Eliminar la tarea: "${action.originalTitle}"`;
+                                return '* Realizar una acción desconocida.';
+                            });
+                            if (explicitDateCorrections.length > 0) {
+                                const correctionPoints = explicitDateCorrections.map(correction => {
+                                    const taskTitle = correction.taskTitle || 'tarea';
+                                    const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
+                                    return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
+                                });
+                                if (correctionPoints.length > 0) {
+                                    summaryPoints.push(...correctionPoints);
+                                    hasExplicitDateCorrectionInSummary = true;
                                 }
-                                break;
                             }
-                            case 'review_and_summarize_plan': {
-                                if (executionPlan.length === 0) {
-                                    // If no actions were taken, use the last thought as a summary.
-                                    const lastThought = thinkingSteps[thinkingSteps.length - 1]?.thought || "No se realizaron cambios, pero he completado la revisión.";
-                                    summary = lastThought.startsWith("Respuesta:") ? lastThought : "No se realizaron cambios.";
-                                } else {
-                                    const summaryPoints = executionPlan.map(action => {
-                                        if (action.action === 'CREATE') {
-                                            return `* Crear la tarea: "${action.task.title}"`;
-                                        }
-                                        if (action.action === 'UPDATE') {
-                                            return `* Actualizar la tarea: "${action.originalTitle}"`;
-                                        }
-                                        if (action.action === 'DELETE') {
-                                            return `* Eliminar la tarea: "${action.originalTitle}"`;
-                                        }
-                                        return '* Realizar una acción desconocida.';
-                                    });
-                                     if (explicitDateCorrections.length > 0) {
-                                        const correctionPoints = explicitDateCorrections.map(correction => {
-                                            const taskTitle = correction.taskTitle || 'tarea';
-                                            const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
-                                            return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
-                                        });
-                                        if (correctionPoints.length > 0) {
-                                            summaryPoints.push(...correctionPoints);
-                                            hasExplicitDateCorrectionInSummary = true;
-                                        }
+                            summary = summaryPoints.join('\n');
+                        }
+                        toolResult = `OK. Plan summarized accurately from execution plan.`;
+                        break;
+                    }
+                    case 'create_task': {
+                        if (userPrompt.toLowerCase().includes('planning')) tool_code.parameters.isProjectTask = true;
+                        const effortCost = { high: 5, medium: 3, low: 1 };
+                        const dailyEffortLimit = 8;
+                        const plannedDate = tool_code.parameters.plannedDate;
+                        const newEffort = effortCost[tool_code.parameters.effort] || 3;
+                        const effortOnDate = tasks.reduce((total, task) => (task.plannedDate === plannedDate) ? total + (effortCost[task.effort] || 3) : total, 0);
+
+                        if (effortOnDate + newEffort > dailyEffortLimit) {
+                            toolResult = `Error: Cannot add task on ${plannedDate} as it would exceed the daily effort limit of ${dailyEffortLimit}. Current effort is ${effortOnDate}. Please choose another date.`;
+                            break;
+                        }
+                        const tempId = generateTemporaryTaskId(currentJobId);
+                        const taskPayload = { ...tool_code.parameters };
+                        const allowedPriorities = ['low', 'medium', 'high'];
+                        if (Object.prototype.hasOwnProperty.call(taskPayload, 'priority')) {
+                            const rawPriority = typeof taskPayload.priority === 'string' ? taskPayload.priority.trim().toLowerCase() : '';
+                            if (allowedPriorities.includes(rawPriority)) taskPayload.priority = rawPriority;
+                            else delete taskPayload.priority;
+                        }
+                        taskPayload.effort = normalizeEffortValue(taskPayload.effort) || 'medium';
+                        if (Object.prototype.hasOwnProperty.call(taskPayload, 'subtasks')) {
+                            if (Array.isArray(taskPayload.subtasks)) {
+                                const sanitizedSubtasks = taskPayload.subtasks.reduce((acc, subtask) => {
+                                    if (subtask && typeof subtask.title === 'string' && subtask.title.trim()) {
+                                        acc.push({ id: generateSubtaskId(), title: subtask.title.trim(), completed: false });
                                     }
-                                    summary = summaryPoints.join('\n');
+                                    return acc;
+                                }, []);
+                                if (sanitizedSubtasks.length > 0) taskPayload.subtasks = sanitizedSubtasks;
+                                else delete taskPayload.subtasks;
+                            } else delete taskPayload.subtasks;
+                        }
+
+                        const createTaskTitle = taskPayload.title || 'Tarea sin título';
+                        const modelPlannedDate = taskPayload.plannedDate;
+                        const normalizationResult = normalizePlannedDate(modelPlannedDate, effectiveTimeZone);
+                        let finalPlannedDate = (modelPlannedDate && normalizationResult.normalizedDate) ? normalizationResult.normalizedDate : modelPlannedDate;
+                        let weekendAdjustment = null;
+                        let planEntryNotes = [];
+                        let explicitOverrideInfo = null;
+
+                        if (normalizationResult.wasAdjusted && normalizationResult.normalizedDate) {
+                            weekendAdjustment = { from: normalizationResult.originalDate, to: normalizationResult.normalizedDate, fromWeekday: normalizationResult.originalWeekday, toWeekday: normalizationResult.normalizedWeekday, taskTitle: createTaskTitle };
+                        }
+
+                        const explicitCandidate = consumeNextExplicitDate();
+                        if (explicitCandidate) {
+                            const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalPlannedDate;
+                            if (!modelPlannedDate || explicitCandidate.isoDate !== previousFinalDate) {
+                                const requestedDate = explicitCandidate.isoDate;
+                                const rolledToFuture = Boolean(explicitCandidate.rolledToFuture);
+                                let overrideFinalDate = requestedDate;
+                                let overrideWeekendAdjustment = null;
+                                if (rolledToFuture) {
+                                    const overrideNormalization = normalizePlannedDate(requestedDate, effectiveTimeZone);
+                                    if (overrideNormalization.wasAdjusted && overrideNormalization.normalizedDate) {
+                                        overrideFinalDate = overrideNormalization.normalizedDate;
+                                        overrideWeekendAdjustment = { from: overrideNormalization.originalDate, to: overrideNormalization.normalizedDate, fromWeekday: overrideNormalization.originalWeekday, toWeekday: overrideNormalization.normalizedWeekday, taskTitle: createTaskTitle };
+                                    }
                                 }
-                                toolResult = `OK. Plan summarized accurately from execution plan.`;
-                                break;
+                                finalPlannedDate = overrideFinalDate;
+                                weekendAdjustment = overrideWeekendAdjustment;
+                                explicitOverrideInfo = { from: previousFinalDate || null, to: overrideFinalDate, originalText: explicitCandidate.originalText, taskTitle: createTaskTitle, requestedDate };
+                                if (rolledToFuture) explicitOverrideInfo.rolledToFuture = true;
+                                const noteParts = [`Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}".`];
+                                if (overrideWeekendAdjustment && requestedDate !== overrideFinalDate) noteParts.push(`Se movió de ${requestedDate} a ${overrideFinalDate} para evitar fines de semana.`);
+                                else noteParts.push(`Se estableció ${overrideFinalDate}.`);
+                                planEntryNotes.push(noteParts.join(' '));
+                                sanitySuggestions.push(`Se corrigió la fecha de "${createTaskTitle}" a ${overrideFinalDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
+                                explicitDateCorrections.push({ taskTitle: createTaskTitle, from: explicitOverrideInfo.from, to: overrideFinalDate, originalText: explicitCandidate.originalText, action: 'CREATE' });
                             }
-                        case 'create_task': {
-                            if (userPrompt.toLowerCase().includes('planning')) {
-                                tool_code.parameters.isProjectTask = true;
-                            }
+                        }
+
+                        if (weekendAdjustment) {
+                            const weekendOriginal = explicitOverrideInfo?.requestedDate || weekendAdjustment.from;
+                            const weekendNote = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                ? `La fecha indicada por el usuario "${explicitOverrideInfo.originalText}" caía en ${weekendAdjustment.fromWeekday} (${weekendOriginal}) y se reprogramó automáticamente al ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`
+                                : `Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`;
+                            planEntryNotes.push(weekendNote);
+                            const sanityMessage = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                ? `"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha indicada por el usuario (${weekendOriginal}) caía en fin de semana.`
+                                : `"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`;
+                            sanitySuggestions.push(sanityMessage);
+                        }
+
+                        if (finalPlannedDate) taskPayload.plannedDate = finalPlannedDate;
+                        const createPlanEntry = { action: "CREATE", docId: tempId, task: taskPayload };
+                        if (weekendAdjustment || explicitOverrideInfo) {
+                            createPlanEntry.adjustments = {};
+                            if (weekendAdjustment) createPlanEntry.adjustments.plannedDate = weekendAdjustment;
+                            if (explicitOverrideInfo) createPlanEntry.adjustments.explicitDateOverride = explicitOverrideInfo;
+                        }
+                        if (explicitOverrideInfo) {
+                            const metadataPayload = { isoDate: explicitOverrideInfo.to, originalText: explicitOverrideInfo.originalText };
+                            if (explicitOverrideInfo.requestedDate && explicitOverrideInfo.requestedDate !== explicitOverrideInfo.to) metadataPayload.requestedDate = explicitOverrideInfo.requestedDate;
+                            if (explicitOverrideInfo.rolledToFuture) metadataPayload.rolledToFuture = true;
+                            createPlanEntry.metadata = { ...(createPlanEntry.metadata || {}), explicitDateOverride: metadataPayload };
+                        }
+                        if (planEntryNotes.length > 0) createPlanEntry.notes = planEntryNotes;
+
+                        executionPlan.push(createPlanEntry);
+                        const taskContextEntry = { docId: tempId, title: createTaskTitle, status: 'todo', plannedDate: taskPayload.plannedDate, effort: taskPayload.effort };
+                        if (taskPayload.priority) taskContextEntry.priority = taskPayload.priority;
+                        if (Array.isArray(taskPayload.subtasks)) taskContextEntry.subtasks = taskPayload.subtasks.map(subtask => ({ ...subtask }));
+                        tasks.push(taskContextEntry);
+                        toolResult = `OK. Task created with temporary ID: ${tempId}.`;
+                        break;
+                    }
+                    case 'create_dependency': {
+                        const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
+                        const dependentTaskContext = tasks.find(t => t.docId === dependent_task_id);
+                        const prerequisiteTaskContext = tasks.find(t => t.docId === prerequisite_task_id);
+                        executionPlan.push({ action: "UPDATE", docId: dependent_task_id, originalTitle: dependentTaskContext?.title || 'Tarea sin título', updates: { dependsOn: [prerequisite_task_id], blocked: true } });
+                        executionPlan.push({ action: "UPDATE", docId: prerequisite_task_id, originalTitle: prerequisiteTaskContext?.title || 'Tarea sin título', updates: { blocks: [dependent_task_id] } });
+                        if (dependentTaskContext) {
+                            const dependsOnSet = new Set([...(dependentTaskContext.dependsOn || []), prerequisite_task_id]);
+                            dependentTaskContext.dependsOn = Array.from(dependsOnSet);
+                            dependentTaskContext.blocked = true;
+                        }
+                        if (prerequisiteTaskContext) {
+                            const blocksSet = new Set([...(prerequisiteTaskContext.blocks || []), dependent_task_id]);
+                            prerequisiteTaskContext.blocks = Array.from(blocksSet);
+                        }
+                        toolResult = `OK. Dependency created: ${dependent_task_id} now depends on ${prerequisite_task_id}.`;
+                        break;
+                    }
+                    case 'delete_task': {
+                        const { task_id } = tool_code.parameters;
+                        const taskIndexToDelete = tasks.findIndex(t => t.docId === task_id);
+                        if (taskIndexToDelete > -1) {
+                            const taskToDelete = tasks[taskIndexToDelete];
+                            executionPlan.push({ action: "DELETE", docId: task_id, originalTitle: taskToDelete.title });
+                            tasks.splice(taskIndexToDelete, 1);
+                            toolResult = `OK. Task "${taskToDelete.title}" marked for deletion and removed from context.`;
+                        } else toolResult = `Error: Task with ID "${task_id}" not found.`;
+                        break;
+                    }
+                    case 'update_task': {
+                        const { task_id: update_task_id, updates } = tool_code.parameters;
+                        const taskToUpdate = tasks.find(t => t.docId === update_task_id);
+                        if (updates.plannedDate && taskToUpdate) {
                             const effortCost = { high: 5, medium: 3, low: 1 };
                             const dailyEffortLimit = 8;
-                            const plannedDate = tool_code.parameters.plannedDate;
-                            const newEffort = effortCost[tool_code.parameters.effort] || 3;
-
-                            const effortOnDate = tasks.reduce((total, task) => {
-                                if (task.plannedDate === plannedDate) {
-                                    return total + (effortCost[task.effort] || 3);
-                                }
-                                return total;
-                            }, 0);
-
-                            if (effortOnDate + newEffort > dailyEffortLimit) {
-                                toolResult = `Error: Cannot add task on ${plannedDate} as it would exceed the daily effort limit of ${dailyEffortLimit}. Current effort is ${effortOnDate}. Please choose another date.`;
+                            const plannedDate = updates.plannedDate;
+                            const taskEffort = effortCost[updates.effort || taskToUpdate.effort] || 3;
+                            const effortOnDate = tasks.reduce((total, task) => (task.plannedDate === plannedDate && task.docId !== update_task_id) ? total + (effortCost[task.effort] || 3) : total, 0);
+                            if (effortOnDate + taskEffort > dailyEffortLimit) {
+                                toolResult = `Error: Cannot move task to ${plannedDate} as it would exceed the daily effort limit of ${dailyEffortLimit}. Current effort on that day is ${effortOnDate}. Please choose another date.`;
                                 break;
                             }
-                            const tempId = generateTemporaryTaskId(currentJobId);
-                            const taskPayload = { ...tool_code.parameters };
-                            const allowedPriorities = ['low', 'medium', 'high'];
-
-                            if (Object.prototype.hasOwnProperty.call(taskPayload, 'priority')) {
-                                const rawPriority = typeof taskPayload.priority === 'string'
-                                    ? taskPayload.priority.trim().toLowerCase()
-                                    : '';
-                                if (allowedPriorities.includes(rawPriority)) {
-                                    taskPayload.priority = rawPriority;
-                                } else {
-                                    delete taskPayload.priority;
-                                }
-                            }
-
-                            const normalizedEffort = normalizeEffortValue(taskPayload.effort);
-                            if (normalizedEffort) {
-                                taskPayload.effort = normalizedEffort;
-                            } else {
-                                taskPayload.effort = 'medium';
-                            }
-
-                            if (Object.prototype.hasOwnProperty.call(taskPayload, 'subtasks')) {
-                                if (Array.isArray(taskPayload.subtasks)) {
-                                    const sanitizedSubtasks = taskPayload.subtasks.reduce((acc, subtask) => {
-                                        if (!subtask || typeof subtask.title !== 'string') {
-                                            return acc;
-                                        }
-                                        const title = subtask.title.trim();
-                                        if (!title) {
-                                            return acc;
-                                        }
-                                        acc.push({
-                                            id: generateSubtaskId(),
-                                            title,
-                                            completed: false,
-                                        });
-                                        return acc;
-                                    }, []);
-                                    if (sanitizedSubtasks.length > 0) {
-                                        taskPayload.subtasks = sanitizedSubtasks;
-                                    } else {
-                                        delete taskPayload.subtasks;
-                                    }
-                                } else {
-                                    delete taskPayload.subtasks;
-                                }
-                            }
-
-                            const createTaskTitle = taskPayload.title || 'Tarea sin título';
-                            const modelPlannedDate = taskPayload.plannedDate;
-
-                            const normalizationResult = normalizePlannedDate(modelPlannedDate, effectiveTimeZone);
-                            let finalPlannedDate = modelPlannedDate;
-                            if (modelPlannedDate && normalizationResult.normalizedDate) {
-                                finalPlannedDate = normalizationResult.normalizedDate;
-                            }
-
+                        }
+                        if (taskToUpdate) {
+                            const updateTaskTitle = taskToUpdate.title || 'Tarea sin título';
+                            const updatePayload = { ...updates };
+                            const planEntryNotes = [];
                             let weekendAdjustment = null;
-                            let planEntryNotes = [];
                             let explicitOverrideInfo = null;
 
-                            if (normalizationResult.wasAdjusted && normalizationResult.normalizedDate) {
-                                weekendAdjustment = {
-                                    from: normalizationResult.originalDate,
-                                    to: normalizationResult.normalizedDate,
-                                    fromWeekday: normalizationResult.originalWeekday,
-                                    toWeekday: normalizationResult.normalizedWeekday,
-                                    taskTitle: createTaskTitle,
-                                };
-                            }
-
-                            const explicitCandidate = consumeNextExplicitDate();
-                            if (explicitCandidate) {
-                                const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalPlannedDate;
-                                if (!modelPlannedDate || explicitCandidate.isoDate !== previousFinalDate) {
-                                    const requestedDate = explicitCandidate.isoDate;
-                                    const rolledToFuture = Boolean(explicitCandidate.rolledToFuture);
-                                    let overrideFinalDate = requestedDate;
-                                    let overrideWeekendAdjustment = null;
-
-                                    if (rolledToFuture) {
-                                        const overrideNormalization = normalizePlannedDate(requestedDate, effectiveTimeZone);
-                                        if (overrideNormalization.wasAdjusted && overrideNormalization.normalizedDate) {
-                                            overrideFinalDate = overrideNormalization.normalizedDate;
-                                            overrideWeekendAdjustment = {
-                                                from: overrideNormalization.originalDate,
-                                                to: overrideNormalization.normalizedDate,
-                                                fromWeekday: overrideNormalization.originalWeekday,
-                                                toWeekday: overrideNormalization.normalizedWeekday,
-                                                taskTitle: createTaskTitle,
-                                            };
+                            if (Object.prototype.hasOwnProperty.call(updatePayload, 'plannedDate')) {
+                                const modelUpdateDate = updatePayload.plannedDate;
+                                const normalizationResult = normalizePlannedDate(modelUpdateDate, effectiveTimeZone);
+                                let finalUpdateDate = (modelUpdateDate && normalizationResult.normalizedDate) ? normalizationResult.normalizedDate : modelUpdateDate;
+                                if (normalizationResult.wasAdjusted && normalizationResult.normalizedDate) weekendAdjustment = { from: normalizationResult.originalDate, to: normalizationResult.normalizedDate, fromWeekday: normalizationResult.originalWeekday, toWeekday: normalizationResult.normalizedWeekday, taskTitle: updateTaskTitle };
+                                const explicitCandidate = consumeNextExplicitDate();
+                                if (explicitCandidate) {
+                                    const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalUpdateDate;
+                                    if (!modelUpdateDate || explicitCandidate.isoDate !== previousFinalDate) {
+                                        const requestedDate = explicitCandidate.isoDate;
+                                        const rolledToFuture = Boolean(explicitCandidate.rolledToFuture);
+                                        let overrideFinalDate = requestedDate;
+                                        let overrideWeekendAdjustment = null;
+                                        if (rolledToFuture) {
+                                            const overrideNormalization = normalizePlannedDate(requestedDate, effectiveTimeZone);
+                                            if (overrideNormalization.wasAdjusted && overrideNormalization.normalizedDate) {
+                                                overrideFinalDate = overrideNormalization.normalizedDate;
+                                                overrideWeekendAdjustment = { from: overrideNormalization.originalDate, to: overrideNormalization.normalizedDate, fromWeekday: overrideNormalization.originalWeekday, toWeekday: overrideNormalization.normalizedWeekday, taskTitle: updateTaskTitle };
+                                            }
                                         }
+                                        finalUpdateDate = overrideFinalDate;
+                                        weekendAdjustment = overrideWeekendAdjustment;
+                                        explicitOverrideInfo = { from: previousFinalDate || null, to: overrideFinalDate, originalText: explicitCandidate.originalText, taskTitle: updateTaskTitle, requestedDate };
+                                        if (rolledToFuture) explicitOverrideInfo.rolledToFuture = true;
+                                        const noteParts = [`Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}".`];
+                                        if (overrideWeekendAdjustment && requestedDate !== overrideFinalDate) noteParts.push(`Se movió de ${requestedDate} a ${overrideFinalDate} para evitar fines de semana.`);
+                                        else noteParts.push(`Se estableció ${overrideFinalDate}.`);
+                                        planEntryNotes.push(noteParts.join(' '));
+                                        sanitySuggestions.push(`Se corrigió la fecha de "${updateTaskTitle}" a ${overrideFinalDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
+                                        explicitDateCorrections.push({ taskTitle: updateTaskTitle, from: explicitOverrideInfo.from, to: overrideFinalDate, originalText: explicitCandidate.originalText, action: 'UPDATE' });
                                     }
-
-                                    finalPlannedDate = overrideFinalDate;
-                                    weekendAdjustment = overrideWeekendAdjustment;
-
-                                    explicitOverrideInfo = {
-                                        from: previousFinalDate || null,
-                                        to: overrideFinalDate,
-                                        originalText: explicitCandidate.originalText,
-                                        taskTitle: createTaskTitle,
-                                        requestedDate,
-                                    };
-
-                                    if (rolledToFuture) {
-                                        explicitOverrideInfo.rolledToFuture = true;
-                                    }
-
-                                    const noteParts = [
-                                        `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}".`,
-                                    ];
-                                    if (overrideWeekendAdjustment && requestedDate !== overrideFinalDate) {
-                                        noteParts.push(`Se movió de ${requestedDate} a ${overrideFinalDate} para evitar fines de semana.`);
-                                    } else {
-                                        noteParts.push(`Se estableció ${overrideFinalDate}.`);
-                                    }
-                                    planEntryNotes.push(noteParts.join(' '));
-
-                                    sanitySuggestions.push(`Se corrigió la fecha de "${createTaskTitle}" a ${overrideFinalDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
-                                    explicitDateCorrections.push({
-                                        taskTitle: createTaskTitle,
-                                        from: explicitOverrideInfo.from,
-                                        to: overrideFinalDate,
-                                        originalText: explicitCandidate.originalText,
-                                        action: 'CREATE',
-                                    });
                                 }
-                            }
-
-                            if (weekendAdjustment) {
-                                const weekendOriginal = explicitOverrideInfo?.requestedDate || weekendAdjustment.from;
-                                const weekendNote = explicitOverrideInfo && explicitOverrideInfo.originalText
-                                    ? `La fecha indicada por el usuario "${explicitOverrideInfo.originalText}" caía en ${weekendAdjustment.fromWeekday} (${weekendOriginal}) y se reprogramó automáticamente al ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`
-                                    : `Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`;
-                                planEntryNotes.push(weekendNote);
-                                const sanityMessage = explicitOverrideInfo && explicitOverrideInfo.originalText
-                                    ? `"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha indicada por el usuario (${weekendOriginal}) caía en fin de semana.`
-                                    : `"${createTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`;
-                                sanitySuggestions.push(sanityMessage);
-                            }
-
-                            if (finalPlannedDate) {
-                                taskPayload.plannedDate = finalPlannedDate;
-                            }
-
-                            const createPlanEntry = { action: "CREATE", docId: tempId, task: taskPayload };
-
-                            if (weekendAdjustment || explicitOverrideInfo) {
-                                createPlanEntry.adjustments = {};
                                 if (weekendAdjustment) {
-                                    createPlanEntry.adjustments.plannedDate = weekendAdjustment;
+                                    const weekendOriginal = explicitOverrideInfo?.requestedDate || weekendAdjustment.from;
+                                    const weekendNote = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                        ? `La fecha indicada por el usuario "${explicitOverrideInfo.originalText}" caía en ${weekendAdjustment.fromWeekday} (${weekendOriginal}) y se reprogramó automáticamente al ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`
+                                        : `Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`;
+                                    planEntryNotes.push(weekendNote);
+                                    const sanityMessage = explicitOverrideInfo && explicitOverrideInfo.originalText
+                                        ? `"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha indicada por el usuario (${weekendOriginal}) caía en fin de semana.`
+                                        : `"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`;
+                                    sanitySuggestions.push(sanityMessage);
                                 }
-                                if (explicitOverrideInfo) {
-                                    createPlanEntry.adjustments.explicitDateOverride = explicitOverrideInfo;
+                                if (finalUpdateDate) {
+                                    updatePayload.plannedDate = finalUpdateDate;
+                                    taskToUpdate.plannedDate = finalUpdateDate;
                                 }
                             }
-
+                            if (Object.prototype.hasOwnProperty.call(updatePayload, 'effort')) {
+                                const normalized = normalizeEffortValue(updatePayload.effort);
+                                if (normalized) {
+                                    updatePayload.effort = normalized;
+                                    taskToUpdate.effort = normalized;
+                                } else delete updatePayload.effort;
+                            }
+                            const updatePlanEntry = { action: "UPDATE", docId: update_task_id, originalTitle: updateTaskTitle, updates: updatePayload };
+                            if (weekendAdjustment || explicitOverrideInfo) {
+                                updatePlanEntry.adjustments = {};
+                                if (weekendAdjustment) updatePlanEntry.adjustments.plannedDate = weekendAdjustment;
+                                if (explicitOverrideInfo) updatePlanEntry.adjustments.explicitDateOverride = explicitOverrideInfo;
+                            }
                             if (explicitOverrideInfo) {
-                                const metadataPayload = {
-                                    isoDate: explicitOverrideInfo.to,
-                                    originalText: explicitOverrideInfo.originalText,
-                                };
-                                if (explicitOverrideInfo.requestedDate && explicitOverrideInfo.requestedDate !== explicitOverrideInfo.to) {
-                                    metadataPayload.requestedDate = explicitOverrideInfo.requestedDate;
-                                }
-                                if (explicitOverrideInfo.rolledToFuture) {
-                                    metadataPayload.rolledToFuture = true;
-                                }
-                                createPlanEntry.metadata = {
-                                    ...(createPlanEntry.metadata || {}),
-                                    explicitDateOverride: metadataPayload,
-                                };
+                                const metadataPayload = { isoDate: explicitOverrideInfo.to, originalText: explicitOverrideInfo.originalText };
+                                if (explicitOverrideInfo.requestedDate && explicitOverrideInfo.requestedDate !== explicitOverrideInfo.to) metadataPayload.requestedDate = explicitOverrideInfo.requestedDate;
+                                if (explicitOverrideInfo.rolledToFuture) metadataPayload.rolledToFuture = true;
+                                updatePlanEntry.metadata = { ...(updatePlanEntry.metadata || {}), explicitDateOverride: metadataPayload };
                             }
-
-                            if (planEntryNotes.length > 0) {
-                                createPlanEntry.notes = planEntryNotes;
-                            }
-
-                            executionPlan.push(createPlanEntry);
-                            const taskContextEntry = {
-                                docId: tempId,
-                                title: createTaskTitle,
-                                status: 'todo',
-                                plannedDate: taskPayload.plannedDate,
-                                effort: taskPayload.effort
-                            };
-
-                            if (taskPayload.priority) {
-                                taskContextEntry.priority = taskPayload.priority;
-                            }
-
-                            if (Array.isArray(taskPayload.subtasks)) {
-                                taskContextEntry.subtasks = taskPayload.subtasks.map(subtask => ({ ...subtask }));
-                            }
-
-                            tasks.push(taskContextEntry);
-                            toolResult = `OK. Task created with temporary ID: ${tempId}.`;
-                            break;
-                        }
-                        case 'create_dependency':
-                            const { dependent_task_id, prerequisite_task_id } = tool_code.parameters;
-                            const dependentTaskContext = tasks.find(t => t.docId === dependent_task_id);
-                            const prerequisiteTaskContext = tasks.find(t => t.docId === prerequisite_task_id);
-
-                            executionPlan.push({
-                                action: "UPDATE",
-                                docId: dependent_task_id,
-                                originalTitle: dependentTaskContext?.title || 'Tarea sin título',
-                                updates: { dependsOn: [prerequisite_task_id], blocked: true }
-                            });
-                            executionPlan.push({
-                                action: "UPDATE",
-                                docId: prerequisite_task_id,
-                                originalTitle: prerequisiteTaskContext?.title || 'Tarea sin título',
-                                updates: { blocks: [dependent_task_id] }
-                            });
-
-                            if (dependentTaskContext) {
-                                const dependsOnSet = new Set([...(dependentTaskContext.dependsOn || []), prerequisite_task_id]);
-                                dependentTaskContext.dependsOn = Array.from(dependsOnSet);
-                                dependentTaskContext.blocked = true;
-                            }
-
-                            if (prerequisiteTaskContext) {
-                                const blocksSet = new Set([...(prerequisiteTaskContext.blocks || []), dependent_task_id]);
-                                prerequisiteTaskContext.blocks = Array.from(blocksSet);
-                            }
-
-                            toolResult = `OK. Dependency created: ${dependent_task_id} now depends on ${prerequisite_task_id}.`;
-                            break;
-                        case 'delete_task':
-                            const { task_id } = tool_code.parameters;
-                            const taskIndexToDelete = tasks.findIndex(t => t.docId === task_id);
-                            if (taskIndexToDelete > -1) {
-                                const taskToDelete = tasks[taskIndexToDelete];
-                                executionPlan.push({
-                                    action: "DELETE",
-                                    docId: task_id,
-                                    originalTitle: taskToDelete.title
-                                });
-                                tasks.splice(taskIndexToDelete, 1);
-                                toolResult = `OK. Task "${taskToDelete.title}" marked for deletion and removed from context.`;
-                            } else {
-                                toolResult = `Error: Task with ID "${task_id}" not found.`;
-                            }
-                            break;
-                        case 'update_task': {
-                            const { task_id: update_task_id, updates } = tool_code.parameters;
-                            const taskToUpdate = tasks.find(t => t.docId === update_task_id);
-
-                            if (updates.plannedDate && taskToUpdate) {
-                                const effortCost = { high: 5, medium: 3, low: 1 };
-                                const dailyEffortLimit = 8;
-                                const plannedDate = updates.plannedDate;
-                                const taskEffort = effortCost[updates.effort || taskToUpdate.effort] || 3;
-
-                                const effortOnDate = tasks.reduce((total, task) => {
-                                    if (task.plannedDate === plannedDate && task.docId !== update_task_id) {
-                                        return total + (effortCost[task.effort] || 3);
-                                    }
-                                    return total;
-                                }, 0);
-
-                                if (effortOnDate + taskEffort > dailyEffortLimit) {
-                                    toolResult = `Error: Cannot move task to ${plannedDate} as it would exceed the daily effort limit of ${dailyEffortLimit}. Current effort on that day is ${effortOnDate}. Please choose another date.`;
-                                    break;
-                                }
-                            }
+                            if (planEntryNotes.length > 0) updatePlanEntry.notes = planEntryNotes;
+                            executionPlan.push(updatePlanEntry);
+                            if (Object.prototype.hasOwnProperty.call(updatePayload, 'title') && typeof updatePayload.title === 'string') taskToUpdate.title = updatePayload.title;
+                            if (Object.prototype.hasOwnProperty.call(updatePayload, 'dependsOn')) taskToUpdate.dependsOn = Array.isArray(updatePayload.dependsOn) ? [...updatePayload.dependsOn] : updatePayload.dependsOn;
+                            if (Object.prototype.hasOwnProperty.call(updatePayload, 'blocks')) taskToUpdate.blocks = Array.isArray(updatePayload.blocks) ? [...updatePayload.blocks] : updatePayload.blocks;
+                            if (Object.prototype.hasOwnProperty.call(updatePayload, 'blocked')) taskToUpdate.blocked = updatePayload.blocked;
+                            toolResult = `OK. Task "${updateTaskTitle}" marked for update.`;
+                        } else toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
+                        break;
+                    }
+                    case 'bulk_update_tasks': {
+                        const { updates: bulk_updates } = tool_code.parameters;
+                        let updated_count = 0;
+                        let not_found_ids = [];
+                        for (const item of bulk_updates) {
+                            const taskToUpdate = tasks.find(t => t.docId === item.task_id);
                             if (taskToUpdate) {
-                                const updateTaskTitle = taskToUpdate.title || 'Tarea sin título';
-                                const updatePayload = { ...updates };
-                                const planEntryNotes = [];
-                                let weekendAdjustment = null;
-                                let explicitOverrideInfo = null;
-
-                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'plannedDate')) {
-                                    const modelUpdateDate = updatePayload.plannedDate;
-                                    const normalizationResult = normalizePlannedDate(modelUpdateDate, effectiveTimeZone);
-                                    let finalUpdateDate = modelUpdateDate;
-                                    if (modelUpdateDate && normalizationResult.normalizedDate) {
-                                        finalUpdateDate = normalizationResult.normalizedDate;
-                                    }
-
-                                    if (normalizationResult.wasAdjusted && normalizationResult.normalizedDate) {
-                                        weekendAdjustment = {
-                                            from: normalizationResult.originalDate,
-                                            to: normalizationResult.normalizedDate,
-                                            fromWeekday: normalizationResult.originalWeekday,
-                                            toWeekday: normalizationResult.normalizedWeekday,
-                                            taskTitle: updateTaskTitle,
-                                        };
-                                    }
-
-                                    const explicitCandidate = consumeNextExplicitDate();
-                                    if (explicitCandidate) {
-                                        const previousFinalDate = weekendAdjustment ? weekendAdjustment.to : finalUpdateDate;
-                                        if (!modelUpdateDate || explicitCandidate.isoDate !== previousFinalDate) {
-                                            const requestedDate = explicitCandidate.isoDate;
-                                            const rolledToFuture = Boolean(explicitCandidate.rolledToFuture);
-                                            let overrideFinalDate = requestedDate;
-                                            let overrideWeekendAdjustment = null;
-
-                                            if (rolledToFuture) {
-                                                const overrideNormalization = normalizePlannedDate(requestedDate, effectiveTimeZone);
-                                                if (overrideNormalization.wasAdjusted && overrideNormalization.normalizedDate) {
-                                                    overrideFinalDate = overrideNormalization.normalizedDate;
-                                                    overrideWeekendAdjustment = {
-                                                        from: overrideNormalization.originalDate,
-                                                        to: overrideNormalization.normalizedDate,
-                                                        fromWeekday: overrideNormalization.originalWeekday,
-                                                        toWeekday: overrideNormalization.normalizedWeekday,
-                                                        taskTitle: updateTaskTitle,
-                                                    };
-                                                }
-                                            }
-
-                                            finalUpdateDate = overrideFinalDate;
-                                            weekendAdjustment = overrideWeekendAdjustment;
-
-                                            explicitOverrideInfo = {
-                                                from: previousFinalDate || null,
-                                                to: overrideFinalDate,
-                                                originalText: explicitCandidate.originalText,
-                                                taskTitle: updateTaskTitle,
-                                                requestedDate,
-                                            };
-
-                                            if (rolledToFuture) {
-                                                explicitOverrideInfo.rolledToFuture = true;
-                                            }
-
-                                            const noteParts = [
-                                                `Fecha ajustada para respetar la indicación del usuario "${explicitCandidate.originalText}".`,
-                                            ];
-                                            if (overrideWeekendAdjustment && requestedDate !== overrideFinalDate) {
-                                                noteParts.push(`Se movió de ${requestedDate} a ${overrideFinalDate} para evitar fines de semana.`);
-                                            } else {
-                                                noteParts.push(`Se estableció ${overrideFinalDate}.`);
-                                            }
-                                            planEntryNotes.push(noteParts.join(' '));
-
-                                            sanitySuggestions.push(`Se corrigió la fecha de "${updateTaskTitle}" a ${overrideFinalDate} porque el usuario indicó "${explicitCandidate.originalText}".`);
-                                            explicitDateCorrections.push({
-                                                taskTitle: updateTaskTitle,
-                                                from: explicitOverrideInfo.from,
-                                                to: overrideFinalDate,
-                                                originalText: explicitCandidate.originalText,
-                                                action: 'UPDATE',
-                                            });
-                                        }
-                                    }
-
-                                    if (weekendAdjustment) {
-                                        const weekendOriginal = explicitOverrideInfo?.requestedDate || weekendAdjustment.from;
-                                        const weekendNote = explicitOverrideInfo && explicitOverrideInfo.originalText
-                                            ? `La fecha indicada por el usuario "${explicitOverrideInfo.originalText}" caía en ${weekendAdjustment.fromWeekday} (${weekendOriginal}) y se reprogramó automáticamente al ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`
-                                            : `Fecha planificada movida automáticamente de ${weekendAdjustment.fromWeekday} (${weekendAdjustment.from}) a ${weekendAdjustment.toWeekday} (${weekendAdjustment.to}) para evitar fines de semana.`;
-                                        planEntryNotes.push(weekendNote);
-                                        const sanityMessage = explicitOverrideInfo && explicitOverrideInfo.originalText
-                                            ? `"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha indicada por el usuario (${weekendOriginal}) caía en fin de semana.`
-                                            : `"${updateTaskTitle}" se reprogramó al ${weekendAdjustment.toWeekday} ${weekendAdjustment.to} porque la fecha sugerida caía en fin de semana.`;
-                                        sanitySuggestions.push(sanityMessage);
-                                    }
-
-                                    if (finalUpdateDate) {
-                                        updatePayload.plannedDate = finalUpdateDate;
-                                        taskToUpdate.plannedDate = finalUpdateDate;
-                                    }
-                                }
-
-                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'effort')) {
-                                    const normalized = normalizeEffortValue(updatePayload.effort);
+                                const itemUpdates = { ...item.updates };
+                                if (Object.prototype.hasOwnProperty.call(itemUpdates, 'effort')) {
+                                    const normalized = normalizeEffortValue(itemUpdates.effort);
                                     if (normalized) {
-                                        updatePayload.effort = normalized;
+                                        itemUpdates.effort = normalized;
                                         taskToUpdate.effort = normalized;
-                                    } else {
-                                        delete updatePayload.effort;
-                                    }
+                                    } else delete itemUpdates.effort;
                                 }
-
-                                const updatePlanEntry = {
-                                    action: "UPDATE",
-                                    docId: update_task_id,
-                                    originalTitle: updateTaskTitle,
-                                    updates: updatePayload
-                                };
-
-                                if (weekendAdjustment || explicitOverrideInfo) {
-                                    updatePlanEntry.adjustments = {};
-                                    if (weekendAdjustment) {
-                                        updatePlanEntry.adjustments.plannedDate = weekendAdjustment;
-                                    }
-                                    if (explicitOverrideInfo) {
-                                        updatePlanEntry.adjustments.explicitDateOverride = explicitOverrideInfo;
-                                    }
-                                }
-
-                                if (explicitOverrideInfo) {
-                                    const metadataPayload = {
-                                        isoDate: explicitOverrideInfo.to,
-                                        originalText: explicitOverrideInfo.originalText,
-                                    };
-                                    if (explicitOverrideInfo.requestedDate && explicitOverrideInfo.requestedDate !== explicitOverrideInfo.to) {
-                                        metadataPayload.requestedDate = explicitOverrideInfo.requestedDate;
-                                    }
-                                    if (explicitOverrideInfo.rolledToFuture) {
-                                        metadataPayload.rolledToFuture = true;
-                                    }
-                                    updatePlanEntry.metadata = {
-                                        ...(updatePlanEntry.metadata || {}),
-                                        explicitDateOverride: metadataPayload,
-                                    };
-                                }
-
-                                if (planEntryNotes.length > 0) {
-                                    updatePlanEntry.notes = planEntryNotes;
-                                }
-
-                                executionPlan.push(updatePlanEntry);
-                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'title') && typeof updatePayload.title === 'string') {
-                                    taskToUpdate.title = updatePayload.title;
-                                }
-                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'dependsOn')) {
-                                    taskToUpdate.dependsOn = Array.isArray(updatePayload.dependsOn) ? [...updatePayload.dependsOn] : updatePayload.dependsOn;
-                                }
-                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'blocks')) {
-                                    taskToUpdate.blocks = Array.isArray(updatePayload.blocks) ? [...updatePayload.blocks] : updatePayload.blocks;
-                                }
-                                if (Object.prototype.hasOwnProperty.call(updatePayload, 'blocked')) {
-                                    taskToUpdate.blocked = updatePayload.blocked;
-                                }
-                                toolResult = `OK. Task "${updateTaskTitle}" marked for update.`;
-                            } else {
-                                toolResult = `Error: Task with ID "${update_task_id}" not found for update.`;
-                            }
-                            break;
+                                executionPlan.push({ action: "UPDATE", docId: item.task_id, originalTitle: taskToUpdate.title || 'Tarea sin título', updates: itemUpdates });
+                                if (Object.prototype.hasOwnProperty.call(itemUpdates, 'title') && typeof itemUpdates.title === 'string') taskToUpdate.title = itemUpdates.title;
+                                if (Object.prototype.hasOwnProperty.call(itemUpdates, 'plannedDate')) taskToUpdate.plannedDate = itemUpdates.plannedDate;
+                                if (Object.prototype.hasOwnProperty.call(itemUpdates, 'dependsOn')) taskToUpdate.dependsOn = Array.isArray(itemUpdates.dependsOn) ? [...itemUpdates.dependsOn] : itemUpdates.dependsOn;
+                                if (Object.prototype.hasOwnProperty.call(itemUpdates, 'blocks')) taskToUpdate.blocks = Array.isArray(itemUpdates.blocks) ? [...itemUpdates.blocks] : itemUpdates.blocks;
+                                if (Object.prototype.hasOwnProperty.call(itemUpdates, 'blocked')) taskToUpdate.blocked = itemUpdates.blocked;
+                                updated_count++;
+                            } else not_found_ids.push(item.task_id);
                         }
-                        case 'bulk_update_tasks':
-                            const { updates: bulk_updates } = tool_code.parameters;
-                            let updated_count = 0;
-                            let not_found_ids = [];
-                            for (const item of bulk_updates) {
-                                const taskToUpdate = tasks.find(t => t.docId === item.task_id);
-                                if (taskToUpdate) {
-                                    const itemUpdates = { ...item.updates };
-                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'effort')) {
-                                        const normalized = normalizeEffortValue(itemUpdates.effort);
-                                        if (normalized) {
-                                            itemUpdates.effort = normalized;
-                                            taskToUpdate.effort = normalized;
-                                        } else {
-                                            delete itemUpdates.effort;
-                                        }
-                                    }
-
-                                    executionPlan.push({
-                                        action: "UPDATE",
-                                        docId: item.task_id,
-                                        originalTitle: taskToUpdate.title || 'Tarea sin título',
-                                        updates: itemUpdates
-                                    });
-                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'title') && typeof itemUpdates.title === 'string') {
-                                        taskToUpdate.title = itemUpdates.title;
-                                    }
-                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'plannedDate')) {
-                                        taskToUpdate.plannedDate = itemUpdates.plannedDate;
-                                    }
-                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'dependsOn')) {
-                                        taskToUpdate.dependsOn = Array.isArray(itemUpdates.dependsOn) ? [...itemUpdates.dependsOn] : itemUpdates.dependsOn;
-                                    }
-                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'blocks')) {
-                                        taskToUpdate.blocks = Array.isArray(itemUpdates.blocks) ? [...itemUpdates.blocks] : itemUpdates.blocks;
-                                    }
-                                    if (Object.prototype.hasOwnProperty.call(itemUpdates, 'blocked')) {
-                                        taskToUpdate.blocked = itemUpdates.blocked;
-                                    }
-                                    updated_count++;
-                                } else {
-                                    not_found_ids.push(item.task_id);
-                                }
-                            }
-                            toolResult = `OK. Marked ${updated_count} tasks for update.`;
-                            if (not_found_ids.length > 0) {
-                                toolResult += ` Could not find tasks with IDs: ${not_found_ids.join(', ')}.`;
-                            }
-                            break;
-                        case 'complete_task':
-                            const { task_id: complete_task_id } = tool_code.parameters;
-                            const taskToComplete = tasks.find(t => t.docId === complete_task_id);
-                            if (taskToComplete) {
-                                const updates = {
-                                    status: 'done',
-                                    isArchived: true,
-                                    completedAt: new Date().toISOString()
-                                };
-                                executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates, originalTitle: taskToComplete.title });
-                                toolResult = `OK. Task "${taskToComplete.title}" marked as complete and archived.`;
-                            } else {
-                                toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
-                            }
-                            break;
-                        case 'find_tasks': {
-                            const { filter } = tool_code.parameters;
-                            console.log(`[aiAgentJobRunner] Executing find_tasks with filter:`, JSON.stringify(filter, null, 2));
-                            const filterKeys = Object.keys(filter);
-                            const foundTasks = tasks.filter(t => {
-                                return filterKeys.every(key => {
-                                    const filterValue = filter[key];
-                                    if (key.endsWith('_lte')) {
-                                        const field = key.replace('_lte', '');
-                                        return t[field] && t[field] <= filterValue;
-                                    }
-                                    if (key.endsWith('_gte')) {
-                                        const field = key.replace('_gte', '');
-                                        return t[field] && t[field] >= filterValue;
-                                    }
-                                    if (key.endsWith('_ne')) {
-                                        const field = key.replace('_ne', '');
-                                        return t[field] !== filterValue;
-                                    }
-                                    if (key === 'title') {
-                                        return t.title.toLowerCase().includes(filterValue.toLowerCase());
-                                    }
-                                    if (key === 'plannedDate' && filterValue === null) {
-                                        return !t.plannedDate;
-                                    }
-                                    return t[key] === filterValue;
-                                });
-                            });
-
-                            if (foundTasks.length > 0) {
-                                foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate || null, effort: t.effort || 'medium' }));
-                                const formattedTaskList = foundTasksContext
-                                    .map(task => {
-                                        const parts = [`Título: ${task.title}`];
-                                        if (task.status) parts.push(`Estado: ${task.status}`);
-                                        if (task.plannedDate) {
-                                            parts.push(`Planificada: ${task.plannedDate}`);
-                                        } else {
-                                            parts.push('Sin fecha planificada');
-                                        }
-                                        if (task.dueDate) parts.push(`Vence: ${task.dueDate}`);
-                                        if (task.effort) {
-                                            const label = effortHumanLabels[task.effort] || task.effort;
-                                            parts.push(`Esfuerzo: ${label}`);
-                                        }
-                                        return `- ${parts.join(' | ')}`;
-                                    })
-                                    .join('\n');
-                                toolResult = `OK. Found ${foundTasks.length} tasks and saved them to the context.\n${formattedTaskList}`;
-                            } else {
-                                foundTasksContext = []; // Clear context if no tasks are found
-                                toolResult = "No se encontraron tareas que coincidan con los filtros proporcionados.";
-                            }
-                            break;
+                        toolResult = `OK. Marked ${updated_count} tasks for update.`;
+                        if (not_found_ids.length > 0) toolResult += ` Could not find tasks with IDs: ${not_found_ids.join(', ')}.`;
+                        break;
+                    }
+                    case 'complete_task': {
+                        const { task_id: complete_task_id } = tool_code.parameters;
+                        const taskToComplete = tasks.find(t => t.docId === complete_task_id);
+                        if (taskToComplete) {
+                            const updates = { status: 'done', isArchived: true, completedAt: new Date().toISOString() };
+                            executionPlan.push({ action: "UPDATE", docId: complete_task_id, updates, originalTitle: taskToComplete.title });
+                            toolResult = `OK. Task "${taskToComplete.title}" marked as complete and archived.`;
+                        } else toolResult = `Error: Task with ID "${complete_task_id}" not found to mark as complete.`;
+                        break;
+                    }
+                    case 'find_tasks': {
+                        const { filter } = tool_code.parameters;
+                        console.log(`[aiAgentJobRunner] Executing find_tasks with filter:`, JSON.stringify(filter, null, 2));
+                        const filterKeys = Object.keys(filter);
+                        const foundTasks = tasks.filter(t => filterKeys.every(key => {
+                            const filterValue = filter[key];
+                            if (key.endsWith('_lte')) return t[key.replace('_lte', '')] && t[key.replace('_lte', '')] <= filterValue;
+                            if (key.endsWith('_gte')) return t[key.replace('_gte', '')] && t[key.replace('_gte', '')] >= filterValue;
+                            if (key.endsWith('_ne')) return t[key.replace('_ne', '')] !== filterValue;
+                            if (key === 'title') return t.title.toLowerCase().includes(filterValue.toLowerCase());
+                            if (key === 'plannedDate' && filterValue === null) return !t.plannedDate;
+                            return t[key] === filterValue;
+                        }));
+                        if (foundTasks.length > 0) {
+                            foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate || null, effort: t.effort || 'medium' }));
+                            const formattedTaskList = foundTasksContext.map(task => {
+                                const parts = [`Título: ${task.title}`];
+                                if (task.status) parts.push(`Estado: ${task.status}`);
+                                if (task.plannedDate) parts.push(`Planificada: ${task.plannedDate}`);
+                                else parts.push('Sin fecha planificada');
+                                if (task.dueDate) parts.push(`Vence: ${task.dueDate}`);
+                                if (task.effort) parts.push(`Esfuerzo: ${effortHumanLabels[task.effort] || task.effort}`);
+                                return `- ${parts.join(' | ')}`;
+                            }).join('\n');
+                            toolResult = `OK. Found ${foundTasks.length} tasks and saved them to the context.\n${formattedTaskList}`;
+                        } else {
+                            foundTasksContext = [];
+                            toolResult = "No se encontraron tareas que coincidan con los filtros proporcionados.";
                         }
-                        default:
-                            toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
+                        break;
                     }
-                    } catch (e) {
-                        toolResult = `Error executing tool: ${e.message}`;
-                    }
-                }
-
-                conversationHistory.push({ role: 'model', parts: [{ text: JSON.stringify(agentResponse, null, 2) }] });
-                conversationHistory.push({ role: 'user', parts: [{ text: `Observation: ${toolResult}` }] });
-                if (tool_code.tool_id === 'find_tasks' && foundTasksContext.length > 0) {
-                    conversationHistory.push({ role: 'user', parts: [{ text: `Contexto de tareas encontradas: ${JSON.stringify(foundTasksContext)}` }] });
+                    default:
+                        toolResult = `Error: Unknown tool "${tool_code.tool_id}".`;
                 }
             }
+        } catch (e) {
+            console.error(`Error executing tool ${tool_code.tool_id} for job ${currentJobId}:`, e);
+            toolResult = `Error: An internal error occurred while executing the tool "${tool_code.tool_id}". Reason: ${e.message}`;
+        }
 
-            await jobRef.update({ statusText: 'Generando plan y resumen...' });
+        conversationHistory.push({ role: 'model', parts: [{ text: JSON.stringify(agentResponse, null, 2) }] });
+        conversationHistory.push({ role: 'user', parts: [{ text: `Observation: ${toolResult}` }] });
+        if (tool_code.tool_id === 'find_tasks' && foundTasksContext.length > 0) {
+            conversationHistory.push({ role: 'user', parts: [{ text: `Contexto de tareas encontradas: ${JSON.stringify(foundTasksContext)}` }] });
+        }
+    }
 
-            const weekendAdjustmentMessages = executionPlan.reduce((messages, action) => {
-                const adjustment = action?.adjustments?.plannedDate;
-                if (!adjustment) {
-                    return messages;
-                }
+    await jobRef.update({ statusText: 'Generando plan y resumen...' });
+    const weekendAdjustmentMessages = executionPlan.reduce((messages, action) => {
+        const adjustment = action?.adjustments?.plannedDate;
+        if (adjustment) {
+            const taskTitle = adjustment.taskTitle || action?.task?.title || action?.originalTitle || action?.docId || 'tarea';
+            messages.push(`La fecha planificada de "${taskTitle}" se movió automáticamente de ${adjustment.fromWeekday} (${adjustment.from}) a ${adjustment.toWeekday} (${adjustment.to}) para evitar fines de semana.`);
+        }
+        return messages;
+    }, []);
 
-                const taskTitle = adjustment.taskTitle || action?.task?.title || action?.originalTitle || action?.docId || 'tarea';
-                messages.push(`La fecha planificada de "${taskTitle}" se movió automáticamente de ${adjustment.fromWeekday} (${adjustment.from}) a ${adjustment.toWeekday} (${adjustment.to}) para evitar fines de semana.`);
-                return messages;
-            }, []);
+    if (weekendAdjustmentMessages.length > 0) {
+        const bulletMessages = weekendAdjustmentMessages.map(message => `* ${message}`).join('\n');
+        summary = summary ? `${summary}\n${bulletMessages}` : bulletMessages;
+    }
 
-            if (weekendAdjustmentMessages.length > 0) {
-                const bulletMessages = weekendAdjustmentMessages.map(message => `* ${message}`).join('\n');
-                summary = summary ? `${summary}\n${bulletMessages}` : bulletMessages;
-            }
+    if (explicitDateCorrections.length > 0 && !hasExplicitDateCorrectionInSummary) {
+        const correctionMessages = explicitDateCorrections.map(correction => {
+            const taskTitle = correction.taskTitle || 'tarea';
+            const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
+            return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
+        }).join('\n');
+        if (correctionMessages) {
+            summary = summary ? `${summary}\n${correctionMessages}` : correctionMessages;
+        }
+    }
 
-            if (explicitDateCorrections.length > 0 && !hasExplicitDateCorrectionInSummary) {
-                const correctionMessages = explicitDateCorrections.map(correction => {
-                    const taskTitle = correction.taskTitle || 'tarea';
-                    const previous = correction.from ? ` (antes ${correction.from})` : ' (no tenía fecha previa)';
-                    return `* Se corrigió la fecha de "${taskTitle}" a ${correction.to} para respetar "${correction.originalText}" indicado por el usuario${previous}.`;
-                }).join('\n');
-                if (correctionMessages) {
-                    summary = summary ? `${summary}\n${correctionMessages}` : correctionMessages;
-                    hasExplicitDateCorrectionInSummary = true;
-                }
-            }
+    const connectors = ['Primero', 'Luego', 'Después', 'Más adelante', 'Finalmente'];
+    const humanizedTool = toolCode => {
+        if (!toolCode) return 'continuar con el siguiente paso';
+        if (toolCode === 'answer_question') return 'dar una respuesta directa';
+        if (toolCode === 'no_action_required') return 'dejar constancia de que no se requería acción';
+        return `usar la herramienta "${toolCode}"`;
+    };
 
-            const connectors = ['Primero', 'Luego', 'Después', 'Más adelante', 'Finalmente'];
-            const humanizedTool = toolCode => {
-                if (!toolCode) return 'continuar con el siguiente paso';
-                if (toolCode === 'answer_question') return 'dar una respuesta directa';
-                if (toolCode === 'no_action_required') return 'dejar constancia de que no se requería acción';
-                return `usar la herramienta "${toolCode}"`;
-            };
+    const finalThoughtProcess = thinkingSteps.map((step, i) => {
+        const connector = connectors[Math.min(i, connectors.length - 1)];
+        const actionDescription = humanizedTool(step.tool_code);
+        return `${connector} pensé que ${step.thought}. Por eso decidí ${actionDescription}.`;
+    }).join('\n\n');
 
-            const finalThoughtProcess = thinkingSteps.map((step, i) => {
-                const connector = connectors[Math.min(i, connectors.length - 1)];
-                const actionDescription = humanizedTool(step.tool_code);
-                return `${connector} pensé que ${step.thought}. Por eso decidí ${actionDescription}.`;
-            }).join('\n\n');
+    let finalThoughtProcessDisplay;
+    if (summary) {
+        const lastTool = thinkingSteps[thinkingSteps.length - 1]?.tool_code;
+        finalThoughtProcessDisplay = lastTool === 'answer_question' ? `Aquí está mi respuesta detallada:\n\n${summary}` : `Este es el plan que tengo en mente:\n\n${summary}`;
+    } else {
+        finalThoughtProcessDisplay = `Así estuve pensando los pasos a seguir:\n\n${finalThoughtProcess}`;
+    }
 
-            let finalThoughtProcessDisplay;
-            if (summary) {
-                const lastTool = thinkingSteps[thinkingSteps.length - 1]?.tool_code;
-                if (lastTool === 'answer_question') {
-                    finalThoughtProcessDisplay = `Aquí está mi respuesta detallada:\n\n${summary}`;
-                } else {
-                    finalThoughtProcessDisplay = `Este es el plan que tengo en mente:\n\n${summary}`;
-                }
-            } else {
-                finalThoughtProcessDisplay = `Así estuve pensando los pasos a seguir:\n\n${finalThoughtProcess}`;
-            }
+    const planRequiresConfirmation = executionPlan.length > 0;
+    const jobStatus = planRequiresConfirmation ? 'AWAITING_CONFIRMATION' : 'COMPLETED';
+    let finalSummary = summary || "No se generó un resumen.";
+    if (!summary && executionPlan.length === 0 && thinkingSteps[thinkingSteps.length - 1]?.tool_code !== 'answer_question') {
+        finalSummary = "No pude procesar completamente tu solicitud. Por favor, sé más específico. Si intentas crear una tarea, asegúrate de incluir al menos un título claro.";
+    }
 
-            const planRequiresConfirmation = executionPlan.length > 0;
-            const jobStatus = planRequiresConfirmation ? 'AWAITING_CONFIRMATION' : 'COMPLETED';
+    await jobRef.update({
+        status: jobStatus,
+        thoughtProcess: finalThoughtProcessDisplay,
+        executionPlan,
+        summary: finalSummary,
+        awaitingUserConfirmation: planRequiresConfirmation,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        conversationHistory,
+        sanitySuggestions,
+    });
 
-            // Final Safeguard: If the AI failed to produce a plan or an answer, provide a helpful message.
-            let finalSummary = summary || "No se generó un resumen.";
-            if (!summary && executionPlan.length === 0) {
-                const lastTool = thinkingSteps[thinkingSteps.length - 1]?.tool_code;
-                if (lastTool !== 'answer_question') {
-                    finalSummary = "No pude procesar completamente tu solicitud. Por favor, sé más específico. Si intentas crear una tarea, asegúrate de incluir al menos un título claro.";
-                }
-            }
+    if (jobData.requestHash && executionPlan.length > 0) {
+        const db = admin.firestore();
+        const cacheRef = db.collection('ai_plan_cache').doc(jobData.requestHash);
+        await cacheRef.set({ executionPlan, summary, sanitySuggestions, createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    }
 
-            await jobRef.update({
-                status: jobStatus,
-                thoughtProcess: finalThoughtProcessDisplay,
-                executionPlan,
-                summary: finalSummary,
-                awaitingUserConfirmation: planRequiresConfirmation,
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-                conversationHistory,
-                sanitySuggestions,
-            });
+    if (conversationId) {
+        const db = admin.firestore();
+        const conversationRef = db.collection('ai_conversations').doc(conversationId);
+        await conversationRef.update({ history: conversationHistory, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    }
+};
 
-            // After a successful run, save the plan to the cache if it's not from there already.
-            if (jobData.requestHash && executionPlan.length > 0) {
-                const db = admin.firestore();
-                const cacheRef = db.collection('ai_plan_cache').doc(jobData.requestHash);
-                await cacheRef.set({
-                    executionPlan,
-                    summary,
-                    sanitySuggestions,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            }
-
-            // Save the final conversation history back to its document
-            if (conversationId) {
-                const db = admin.firestore();
-                const conversationRef = db.collection('ai_conversations').doc(conversationId);
-                await conversationRef.update({
-                    history: conversationHistory,
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            }
-
+exports.aiAgentJobRunner = functions.runWith({timeoutSeconds: 120}).firestore.document('ai_agent_jobs/{jobId}')
+    .onCreate(async (snap, context) => {
+        try {
+            await _runAgentLogic(snap.data(), snap.ref, context.params.jobId);
         } catch (error) {
             console.error(`Error running AI agent job ${context.params.jobId}:`, error);
-            await jobRef.update({
+            await snap.ref.update({
                 status: 'ERROR',
                 error: `Agent job failed: ${error.message}`,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -2062,70 +1603,80 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
         // --- Second Pass: Apply updates, deletions, and dependencies ---
         for (let i = 0; i < plan.length; i++) {
             const action = plan[i];
-            if (action.action === 'UPDATE') {
+            if (action.action === 'UPDATE' || action.action === 'DELETE') {
                 currentStepIndex = i;
                 await updateProgress(i, 'running');
+
                 const realDocId = tempIdToRealIdMap.get(action.docId) || action.docId;
                 const taskRef = db.collection('tareas').doc(realDocId);
-                const resolvedUpdates = {...action.updates};
 
-                if (typeof resolvedUpdates.isProjectTask !== 'boolean') {
-                    delete resolvedUpdates.isProjectTask;
+                // --- SECURITY CHECK ---
+                const taskSnap = await taskRef.get();
+                if (!taskSnap.exists) {
+                    // Throw an error that will be caught by the main try...catch block
+                    throw new Error(`Security check failed: Task with ID ${realDocId} not found for modification.`);
                 }
-                const explicitOverride = action?.metadata?.explicitDateOverride;
-                const hasExplicitOverride = Boolean(explicitOverride?.isoDate) && Object.prototype.hasOwnProperty.call(resolvedUpdates, 'plannedDate');
-                if (hasExplicitOverride) {
-                    resolvedUpdates.plannedDate = explicitOverride.isoDate;
+                const taskData = taskSnap.data();
+                if (taskData.creatorUid !== creatorUid) {
+                    // Throw a specific permission error
+                    throw new Error(`Permission denied. You do not have permission to modify the task: "${taskData.title || realDocId}".`);
                 }
+                // --- END SECURITY CHECK ---
 
-                if (resolvedUpdates.assigneeEmail) {
-                    const assigneeUid = emailToUidCache.get(resolvedUpdates.assigneeEmail);
-                    if (assigneeUid) {
-                        resolvedUpdates.assigneeUid = assigneeUid;
-                    }
-                    delete resolvedUpdates.assigneeEmail;
-                }
+                if (action.action === 'UPDATE') {
+                    const resolvedUpdates = { ...action.updates };
 
-                if (resolvedUpdates.plannedDate && !hasExplicitOverride) {
-                    const { normalizedDate } = normalizePlannedDate(resolvedUpdates.plannedDate);
-                    if (normalizedDate) {
-                        resolvedUpdates.plannedDate = normalizedDate;
+                    if (typeof resolvedUpdates.isProjectTask !== 'boolean') {
+                        delete resolvedUpdates.isProjectTask;
                     }
-                } else if (hasExplicitOverride) {
-                    resolvedUpdates.plannedDate = explicitOverride.isoDate;
-                }
+                    const explicitOverride = action?.metadata?.explicitDateOverride;
+                    const hasExplicitOverride = Boolean(explicitOverride?.isoDate) && Object.prototype.hasOwnProperty.call(resolvedUpdates, 'plannedDate');
+                    if (hasExplicitOverride) {
+                        resolvedUpdates.plannedDate = explicitOverride.isoDate;
+                    }
 
-                // --- Final Date Derivation ---
-                // This runs *after* all overrides and normalizations.
-                if (resolvedUpdates.isProjectTask && resolvedUpdates.plannedDate) {
-                    resolvedUpdates.startDate = resolvedUpdates.plannedDate;
-                    // Only set dueDate if it's not already being updated to something else.
-                    if (!resolvedUpdates.dueDate) {
-                        resolvedUpdates.dueDate = resolvedUpdates.plannedDate;
+                    if (resolvedUpdates.assigneeEmail) {
+                        const assigneeUid = emailToUidCache.get(resolvedUpdates.assigneeEmail);
+                        if (assigneeUid) {
+                            resolvedUpdates.assigneeUid = assigneeUid;
+                        }
+                        delete resolvedUpdates.assigneeEmail;
                     }
-                }
 
-                const finalUpdates = {};
-                for (const key in resolvedUpdates) {
-                    const value = resolvedUpdates[key];
-                    // --- Defensive Programming: Prevent undefined values ---
-                    if (value === undefined) {
-                        continue; // Skip undefined values to prevent Firestore errors
+                    if (resolvedUpdates.plannedDate && !hasExplicitOverride) {
+                        const { normalizedDate } = normalizePlannedDate(resolvedUpdates.plannedDate);
+                        if (normalizedDate) {
+                            resolvedUpdates.plannedDate = normalizedDate;
+                        }
+                    } else if (hasExplicitOverride) {
+                        resolvedUpdates.plannedDate = explicitOverride.isoDate;
                     }
-                    if (key === 'dependsOn' || key === 'blocks') {
-                        const resolvedIds = value.map(id => tempIdToRealIdMap.get(id) || id);
-                        finalUpdates[key] = admin.firestore.FieldValue.arrayUnion(...resolvedIds);
-                    } else {
-                        finalUpdates[key] = value;
+
+                    // --- Final Date Derivation ---
+                    if (resolvedUpdates.isProjectTask && resolvedUpdates.plannedDate) {
+                        resolvedUpdates.startDate = resolvedUpdates.plannedDate;
+                        if (!resolvedUpdates.dueDate) {
+                            resolvedUpdates.dueDate = resolvedUpdates.plannedDate;
+                        }
                     }
+
+                    const finalUpdates = {};
+                    for (const key in resolvedUpdates) {
+                        const value = resolvedUpdates[key];
+                        if (value === undefined) {
+                            continue;
+                        }
+                        if (key === 'dependsOn' || key === 'blocks') {
+                            const resolvedIds = value.map(id => tempIdToRealIdMap.get(id) || id);
+                            finalUpdates[key] = admin.firestore.FieldValue.arrayUnion(...resolvedIds);
+                        } else {
+                            finalUpdates[key] = value;
+                        }
+                    }
+                    batch.update(taskRef, finalUpdates);
+                } else if (action.action === 'DELETE') {
+                    batch.delete(taskRef);
                 }
-                batch.update(taskRef, finalUpdates);
-                await updateProgress(i, 'completed');
-            } else if (action.action === 'DELETE') {
-                currentStepIndex = i;
-                await updateProgress(i, 'running');
-                const taskRef = db.collection('tareas').doc(action.docId);
-                batch.delete(taskRef);
                 await updateProgress(i, 'completed');
             }
         }
@@ -2145,9 +1696,9 @@ const _executePlan = async (db, plan, creatorUid, jobId = null) => {
     } catch (error) {
         if (currentStepIndex !== null && plan[currentStepIndex]) {
             const failedAction = plan[currentStepIndex];
-            console.error(`Error executing task modification plan at step ${currentStepIndex}:`, JSON.stringify(failedAction, null, 2), "Error:", error);
+            console.error(`Error executing task modification plan at step ${currentStepIndex}:`, JSON.stringify(failedAction, null, 2), "Error:", error.message);
         } else {
-            console.error("Error executing task modification plan (step unknown):", error);
+            console.error("Error executing task modification plan (step unknown):", error.message);
         }
 
         if (progressRef) {
@@ -2336,6 +1887,7 @@ exports.getCurrentDateForUserTZ = getCurrentDateForUserTZ;
 
 if (process.env.NODE_ENV === 'test') {
     module.exports._executePlan = _executePlan;
+    module.exports._runAgentLogic = _runAgentLogic;
     module.exports.extractExplicitDatesFromPrompt = extractExplicitDatesFromPrompt;
     module.exports.generateRequestHash = generateRequestHash;
 }

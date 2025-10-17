@@ -50,16 +50,24 @@ const createDbMock = ({ failOnUpdate = false } = {}) => {
   const collections = {
     tareas: {
       doc: jest.fn((id) => {
+        const docRef = {
+          id: id || `generated-${++generatedId}`,
+          _setData: null,
+          _updateData: null,
+          _deleted: false,
+          get: jest.fn().mockResolvedValue({
+            exists: true,
+            data: () => ({ creatorUid: 'creator-uid' }), // Default mock for security
+          }),
+        };
         if (id) {
           if (!generatedDocs.has(id)) {
-            generatedDocs.set(id, { id });
+            generatedDocs.set(id, docRef);
           }
           return generatedDocs.get(id);
         }
-        const newId = `generated-${++generatedId}`;
-        const ref = { id: newId };
-        generatedDocs.set(newId, ref);
-        return ref;
+        generatedDocs.set(docRef.id, docRef);
+        return docRef;
       }),
     },
     plan_executions: {
