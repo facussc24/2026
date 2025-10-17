@@ -762,6 +762,7 @@ const _runAgentLogic = async (jobData, jobRef, currentJobId) => {
         update_task: { task_id: { type: 'string', required: true }, updates: { type: 'object', required: true } },
         bulk_update_tasks: { updates: { type: 'array', required: true } },
         find_tasks: { filter: { type: 'object', required: true } },
+        get_project_summary: { project_task_id: { type: 'string', required: true } },
         answer_question: { answer: { type: 'string', required: true } },
         review_and_summarize_plan: {},
         critique_plan: {},
@@ -1279,12 +1280,41 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                         const filterKeys = Object.keys(filter);
                         const foundTasks = tasks.filter(t => filterKeys.every(key => {
                             const filterValue = filter[key];
-                            if (key.endsWith('_lte')) return t[key.replace('_lte', '')] && t[key.replace('_lte', '')] <= filterValue;
-                            if (key.endsWith('_gte')) return t[key.replace('_gte', '')] && t[key.replace('_gte', '')] >= filterValue;
-                            if (key.endsWith('_ne')) return t[key.replace('_ne', '')] !== filterValue;
-                            if (key === 'title') return t.title.toLowerCase().includes(filterValue.toLowerCase());
-                            if (key === 'plannedDate' && filterValue === null) return !t.plannedDate;
-                            return t[key] === filterValue;
+
+                            if (key.endsWith('_lte')) {
+                                const field = key.replace('_lte', '');
+                                return t[field] && t[field] <= filterValue;
+                            }
+                            if (key.endsWith('_gte')) {
+                                const field = key.replace('_gte', '');
+                                return t[field] && t[field] >= filterValue;
+                            }
+                            if (key.endsWith('_ne')) {
+                                const field = key.replace('_ne', '');
+                                return t[field] !== filterValue;
+                            }
+                            if (key.endsWith('_in')) {
+                                const field = key.replace('_in', '');
+                                if (!Array.isArray(filterValue)) return false;
+                                return filterValue.includes(t[field]);
+                            }
+                            if (key.endsWith('_nin')) {
+                                const field = key.replace('_nin', '');
+                                if (!Array.isArray(filterValue)) return false;
+                                return !filterValue.includes(t[field]);
+                            }
+                            if (key.endsWith('_contains')) {
+                                const field = key.replace('_contains', '');
+                                const taskValue = t[field];
+                                if (typeof taskValue !== 'string' || typeof filterValue !== 'string') return false;
+                                return taskValue.toLowerCase().includes(filterValue.toLowerCase());
+                            }
+
+                            const taskValue = t[key];
+                            if (filterValue === null) {
+                                return taskValue === null || taskValue === undefined;
+                            }
+                            return taskValue === filterValue;
                         }));
                         if (foundTasks.length > 0) {
                             foundTasksContext = foundTasks.map(t => ({ id: t.docId, title: t.title, status: t.status, plannedDate: t.plannedDate, dueDate: t.dueDate || null, effort: t.effort || 'medium' }));
@@ -1302,6 +1332,45 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                             foundTasksContext = [];
                             toolResult = "No se encontraron tareas que coincidan con los filtros proporcionados.";
                         }
+                        break;
+                    }
+                    case 'get_project_summary': {
+                        const { project_task_id } = tool_code.parameters;
+                        const projectTask = tasks.find(t => t.docId === project_task_id && t.isProjectTask);
+
+                        if (!projectTask) {
+                            toolResult = `Error: No se encontró una tarea de proyecto con el ID "${project_task_id}". Asegúrate de usar el ID de una tarea marcada como 'isProjectTask: true'.`;
+                            break;
+                        }
+
+                        const relatedTasks = tasks.filter(t => t.dependsOn && t.dependsOn.includes(project_task_id));
+
+                        if (relatedTasks.length === 0) {
+                             toolResult = `El proyecto "${projectTask.title}" no tiene tareas asociadas directamente. Resumen: Sin tareas secundarias.`;
+                             break;
+                        }
+
+                        const totalTasks = relatedTasks.length;
+                        const completedTasks = relatedTasks.filter(t => t.status === 'done').length;
+                        const overallProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+                        const statusCounts = relatedTasks.reduce((acc, task) => {
+                            acc[task.status] = (acc[task.status] || 0) + 1;
+                            return acc;
+                        }, {});
+
+                        const summary = {
+                            projectTitle: projectTask.title,
+                            startDate: projectTask.startDate || 'No definida',
+                            dueDate: projectTask.dueDate || 'No definida',
+                            totalTasks: totalTasks,
+                            completedTasks: completedTasks,
+                            overallProgress: `${overallProgress}%`,
+                            statusBreakdown: statusCounts,
+                            tasks: relatedTasks.map(t => ({ title: t.title, status: t.status, plannedDate: t.plannedDate }))
+                        };
+
+                        toolResult = `OK. Resumen del proyecto "${projectTask.title}": ${JSON.stringify(summary, null, 2)}`;
                         break;
                     }
                     default:
