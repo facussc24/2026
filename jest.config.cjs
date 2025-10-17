@@ -80,6 +80,9 @@ module.exports = {
     "https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.es.js": "<rootDir>/__mocks__/emptyMock.js",
 
     // Mock for nodemailer used in functions/index.js
-    "^nodemailer$": "<rootDir>/__mocks__/emptyMock.js"
+    "^nodemailer$": "<rootDir>/__mocks__/emptyMock.js",
+
+    // Mock for task module to prevent side effects in other tests
+    "../../public/modules/tasks/tasks.js": "<rootDir>/__mocks__/emptyMock.js"
   },
 };
