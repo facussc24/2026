@@ -164,6 +164,30 @@ describe('_runAgentLogic', () => {
         expect(finalUpdateCall).toBeDefined();
         expect(finalUpdateCall[0].summary).toContain("No tengo permiso para modificar la tarea 'Tarea de Otro'");
     });
+
+    test('should provide a helpful fallback message when the AI fails to generate a plan', async () => {
+        const userPrompt = "Necesito que hagas algo, pero no estoy seguro de qué.";
+        const jobData = { userPrompt, tasks: [], allUsers: [], creatorUid: 'test-uid', conversationHistory: [], executionPlan: [], thinkingSteps: [], summary: '', foundTasksContext: [] };
+
+        // Simulate the AI being "confused" and not calling any tools, just thinking.
+        const modelResponse = {
+            thought: "No estoy seguro de qué hacer con esta solicitud. Es demasiado vaga.",
+            tool_code: { tool_id: 'finish', parameters: {} } // The agent gives up.
+        };
+
+        mockGenerativeModel.generateContent
+            .mockResolvedValueOnce({ response: { candidates: [{ content: { parts: [{ text: JSON.stringify(modelResponse) }] } }] } });
+
+        await _runAgentLogic(jobData, mockJobRef, 'test-job-id-fallback');
+
+        const finalUpdateCall = mockJobRef.update.mock.calls.find(call => call[0].status === 'COMPLETED');
+        expect(finalUpdateCall).toBeDefined();
+
+        // Check that the summary is the new, helpful fallback message.
+        expect(finalUpdateCall[0].summary).toContain("No pude generar un plan de acción con tu última petición.");
+        expect(finalUpdateCall[0].summary).toContain("Mi último pensamiento fue: \"No estoy seguro de qué hacer con esta solicitud. Es demasiado vaga.\"");
+        expect(finalUpdateCall[0].summary).toContain("Por favor, intenta reformular tu solicitud con más detalles");
+    });
 });
 
 describe('_executePlan', () => {
