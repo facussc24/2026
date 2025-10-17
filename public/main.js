@@ -1205,7 +1205,12 @@ async function switchView(viewName, params = null) {
     
     // The `await` keyword ensures that the promise returned by each `run...Logic` function
     // resolves before moving on. This makes view transitions predictable.
-    if (viewName === 'landing-page') await runLandingPageLogic();
+    if (viewName === 'landing-page') {
+        dom.headerActions.style.display = 'flex';
+        dom.searchInput.style.display = 'none'; // No search on landing page
+        dom.addNewButton.style.display = 'none'; // No generic add button
+        await runLandingPageLogic();
+    }
     else if (viewName === 'planning') await runPlanningLogic();
     else if (viewName === 'profile') await runProfileLogic();
     else if (config?.dataKey) {

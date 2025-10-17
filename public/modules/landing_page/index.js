@@ -108,12 +108,6 @@ function renderLandingPageHTML() {
                                  <button id="prev-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Semana Anterior"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
                                  <button id="today-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Volver a Hoy"><i data-lucide="calendar-check-2" class="w-5 h-5"></i></button>
                                 <button id="next-week-btn" class="p-2 rounded-full bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600" title="Siguiente Semana"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
-                                <button id="ai-assistant-btn" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
-                                    <span class="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-600 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></span>
-                                    <span class="relative flex items-center">
-                                        <i data-lucide="bot" class="mr-2 h-5 w-5"></i>Asistente de IA
-                                    </span>
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -1575,6 +1569,25 @@ async function refreshWeeklyTasksView(direction = 'next') {
  * landing page view is activated.
  */
 export async function runLandingPageLogic() {
+    const aiButtonContainer = document.getElementById('ai-assistant-button-container');
+    if (aiButtonContainer) {
+        aiButtonContainer.innerHTML = `
+            <button id="ai-assistant-button" class="relative group bg-gradient-to-r from-purple-500 to-indigo-600 text-white px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-purple-500/50 flex items-center shadow-md transition-all duration-300 transform hover:scale-105">
+                <span class="absolute -inset-0.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-600 rounded-full blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></span>
+                <span class="relative flex items-center">
+                    <i data-lucide="bot" class="mr-2 h-5 w-5"></i>Asistente de IA
+                </span>
+            </button>
+        `;
+        document.getElementById('ai-assistant-button').addEventListener('click', () => {
+            if (openAIAssistantModal) {
+                openAIAssistantModal({ currentView: appState.currentView });
+            } else {
+                showToast('El Asistente IA no está disponible.', 'error');
+            }
+        });
+    }
+
     appState.weekOffset = 0;
     appState.plannerViewMode = 'weekly';
     monthlyViewState.yearOffset = 0;
@@ -1596,6 +1609,10 @@ export async function runLandingPageLogic() {
     document.addEventListener('ai-tasks-updated', onAITasksUpdated);
 
     appState.currentViewCleanup = () => {
+        const aiButtonContainer = document.getElementById('ai-assistant-button-container');
+        if (aiButtonContainer) {
+            aiButtonContainer.innerHTML = '';
+        }
         document.removeEventListener('ai-tasks-updated', onAITasksUpdated);
     };
 
