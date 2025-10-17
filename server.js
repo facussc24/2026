@@ -4,9 +4,7 @@ import handler from 'serve-handler';
 const server = http.createServer((request, response) => {
   return handler(request, response, {
     "public": "public",
-    "rewrites": [
-      { "source": "**", "destination": "/index.html" }
-    ]
+    "single": true
   });
 });
 

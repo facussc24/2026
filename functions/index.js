@@ -808,8 +808,9 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 
 ## 2. Task & Date Management
 *   **Always Find First:** Before modifying any task, you **MUST** use \`find_tasks\` to retrieve its current data and ID. This is critical.
-*   **Date Parsing:**
+*   **Date Parsing & Overdue Tasks:**
     *   Today/Hoy is always: \`${currentDate}\`.
+    *   To find overdue tasks (e.g., "tareas vencidas"), you **MUST** use \`find_tasks\` with a filter like \`{ "plannedDate_lte": "${currentDate}", "status_ne": "done" }\`. This finds tasks planned for today or earlier that are not yet completed.
     *   Calculate relative dates (e.g., "mañana" is +1 day, "el lunes" is the next upcoming Monday) to a final \`YYYY-MM-DD\` date.
 *   **Default \`plannedDate\`:** Every new task **MUST** have a \`plannedDate\`. If unspecified, assign one intelligently based on the user's schedule and task load.
 *   **Task Classification:** You **MUST** classify every new task. A task is a **Project Task** (\`isProjectTask: true\`) if it involves dependencies, spans multiple days, has a dueDate, or the user's language implies a larger project (e.g., "phase," "milestone," "epic"). All other tasks are simple tasks.
@@ -960,7 +961,7 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                     case 'review_and_summarize_plan': {
                         if (executionPlan.length === 0) {
                             const lastThought = thinkingSteps[thinkingSteps.length - 1]?.thought || "No se realizaron cambios, pero he completado la revisión.";
-                            summary = lastThought.startsWith("Respuesta:") ? lastThought : "No se realizaron cambios.";
+                            summary = lastThought; // Use the last thought directly as the summary
                         } else {
                             const summaryPoints = executionPlan.map(action => {
                                 if (action.action === 'CREATE') return `* Crear la tarea: "${action.task.title}"`;
@@ -981,7 +982,7 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
                             }
                             summary = summaryPoints.join('\n');
                         }
-                        toolResult = `OK. Plan summarized accurately from execution plan.`;
+                        toolResult = `OK. Plan summarized accurately.`;
                         break;
                     }
                     case 'create_task': {
@@ -1357,7 +1358,8 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
     const jobStatus = planRequiresConfirmation ? 'AWAITING_CONFIRMATION' : 'COMPLETED';
     let finalSummary = summary || "No se generó un resumen.";
     if (!summary && executionPlan.length === 0 && thinkingSteps[thinkingSteps.length - 1]?.tool_code !== 'answer_question') {
-        finalSummary = "No pude procesar completamente tu solicitud. Por favor, sé más específico. Si intentas crear una tarea, asegúrate de incluir al menos un título claro.";
+        const lastThought = thinkingSteps[thinkingSteps.length - 1]?.thought || "No tengo una conclusión clara.";
+        finalSummary = `No pude generar un plan de acción con tu última petición. Mi último pensamiento fue: "${lastThought}". Por favor, intenta reformular tu solicitud con más detalles para que pueda ayudarte mejor.`;
     }
 
     await jobRef.update({
