@@ -1356,10 +1356,18 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
 
     const planRequiresConfirmation = executionPlan.length > 0;
     const jobStatus = planRequiresConfirmation ? 'AWAITING_CONFIRMATION' : 'COMPLETED';
-    let finalSummary = summary || "No se generó un resumen.";
-    if (!summary && executionPlan.length === 0 && thinkingSteps[thinkingSteps.length - 1]?.tool_code !== 'answer_question') {
+
+    let finalSummary;
+    if (summary) {
+        finalSummary = summary;
+    } else if (executionPlan.length === 0) {
+        // If no summary and no plan, the agent likely failed or had nothing to do.
+        // Provide a helpful message using the last thought.
         const lastThought = thinkingSteps[thinkingSteps.length - 1]?.thought || "No tengo una conclusión clara.";
         finalSummary = `No pude generar un plan de acción con tu última petición. Mi último pensamiento fue: "${lastThought}". Por favor, intenta reformular tu solicitud con más detalles para que pueda ayudarte mejor.`;
+    } else {
+        // This case is unlikely but acts as a safeguard.
+        finalSummary = "Se ha generado un plan de ejecución, pero no se pudo crear un resumen final.";
     }
 
     await jobRef.update({
