@@ -422,6 +422,25 @@ export function openAIAssistantModal({ currentView = 'unknown' } = {}) {
 
             const hasExecutionPlan = Array.isArray(jobData.executionPlan) && jobData.executionPlan.length > 0;
 
+            // Check for a special navigation action first
+            const navigationAction = hasExecutionPlan ? jobData.executionPlan.find(action => action.action === 'NAVIGATE') : null;
+            if (navigationAction && navigationAction.view) {
+                showToast(`Navegando a la vista: ${navigationAction.view}...`, 'info');
+                closeModal(); // Close the modal BEFORE navigating
+                // We need to call the global switchView function.
+                // Assuming it's available on the window object as per main.js
+                if (window.switchView) {
+                    // Use a small timeout to ensure the modal has finished its closing animation
+                    setTimeout(() => {
+                        window.switchView(navigationAction.view);
+                    }, 100);
+                } else {
+                    console.error('La función de navegación global (switchView) no está disponible.');
+                    showToast('Error: No se pudo cambiar de vista.', 'error');
+                }
+                return; // Stop further processing for this job update
+            }
+
             if (hasExecutionPlan) {
                 const taskTitleMap = new Map();
                 (jobData.tasks || []).forEach(taskItem => {

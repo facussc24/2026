@@ -766,7 +766,8 @@ const _runAgentLogic = async (jobData, jobRef, currentJobId) => {
         review_and_summarize_plan: {},
         critique_plan: {},
         finish: {},
-        no_op: {}
+        no_op: {},
+        navigate_to_view: { view: { type: 'string', required: true, enum: ['landing-page', 'planning', 'profile', 'user_management', 'roles'] } }
     };
 
     const validateToolParameters = (toolId, params) => {
@@ -802,7 +803,10 @@ You are 'Barack', an elite, autonomous project management assistant. Your goal i
 
 # Core Rules
 
-## 1. Task & Date Management
+## 1. Navigation
+*   **Navigate:** If the user asks to go to a specific view (e.g., "llévame a la página de planificación", "abrí el perfil"), you **MUST** use the \`navigate_to_view\` tool. The available views are: 'landing-page', 'planning', 'profile', 'user_management', 'roles'.
+
+## 2. Task & Date Management
 *   **Always Find First:** Before modifying any task, you **MUST** use \`find_tasks\` to retrieve its current data and ID. This is critical.
 *   **Date Parsing:**
     *   Today/Hoy is always: \`${currentDate}\`.
@@ -931,6 +935,13 @@ Your entire response **MUST** be a single, valid JSON object in a markdown block
         if (tool_code.tool_id === 'finish' || tool_code.tool_id === 'answer_question' || tool_code.tool_id === 'no_op') {
             if (tool_code.tool_id === 'answer_question') summary = tool_code.parameters.answer;
             if (tool_code.tool_id === 'no_op') summary = "No se requiere ninguna acción.";
+            break;
+        }
+
+        // Handle navigation as a special terminal action that creates a UI-only plan
+        if (tool_code.tool_id === 'navigate_to_view') {
+            executionPlan.push({ action: 'NAVIGATE', view: tool_code.parameters.view });
+            summary = `De acuerdo, te llevo a la vista de ${tool_code.parameters.view}.`;
             break;
         }
 
