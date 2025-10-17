@@ -184,9 +184,9 @@ describe('_runAgentLogic', () => {
         expect(finalUpdateCall).toBeDefined();
 
         // Check that the summary is the new, helpful fallback message.
-        expect(finalUpdateCall[0].summary).toContain("No pude generar un plan de acción con tu última petición.");
+        expect(finalUpdateCall[0].summary).toContain("He analizado tu petición, pero no he generado un plan de acción todavía.");
         expect(finalUpdateCall[0].summary).toContain("Mi último pensamiento fue: \"No estoy seguro de qué hacer con esta solicitud. Es demasiado vaga.\"");
-        expect(finalUpdateCall[0].summary).toContain("Por favor, intenta reformular tu solicitud con más detalles");
+        expect(finalUpdateCall[0].summary).toContain("¿Podrías darme un poco más de detalle sobre lo que necesitas para que pueda ayudarte mejor?");
     });
 });
 
