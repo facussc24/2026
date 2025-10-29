@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Tareas y Documentos - 2026</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 Sistema de Gestión - 2026</h1>
+            <p class="subtitle">Tareas y Documentos de Ingeniería</p>
+        </header>
+
+        <div class="main-content">
+            <!-- Task Management Section -->
+            <section class="section" id="tasks-section">
+                <div class="section-header">
+                    <h2>📋 Gestión de Tareas</h2>
+                    <button class="btn btn-primary" onclick="showAddTaskForm()">+ Nueva Tarea</button>
+                </div>
+
+                <!-- Add Task Form -->
+                <div id="add-task-form" class="form-container" style="display: none;">
+                    <h3>Agregar Nueva Tarea</h3>
+                    <form onsubmit="addTask(event)">
+                        <div class="form-group">
+                            <label for="task-title">Título*</label>
+                            <input type="text" id="task-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-description">Descripción</label>
+                            <textarea id="task-description" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-priority">Prioridad</label>
+                            <select id="task-priority">
+                                <option value="baja">Baja</option>
+                                <option value="media" selected>Media</option>
+                                <option value="alta">Alta</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="task-due-date">Fecha de Vencimiento</label>
+                            <input type="date" id="task-due-date">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-success">Guardar</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideAddTaskForm()">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Task Filters -->
+                <div class="filters">
+                    <button class="filter-btn active" onclick="filterTasks('all')">Todas</button>
+                    <button class="filter-btn" onclick="filterTasks('pending')">Pendientes</button>
+                    <button class="filter-btn" onclick="filterTasks('completed')">Completadas</button>
+                </div>
+
+                <!-- Tasks List -->
+                <div id="tasks-list" class="tasks-list">
+                    <!-- Tasks will be rendered here -->
+                </div>
+            </section>
+
+            <!-- Documents Management Section -->
+            <section class="section" id="documents-section">
+                <div class="section-header">
+                    <h2>📚 Documentos de Ingeniería</h2>
+                    <button class="btn btn-primary" onclick="showAddDocumentForm()">+ Nuevo Documento</button>
+                </div>
+
+                <!-- Add Document Form -->
+                <div id="add-document-form" class="form-container" style="display: none;">
+                    <h3>Agregar Nuevo Documento</h3>
+                    <form onsubmit="addDocument(event)">
+                        <div class="form-group">
+                            <label for="doc-title">Título*</label>
+                            <input type="text" id="doc-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="doc-type">Tipo de Documento</label>
+                            <select id="doc-type">
+                                <option value="especificacion">Especificación</option>
+                                <option value="diseño">Diseño</option>
+                                <option value="manual">Manual</option>
+                                <option value="reporte">Reporte</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="doc-description">Descripción</label>
+                            <textarea id="doc-description" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="doc-url">URL o Enlace</label>
+                            <input type="text" id="doc-url" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label for="doc-version">Versión</label>
+                            <input type="text" id="doc-version" placeholder="v1.0">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-success">Guardar</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideAddDocumentForm()">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Document Categories -->
+                <div class="filters">
+                    <button class="filter-btn active" onclick="filterDocuments('all')">Todos</button>
+                    <button class="filter-btn" onclick="filterDocuments('especificacion')">Especificaciones</button>
+                    <button class="filter-btn" onclick="filterDocuments('diseño')">Diseños</button>
+                    <button class="filter-btn" onclick="filterDocuments('manual')">Manuales</button>
+                    <button class="filter-btn" onclick="filterDocuments('reporte')">Reportes</button>
+                </div>
+
+                <!-- Documents List -->
+                <div id="documents-list" class="documents-list">
+                    <!-- Documents will be rendered here -->
+                </div>
+            </section>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 Barack - Sistema de Gestión Empresarial</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
