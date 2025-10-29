@@ -3,6 +3,7 @@ let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 let documents = JSON.parse(localStorage.getItem('documents')) || [];
 let taskFilter = 'all';
 let documentFilter = 'all';
+let idCounter = 0;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -29,7 +30,7 @@ function addTask(event) {
     const dueDate = document.getElementById('task-due-date').value;
     
     const task = {
-        id: Date.now(),
+        id: Date.now() + (idCounter++),
         title: title,
         description: description,
         priority: priority,
@@ -96,8 +97,16 @@ function filterTasks(filter) {
     
     // Update filter buttons
     const filterButtons = document.querySelectorAll('#tasks-section .filter-btn');
-    filterButtons.forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    filterButtons.forEach(btn => {
+        btn.classList.remove('active');
+        // Check button text to match filter
+        const buttonText = btn.textContent.trim().toLowerCase();
+        if ((filter === 'all' && buttonText === 'todas') ||
+            (filter === 'pending' && buttonText === 'pendientes') ||
+            (filter === 'completed' && buttonText === 'completadas')) {
+            btn.classList.add('active');
+        }
+    });
     
     renderTasks();
 }
@@ -171,7 +180,7 @@ function addDocument(event) {
     const version = document.getElementById('doc-version').value;
     
     const newDoc = {
-        id: Date.now(),
+        id: Date.now() + (idCounter++),
         title: title,
         type: type,
         description: description,
@@ -231,8 +240,18 @@ function filterDocuments(filter) {
     
     // Update filter buttons
     const filterButtons = document.querySelectorAll('#documents-section .filter-btn');
-    filterButtons.forEach(btn => btn.classList.remove('active'));
-    event.target.classList.add('active');
+    filterButtons.forEach(btn => {
+        btn.classList.remove('active');
+        // Check button text to match filter
+        const buttonText = btn.textContent.trim().toLowerCase();
+        if ((filter === 'all' && buttonText === 'todos') ||
+            (filter === 'especificacion' && buttonText === 'especificaciones') ||
+            (filter === 'diseño' && buttonText === 'diseños') ||
+            (filter === 'manual' && buttonText === 'manuales') ||
+            (filter === 'reporte' && buttonText === 'reportes')) {
+            btn.classList.add('active');
+        }
+    });
     
     renderDocuments();
 }
