@@ -3,6 +3,7 @@ let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
 let documents = JSON.parse(localStorage.getItem('documents')) || [];
 let taskFilter = 'all';
 let documentFilter = 'all';
+let taskSearchQuery = '';
 let idCounter = 0;
 
 // Initialize on page load
@@ -10,6 +11,23 @@ document.addEventListener('DOMContentLoaded', function() {
     renderTasks();
     renderDocuments();
 });
+
+// Module Navigation
+function showModule(moduleId) {
+    // Hide all modules
+    document.querySelectorAll('.module-content').forEach(module => {
+        module.classList.remove('active');
+    });
+    
+    // Show selected module
+    document.getElementById('module-' + moduleId).classList.add('active');
+    
+    // Update navigation buttons
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    event.target.classList.add('active');
+}
 
 // Task Management Functions
 function showAddTaskForm() {
@@ -28,6 +46,9 @@ function addTask(event) {
     const description = document.getElementById('task-description').value;
     const priority = document.getElementById('task-priority').value;
     const dueDate = document.getElementById('task-due-date').value;
+    const assignee = document.getElementById('task-assignee').value;
+    const tagsInput = document.getElementById('task-tags').value;
+    const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
     
     const task = {
         id: Date.now() + (idCounter++),
@@ -35,6 +56,8 @@ function addTask(event) {
         description: description,
         priority: priority,
         dueDate: dueDate,
+        assignee: assignee,
+        tags: tags,
         completed: false,
         createdAt: new Date().toISOString()
     };
@@ -72,6 +95,8 @@ function editTask(taskId) {
     document.getElementById('task-description').value = task.description;
     document.getElementById('task-priority').value = task.priority;
     document.getElementById('task-due-date').value = task.dueDate;
+    document.getElementById('task-assignee').value = task.assignee || '';
+    document.getElementById('task-tags').value = task.tags ? task.tags.join(', ') : '';
     
     // Change form submit to update instead of add
     const form = document.getElementById('add-task-form').querySelector('form');
@@ -82,6 +107,9 @@ function editTask(taskId) {
         task.description = document.getElementById('task-description').value;
         task.priority = document.getElementById('task-priority').value;
         task.dueDate = document.getElementById('task-due-date').value;
+        task.assignee = document.getElementById('task-assignee').value;
+        const tagsInput = document.getElementById('task-tags').value;
+        task.tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
         
         saveTasks();
         renderTasks();
@@ -90,6 +118,11 @@ function editTask(taskId) {
         // Reset form submit to addTask
         form.onsubmit = addTask;
     };
+}
+
+function searchTasks() {
+    taskSearchQuery = document.getElementById('task-search').value.toLowerCase();
+    renderTasks();
 }
 
 function filterTasks(filter) {
@@ -115,10 +148,25 @@ function renderTasks() {
     const tasksList = document.getElementById('tasks-list');
     
     let filteredTasks = tasks;
+    
+    // Apply status filter
     if (taskFilter === 'pending') {
         filteredTasks = tasks.filter(task => !task.completed);
     } else if (taskFilter === 'completed') {
         filteredTasks = tasks.filter(task => task.completed);
+    }
+    
+    // Apply search filter
+    if (taskSearchQuery) {
+        filteredTasks = filteredTasks.filter(task => {
+            const searchIn = [
+                task.title,
+                task.description,
+                task.assignee,
+                ...(task.tags || [])
+            ].join(' ').toLowerCase();
+            return searchIn.includes(taskSearchQuery);
+        });
     }
     
     if (filteredTasks.length === 0) {
@@ -140,10 +188,16 @@ function renderTasks() {
                     <div class="task-meta">
                         <span class="task-badge badge-${task.priority}">${task.priority.toUpperCase()}</span>
                         ${task.dueDate ? `<span class="task-badge" style="background: #e0e7ff; color: #3730a3;">📅 ${formatDate(task.dueDate)}</span>` : ''}
+                        ${task.assignee ? `<span class="task-assignee">👤 ${escapeHtml(task.assignee)}</span>` : ''}
                     </div>
                 </div>
             </div>
             ${task.description ? `<div class="task-description">${escapeHtml(task.description)}</div>` : ''}
+            ${task.tags && task.tags.length > 0 ? `
+                <div class="task-tags">
+                    ${task.tags.map(tag => `<span class="task-tag">${escapeHtml(tag)}</span>`).join('')}
+                </div>
+            ` : ''}
             <div class="task-actions">
                 <label class="checkbox-label">
                     <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTaskComplete(${task.id})">

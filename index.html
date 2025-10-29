@@ -13,7 +13,25 @@
             <p class="subtitle">Tareas y Documentos de Ingeniería</p>
         </header>
 
-        <div class="main-content">
+        <!-- Navigation Bar -->
+        <nav class="navigation-bar">
+            <button class="nav-btn active" onclick="showModule('tasks-docs')">
+                📋 Tareas y Documentos
+            </button>
+            <button class="nav-btn" onclick="showModule('amfe')">
+                ⚠️ AMFE
+            </button>
+            <button class="nav-btn" onclick="showModule('control-plan')">
+                📊 Plan de Control
+            </button>
+            <button class="nav-btn" onclick="showModule('flowchart')">
+                🔄 Flujograma
+            </button>
+        </nav>
+
+        <!-- Tasks and Documents Module -->
+        <div id="module-tasks-docs" class="module-content active">
+            <div class="main-content">
             <!-- Task Management Section -->
             <section class="section" id="tasks-section">
                 <div class="section-header">
@@ -45,6 +63,14 @@
                             <label for="task-due-date">Fecha de Vencimiento</label>
                             <input type="date" id="task-due-date">
                         </div>
+                        <div class="form-group">
+                            <label for="task-assignee">Asignado a</label>
+                            <input type="text" id="task-assignee" placeholder="Nombre del responsable">
+                        </div>
+                        <div class="form-group">
+                            <label for="task-tags">Etiquetas (separadas por coma)</label>
+                            <input type="text" id="task-tags" placeholder="desarrollo, frontend, urgente">
+                        </div>
                         <div class="form-actions">
                             <button type="submit" class="btn btn-success">Guardar</button>
                             <button type="button" class="btn btn-secondary" onclick="hideAddTaskForm()">Cancelar</button>
@@ -52,11 +78,16 @@
                     </form>
                 </div>
 
-                <!-- Task Filters -->
-                <div class="filters">
-                    <button class="filter-btn active" onclick="filterTasks('all')">Todas</button>
-                    <button class="filter-btn" onclick="filterTasks('pending')">Pendientes</button>
-                    <button class="filter-btn" onclick="filterTasks('completed')">Completadas</button>
+                <!-- Task Search and Filters -->
+                <div class="search-filters">
+                    <div class="search-box">
+                        <input type="text" id="task-search" placeholder="🔍 Buscar tareas..." oninput="searchTasks()">
+                    </div>
+                    <div class="filters">
+                        <button class="filter-btn active" onclick="filterTasks('all')">Todas</button>
+                        <button class="filter-btn" onclick="filterTasks('pending')">Pendientes</button>
+                        <button class="filter-btn" onclick="filterTasks('completed')">Completadas</button>
+                    </div>
                 </div>
 
                 <!-- Tasks List -->
@@ -123,10 +154,63 @@
                     <!-- Documents will be rendered here -->
                 </div>
             </section>
+            </div>
+        </div>
+
+        <!-- AMFE Module -->
+        <div id="module-amfe" class="module-content">
+            <div class="under-construction">
+                <div class="construction-icon">🚧</div>
+                <h2>Módulo AMFE</h2>
+                <p class="construction-subtitle">Análisis de Modo y Efecto de Fallas</p>
+                <p>Este módulo está en construcción. Próximamente podrás:</p>
+                <ul class="features-list">
+                    <li>✓ Crear y gestionar análisis AMFE</li>
+                    <li>✓ Identificar modos de falla potenciales</li>
+                    <li>✓ Evaluar severidad, ocurrencia y detección</li>
+                    <li>✓ Calcular NPR (Número de Prioridad de Riesgo)</li>
+                    <li>✓ Generar reportes y recomendaciones</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Control Plan Module -->
+        <div id="module-control-plan" class="module-content">
+            <div class="under-construction">
+                <div class="construction-icon">🚧</div>
+                <h2>Plan de Control</h2>
+                <p class="construction-subtitle">Gestión de Controles de Calidad</p>
+                <p>Este módulo está en construcción. Próximamente podrás:</p>
+                <ul class="features-list">
+                    <li>✓ Definir planes de control de proceso</li>
+                    <li>✓ Establecer características críticas</li>
+                    <li>✓ Especificar métodos de medición</li>
+                    <li>✓ Asignar frecuencias de control</li>
+                    <li>✓ Documentar planes de reacción</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Flowchart Module -->
+        <div id="module-flowchart" class="module-content">
+            <div class="under-construction">
+                <div class="construction-icon">🚧</div>
+                <h2>Flujograma</h2>
+                <p class="construction-subtitle">Diagramas de Flujo de Procesos</p>
+                <p>Este módulo está en construcción. Próximamente podrás:</p>
+                <ul class="features-list">
+                    <li>✓ Crear diagramas de flujo interactivos</li>
+                    <li>✓ Definir procesos y subprocesos</li>
+                    <li>✓ Mapear flujos de trabajo</li>
+                    <li>✓ Identificar puntos de control</li>
+                    <li>✓ Exportar diagramas en múltiples formatos</li>
+                </ul>
+            </div>
         </div>
 
         <footer>
             <p>&copy; 2026 Barack - Sistema de Gestión Empresarial</p>
+            <p class="footer-note">💡 Sugerencia: Considera Firebase o Supabase para el backend</p>
         </footer>
     </div>
 
