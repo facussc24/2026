@@ -8,9 +8,94 @@ let idCounter = 0;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    createToastContainer();
     renderTasks();
     renderDocuments();
 });
+
+// Toast Notification System
+function createToastContainer() {
+    if (!document.querySelector('.toast-container')) {
+        const container = document.createElement('div');
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+}
+
+function showToast(title, message, type = 'info') {
+    const container = document.querySelector('.toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icons = {
+        success: '✓',
+        error: '✗',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+    
+    toast.innerHTML = `
+        <div class="toast-icon">${icons[type] || icons.info}</div>
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            ${message ? `<div class="toast-message">${message}</div>` : ''}
+        </div>
+        <button class="toast-close" onclick="closeToast(this)">×</button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+        closeToast(toast.querySelector('.toast-close'));
+    }, 4000);
+}
+
+function closeToast(button) {
+    const toast = button.closest('.toast');
+    toast.classList.add('hiding');
+    setTimeout(() => toast.remove(), 300);
+}
+
+// Task Status Calculation
+function getTaskStatus(task) {
+    if (task.completed) return 'completed';
+    if (!task.dueDate) return 'no-date';
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(task.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) return 'overdue';
+    if (diffDays <= 3) return 'due-soon';
+    return 'on-track';
+}
+
+function getTaskStatusBadge(task) {
+    const status = getTaskStatus(task);
+    const badges = {
+        'overdue': { text: 'Vencida', icon: '🔴' },
+        'due-soon': { text: 'Próxima a vencer', icon: '🟡' },
+        'on-track': { text: 'En tiempo', icon: '🟢' },
+        'completed': { text: 'Completada', icon: '✓' },
+        'no-date': { text: 'Sin fecha', icon: '⚪' }
+    };
+    
+    const badge = badges[status] || badges['no-date'];
+    return `<span class="status-badge ${status}">${badge.icon} ${badge.text}</span>`;
+}
+
+function getDaysUntilDue(task) {
+    if (!task.dueDate) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(task.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+    return diffDays;
+}
 
 // Module Navigation
 function showModule(moduleId) {
@@ -66,13 +151,16 @@ function addTask(event) {
     saveTasks();
     renderTasks();
     hideAddTaskForm();
+    showToast('¡Tarea creada!', `"${title}" se ha agregado exitosamente`, 'success');
 }
 
 function deleteTask(taskId) {
+    const task = tasks.find(t => t.id === taskId);
     if (confirm('¿Estás seguro de que quieres eliminar esta tarea?')) {
-        tasks = tasks.filter(task => task.id !== taskId);
+        tasks = tasks.filter(t => t.id !== taskId);
         saveTasks();
         renderTasks();
+        showToast('Tarea eliminada', `"${task.title}" ha sido eliminada`, 'info');
     }
 }
 
@@ -80,8 +168,14 @@ function toggleTaskComplete(taskId) {
     const task = tasks.find(t => t.id === taskId);
     if (task) {
         task.completed = !task.completed;
+        task.completedAt = task.completed ? new Date().toISOString() : null;
         saveTasks();
         renderTasks();
+        if (task.completed) {
+            showToast('¡Tarea completada!', `"${task.title}" marcada como completada`, 'success');
+        } else {
+            showToast('Tarea reactivada', `"${task.title}" marcada como pendiente`, 'info');
+        }
     }
 }
 
@@ -114,6 +208,7 @@ function editTask(taskId) {
         saveTasks();
         renderTasks();
         hideAddTaskForm();
+        showToast('Tarea actualizada', `"${task.title}" se ha actualizado correctamente`, 'success');
         
         // Reset form submit to addTask
         form.onsubmit = addTask;
@@ -180,14 +275,19 @@ function renderTasks() {
         return;
     }
     
-    tasksList.innerHTML = filteredTasks.map(task => `
-        <div class="task-item ${task.completed ? 'completed' : ''}">
+    tasksList.innerHTML = filteredTasks.map(task => {
+        const status = getTaskStatus(task);
+        const daysUntil = getDaysUntilDue(task);
+        
+        return `
+        <div class="task-item ${task.completed ? 'completed' : ''} status-${status}">
+            <div class="task-status-indicator"></div>
             <div class="task-header">
                 <div class="task-title-section">
                     <div class="task-title">${escapeHtml(task.title)}</div>
                     <div class="task-meta">
                         <span class="task-badge badge-${task.priority}">${task.priority.toUpperCase()}</span>
-                        ${task.dueDate ? `<span class="task-badge" style="background: #e0e7ff; color: #3730a3;">📅 ${formatDate(task.dueDate)}</span>` : ''}
+                        ${!task.completed && task.dueDate ? getTaskStatusBadge(task) : ''}
                         ${task.assignee ? `<span class="task-assignee">👤 ${escapeHtml(task.assignee)}</span>` : ''}
                     </div>
                 </div>
@@ -198,6 +298,26 @@ function renderTasks() {
                     ${task.tags.map(tag => `<span class="task-tag">${escapeHtml(tag)}</span>`).join('')}
                 </div>
             ` : ''}
+            <div class="task-footer">
+                <div class="task-info-items">
+                    ${task.dueDate ? `
+                        <div class="task-info-item">
+                            📅 ${formatDate(task.dueDate)}
+                            ${daysUntil !== null && !task.completed ? 
+                                `<span style="color: var(--text-secondary);">(${daysUntil === 0 ? 'Hoy' : daysUntil > 0 ? `en ${daysUntil}d` : `hace ${Math.abs(daysUntil)}d`})</span>` 
+                                : ''}
+                        </div>
+                    ` : '<div class="task-info-item">📅 Sin fecha</div>'}
+                    <div class="task-info-item">
+                        🕐 Creada ${formatRelativeTime(task.createdAt)}
+                    </div>
+                    ${task.completedAt ? `
+                        <div class="task-info-item">
+                            ✓ Completada ${formatRelativeTime(task.completedAt)}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
             <div class="task-actions">
                 <label class="checkbox-label">
                     <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleTaskComplete(${task.id})">
@@ -207,7 +327,8 @@ function renderTasks() {
                 <button class="btn btn-danger" onclick="deleteTask(${task.id})">🗑️ Eliminar</button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function saveTasks() {
@@ -247,13 +368,16 @@ function addDocument(event) {
     saveDocuments();
     renderDocuments();
     hideAddDocumentForm();
+    showToast('¡Documento creado!', `"${title}" se ha agregado exitosamente`, 'success');
 }
 
 function deleteDocument(docId) {
+    const doc = documents.find(d => d.id === docId);
     if (confirm('¿Estás seguro de que quieres eliminar este documento?')) {
-        documents = documents.filter(doc => doc.id !== docId);
+        documents = documents.filter(d => d.id !== docId);
         saveDocuments();
         renderDocuments();
+        showToast('Documento eliminado', `"${doc.title}" ha sido eliminado`, 'info');
     }
 }
 
@@ -364,4 +488,21 @@ function formatDate(dateString) {
     const date = new Date(dateString);
     const options = { year: 'numeric', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('es-ES', options);
+}
+
+function formatRelativeTime(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 1) return 'hace un momento';
+    if (diffMins < 60) return `hace ${diffMins} min`;
+    if (diffHours < 24) return `hace ${diffHours}h`;
+    if (diffDays < 7) return `hace ${diffDays}d`;
+    if (diffDays < 30) return `hace ${Math.floor(diffDays / 7)} semana${Math.floor(diffDays / 7) > 1 ? 's' : ''}`;
+    if (diffDays < 365) return `hace ${Math.floor(diffDays / 30)} mes${Math.floor(diffDays / 30) > 1 ? 'es' : ''}`;
+    return `hace ${Math.floor(diffDays / 365)} año${Math.floor(diffDays / 365) > 1 ? 's' : ''}`;
 }
