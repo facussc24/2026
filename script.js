@@ -5,6 +5,7 @@ let taskFilter = 'all';
 let documentFilter = 'all';
 let taskSearchQuery = '';
 let idCounter = 0;
+let currentTaskView = 'list'; // 'list' or 'kanban'
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -338,6 +339,223 @@ function saveTasks() {
     if (document.getElementById('stat-total-tasks')) {
         renderDashboard();
     }
+}
+
+// View Switching
+function switchTaskView(view) {
+    currentTaskView = view;
+    
+    // Update button states
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.view === view) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Show/hide views
+    const listView = document.getElementById('tasks-list');
+    const kanbanView = document.getElementById('kanban-board');
+    const searchFilters = document.querySelector('.search-filters');
+    
+    if (view === 'list') {
+        listView.style.display = 'block';
+        kanbanView.style.display = 'none';
+        if (searchFilters) searchFilters.style.display = 'block';
+        renderTasks();
+    } else if (view === 'kanban') {
+        listView.style.display = 'none';
+        kanbanView.style.display = 'grid';
+        if (searchFilters) searchFilters.style.display = 'none';
+        renderKanban();
+    }
+}
+
+// Kanban Functions
+function renderKanban() {
+    // Initialize task status if not set
+    tasks.forEach(task => {
+        if (!task.kanbanStatus) {
+            task.kanbanStatus = task.completed ? 'done' : 'todo';
+        }
+    });
+    
+    const columns = {
+        'todo': document.getElementById('kanban-todo'),
+        'progress': document.getElementById('kanban-progress'),
+        'review': document.getElementById('kanban-review'),
+        'done': document.getElementById('kanban-done')
+    };
+    
+    // Clear all columns
+    Object.values(columns).forEach(col => {
+        if (col) col.innerHTML = '';
+    });
+    
+    // Count tasks per column
+    const counts = {
+        'todo': 0,
+        'progress': 0,
+        'review': 0,
+        'done': 0
+    };
+    
+    // Render tasks in their respective columns
+    tasks.forEach(task => {
+        const status = task.kanbanStatus || 'todo';
+        counts[status]++;
+        
+        const column = columns[status];
+        if (!column) return;
+        
+        const taskStatus = getTaskStatus(task);
+        const card = document.createElement('div');
+        card.className = `kanban-card status-${taskStatus}`;
+        card.draggable = true;
+        card.dataset.taskId = task.id;
+        
+        card.innerHTML = `
+            <div class="kanban-card-title">${escapeHtml(task.title)}</div>
+            <div class="kanban-card-meta">
+                <span class="task-badge badge-${task.priority}">${task.priority.toUpperCase()}</span>
+                ${task.assignee ? `<span class="task-assignee">👤 ${escapeHtml(task.assignee)}</span>` : ''}
+                ${task.dueDate && !task.completed ? getTaskStatusBadge(task) : ''}
+            </div>
+            ${task.tags && task.tags.length > 0 ? `
+                <div class="task-tags">
+                    ${task.tags.slice(0, 3).map(tag => `<span class="task-tag">${escapeHtml(tag)}</span>`).join('')}
+                    ${task.tags.length > 3 ? `<span class="task-tag">+${task.tags.length - 3}</span>` : ''}
+                </div>
+            ` : ''}
+            <div class="kanban-card-footer">
+                <span>${task.dueDate ? '📅 ' + formatDate(task.dueDate) : '📅 Sin fecha'}</span>
+                <div class="kanban-card-actions">
+                    <button class="kanban-card-btn" onclick="editTask(${task.id})" title="Editar">✏️</button>
+                    <button class="kanban-card-btn" onclick="deleteTask(${task.id})" title="Eliminar">🗑️</button>
+                </div>
+            </div>
+        `;
+        
+        // Add drag event listeners
+        card.addEventListener('dragstart', handleDragStart);
+        card.addEventListener('dragend', handleDragEnd);
+        
+        column.appendChild(card);
+    });
+    
+    // Update counts
+    document.getElementById('todo-count').textContent = counts.todo;
+    document.getElementById('progress-count').textContent = counts.progress;
+    document.getElementById('review-count').textContent = counts.review;
+    document.getElementById('done-count').textContent = counts.done;
+    
+    // Show empty states
+    Object.keys(columns).forEach(status => {
+        const column = columns[status];
+        if (column && counts[status] === 0) {
+            column.innerHTML = `
+                <div class="kanban-empty">
+                    <div class="kanban-empty-icon">📋</div>
+                    <div>No hay tareas aquí</div>
+                </div>
+            `;
+        }
+    });
+    
+    // Setup drop zones
+    Object.values(columns).forEach(column => {
+        if (column) {
+            column.addEventListener('dragover', handleDragOver);
+            column.addEventListener('drop', handleDrop);
+            column.addEventListener('dragleave', handleDragLeave);
+        }
+    });
+}
+
+// Drag and Drop Handlers
+let draggedTask = null;
+
+function handleDragStart(e) {
+    draggedTask = e.target;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.innerHTML);
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    
+    const column = e.target.closest('.kanban-column-content');
+    if (column) {
+        column.classList.add('drag-over');
+    }
+    
+    return false;
+}
+
+function handleDragLeave(e) {
+    const column = e.target.closest('.kanban-column-content');
+    if (column) {
+        column.classList.remove('drag-over');
+    }
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) {
+        e.stopPropagation();
+    }
+    
+    const column = e.target.closest('.kanban-column-content');
+    if (!column) return false;
+    
+    column.classList.remove('drag-over');
+    
+    if (draggedTask) {
+        const taskId = parseInt(draggedTask.dataset.taskId);
+        const newStatus = column.dataset.status;
+        
+        const task = tasks.find(t => t.id === taskId);
+        if (task) {
+            task.kanbanStatus = newStatus;
+            
+            // Auto-complete if moved to done
+            if (newStatus === 'done' && !task.completed) {
+                task.completed = true;
+                task.completedAt = new Date().toISOString();
+                showToast('¡Tarea completada!', `"${task.title}" movida a Completo`, 'success');
+            }
+            // Reopen if moved from done
+            else if (newStatus !== 'done' && task.completed) {
+                task.completed = false;
+                task.completedAt = null;
+                showToast('Tarea reactivada', `"${task.title}" movida a ${getStatusName(newStatus)}`, 'info');
+            } else {
+                showToast('Tarea movida', `"${task.title}" movida a ${getStatusName(newStatus)}`, 'info');
+            }
+            
+            saveTasks();
+            renderKanban();
+        }
+    }
+    
+    return false;
+}
+
+function getStatusName(status) {
+    const names = {
+        'todo': 'Por Hacer',
+        'progress': 'En Curso',
+        'review': 'Revisión',
+        'done': 'Completo'
+    };
+    return names[status] || status;
 }
 
 // Document Management Functions

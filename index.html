@@ -178,7 +178,17 @@
             <section class="section" id="tasks-section">
                 <div class="section-header">
                     <h2>📋 Gestión de Tareas</h2>
-                    <button class="btn btn-primary" onclick="showAddTaskForm()">+ Nueva Tarea</button>
+                    <div class="header-controls">
+                        <div class="view-toggle">
+                            <button class="view-btn active" onclick="switchTaskView('list')" data-view="list">
+                                📋 Lista
+                            </button>
+                            <button class="view-btn" onclick="switchTaskView('kanban')" data-view="kanban">
+                                📊 Kanban
+                            </button>
+                        </div>
+                        <button class="btn btn-primary" onclick="showAddTaskForm()">+ Nueva Tarea</button>
+                    </div>
                 </div>
 
                 <!-- Add Task Form -->
@@ -233,8 +243,52 @@
                 </div>
 
                 <!-- Tasks List -->
+                <!-- List View -->
                 <div id="tasks-list" class="tasks-list">
                     <!-- Tasks will be rendered here -->
+                </div>
+                
+                <!-- Kanban View -->
+                <div id="kanban-board" class="kanban-board" style="display: none;">
+                    <div class="kanban-column">
+                        <div class="kanban-column-header">
+                            <span class="kanban-column-title">📋 Por Hacer</span>
+                            <span class="kanban-column-count" id="todo-count">0</span>
+                        </div>
+                        <div class="kanban-column-content" id="kanban-todo" data-status="todo">
+                            <!-- Todo tasks will be rendered here -->
+                        </div>
+                    </div>
+                    
+                    <div class="kanban-column">
+                        <div class="kanban-column-header">
+                            <span class="kanban-column-title">⚡ En Curso</span>
+                            <span class="kanban-column-count" id="progress-count">0</span>
+                        </div>
+                        <div class="kanban-column-content" id="kanban-progress" data-status="progress">
+                            <!-- In progress tasks will be rendered here -->
+                        </div>
+                    </div>
+                    
+                    <div class="kanban-column">
+                        <div class="kanban-column-header">
+                            <span class="kanban-column-title">🔍 Revisión</span>
+                            <span class="kanban-column-count" id="review-count">0</span>
+                        </div>
+                        <div class="kanban-column-content" id="kanban-review" data-status="review">
+                            <!-- Review tasks will be rendered here -->
+                        </div>
+                    </div>
+                    
+                    <div class="kanban-column">
+                        <div class="kanban-column-header">
+                            <span class="kanban-column-title">✅ Completo</span>
+                            <span class="kanban-column-count" id="done-count">0</span>
+                        </div>
+                        <div class="kanban-column-content" id="kanban-done" data-status="done">
+                            <!-- Completed tasks will be rendered here -->
+                        </div>
+                    </div>
                 </div>
             </section>
 
