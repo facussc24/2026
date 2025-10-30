@@ -30,6 +30,9 @@
             <button class="nav-btn" onclick="showModule('flowchart')">
                 🔄 Flujograma
             </button>
+            <button class="nav-btn" onclick="showModule('timesheets')">
+                ⏱️ Planillas de Tiempo
+            </button>
         </nav>
 
         <!-- Dashboard Module -->
@@ -401,6 +404,220 @@
                     <li>✓ Identificar puntos de control</li>
                     <li>✓ Exportar diagramas en múltiples formatos</li>
                 </ul>
+            </div>
+        </div>
+
+        <!-- Time Sheets Module -->
+        <div id="module-timesheets" class="module-content">
+            <div class="timesheets-container">
+                <div class="section-header">
+                    <h2>⏱️ Planillas de Tiempo - OEE</h2>
+                    <button class="btn btn-primary" onclick="showAddTimesheetForm()">+ Nueva Planilla</button>
+                </div>
+
+                <!-- Add Timesheet Form -->
+                <div id="add-timesheet-form" class="form-container" style="display: none;">
+                    <h3>Nueva Planilla de Tiempo</h3>
+                    <form onsubmit="addTimesheet(event)">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="ts-date">Fecha*</label>
+                                <input type="date" id="ts-date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="ts-line">Línea/Máquina*</label>
+                                <input type="text" id="ts-line" required placeholder="Ej: Línea A, Torno 1">
+                            </div>
+                            <div class="form-group">
+                                <label for="ts-product">Producto/Modelo*</label>
+                                <input type="text" id="ts-product" required placeholder="Ej: Modelo X-100">
+                            </div>
+                            <div class="form-group">
+                                <label for="ts-supervisor">Supervisor*</label>
+                                <input type="text" id="ts-supervisor" required>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-top: 20px; color: var(--text-primary);">⏰ Configuración de Turnos</h4>
+                        <div class="shifts-container">
+                            <!-- Shift 1 -->
+                            <div class="shift-card">
+                                <h5>🌅 Turno 1</h5>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="ts-shift1-start">Hora Inicio</label>
+                                        <input type="time" id="ts-shift1-start" value="06:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ts-shift1-end">Hora Fin</label>
+                                        <input type="time" id="ts-shift1-end" value="14:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ts-shift1-break">Descanso (min)</label>
+                                        <input type="number" id="ts-shift1-break" value="30" min="0">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Shift 2 -->
+                            <div class="shift-card">
+                                <h5>🌞 Turno 2</h5>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="ts-shift2-start">Hora Inicio</label>
+                                        <input type="time" id="ts-shift2-start" value="14:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ts-shift2-end">Hora Fin</label>
+                                        <input type="time" id="ts-shift2-end" value="22:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ts-shift2-break">Descanso (min)</label>
+                                        <input type="number" id="ts-shift2-break" value="30" min="0">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Shift 3 -->
+                            <div class="shift-card">
+                                <h5>🌙 Turno 3</h5>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label for="ts-shift3-start">Hora Inicio</label>
+                                        <input type="time" id="ts-shift3-start" value="22:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ts-shift3-end">Hora Fin</label>
+                                        <input type="time" id="ts-shift3-end" value="06:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="ts-shift3-break">Descanso (min)</label>
+                                        <input type="number" id="ts-shift3-break" value="30" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h4 style="margin-top: 20px; color: var(--text-primary);">📊 Capacidad y Producción</h4>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="ts-capacity">Cadencia Teórica (pcs/min)*</label>
+                                <input type="number" id="ts-capacity" required step="0.01" min="0" placeholder="Ej: 100">
+                            </div>
+                            <div class="form-group">
+                                <label for="ts-actual-production">Producción Real (pcs)*</label>
+                                <input type="number" id="ts-actual-production" required min="0" placeholder="Ej: 25000">
+                            </div>
+                            <div class="form-group">
+                                <label for="ts-defects">Piezas Defectuosas</label>
+                                <input type="number" id="ts-defects" value="0" min="0">
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-success">Guardar Planilla</button>
+                            <button type="button" class="btn btn-secondary" onclick="hideAddTimesheetForm()">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Timesheet List -->
+                <div id="timesheets-list" class="timesheets-list">
+                    <!-- Timesheets will be rendered here -->
+                </div>
+
+                <!-- Losses/Stops Section -->
+                <div id="losses-section" style="display: none;" class="section">
+                    <div class="section-header">
+                        <h3>📉 Registro de Pérdidas - <span id="current-timesheet-title"></span></h3>
+                        <div>
+                            <button class="btn btn-primary" onclick="showAddLossForm()">+ Registrar Pérdida</button>
+                            <button class="btn btn-secondary" onclick="hideLossesSection()">Volver</button>
+                        </div>
+                    </div>
+
+                    <!-- Add Loss Form -->
+                    <div id="add-loss-form" class="form-container" style="display: none;">
+                        <h4>Registrar Nueva Pérdida</h4>
+                        <form onsubmit="addLoss(event)">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="loss-category">Categoría de Pérdida*</label>
+                                    <select id="loss-category" required onchange="updateLossTypes()">
+                                        <option value="">Seleccionar...</option>
+                                        <option value="disponibilidad">Disponibilidad</option>
+                                        <option value="rendimiento">Rendimiento</option>
+                                        <option value="calidad">Calidad</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="loss-type">Tipo de Pérdida*</label>
+                                    <select id="loss-type" required>
+                                        <option value="">Seleccionar categoría primero...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="loss-duration">Duración (minutos)*</label>
+                                    <input type="number" id="loss-duration" required min="1" placeholder="Ej: 45">
+                                </div>
+                                <div class="form-group">
+                                    <label for="loss-shift">Turno</label>
+                                    <select id="loss-shift">
+                                        <option value="1">Turno 1</option>
+                                        <option value="2">Turno 2</option>
+                                        <option value="3">Turno 3</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="loss-description">Descripción / Observaciones</label>
+                                <textarea id="loss-description" rows="3" placeholder="Describe los detalles de la pérdida..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-success">Registrar</button>
+                                <button type="button" class="btn btn-secondary" onclick="hideAddLossForm()">Cancelar</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Losses List -->
+                    <div id="losses-list" class="losses-list">
+                        <!-- Losses will be rendered here -->
+                    </div>
+
+                    <!-- OEE Metrics -->
+                    <div class="oee-metrics-container">
+                        <h4>📊 Métricas OEE</h4>
+                        <div class="oee-metrics-grid">
+                            <div class="oee-metric-card">
+                                <div class="oee-metric-label">Disponibilidad</div>
+                                <div class="oee-metric-value" id="oee-availability">0%</div>
+                                <div class="oee-metric-formula">Tiempo Operativo / Tiempo Planificado</div>
+                            </div>
+                            <div class="oee-metric-card">
+                                <div class="oee-metric-label">Rendimiento</div>
+                                <div class="oee-metric-value" id="oee-performance">0%</div>
+                                <div class="oee-metric-formula">Producción Real / Producción Teórica</div>
+                            </div>
+                            <div class="oee-metric-card">
+                                <div class="oee-metric-label">Calidad</div>
+                                <div class="oee-metric-value" id="oee-quality">0%</div>
+                                <div class="oee-metric-formula">Piezas Buenas / Producción Total</div>
+                            </div>
+                            <div class="oee-metric-card oee-final">
+                                <div class="oee-metric-label">OEE Final</div>
+                                <div class="oee-metric-value oee-final-value" id="oee-final">0%</div>
+                                <div class="oee-metric-formula">Disponibilidad × Rendimiento × Calidad</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pareto Chart -->
+                    <div class="pareto-container">
+                        <h4>📉 Análisis de Pareto - Pérdidas</h4>
+                        <canvas id="pareto-chart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
 

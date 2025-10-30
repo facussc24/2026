@@ -983,3 +983,539 @@ function renderRecentActivity() {
         `;
     }).join('');
 }
+
+// ============================================================================
+// TIME SHEETS MODULE - OEE (Overall Equipment Effectiveness)
+// ============================================================================
+
+let timesheets = JSON.parse(localStorage.getItem('timesheets')) || [];
+let currentTimesheetId = null;
+
+// Loss type definitions by category
+const lossTypes = {
+    disponibilidad: [
+        'Avería / Falla de Equipo',
+        'Setup / Cambio de Formato',
+        'Mantenimiento Programado',
+        'Falta de Material',
+        'Falta de Personal',
+        'Problema de Servicios (energía, agua, etc)',
+        'Otro'
+    ],
+    rendimiento: [
+        'Marcha en Vacío / Paradas Menores',
+        'Velocidad Reducida',
+        'Arranque / Calentamiento',
+        'Ajustes / Regulaciones',
+        'Espera por Cambio',
+        'Otro'
+    ],
+    calidad: [
+        'Defectos de Proceso',
+        'Scrap / Desperdicio',
+        'Retrabajo / Reproceso',
+        'Arranque de Producción',
+        'Producto Fuera de Especificación',
+        'Otro'
+    ]
+};
+
+// Initialize time sheets
+document.addEventListener('DOMContentLoaded', function() {
+    renderTimesheets();
+});
+
+// Save timesheets to localStorage
+function saveTimesheets() {
+    localStorage.setItem('timesheets', JSON.stringify(timesheets));
+}
+
+// Show/Hide Forms
+function showAddTimesheetForm() {
+    document.getElementById('add-timesheet-form').style.display = 'block';
+    // Set today's date as default
+    document.getElementById('ts-date').valueAsDate = new Date();
+}
+
+function hideAddTimesheetForm() {
+    document.getElementById('add-timesheet-form').style.display = 'none';
+    document.querySelector('#add-timesheet-form form').reset();
+}
+
+// Add new timesheet
+function addTimesheet(event) {
+    event.preventDefault();
+    
+    const date = document.getElementById('ts-date').value;
+    const line = document.getElementById('ts-line').value;
+    const product = document.getElementById('ts-product').value;
+    const supervisor = document.getElementById('ts-supervisor').value;
+    
+    // Shift configuration
+    const shifts = [
+        {
+            number: 1,
+            start: document.getElementById('ts-shift1-start').value,
+            end: document.getElementById('ts-shift1-end').value,
+            break: parseInt(document.getElementById('ts-shift1-break').value) || 0
+        },
+        {
+            number: 2,
+            start: document.getElementById('ts-shift2-start').value,
+            end: document.getElementById('ts-shift2-end').value,
+            break: parseInt(document.getElementById('ts-shift2-break').value) || 0
+        },
+        {
+            number: 3,
+            start: document.getElementById('ts-shift3-start').value,
+            end: document.getElementById('ts-shift3-end').value,
+            break: parseInt(document.getElementById('ts-shift3-break').value) || 0
+        }
+    ];
+    
+    const capacity = parseFloat(document.getElementById('ts-capacity').value);
+    const actualProduction = parseInt(document.getElementById('ts-actual-production').value);
+    const defects = parseInt(document.getElementById('ts-defects').value) || 0;
+    
+    const timesheet = {
+        id: Date.now() + Math.random(),
+        date,
+        line,
+        product,
+        supervisor,
+        shifts,
+        capacity,
+        actualProduction,
+        defects,
+        losses: [],
+        createdAt: new Date().toISOString()
+    };
+    
+    timesheets.unshift(timesheet);
+    saveTimesheets();
+    hideAddTimesheetForm();
+    renderTimesheets();
+    showToast('¡Planilla creada!', `Planilla para ${line} - ${product}`, 'success');
+}
+
+// Render timesheets list
+function renderTimesheets() {
+    const container = document.getElementById('timesheets-list');
+    if (!container) return;
+    
+    if (timesheets.length === 0) {
+        container.innerHTML = `
+            <div class="timesheets-empty">
+                <div class="timesheets-empty-icon">⏱️</div>
+                <h3>No hay planillas registradas</h3>
+                <p>Crea una nueva planilla para comenzar a registrar tiempos y pérdidas</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = timesheets.map(ts => {
+        const oee = calculateOEE(ts);
+        const oeeClass = oee.final >= 85 ? 'good' : oee.final >= 65 ? 'warning' : 'danger';
+        
+        return `
+            <div class="timesheet-card" onclick="viewTimesheet(${ts.id})">
+                <div class="timesheet-header">
+                    <div>
+                        <div class="timesheet-title">${escapeHtml(ts.line)}</div>
+                        <div class="timesheet-date">📅 ${formatDate(ts.date)}</div>
+                    </div>
+                </div>
+                
+                <div class="timesheet-info">
+                    <div class="timesheet-info-item">
+                        <div class="timesheet-info-label">Producto</div>
+                        <div class="timesheet-info-value">${escapeHtml(ts.product)}</div>
+                    </div>
+                    <div class="timesheet-info-item">
+                        <div class="timesheet-info-label">Supervisor</div>
+                        <div class="timesheet-info-value">${escapeHtml(ts.supervisor)}</div>
+                    </div>
+                    <div class="timesheet-info-item">
+                        <div class="timesheet-info-label">Producción Real</div>
+                        <div class="timesheet-info-value">${ts.actualProduction.toLocaleString()} pcs</div>
+                    </div>
+                    <div class="timesheet-info-item">
+                        <div class="timesheet-info-label">Pérdidas Registradas</div>
+                        <div class="timesheet-info-value">${ts.losses.length}</div>
+                    </div>
+                </div>
+                
+                <div class="timesheet-oee">
+                    <span class="timesheet-oee-label">OEE Final:</span>
+                    <span class="timesheet-oee-value ${oeeClass}">${oee.final.toFixed(1)}%</span>
+                </div>
+                
+                <div class="timesheet-actions" onclick="event.stopPropagation()">
+                    <button class="btn btn-primary" onclick="viewTimesheet(${ts.id})">Ver Detalles</button>
+                    <button class="btn btn-danger" onclick="deleteTimesheet(${ts.id})">Eliminar</button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// View timesheet details (losses section)
+function viewTimesheet(id) {
+    currentTimesheetId = id;
+    const timesheet = timesheets.find(ts => ts.id === id);
+    if (!timesheet) return;
+    
+    // Hide timesheets list and form
+    document.getElementById('add-timesheet-form').style.display = 'none';
+    document.getElementById('timesheets-list').style.display = 'none';
+    document.querySelector('#module-timesheets .section-header').style.display = 'none';
+    
+    // Show losses section
+    document.getElementById('losses-section').style.display = 'block';
+    document.getElementById('current-timesheet-title').textContent = 
+        `${timesheet.line} - ${timesheet.product} (${formatDate(timesheet.date)})`;
+    
+    renderLosses();
+    renderOEEMetrics();
+    renderParetoChart();
+}
+
+// Hide losses section
+function hideLossesSection() {
+    currentTimesheetId = null;
+    document.getElementById('losses-section').style.display = 'none';
+    document.getElementById('add-loss-form').style.display = 'none';
+    document.getElementById('timesheets-list').style.display = 'grid';
+    document.querySelector('#module-timesheets .section-header').style.display = 'flex';
+}
+
+// Show/Hide Loss Form
+function showAddLossForm() {
+    document.getElementById('add-loss-form').style.display = 'block';
+}
+
+function hideAddLossForm() {
+    document.getElementById('add-loss-form').style.display = 'none';
+    document.querySelector('#add-loss-form form').reset();
+    document.getElementById('loss-type').innerHTML = '<option value="">Seleccionar categoría primero...</option>';
+}
+
+// Update loss types dropdown based on category
+function updateLossTypes() {
+    const category = document.getElementById('loss-category').value;
+    const typeSelect = document.getElementById('loss-type');
+    
+    if (!category) {
+        typeSelect.innerHTML = '<option value="">Seleccionar categoría primero...</option>';
+        return;
+    }
+    
+    const types = lossTypes[category] || [];
+    typeSelect.innerHTML = types.map(type => 
+        `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`
+    ).join('');
+}
+
+// Add loss
+function addLoss(event) {
+    event.preventDefault();
+    
+    const timesheet = timesheets.find(ts => ts.id === currentTimesheetId);
+    if (!timesheet) return;
+    
+    const category = document.getElementById('loss-category').value;
+    const type = document.getElementById('loss-type').value;
+    const duration = parseInt(document.getElementById('loss-duration').value);
+    const shift = parseInt(document.getElementById('loss-shift').value);
+    const description = document.getElementById('loss-description').value;
+    
+    const loss = {
+        id: Date.now() + Math.random(),
+        category,
+        type,
+        duration,
+        shift,
+        description,
+        createdAt: new Date().toISOString()
+    };
+    
+    timesheet.losses.push(loss);
+    saveTimesheets();
+    hideAddLossForm();
+    renderLosses();
+    renderOEEMetrics();
+    renderParetoChart();
+    renderTimesheets(); // Update main list
+    showToast('Pérdida registrada', `${duration} min - ${type}`, 'warning');
+}
+
+// Render losses
+function renderLosses() {
+    const timesheet = timesheets.find(ts => ts.id === currentTimesheetId);
+    if (!timesheet) return;
+    
+    const container = document.getElementById('losses-list');
+    
+    if (timesheet.losses.length === 0) {
+        container.innerHTML = `
+            <div class="timesheets-empty">
+                <div class="timesheets-empty-icon">📉</div>
+                <h3>No hay pérdidas registradas</h3>
+                <p>Registra las paradas y pérdidas para analizar la eficiencia</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort by duration (largest first)
+    const sortedLosses = [...timesheet.losses].sort((a, b) => b.duration - a.duration);
+    
+    container.innerHTML = sortedLosses.map(loss => `
+        <div class="loss-card ${loss.category}">
+            <div class="loss-header">
+                <div>
+                    <div class="loss-title">${escapeHtml(loss.type)}</div>
+                    <span class="loss-category-badge ${loss.category}">${loss.category}</span>
+                </div>
+                <div class="loss-duration">${loss.duration} min</div>
+            </div>
+            
+            <div class="loss-meta">
+                <span>🔄 Turno ${loss.shift}</span>
+                <span>🕐 ${formatRelativeTime(loss.createdAt)}</span>
+            </div>
+            
+            ${loss.description ? `
+                <div class="loss-description">${escapeHtml(loss.description)}</div>
+            ` : ''}
+            
+            <div class="loss-actions">
+                <button class="btn btn-danger btn-sm" onclick="deleteLoss(${loss.id})">
+                    🗑️ Eliminar
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Delete loss
+function deleteLoss(lossId) {
+    const timesheet = timesheets.find(ts => ts.id === currentTimesheetId);
+    if (!timesheet) return;
+    
+    if (confirm('¿Eliminar esta pérdida?')) {
+        timesheet.losses = timesheet.losses.filter(loss => loss.id !== lossId);
+        saveTimesheets();
+        renderLosses();
+        renderOEEMetrics();
+        renderParetoChart();
+        renderTimesheets();
+        showToast('Pérdida eliminada', '', 'info');
+    }
+}
+
+// Delete timesheet
+function deleteTimesheet(id) {
+    if (confirm('¿Eliminar esta planilla y todas sus pérdidas?')) {
+        timesheets = timesheets.filter(ts => ts.id !== id);
+        saveTimesheets();
+        renderTimesheets();
+        showToast('Planilla eliminada', '', 'info');
+    }
+}
+
+// Calculate OEE
+function calculateOEE(timesheet) {
+    // Calculate total planned time (all 3 shifts minus breaks)
+    const totalPlannedMinutes = timesheet.shifts.reduce((total, shift) => {
+        const start = parseTime(shift.start);
+        const end = parseTime(shift.end);
+        let shiftMinutes = end - start;
+        
+        // Handle overnight shifts
+        if (shiftMinutes < 0) {
+            shiftMinutes += 24 * 60;
+        }
+        
+        return total + (shiftMinutes - shift.break);
+    }, 0);
+    
+    // Calculate total downtime from losses
+    const totalDowntime = timesheet.losses.reduce((sum, loss) => sum + loss.duration, 0);
+    
+    // Calculate operating time
+    const operatingTime = totalPlannedMinutes - totalDowntime;
+    
+    // Calculate availability
+    const availability = (operatingTime / totalPlannedMinutes) * 100;
+    
+    // Calculate theoretical production
+    const theoreticalProduction = operatingTime * timesheet.capacity;
+    
+    // Calculate performance
+    const performance = (timesheet.actualProduction / theoreticalProduction) * 100;
+    
+    // Calculate quality
+    const goodPieces = timesheet.actualProduction - timesheet.defects;
+    const quality = (goodPieces / timesheet.actualProduction) * 100;
+    
+    // Calculate final OEE
+    const oee = (availability * performance * quality) / 10000;
+    
+    return {
+        availability: isNaN(availability) ? 0 : availability,
+        performance: isNaN(performance) ? 0 : performance,
+        quality: isNaN(quality) ? 0 : quality,
+        final: isNaN(oee) ? 0 : oee
+    };
+}
+
+// Helper function to parse time string "HH:MM" to minutes
+function parseTime(timeStr) {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours * 60 + minutes;
+}
+
+// Render OEE metrics
+function renderOEEMetrics() {
+    const timesheet = timesheets.find(ts => ts.id === currentTimesheetId);
+    if (!timesheet) return;
+    
+    const oee = calculateOEE(timesheet);
+    
+    document.getElementById('oee-availability').textContent = oee.availability.toFixed(1) + '%';
+    document.getElementById('oee-performance').textContent = oee.performance.toFixed(1) + '%';
+    document.getElementById('oee-quality').textContent = oee.quality.toFixed(1) + '%';
+    document.getElementById('oee-final').textContent = oee.final.toFixed(1) + '%';
+    
+    // Color code the final OEE
+    const finalElement = document.getElementById('oee-final');
+    finalElement.style.color = oee.final >= 85 ? 'var(--success-color)' : 
+                                oee.final >= 65 ? 'var(--warning-color)' : 
+                                'var(--danger-color)';
+}
+
+// Render Pareto chart
+function renderParetoChart() {
+    const timesheet = timesheets.find(ts => ts.id === currentTimesheetId);
+    if (!timesheet || timesheet.losses.length === 0) return;
+    
+    // Group losses by type and sum durations
+    const lossesData = {};
+    timesheet.losses.forEach(loss => {
+        if (!lossesData[loss.type]) {
+            lossesData[loss.type] = 0;
+        }
+        lossesData[loss.type] += loss.duration;
+    });
+    
+    // Convert to array and sort by duration
+    const sortedData = Object.entries(lossesData)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10); // Top 10
+    
+    const canvas = document.getElementById('pareto-chart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const width = canvas.parentElement.clientWidth;
+    const height = 300;
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    const padding = { top: 40, right: 60, bottom: 100, left: 60 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    
+    // Calculate totals
+    const totalLoss = sortedData.reduce((sum, [, duration]) => sum + duration, 0);
+    let cumulativePercent = 0;
+    
+    // Bar width
+    const barWidth = chartWidth / sortedData.length;
+    const barPadding = barWidth * 0.2;
+    const actualBarWidth = barWidth - barPadding;
+    
+    // Draw bars and cumulative line
+    sortedData.forEach(([type, duration], index) => {
+        const barHeight = (duration / totalLoss) * chartHeight;
+        const x = padding.left + index * barWidth;
+        const y = padding.top + chartHeight - barHeight;
+        
+        // Draw bar
+        ctx.fillStyle = '#3b82f6';
+        ctx.fillRect(x + barPadding / 2, y, actualBarWidth, barHeight);
+        
+        // Draw value on bar
+        ctx.fillStyle = '#1e293b';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${duration}m`, x + barWidth / 2, y - 5);
+        
+        // Draw label
+        ctx.save();
+        ctx.translate(x + barWidth / 2, height - padding.bottom + 10);
+        ctx.rotate(-Math.PI / 4);
+        ctx.textAlign = 'right';
+        ctx.fillText(type.substring(0, 20), 0, 0);
+        ctx.restore();
+        
+        // Calculate cumulative percentage
+        cumulativePercent += (duration / totalLoss) * 100;
+        
+        // Draw cumulative line point
+        const lineY = padding.top + chartHeight * (1 - cumulativePercent / 100);
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(x + barWidth / 2, lineY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw line to next point
+        if (index < sortedData.length - 1) {
+            const nextPercent = cumulativePercent + (sortedData[index + 1][1] / totalLoss) * 100;
+            const nextLineY = padding.top + chartHeight * (1 - nextPercent / 100);
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x + barWidth / 2, lineY);
+            ctx.lineTo(x + barWidth * 1.5, nextLineY);
+            ctx.stroke();
+        }
+    });
+    
+    // Draw axes
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(padding.left, padding.top + chartHeight);
+    ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+    ctx.stroke();
+    
+    // Draw title
+    ctx.fillStyle = '#1e293b';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Top 10 Pérdidas por Tiempo (Principio de Pareto)', width / 2, 20);
+    
+    // Draw percentage axis
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 100; i += 20) {
+        const y = padding.top + chartHeight * (1 - i / 100);
+        ctx.fillText(`${i}%`, width - padding.right + 40, y + 4);
+        
+        // Draw grid line
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+    }
+}
