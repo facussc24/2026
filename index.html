@@ -2,8 +2,24 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Tareas y Documentos - 2026</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="description" content="Sistema modular de gestión de tareas, documentos de ingeniería y análisis OEE para producción industrial">
+    <meta name="keywords" content="gestión, tareas, OEE, producción, ingeniería, AMFE, control, calidad">
+    <meta name="author" content="Gestión 2026">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Gestión 2026">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ctext x='16' y='24' font-size='20' text-anchor='middle'%3E🚀%3C/text%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' fill='%232563eb' rx='40'/%3E%3Ctext x='90' y='125' font-size='90' text-anchor='middle' fill='white'%3E🚀%3C/text%3E%3C/svg%3E">
+    
+    <title>Sistema de Gestión - 2026</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -630,6 +646,131 @@
     <!-- Screen Reader Announcements -->
     <div id="sr-announcements" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
+    <!-- Offline Indicator -->
+    <div id="offline-indicator" class="offline-indicator" style="display: none;">
+        <span class="offline-icon">📡</span>
+        <span class="offline-text">Sin conexión - Los cambios se sincronizarán automáticamente</span>
+    </div>
+
+    <!-- Configuration and Logger -->
+    <script src="config.js"></script>
+    
+    <!-- Advanced Storage Layer -->
+    <script src="storage.js"></script>
+    
+    <!-- Main Application -->
     <script src="script.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        // Register Service Worker for PWA support
+        if ('serviceWorker' in navigator && APP_CONFIG.features.serviceWorker) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(registration => {
+                        logger.info('Service Worker registered successfully:', registration.scope);
+                        
+                        // Check for updates
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // New version available
+                                    if (confirm('Nueva versión disponible. ¿Actualizar ahora?')) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch(error => {
+                        logger.warn('Service Worker registration failed:', error);
+                    });
+            });
+        }
+
+        // Online/Offline Status Management
+        const offlineIndicator = document.getElementById('offline-indicator');
+        
+        window.addEventListener('online', () => {
+            if (offlineIndicator) {
+                offlineIndicator.style.display = 'none';
+            }
+            logger.info('Connection restored');
+            
+            // Trigger sync
+            if ('serviceWorker' in navigator && 'sync' in ServiceWorkerRegistration.prototype) {
+                navigator.serviceWorker.ready.then(registration => {
+                    return registration.sync.register('sync-data');
+                }).catch(err => {
+                    logger.warn('Background sync registration failed:', err);
+                });
+            }
+        });
+
+        window.addEventListener('offline', () => {
+            if (offlineIndicator) {
+                offlineIndicator.style.display = 'flex';
+            }
+            logger.info('Connection lost - offline mode activated');
+        });
+
+        // Global error handler
+        window.addEventListener('error', (event) => {
+            logger.error('Global error:', event.error);
+            
+            // Show user-friendly message for critical errors
+            if (typeof showToast === 'function') {
+                showToast('Error', 'Ocurrió un error inesperado. Por favor, recarga la página.', 'error');
+            }
+        });
+
+        // Unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', (event) => {
+            logger.error('Unhandled promise rejection:', event.reason);
+            event.preventDefault(); // Prevent default browser logging
+            
+            if (typeof showToast === 'function') {
+                showToast('Error', 'Error en operación asíncrona. Intenta nuevamente.', 'error');
+            }
+        });
+
+        // Performance monitoring
+        if (APP_CONFIG.features.performanceMonitoring && APP_CONFIG.debug.showPerformance) {
+            window.addEventListener('load', () => {
+                const perfData = performance.timing;
+                const loadTime = perfData.loadEventEnd - perfData.navigationStart;
+                logger.info(`Page load time: ${loadTime}ms`);
+            });
+        }
+
+        // Initialize storage on load
+        document.addEventListener('DOMContentLoaded', async () => {
+            logger.info('Application initializing...');
+            
+            if (APP_CONFIG.features.indexedDB) {
+                try {
+                    await storage.init();
+                    logger.info('Storage initialized successfully');
+                } catch (error) {
+                    logger.error('Storage initialization failed:', error);
+                }
+            }
+            
+            // Check storage quota
+            if (APP_CONFIG.storage.autoCleanup) {
+                const quota = await storage.checkQuota();
+                if (quota.warning) {
+                    logger.warn('Storage quota warning:', quota);
+                    if (typeof showToast === 'function') {
+                        showToast('Advertencia', `Espacio de almacenamiento al ${Math.round(quota.percentUsed)}%`, 'warning');
+                    }
+                }
+            }
+            
+            logger.info('Application ready');
+        });
+    </script>
 </body>
 </html>

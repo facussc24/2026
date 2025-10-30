@@ -1755,3 +1755,69 @@ footer {
         grid-template-columns: 1fr;
     }
 }
+
+/* ===========================
+   Offline Indicator
+   =========================== */
+.offline-indicator {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 30px;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 10000;
+    animation: slideUp 0.3s ease-out;
+    font-weight: 500;
+}
+
+.offline-icon {
+    font-size: 1.2em;
+    animation: pulse 2s infinite;
+}
+
+.offline-text {
+    font-size: 0.95em;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translate(-50%, 100px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(-50%);
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* Mobile adjustments for offline indicator */
+@media (max-width: 768px) {
+    .offline-indicator {
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+        transform: none;
+        padding: 10px 16px;
+        border-radius: 12px;
+    }
+    
+    .offline-text {
+        font-size: 0.85em;
+    }
+}
