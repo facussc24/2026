@@ -43,6 +43,8 @@ body {
     background: var(--background);
     color: var(--text-primary);
     line-height: 1.6;
+    /* Remove 300ms tap delay on iOS */
+    touch-action: manipulation;
 }
 
 .container {
@@ -218,6 +220,9 @@ header h1 {
     cursor: pointer;
     transition: all 0.3s ease;
     display: inline-block;
+    /* Ensure minimum touch target size (44x44px per Apple HIG) */
+    min-height: 44px;
+    min-width: 44px;
 }
 
 .btn:hover {
@@ -611,6 +616,19 @@ footer {
     color: var(--text-secondary);
     box-shadow: var(--shadow);
     margin-top: 40px;
+}
+
+/* Screen Reader Only */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 
 .footer-note {

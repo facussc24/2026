@@ -28,6 +28,8 @@ function showToast(title, message, type = 'info') {
     const container = document.querySelector('.toast-container');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'polite');
     
     const icons = {
         success: '✓',
@@ -37,15 +39,18 @@ function showToast(title, message, type = 'info') {
     };
     
     toast.innerHTML = `
-        <div class="toast-icon">${icons[type] || icons.info}</div>
+        <div class="toast-icon" aria-hidden="true">${icons[type] || icons.info}</div>
         <div class="toast-content">
             <div class="toast-title">${title}</div>
             ${message ? `<div class="toast-message">${message}</div>` : ''}
         </div>
-        <button class="toast-close" onclick="closeToast(this)">×</button>
+        <button class="toast-close" onclick="closeToast(this)" aria-label="Cerrar notificación">×</button>
     `;
     
     container.appendChild(toast);
+    
+    // Announce to screen readers
+    announceToScreenReader(`${title}. ${message || ''}`);
     
     // Auto-remove after 4 seconds
     setTimeout(() => {
@@ -57,6 +62,18 @@ function closeToast(button) {
     const toast = button.closest('.toast');
     toast.classList.add('hiding');
     setTimeout(() => toast.remove(), 300);
+}
+
+// Screen reader announcement helper
+function announceToScreenReader(message) {
+    const announcer = document.getElementById('sr-announcements');
+    if (announcer) {
+        announcer.textContent = message;
+        // Clear after announcement
+        setTimeout(() => {
+            announcer.textContent = '';
+        }, 1000);
+    }
 }
 
 // Task Status Calculation
@@ -138,7 +155,7 @@ function addTask(event) {
     const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()).filter(tag => tag) : [];
     
     const task = {
-        id: Date.now() + (idCounter++),
+        id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         title: title,
         description: description,
         priority: priority,
@@ -217,9 +234,14 @@ function editTask(taskId) {
     };
 }
 
+// Debounced search for better performance
+let searchTimeout;
 function searchTasks() {
-    taskSearchQuery = document.getElementById('task-search').value.toLowerCase();
-    renderTasks();
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        taskSearchQuery = document.getElementById('task-search').value.toLowerCase();
+        renderTasks();
+    }, 300); // Wait 300ms after user stops typing
 }
 
 function filterTasks(filter) {
@@ -334,10 +356,21 @@ function renderTasks() {
 }
 
 function saveTasks() {
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-    // Update dashboard if it exists
-    if (document.getElementById('stat-total-tasks')) {
-        renderDashboard();
+    try {
+        localStorage.setItem('tasks', JSON.stringify(tasks));
+        // Update dashboard if it exists
+        if (document.getElementById('stat-total-tasks')) {
+            renderDashboard();
+        }
+    } catch (e) {
+        if (e.name === 'QuotaExceededError') {
+            showToast('Error de almacenamiento', 'Espacio lleno. Elimina datos antiguos.', 'error');
+        } else if (e.name === 'SecurityError') {
+            showToast('Error', 'Almacenamiento no disponible en modo privado', 'error');
+        } else {
+            showToast('Error', 'No se pudieron guardar los cambios', 'error');
+        }
+        console.error('localStorage error:', e);
     }
 }
 
@@ -430,11 +463,23 @@ function renderKanban() {
             <div class="kanban-card-footer">
                 <span>${task.dueDate ? '📅 ' + formatDate(task.dueDate) : '📅 Sin fecha'}</span>
                 <div class="kanban-card-actions">
-                    <button class="kanban-card-btn" onclick="editTask(${task.id})" title="Editar">✏️</button>
-                    <button class="kanban-card-btn" onclick="deleteTask(${task.id})" title="Eliminar">🗑️</button>
+                    <button class="kanban-card-btn" onclick="editTask('${task.id}')" aria-label="Editar tarea ${escapeHtml(task.title)}" title="Editar">✏️</button>
+                    <button class="kanban-card-btn" onclick="deleteTask('${task.id}')" aria-label="Eliminar tarea ${escapeHtml(task.title)}" title="Eliminar">🗑️</button>
                 </div>
             </div>
         `;
+        
+        // Add keyboard navigation
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-label', `Tarea: ${task.title}. Prioridad: ${task.priority}. Columna: ${status}`);
+        
+        // Keyboard handler for moving cards
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                handleKeyboardMove(e, task, status);
+            }
+        });
         
         // Add drag event listeners
         card.addEventListener('dragstart', handleDragStart);
@@ -558,6 +603,39 @@ function getStatusName(status) {
     return names[status] || status;
 }
 
+// Keyboard navigation for Kanban board (accessibility)
+function handleKeyboardMove(e, task, currentStatus) {
+    e.preventDefault();
+    const statuses = ['todo', 'progress', 'review', 'done'];
+    const currentIndex = statuses.indexOf(currentStatus);
+    
+    let newIndex = currentIndex;
+    if (e.key === 'ArrowRight' && currentIndex < statuses.length - 1) {
+        newIndex = currentIndex + 1;
+    } else if (e.key === 'ArrowLeft' && currentIndex > 0) {
+        newIndex = currentIndex - 1;
+    } else {
+        return; // No movement
+    }
+    
+    const newStatus = statuses[newIndex];
+    task.kanbanStatus = newStatus;
+    
+    // Auto-complete/reopen logic
+    if (newStatus === 'done' && !task.completed) {
+        task.completed = true;
+        task.completedAt = new Date().toISOString();
+    } else if (newStatus !== 'done' && task.completed) {
+        task.completed = false;
+        task.completedAt = null;
+    }
+    
+    saveTasks();
+    renderKanban();
+    announceToScreenReader(`Tarea "${task.title}" movida a ${getStatusName(newStatus)}`);
+    showToast('Tarea movida', `"${task.title}" → ${getStatusName(newStatus)}`, 'info');
+}
+
 // Document Management Functions
 function showAddDocumentForm() {
     document.getElementById('add-document-form').style.display = 'block';
@@ -578,7 +656,7 @@ function addDocument(event) {
     const version = document.getElementById('doc-version').value;
     
     const newDoc = {
-        id: Date.now() + (idCounter++),
+        id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         title: title,
         type: type,
         description: description,
@@ -697,7 +775,16 @@ function renderDocuments() {
 }
 
 function saveDocuments() {
-    localStorage.setItem('documents', JSON.stringify(documents));
+    try {
+        localStorage.setItem('documents', JSON.stringify(documents));
+    } catch (e) {
+        if (e.name === 'QuotaExceededError') {
+            showToast('Error de almacenamiento', 'Espacio lleno. Elimina datos antiguos.', 'error');
+        } else {
+            showToast('Error', 'No se pudieron guardar los cambios', 'error');
+        }
+        console.error('localStorage error:', e);
+    }
 }
 
 // Utility Functions
@@ -1027,7 +1114,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Save timesheets to localStorage
 function saveTimesheets() {
-    localStorage.setItem('timesheets', JSON.stringify(timesheets));
+    try {
+        localStorage.setItem('timesheets', JSON.stringify(timesheets));
+    } catch (e) {
+        if (e.name === 'QuotaExceededError') {
+            showToast('Error de almacenamiento', 'Espacio lleno. Elimina datos antiguos.', 'error');
+        } else {
+            showToast('Error', 'No se pudieron guardar los cambios', 'error');
+        }
+        console.error('localStorage error:', e);
+    }
 }
 
 // Show/Hide Forms
@@ -1078,7 +1174,7 @@ function addTimesheet(event) {
     const defects = parseInt(document.getElementById('ts-defects').value) || 0;
     
     const timesheet = {
-        id: Date.now() + Math.random(),
+        id: `ts-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         date,
         line,
         product,
@@ -1231,7 +1327,7 @@ function addLoss(event) {
     const description = document.getElementById('loss-description').value;
     
     const loss = {
-        id: Date.now() + Math.random(),
+        id: `loss-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         category,
         type,
         duration,
