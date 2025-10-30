@@ -15,6 +15,9 @@
 
         <!-- Navigation Bar -->
         <nav class="navigation-bar">
+            <button class="nav-btn" onclick="showModule('dashboard')">
+                📊 Dashboard
+            </button>
             <button class="nav-btn active" onclick="showModule('tasks-docs')">
                 📋 Tareas y Documentos
             </button>
@@ -22,12 +25,151 @@
                 ⚠️ AMFE
             </button>
             <button class="nav-btn" onclick="showModule('control-plan')">
-                📊 Plan de Control
+                📈 Plan de Control
             </button>
             <button class="nav-btn" onclick="showModule('flowchart')">
                 🔄 Flujograma
             </button>
         </nav>
+
+        <!-- Dashboard Module -->
+        <div id="module-dashboard" class="module-content">
+            <div class="dashboard-container">
+                <h2 class="dashboard-title">📊 Dashboard de Productividad</h2>
+                
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
+                            📋
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">Total de Tareas</div>
+                            <div class="stat-value" id="stat-total-tasks">0</div>
+                            <div class="stat-change positive" id="stat-tasks-change">+0 esta semana</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            ✓
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">Completadas</div>
+                            <div class="stat-value" id="stat-completed-tasks">0</div>
+                            <div class="stat-change" id="stat-completion-rate">0% tasa completado</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                            ⏱️
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">Pendientes</div>
+                            <div class="stat-value" id="stat-pending-tasks">0</div>
+                            <div class="stat-change" id="stat-pending-change">0 vencidas</div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                            🔥
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-label">Alta Prioridad</div>
+                            <div class="stat-value" id="stat-high-priority">0</div>
+                            <div class="stat-change" id="stat-priority-change">Requieren atención</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Charts Section -->
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3 class="chart-title">Tareas por Estado</h3>
+                        <div class="chart-container">
+                            <canvas id="status-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="chart-card">
+                        <h3 class="chart-title">Tareas por Prioridad</h3>
+                        <div class="chart-container">
+                            <canvas id="priority-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Progress Section -->
+                <div class="progress-section">
+                    <h3 class="section-title">📈 Progreso Esta Semana</h3>
+                    <div class="progress-cards">
+                        <div class="progress-card">
+                            <div class="progress-header">
+                                <span>Lunes</span>
+                                <span id="progress-mon">0</span>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar-fill" id="progress-mon-bar"></div>
+                            </div>
+                        </div>
+                        <div class="progress-card">
+                            <div class="progress-header">
+                                <span>Martes</span>
+                                <span id="progress-tue">0</span>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar-fill" id="progress-tue-bar"></div>
+                            </div>
+                        </div>
+                        <div class="progress-card">
+                            <div class="progress-header">
+                                <span>Miércoles</span>
+                                <span id="progress-wed">0</span>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar-fill" id="progress-wed-bar"></div>
+                            </div>
+                        </div>
+                        <div class="progress-card">
+                            <div class="progress-header">
+                                <span>Jueves</span>
+                                <span id="progress-thu">0</span>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar-fill" id="progress-thu-bar"></div>
+                            </div>
+                        </div>
+                        <div class="progress-card">
+                            <div class="progress-header">
+                                <span>Viernes</span>
+                                <span id="progress-fri">0</span>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar-fill" id="progress-fri-bar"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Team Performance -->
+                <div class="team-section">
+                    <h3 class="section-title">👥 Rendimiento por Persona</h3>
+                    <div id="team-stats" class="team-stats">
+                        <!-- Will be populated dynamically -->
+                    </div>
+                </div>
+                
+                <!-- Recent Activity -->
+                <div class="activity-section">
+                    <h3 class="section-title">🕐 Actividad Reciente</h3>
+                    <div id="recent-activity" class="activity-list">
+                        <!-- Will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Tasks and Documents Module -->
         <div id="module-tasks-docs" class="module-content active">

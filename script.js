@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', function() {
     createToastContainer();
     renderTasks();
     renderDocuments();
+    renderDashboard();
 });
 
 // Toast Notification System
@@ -333,6 +334,10 @@ function renderTasks() {
 
 function saveTasks() {
     localStorage.setItem('tasks', JSON.stringify(tasks));
+    // Update dashboard if it exists
+    if (document.getElementById('stat-total-tasks')) {
+        renderDashboard();
+    }
 }
 
 // Document Management Functions
@@ -505,4 +510,258 @@ function formatRelativeTime(dateString) {
     if (diffDays < 30) return `hace ${Math.floor(diffDays / 7)} semana${Math.floor(diffDays / 7) > 1 ? 's' : ''}`;
     if (diffDays < 365) return `hace ${Math.floor(diffDays / 30)} mes${Math.floor(diffDays / 30) > 1 ? 'es' : ''}`;
     return `hace ${Math.floor(diffDays / 365)} año${Math.floor(diffDays / 365) > 1 ? 's' : ''}`;
+}
+
+// Dashboard Functions
+function renderDashboard() {
+    updateDashboardStats();
+    renderCharts();
+    renderWeeklyProgress();
+    renderTeamStats();
+    renderRecentActivity();
+}
+
+function updateDashboardStats() {
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(t => t.completed).length;
+    const pendingTasks = tasks.filter(t => !t.completed).length;
+    const overdueTasks = tasks.filter(t => !t.completed && getTaskStatus(t) === 'overdue').length;
+    const highPriorityTasks = tasks.filter(t => !t.completed && t.priority === 'alta').length;
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    
+    // Get tasks from this week
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const tasksThisWeek = tasks.filter(t => new Date(t.createdAt) > oneWeekAgo).length;
+    
+    document.getElementById('stat-total-tasks').textContent = totalTasks;
+    document.getElementById('stat-completed-tasks').textContent = completedTasks;
+    document.getElementById('stat-pending-tasks').textContent = pendingTasks;
+    document.getElementById('stat-high-priority').textContent = highPriorityTasks;
+    
+    document.getElementById('stat-tasks-change').textContent = `+${tasksThisWeek} esta semana`;
+    document.getElementById('stat-completion-rate').textContent = `${completionRate}% tasa completado`;
+    document.getElementById('stat-pending-change').textContent = `${overdueTasks} vencidas`;
+    document.getElementById('stat-priority-change').textContent = highPriorityTasks > 0 ? 'Requieren atención' : 'Todo bajo control';
+}
+
+function renderCharts() {
+    renderStatusChart();
+    renderPriorityChart();
+}
+
+function renderStatusChart() {
+    const canvas = document.getElementById('status-chart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const completed = tasks.filter(t => t.completed).length;
+    const pending = tasks.filter(t => !t.completed).length;
+    
+    drawPieChart(ctx, [
+        { label: 'Completadas', value: completed, color: '#10b981' },
+        { label: 'Pendientes', value: pending, color: '#f59e0b' }
+    ]);
+}
+
+function renderPriorityChart() {
+    const canvas = document.getElementById('priority-chart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const alta = tasks.filter(t => !t.completed && t.priority === 'alta').length;
+    const media = tasks.filter(t => !t.completed && t.priority === 'media').length;
+    const baja = tasks.filter(t => !t.completed && t.priority === 'baja').length;
+    
+    drawPieChart(ctx, [
+        { label: 'Alta', value: alta, color: '#ef4444' },
+        { label: 'Media', value: media, color: '#f59e0b' },
+        { label: 'Baja', value: baja, color: '#3b82f6' }
+    ]);
+}
+
+function drawPieChart(ctx, data) {
+    const canvas = ctx.canvas;
+    canvas.width = canvas.offsetWidth || 300;
+    canvas.height = canvas.offsetHeight || 250;
+    
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.max(Math.min(centerX, centerY) - 20, 50);
+    
+    const total = data.reduce((sum, item) => sum + item.value, 0);
+    
+    if (total === 0) {
+        ctx.fillStyle = '#e2e8f0';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Sin datos', centerX, centerY);
+        return;
+    }
+    
+    let currentAngle = -Math.PI / 2;
+    
+    data.forEach(item => {
+        const sliceAngle = (item.value / total) * 2 * Math.PI;
+        
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+        ctx.closePath();
+        ctx.fillStyle = item.color;
+        ctx.fill();
+        
+        // Draw label
+        const labelAngle = currentAngle + sliceAngle / 2;
+        const labelX = centerX + Math.cos(labelAngle) * (radius * 0.7);
+        const labelY = centerY + Math.sin(labelAngle) * (radius * 0.7);
+        
+        if (item.value > 0) {
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(item.value, labelX, labelY);
+        }
+        
+        currentAngle += sliceAngle;
+    });
+    
+    // Draw legend
+    let legendY = 20;
+    data.forEach(item => {
+        ctx.fillStyle = item.color;
+        ctx.fillRect(canvas.width - 120, legendY, 15, 15);
+        ctx.fillStyle = '#1e293b';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${item.label} (${item.value})`, canvas.width - 100, legendY + 12);
+        legendY += 25;
+    });
+}
+
+function renderWeeklyProgress() {
+    const days = ['mon', 'tue', 'wed', 'thu', 'fri'];
+    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    days.forEach((day, index) => {
+        // Get tasks completed on this day of current week
+        const targetDay = index + 1; // Monday = 1, Friday = 5
+        const tasksCompletedOnDay = tasks.filter(t => {
+            if (!t.completedAt) return false;
+            const completedDate = new Date(t.completedAt);
+            const dayOfWeek = completedDate.getDay();
+            // Check if in current week
+            const weekStart = new Date(today);
+            weekStart.setDate(today.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
+            weekStart.setHours(0, 0, 0, 0);
+            return dayOfWeek === targetDay && completedDate >= weekStart;
+        }).length;
+        
+        const maxTasks = 10; // For scaling
+        const percentage = Math.min((tasksCompletedOnDay / maxTasks) * 100, 100);
+        
+        document.getElementById(`progress-${day}`).textContent = tasksCompletedOnDay;
+        document.getElementById(`progress-${day}-bar`).style.width = `${percentage}%`;
+    });
+}
+
+function renderTeamStats() {
+    const teamStatsContainer = document.getElementById('team-stats');
+    if (!teamStatsContainer) return;
+    
+    // Group tasks by assignee
+    const teamData = {};
+    tasks.forEach(task => {
+        if (task.assignee) {
+            if (!teamData[task.assignee]) {
+                teamData[task.assignee] = { total: 0, completed: 0, pending: 0 };
+            }
+            teamData[task.assignee].total++;
+            if (task.completed) {
+                teamData[task.assignee].completed++;
+            } else {
+                teamData[task.assignee].pending++;
+            }
+        }
+    });
+    
+    if (Object.keys(teamData).length === 0) {
+        teamStatsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No hay tareas asignadas aún</p>';
+        return;
+    }
+    
+    teamStatsContainer.innerHTML = Object.entries(teamData).map(([name, stats]) => {
+        const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        const completionRate = Math.round((stats.completed / stats.total) * 100);
+        
+        return `
+            <div class="team-member">
+                <div class="team-member-info">
+                    <div class="team-avatar">${initials}</div>
+                    <div class="team-member-name">${escapeHtml(name)}</div>
+                </div>
+                <div class="team-stats-badges">
+                    <div class="team-stat-badge">
+                        <div class="team-stat-value">${stats.total}</div>
+                        <div class="team-stat-label">Total</div>
+                    </div>
+                    <div class="team-stat-badge">
+                        <div class="team-stat-value" style="color: var(--success-color);">${stats.completed}</div>
+                        <div class="team-stat-label">Completas</div>
+                    </div>
+                    <div class="team-stat-badge">
+                        <div class="team-stat-value" style="color: var(--warning-color);">${stats.pending}</div>
+                        <div class="team-stat-label">Pendientes</div>
+                    </div>
+                    <div class="team-stat-badge">
+                        <div class="team-stat-value">${completionRate}%</div>
+                        <div class="team-stat-label">Tasa</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderRecentActivity() {
+    const activityContainer = document.getElementById('recent-activity');
+    if (!activityContainer) return;
+    
+    // Get recent tasks (last 5 created or completed)
+    const recentTasks = [...tasks]
+        .sort((a, b) => {
+            const dateA = new Date(a.completedAt || a.createdAt);
+            const dateB = new Date(b.completedAt || b.createdAt);
+            return dateB - dateA;
+        })
+        .slice(0, 10);
+    
+    if (recentTasks.length === 0) {
+        activityContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No hay actividad reciente</p>';
+        return;
+    }
+    
+    activityContainer.innerHTML = recentTasks.map(task => {
+        const isCompleted = task.completed;
+        const activityType = isCompleted ? 'completed' : 'created';
+        const icon = isCompleted ? '✓' : '➕';
+        const action = isCompleted ? 'completó' : 'creó';
+        const time = formatRelativeTime(isCompleted ? task.completedAt : task.createdAt);
+        
+        return `
+            <div class="activity-item ${activityType}">
+                <div class="activity-icon">${icon}</div>
+                <div class="activity-content">
+                    <div class="activity-text">
+                        ${task.assignee ? `<strong>${escapeHtml(task.assignee)}</strong>` : 'Alguien'} 
+                        ${action} <strong>${escapeHtml(task.title)}</strong>
+                    </div>
+                    <div class="activity-time">${time}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
