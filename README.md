@@ -11,24 +11,57 @@ Prioridad de Acción) y las acciones de optimización se gestionan a nivel
 de elemento. Además, incluye un backend en Node.js para guardar y
 recuperar análisis y una utilidad de exportación a Excel.
 
+## 📋 Tabla de Contenidos
+
+- [Características](#-características)
+- [Estructura del Proyecto](#-estructura-del-proyecto)
+- [Requisitos](#-requisitos)
+- [Instalación y Configuración](#-instalación-y-configuración)
+- [Cómo Ejecutar](#-cómo-ejecutar)
+- [Uso de la Interfaz](#-uso-de-la-interfaz)
+- [Mejoras Recientes](#-mejoras-recientes)
+- [Próximos Pasos](#-próximos-pasos)
+- [Migración a Firebase](#-migración-a-firebase)
+- [Referencias](#-referencias)
+
+## ✨ Características
+
+- ✅ **Estructura jerárquica completa**: Ítems → Pasos → Elementos 4M
+- ✅ **Múltiples modos de falla por elemento**
+- ✅ **Cálculo automático de Prioridad de Acción (AP)** según AIAG-VDA
+- ✅ **Clasificación de características especiales** (Crítica/Significativa)
+- ✅ **Plan de control integrado**
+- ✅ **Exportación a Excel** con formato profesional
+- ✅ **Backend con persistencia de datos**
+- ✅ **Gestión multi-documento**
+- ✅ **Búsqueda y filtrado**
+- ✅ **Validación de datos completa**
+- ✅ **Interfaz responsive**
+
 ## 📂 Estructura del proyecto
 
 ```
-amfe_pro_app_final/
-├── public/
-│   ├── index.html      # Interfaz web con estructura y panel de detalle
-│   ├── styles.css      # Estilos responsive y codificación de colores
-│   └── script.js       # Lógica del frontend (estructura jerárquica,
-│                       #   cálculo de AP, exportación, etc.)
-├── data/
-│   └── fmeas.json      # Fichero de almacenamiento de AMFE (se genera
-│                       #   automáticamente al guardar)
-├── server.js           # Servidor HTTP/Express minimalista
-├── package.json        # Script de arranque (npm start)
-└── README.md           # Este archivo
+2026/
+├── public/                     # Frontend de la aplicación
+│   ├── index.html             # Interfaz principal del editor AMFE
+│   ├── home.html              # Página de inicio (lista de AMFEs)
+│   ├── styles.css             # Estilos responsive y codificación de colores
+│   └── script.js              # Lógica del frontend (1592 líneas)
+├── data/                       # Almacenamiento de datos (auto-generado)
+│   ├── docs.json              # Metadatos de documentos
+│   └── amfes/                 # Contenido de documentos individuales
+├── server.js                   # Backend Node.js/Express (151 líneas)
+├── package.json               # Dependencias y scripts
+├── README.md                  # Este archivo
+├── README.txt                 # Instrucciones detalladas
+├── FIREBASE_MIGRATION_GUIDE.md # Guía para migrar a Firebase
+├── QUESTIONS_AND_IMPROVEMENTS.md # Preguntas y mejoras sugeridas
+├── .gitignore                 # Archivos excluidos del control de versiones
+├── run_server.bat             # Script de inicio para Windows
+└── run_server.sh              # Script de inicio para Linux/Mac
 ```
 
-## 🚀 Cómo ejecutar
+## 🔧 Requisitos
 
 1. **Instala Node.js** (versión 18 o superior). Comprueba con `node -v`.
 2. Abre una terminal en la carpeta `amfe_pro_app_final` y ejecuta:
@@ -106,6 +139,69 @@ funcionalidad de varias maneras:
 - Integrar bases de datos reales (por ejemplo MongoDB o MySQL) en
   lugar de un fichero JSON para almacenar los AMFE.
 - Implementar exportación a PDF o generación de informes personalizados.
+
+## 🔥 Mejoras recientes (Noviembre 2024)
+
+### Mejoras de Código
+- ✅ Agregado `.gitignore` para excluir node_modules y archivos de datos
+- ✅ Mejorado `server.js` con:
+  - Documentación JSDoc completa
+  - Mejor manejo de errores
+  - Validación de entrada
+  - Mensajes de log más informativos
+- ✅ Mejorado `home.html` con:
+  - Mejor manejo de errores en operaciones async
+  - Mensajes de feedback para el usuario
+  - Manejo de estado vacío
+  - Try-catch en todas las operaciones de red
+
+### Documentación
+- ✅ **FIREBASE_MIGRATION_GUIDE.md**: Guía completa para migrar a Firebase
+  - Instrucciones paso a paso
+  - Ejemplos de código para conversión de API REST a Firestore
+  - Configuración de autenticación
+  - Script de migración de datos
+  - Análisis de costos
+  
+- ✅ **QUESTIONS_AND_IMPROVEMENTS.md**: Preguntas y mejoras sugeridas
+  - 12 preguntas clave sobre requerimientos
+  - 25+ sugerencias de mejora priorizadas
+  - Checklist de pruebas
+  - Recomendaciones de arquitectura
+
+### Calidad del Código
+- Código más legible y mantenible
+- Mejor separación de responsabilidades
+- Documentación inline mejorada
+- Preparado para escalamiento futuro
+
+## 🚀 Migración a Firebase
+
+¿Estás considerando migrar a Firebase? Consulta la **[Guía de Migración a Firebase](FIREBASE_MIGRATION_GUIDE.md)** que incluye:
+
+- Comparación entre arquitectura actual y Firebase
+- Instrucciones paso a paso de migración
+- Ejemplos de código completos
+- Configuración de autenticación y seguridad
+- Script de migración de datos existentes
+
+**Ventajas de Firebase:**
+- Escalabilidad automática
+- Hosting gratuito con SSL
+- Sincronización en tiempo real
+- Backup automático
+- No requiere servidor
+
+## ❓ Preguntas y Mejoras
+
+Para ver el análisis completo de mejoras sugeridas y preguntas sobre el proyecto, consulta **[QUESTIONS_AND_IMPROVEMENTS.md](QUESTIONS_AND_IMPROVEMENTS.md)**.
+
+El documento cubre:
+- Decisiones de arquitectura (¿Firebase o servidor propio?)
+- Funcionalidades adicionales sugeridas
+- Mejoras de UX/UI
+- Optimizaciones de rendimiento
+- Plan de pruebas
 
 Esperamos que esta herramienta te sirva para documentar y analizar
 procesos de manera profesional y conforme a los estándares de la
