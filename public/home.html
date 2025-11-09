@@ -77,6 +77,23 @@
       <div class="list-section">
         <h2>AMFEs guardados</h2>
         <input type="text" id="search" placeholder="Buscar por nombre…">
+        
+        <!-- Advanced Search Filters -->
+        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+          <select id="sort-by" style="padding: 5px;">
+            <option value="lastModified">Ordenar por: Más reciente</option>
+            <option value="name">Ordenar por: Nombre</option>
+            <option value="oldest">Ordenar por: Más antiguo</option>
+          </select>
+          
+          <select id="filter-date" style="padding: 5px;">
+            <option value="all">Todas las fechas</option>
+            <option value="today">Hoy</option>
+            <option value="week">Última semana</option>
+            <option value="month">Último mes</option>
+          </select>
+        </div>
+        
         <div id="doc-list"></div>
       </div>
     </div>
@@ -138,17 +155,52 @@
     }
 
     /**
-     * Renderiza la lista de documentos
+     * Renderiza la lista de documentos con filtros avanzados
      */
     async function renderList() {
       try {
         const filter = searchInput.value.toLowerCase();
-        const docs = await fetchDocs();
-        docListDiv.innerHTML = '';
+        const sortBy = document.getElementById('sort-by').value;
+        const filterDate = document.getElementById('filter-date').value;
         
+        let docs = await fetchDocs();
+        
+        // Apply date filter
+        if (filterDate !== 'all') {
+          const now = new Date();
+          docs = docs.filter(doc => {
+            if (!doc.lastModified || !doc.lastModified.toDate) return false;
+            const docDate = doc.lastModified.toDate();
+            const diffTime = Math.abs(now - docDate);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            switch(filterDate) {
+              case 'today': return diffDays === 0;
+              case 'week': return diffDays <= 7;
+              case 'month': return diffDays <= 30;
+              default: return true;
+            }
+          });
+        }
+        
+        // Apply text filter
         const filteredDocs = docs.filter(doc => 
           doc.name && doc.name.toLowerCase().includes(filter)
         );
+        
+        // Apply sorting
+        if (sortBy === 'name') {
+          filteredDocs.sort((a, b) => a.name.localeCompare(b.name));
+        } else if (sortBy === 'oldest') {
+          filteredDocs.sort((a, b) => {
+            const dateA = a.lastModified?.toDate ? a.lastModified.toDate() : new Date(0);
+            const dateB = b.lastModified?.toDate ? b.lastModified.toDate() : new Date(0);
+            return dateA - dateB;
+          });
+        }
+        // Default is 'lastModified' (most recent) which is already sorted by fetchDocs
+        
+        docListDiv.innerHTML = '';
         
         if (filteredDocs.length === 0) {
           docListDiv.innerHTML = '<p>No se encontraron documentos.</p>';
@@ -191,6 +243,41 @@
             }
           };
           
+          // Duplicar AMFE
+          const duplicateBtn = document.createElement('button');
+          duplicateBtn.textContent = 'Duplicar';
+          duplicateBtn.onclick = async () => {
+            try {
+              if (typeof loading !== 'undefined') {
+                loading.show();
+              }
+              
+              // Get the original document
+              const originalDoc = await db.collection(COLLECTION_NAME).doc(doc.id).get();
+              const originalData = originalDoc.data();
+              
+              // Create a copy with a new name
+              const newName = doc.name + ' (Copia)';
+              await db.collection(COLLECTION_NAME).add({
+                name: newName,
+                lastModified: firebase.firestore.FieldValue.serverTimestamp(),
+                content: originalData.content
+              });
+              
+              if (typeof loading !== 'undefined') {
+                loading.hide();
+              }
+              
+              showSuccess('Documento duplicado correctamente');
+              renderList();
+            } catch (error) {
+              if (typeof loading !== 'undefined') {
+                loading.hide();
+              }
+              showError('Error al duplicar: ' + error.message);
+            }
+          };
+          
           // Eliminar AMFE
           const deleteBtn = document.createElement('button');
           deleteBtn.textContent = 'Eliminar';
@@ -207,6 +294,7 @@
           
           actions.appendChild(openBtn);
           actions.appendChild(renameBtn);
+          actions.appendChild(duplicateBtn);
           actions.appendChild(deleteBtn);
           wrapper.appendChild(info);
           wrapper.appendChild(actions);
@@ -260,6 +348,15 @@
 
     // Escuchar cambios en el filtro de búsqueda
     searchInput.addEventListener('input', () => {
+      renderList().catch(err => console.error(err));
+    });
+    
+    // Escuchar cambios en los filtros avanzados
+    document.getElementById('sort-by').addEventListener('change', () => {
+      renderList().catch(err => console.error(err));
+    });
+    
+    document.getElementById('filter-date').addEventListener('change', () => {
       renderList().catch(err => console.error(err));
     });
 

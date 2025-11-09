@@ -1691,3 +1691,60 @@ if (typeof firebase !== 'undefined' && firebase.database) {
 }
 
 console.log('Auto-save and UI enhancements initialized');
+
+// ========== KEYBOARD SHORTCUTS ==========
+
+// Add keyboard shortcuts for common actions
+document.addEventListener('keydown', (e) => {
+  // Ctrl+S or Cmd+S to save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveData();
+    if (typeof toast !== 'undefined') {
+      toast.info('Guardando con Ctrl+S...', 2000);
+    }
+  }
+  
+  // Ctrl+E or Cmd+E to export
+  if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+    e.preventDefault();
+    exportToExcel();
+    if (typeof toast !== 'undefined') {
+      toast.info('Exportando a Excel...', 2000);
+    }
+  }
+  
+  // Escape to close modals/deselect
+  if (e.key === 'Escape') {
+    // Could be used to deselect current element
+    console.log('Escape pressed - could deselect element');
+  }
+});
+
+console.log('Keyboard shortcuts initialized (Ctrl+S = Save, Ctrl+E = Export)');
+
+// ========== KEYBOARD SHORTCUTS HELP PANEL ==========
+
+// Add shortcuts help button in header if it doesn't exist
+document.addEventListener('DOMContentLoaded', () => {
+  const nav = document.querySelector('nav');
+  if (nav && !document.getElementById('show-shortcuts')) {
+    const shortcutsBtn = document.createElement('button');
+    shortcutsBtn.id = 'show-shortcuts';
+    shortcutsBtn.className = 'btn';
+    shortcutsBtn.style.marginLeft = '10px';
+    shortcutsBtn.textContent = '⌨️ Atajos';
+    shortcutsBtn.onclick = showShortcutsHelp;
+    nav.appendChild(shortcutsBtn);
+  }
+});
+
+function showShortcutsHelp() {
+  if (typeof toast !== 'undefined') {
+    toast.info('Ctrl+S = Guardar | Ctrl+E = Exportar', 5000);
+  } else {
+    alert('Atajos de teclado:\n\nCtrl+S - Guardar AMFE\nCtrl+E - Exportar a Excel\nEsc - Cerrar paneles');
+  }
+}
+
+console.log('Keyboard shortcuts help initialized');
