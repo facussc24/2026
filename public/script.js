@@ -1379,21 +1379,25 @@ function initControlHeaderUI() {
 async function loadFromServer() {
   if (!currentDocId) return;
   try {
-    const res = await fetch('/api/docs/' + encodeURIComponent(currentDocId));
-    if (!res.ok) throw new Error('Error al cargar documento');
-    const saved = await res.json();
-    // Copiar propiedades guardadas al estado actual
-    if (saved.general) {
-      Object.assign(state.general, saved.general);
-    }
-    if (Array.isArray(saved.items)) {
-      state.items = saved.items;
-    }
-    if (saved.controlHeader) {
-      Object.assign(state.controlHeader, saved.controlHeader);
+    const docRef = db.collection('docs').doc(currentDocId);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+      const saved = docSnap.data().content || {};
+      // Copiar propiedades guardadas al estado actual
+      if (saved.general) {
+        Object.assign(state.general, saved.general);
+      }
+      if (Array.isArray(saved.items)) {
+        state.items = saved.items;
+      }
+      if (saved.controlHeader) {
+        Object.assign(state.controlHeader, saved.controlHeader);
+      }
+    } else {
+      console.log("No such document!");
     }
   } catch (ex) {
-    console.error(ex);
+    console.error("Error getting document:", ex);
   }
 }
 
@@ -1403,11 +1407,11 @@ async function persistServer() {
   try {
     const copy = JSON.parse(JSON.stringify(state));
     const name = state.general.tema && state.general.tema.trim() !== '' ? state.general.tema.trim() : 'AMFE sin tema';
-    await fetch('/api/docs/' + encodeURIComponent(currentDocId), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, content: copy })
-    });
+    await db.collection('docs').doc(currentDocId).set({
+      name: name,
+      content: copy,
+      lastModified: new Date().toISOString()
+    }, { merge: true });
   } catch (ex) {
     console.error('Error al guardar en servidor:', ex);
   }

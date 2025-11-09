@@ -80,17 +80,16 @@
       </div>
     </div>
   </main>
+  <script src="firebase-config.js"></script>
   <script>
-    // Página de inicio para servidor: trabaja con API REST en lugar de localStorage
     const newBtn = document.getElementById('new-amfe');
     const docListDiv = document.getElementById('doc-list');
     const searchInput = document.getElementById('search');
 
-    // Obtener la lista de documentos desde el servidor
+    // Obtener la lista de documentos desde Firestore
     async function fetchDocs() {
-      const res = await fetch('/api/docs');
-      if (!res.ok) throw new Error('No se pudo cargar la lista de AMFEs');
-      return await res.json();
+      const snapshot = await db.collection('docs').get();
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     }
 
     // Renderiza la lista de documentos
@@ -104,7 +103,8 @@
           const wrapper = document.createElement('div');
           wrapper.className = 'doc-item';
           const info = document.createElement('div');
-          info.textContent = `${doc.name} (Modificado: ${new Date(doc.lastModified).toLocaleDateString()})`;
+          const lastModified = doc.lastModified ? new Date(doc.lastModified).toLocaleDateString() : 'N/A';
+          info.textContent = `${doc.name} (Modificado: ${lastModified})`;
           const actions = document.createElement('div');
           actions.className = 'doc-actions';
           // Abrir AMFE
@@ -119,10 +119,9 @@
           renameBtn.onclick = async () => {
             const nuevo = prompt('Nuevo nombre para el AMFE:', doc.name);
             if (!nuevo || nuevo.trim() === '') return;
-            await fetch('/api/docs/' + encodeURIComponent(doc.id), {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: nuevo.trim() })
+            await db.collection('docs').doc(doc.id).update({
+              name: nuevo.trim(),
+              lastModified: new Date().toISOString()
             });
             renderList();
           };
@@ -131,7 +130,7 @@
           deleteBtn.textContent = 'Eliminar';
           deleteBtn.onclick = async () => {
             if (!confirm('¿Desea eliminar este AMFE? Esta acción no se puede deshacer.')) return;
-            await fetch('/api/docs/' + encodeURIComponent(doc.id), { method: 'DELETE' });
+            await db.collection('docs').doc(doc.id).delete();
             renderList();
           };
           actions.appendChild(openBtn);
@@ -145,14 +144,24 @@
 
     // Crear un nuevo AMFE
     newBtn.addEventListener('click', async () => {
-      // Solicita al servidor la creación con nombre por defecto
-      const res = await fetch('/api/docs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Nuevo AMFE' })
-      });
-      const meta = await res.json();
-      window.location.href = 'index.html?id=' + encodeURIComponent(meta.id);
+      try {
+        const newDoc = {
+          name: 'Nuevo AMFE',
+          lastModified: new Date().toISOString(),
+          content: {
+            general: { orgName: '', tema: '', numeroAmfe: '', revisionAmfe: '', planta: '', fechaInicio: '', responsable: '', cliente: '', fechaRevision: '', confidencialidad: '', modelo: '', equipo: '', planNumber: '', contacto: '', tipoPlan: '', numParte: '', ultimoCambio: '', aprobProv: '', aprobIngCliente: '', aprobCalidadCliente: '', aprobOtras: '' },
+            items: [],
+            selected: { itemId: null, stepId: null, elementId: null }
+          }
+        };
+        console.log("Attempting to add document to Firestore...");
+        const docRef = await db.collection('docs').add(newDoc);
+        console.log("Document added with ID: ", docRef.id);
+        window.location.href = 'index.html?id=' + encodeURIComponent(docRef.id);
+      } catch (error) {
+        console.error("Error creating new document:", error);
+        alert("Could not create new document. See console for details.");
+      }
     });
 
     // Escuchar cambios en el filtro de búsqueda
@@ -163,5 +172,8 @@
     // Carga inicial
     renderList().catch(err => console.error(err));
   </script>
+  <!-- Firebase SDK (v8 for compatibility with existing code) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 </body>
 </html>
