@@ -122,19 +122,37 @@
           renameBtn.onclick = async () => {
             const nuevo = prompt('Nuevo nombre para el AMFE:', doc.name);
             if (!nuevo || nuevo.trim() === '') return;
-            await db.collection('docs').doc(doc.id).update({
-              name: nuevo.trim(),
-              lastModified: new Date().toISOString()
-            });
-            renderList();
+            renameBtn.disabled = true;
+            renameBtn.textContent = 'Renombrando...';
+            try {
+              await db.collection('docs').doc(doc.id).update({
+                name: nuevo.trim(),
+                lastModified: new Date().toISOString()
+              });
+              renderList();
+            } catch (error) {
+              console.error("Error renaming document:", error);
+              alert("Could not rename document. See console for details.");
+              renameBtn.disabled = false;
+              renameBtn.textContent = 'Renombrar';
+            }
           };
           // Eliminar AMFE
           const deleteBtn = document.createElement('button');
           deleteBtn.textContent = 'Eliminar';
           deleteBtn.onclick = async () => {
             if (!confirm('¿Desea eliminar este AMFE? Esta acción no se puede deshacer.')) return;
-            await db.collection('docs').doc(doc.id).delete();
-            renderList();
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = 'Eliminando...';
+            try {
+              await db.collection('docs').doc(doc.id).delete();
+              renderList();
+            } catch (error) {
+              console.error("Error deleting document:", error);
+              alert("Could not delete document. See console for details.");
+              deleteBtn.disabled = false;
+              deleteBtn.textContent = 'Eliminar';
+            }
           };
           actions.appendChild(openBtn);
           actions.appendChild(renameBtn);
@@ -147,6 +165,8 @@
 
     // Crear un nuevo AMFE
     newBtn.addEventListener('click', async () => {
+      newBtn.disabled = true;
+      newBtn.textContent = 'Creando...';
       try {
         const newDoc = {
           name: 'Nuevo AMFE',
@@ -157,13 +177,13 @@
             selected: { itemId: null, stepId: null, elementId: null }
           }
         };
-        console.log("Attempting to add document to Firestore...");
         const docRef = await db.collection('docs').add(newDoc);
-        console.log("Document added with ID: ", docRef.id);
         window.location.href = 'index.html?id=' + encodeURIComponent(docRef.id);
       } catch (error) {
         console.error("Error creating new document:", error);
         alert("Could not create new document. See console for details.");
+        newBtn.disabled = false;
+        newBtn.textContent = 'Nuevo AMFE';
       }
     });
 

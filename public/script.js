@@ -1253,17 +1253,21 @@ function exportToExcel() {
   });
   // Construir hoja Plan de control
   const controlRows = [];
+  const controlHeaders = [
+    'Nº proceso / Parte', 'Nombre de proceso', 'Máquina, utillaje, herramientas',
+    'Nº característica', 'Producto', 'Proceso', 'Clase especial',
+    'Especificación / Tolerancia (producto/proceso)', 'Técnica de medición',
+    'Error proofing', 'Muestra – Cantidad', 'Muestra – Frecuencia',
+    'Método de control', 'Plan de reacción'
+  ];
   Array.from(controlBody.children).forEach(tr => {
     const row = {};
     const tds = Array.from(tr.children);
-    row['Proceso / Operación'] = tds[0].textContent;
-    row['Característica clave'] = tds[1].firstElementChild.value;
-    row['Especificación / Tolerancia'] = tds[2].firstElementChild.value;
-    row['Método de control'] = tds[3].firstElementChild.value;
-    row['Tamaño de muestra / Frecuencia'] = tds[4].firstElementChild.value;
-    row['Método de detección'] = tds[5].firstElementChild.value;
-    row['Plan de reacción'] = tds[6].firstElementChild.value;
-    row['Estatus MSA'] = tds[7] && tds[7].firstElementChild ? tds[7].firstElementChild.value : '';
+    tds.forEach((td, i) => {
+      const header = controlHeaders[i];
+      const input = td.querySelector('input, select, textarea');
+      row[header] = input ? input.value : td.textContent;
+    });
     controlRows.push(row);
   });
   // Crear workbook
