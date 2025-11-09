@@ -80,6 +80,9 @@
       </div>
     </div>
   </main>
+  <!-- Firebase SDK (v8 for compatibility with existing code) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script src="firebase-config.js"></script>
   <script>
     const newBtn = document.getElementById('new-amfe');
@@ -172,8 +175,5 @@
     // Carga inicial
     renderList().catch(err => console.error(err));
   </script>
-  <!-- Firebase SDK (v8 for compatibility with existing code) -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 </body>
 </html>
