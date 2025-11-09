@@ -1133,27 +1133,8 @@ async function saveData() {
   if (!validateData()) {
     return;
   }
-  // Construir payload
-  const payload = {
-    ...state.general,
-    created: new Date().toISOString(),
-    items: state.items
-  };
-  try {
-    const resp = await fetch('/api/fmeas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (resp.ok) {
-      alert('AMFE guardado correctamente');
-    } else {
-      alert('Error al guardar el AMFE');
-    }
-  } catch (err) {
-    console.error('Error al guardar datos', err);
-    alert('Error al guardar datos');
-  }
+  // Guardar los datos en el servidor
+  await persistServer();
 }
 
 // Exporta el estado actual a un archivo Excel (FMEA y Plan de control)
@@ -1404,6 +1385,11 @@ async function loadFromServer() {
 // Guardar estado en servidor
 async function persistServer() {
   if (!currentDocId) return;
+  const statusEl = document.getElementById('save-status');
+  if (statusEl) {
+    statusEl.textContent = 'Guardando...';
+    statusEl.style.color = 'orange';
+  }
   try {
     const copy = JSON.parse(JSON.stringify(state));
     const name = state.general.tema && state.general.tema.trim() !== '' ? state.general.tema.trim() : 'AMFE sin tema';
@@ -1412,8 +1398,19 @@ async function persistServer() {
       content: copy,
       lastModified: new Date().toISOString()
     }, { merge: true });
+    if (statusEl) {
+      statusEl.textContent = 'Guardado correctamente.';
+      statusEl.style.color = 'green';
+      setTimeout(() => {
+        statusEl.textContent = '';
+      }, 3000);
+    }
   } catch (ex) {
     console.error('Error al guardar en servidor:', ex);
+    if (statusEl) {
+      statusEl.textContent = 'Error al guardar.';
+      statusEl.style.color = 'red';
+    }
   }
 }
 
@@ -1543,17 +1540,7 @@ document.getElementById('tab-standard').addEventListener('click', () => {
 // Botón de exportación de la vista estándar
 document.getElementById('export-standard').addEventListener('click', exportStandardToPDF);
 
-// Modificar saveData y exportToExcel para persistir localmente
-const originalSaveData = saveData;
-saveData = function() {
-  originalSaveData.apply(this, arguments);
-  persistServer();
-};
-const originalExport = exportToExcel;
-exportToExcel = function() {
-  originalExport.apply(this, arguments);
-  persistServer();
-};
+// No longer need to wrap these functions
 
 // Cargar desde localStorage antes de inicializar
 document.addEventListener('DOMContentLoaded', () => {
