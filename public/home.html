@@ -86,21 +86,58 @@
     const docListDiv = document.getElementById('doc-list');
     const searchInput = document.getElementById('search');
 
-    // Obtener la lista de documentos desde el servidor
-    async function fetchDocs() {
-      const res = await fetch('/api/docs');
-      if (!res.ok) throw new Error('No se pudo cargar la lista de AMFEs');
-      return await res.json();
+    /**
+     * Muestra un mensaje de error al usuario
+     * @param {string} message - Mensaje de error
+     */
+    function showError(message) {
+      alert('Error: ' + message);
     }
 
-    // Renderiza la lista de documentos
+    /**
+     * Muestra un mensaje de éxito al usuario
+     * @param {string} message - Mensaje de éxito
+     */
+    function showSuccess(message) {
+      // Simple alert for now - could be improved with toast notifications
+      console.log('Éxito:', message);
+    }
+
+    /**
+     * Obtener la lista de documentos desde el servidor
+     */
+    async function fetchDocs() {
+      try {
+        const res = await fetch('/api/docs');
+        if (!res.ok) {
+          throw new Error('No se pudo cargar la lista de AMFEs');
+        }
+        return await res.json();
+      } catch (error) {
+        showError('No se pudo conectar con el servidor. Verifique que el servidor esté ejecutándose.');
+        throw error;
+      }
+    }
+
+    /**
+     * Renderiza la lista de documentos
+     */
     async function renderList() {
-      const filter = searchInput.value.toLowerCase();
-      const docs = await fetchDocs();
-      docListDiv.innerHTML = '';
-      docs
-        .filter(doc => doc.name.toLowerCase().includes(filter))
-        .forEach(doc => {
+      try {
+        const filter = searchInput.value.toLowerCase();
+        const docs = await fetchDocs();
+        docListDiv.innerHTML = '';
+        
+        const filteredDocs = docs.filter(doc => 
+          doc.name.toLowerCase().includes(filter)
+        );
+        
+        if (filteredDocs.length === 0) {
+          docListDiv.innerHTML = '<p>No se encontraron documentos.</p>';
+          return;
+        }
+        
+        filteredDocs.forEach(doc => {
           const wrapper = document.createElement('div');
           wrapper.className = 'doc-item';
           const info = document.createElement('div');
@@ -119,20 +156,38 @@
           renameBtn.onclick = async () => {
             const nuevo = prompt('Nuevo nombre para el AMFE:', doc.name);
             if (!nuevo || nuevo.trim() === '') return;
-            await fetch('/api/docs/' + encodeURIComponent(doc.id), {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: nuevo.trim() })
-            });
-            renderList();
+            try {
+              const res = await fetch('/api/docs/' + encodeURIComponent(doc.id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: nuevo.trim() })
+              });
+              if (!res.ok) {
+                throw new Error('No se pudo renombrar el documento');
+              }
+              showSuccess('Documento renombrado correctamente');
+              renderList();
+            } catch (error) {
+              showError('Error al renombrar: ' + error.message);
+            }
           };
           // Eliminar AMFE
           const deleteBtn = document.createElement('button');
           deleteBtn.textContent = 'Eliminar';
           deleteBtn.onclick = async () => {
             if (!confirm('¿Desea eliminar este AMFE? Esta acción no se puede deshacer.')) return;
-            await fetch('/api/docs/' + encodeURIComponent(doc.id), { method: 'DELETE' });
-            renderList();
+            try {
+              const res = await fetch('/api/docs/' + encodeURIComponent(doc.id), { 
+                method: 'DELETE' 
+              });
+              if (!res.ok) {
+                throw new Error('No se pudo eliminar el documento');
+              }
+              showSuccess('Documento eliminado correctamente');
+              renderList();
+            } catch (error) {
+              showError('Error al eliminar: ' + error.message);
+            }
           };
           actions.appendChild(openBtn);
           actions.appendChild(renameBtn);
@@ -141,18 +196,29 @@
           wrapper.appendChild(actions);
           docListDiv.appendChild(wrapper);
         });
+      } catch (error) {
+        console.error('Error rendering list:', error);
+        docListDiv.innerHTML = '<p style="color: red;">Error al cargar los documentos. Por favor, recargue la página.</p>';
+      }
     }
 
     // Crear un nuevo AMFE
     newBtn.addEventListener('click', async () => {
-      // Solicita al servidor la creación con nombre por defecto
-      const res = await fetch('/api/docs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Nuevo AMFE' })
-      });
-      const meta = await res.json();
-      window.location.href = 'index.html?id=' + encodeURIComponent(meta.id);
+      try {
+        // Solicita al servidor la creación con nombre por defecto
+        const res = await fetch('/api/docs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'Nuevo AMFE' })
+        });
+        if (!res.ok) {
+          throw new Error('No se pudo crear el documento');
+        }
+        const meta = await res.json();
+        window.location.href = 'index.html?id=' + encodeURIComponent(meta.id);
+      } catch (error) {
+        showError('Error al crear nuevo AMFE: ' + error.message);
+      }
     });
 
     // Escuchar cambios en el filtro de búsqueda
