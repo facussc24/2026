@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMFE‑FMEA de Proceso</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <!-- Eliminamos la palabra “Preliminar” para reflejar que este formato puede utilizarse en cualquier etapa del AMFE -->
+    <h1>AMFE‑FMEA de Proceso</h1>
+    <nav>
+      <!-- Enlace para volver al inicio, donde se listan los AMFEs guardados -->
+      <a href="home.html" class="btn-primary">Inicio</a>
+    </nav>
+  </header>
+  <!-- Datos generales del análisis (Paso 1: planificación y preparación) -->
+  <section id="general-info">
+    <h2>Datos generales</h2>
+    <div class="grid-3">
+      <label>Nombre de la organización:<br>
+        <input type="text" id="orgName" value="" required>
+      </label>
+      <label>Tema:<br>
+        <input type="text" id="tema" value="" required>
+      </label>
+      <label>Nº de AMFE:<br>
+        <input type="text" id="numeroAmfe" required>
+      </label>
+      <label>Revisión AMFE:<br>
+        <input type="text" id="revisionAmfe" required>
+      </label>
+      <label>Ubicación de la planta:<br>
+        <input type="text" id="planta" value="" required>
+      </label>
+      <label>Fecha inicio AMFE:<br>
+        <input type="date" id="fechaInicio" required>
+      </label>
+      <label>Responsable del proceso:<br>
+        <input type="text" id="responsable" value="" required>
+      </label>
+      <label>Nombre del cliente:<br>
+        <input type="text" id="cliente" value="" required>
+      </label>
+      <label>Fecha revisión AMFE:<br>
+        <input type="date" id="fechaRevision" required>
+      </label>
+      <label>Nivel de confidencialidad:<br>
+        <input type="text" id="confidencialidad" value="" required>
+      </label>
+      <label>Modelo-año plataforma:<br>
+        <input type="text" id="modelo" value="" required>
+      </label>
+
+      <!-- Equipo multifuncional -->
+      <label>Equipo multifuncional:<br>
+        <input type="text" id="equipo" value="" required placeholder="Lista de integrantes">
+      </label>
+
+      <!-- Número del plan de control -->
+      <label>Nº de plan de control:<br>
+        <input type="text" id="planNumber" required>
+      </label>
+
+      <!-- Contacto clave / Teléfono -->
+      <label>Contacto clave / Teléfono:<br>
+        <input type="text" id="contacto" required>
+      </label>
+
+      <!-- Tipo de plan (Prototipo, Prelanzamiento, Producción, Lanzamiento Seguro) -->
+      <label>Tipo de plan:<br>
+        <select id="tipoPlan" required>
+          <option value="">Seleccione…</option>
+          <option value="Prototipo">Prototipo</option>
+          <option value="Prelanzamiento">Prelanzamiento</option>
+          <option value="Producción">Producción</option>
+          <option value="Lanzamiento Seguro">Lanzamiento Seguro</option>
+        </select>
+      </label>
+
+      <!-- Número de parte (sistema/subsistema/componente) -->
+      <label>Nº de parte:<br>
+        <input type="text" id="numParte" required>
+      </label>
+
+      <!-- Último cambio de ingeniería -->
+      <label>Último nivel de cambio de ingeniería:<br>
+        <input type="text" id="ultimoCambio" required>
+      </label>
+
+      <!-- Aprobación proveedor/planta -->
+      <label>Aprobación proveedor/planta:<br>
+        <input type="date" id="aprobProv" required>
+      </label>
+
+      <!-- Aprobación ingeniería cliente -->
+      <label>Aprobación ingeniería cliente:<br>
+        <input type="date" id="aprobIngCliente" required>
+      </label>
+
+      <!-- Aprobación calidad cliente -->
+      <label>Aprobación calidad cliente:<br>
+        <input type="date" id="aprobCalidadCliente" required>
+      </label>
+
+      <!-- Otras aprobaciones -->
+      <label>Otras aprobaciones:<br>
+        <input type="text" id="aprobOtras" placeholder="Descripción / fecha">
+      </label>
+    </div>
+  </section>
+  <nav id="main-nav">
+    <button id="tab-fmea" class="tab-btn active">AMFE</button>
+    <button id="tab-control" class="tab-btn">Plan de control</button>
+    <button id="tab-standard" class="tab-btn">Vista estándar</button>
+  </nav>
+  <!-- Resumen de errores de validación -->
+  <div id="error-summary" class="error-summary" style="color:#b00020; font-weight:bold; margin:8px 0;"></div>
+  <main>
+    <!-- Sección AMFE con estructura y detalle -->
+    <section id="fmea-section" class="tab-content active">
+      <div id="structure-and-detail">
+        <!-- Panel de estructura (Paso 2) -->
+        <aside id="structure-panel">
+          <h3>Estructura (Paso&nbsp;2)</h3>
+          <ul id="item-list" class="tree"></ul>
+          <button id="add-item">+ Ítem</button>
+        </aside>
+        <!-- Panel de detalle: pasos 3, 4, 5, 6 -->
+        <section id="detail-panel">
+          <h3 id="detail-title">Detalle</h3>
+          <div id="detail-tabs" class="subtabs">
+            <button class="detail-tab active" data-tab="funciones">Funciones (Paso&nbsp;3)</button>
+            <button class="detail-tab" data-tab="fallas">Fallos (Paso&nbsp;4)</button>
+            <button class="detail-tab" data-tab="riesgos">Riesgos (Paso&nbsp;5)</button>
+            <button class="detail-tab" data-tab="optimizacion">Optimización (Paso&nbsp;6)</button>
+          </div>
+          <div id="detail-content">
+            <!-- Contenidos de cada sub-tab -->
+            <div class="detail-tab-content active" id="tab-funciones">
+              <form id="funciones-form">
+                <div class="grid-3">
+                  <label>Función del ítem (sistema/subsistema/proceso):<br>
+                    <textarea id="funcionItem"></textarea>
+                  </label>
+                  <label>Función del paso del proceso (característica del producto):<br>
+                    <textarea id="funcionPaso"></textarea>
+                  </label>
+                  <label>Función del elemento de trabajo (característica del proceso):<br>
+                    <textarea id="funcionElemento"></textarea>
+                  </label>
+                </div>
+              </form>
+            </div>
+            <div class="detail-tab-content" id="tab-fallas">
+              <div class="fallas-header">
+                <h4>Modos de falla</h4>
+                <button id="add-falla">+ Modo de Falla</button>
+              </div>
+              <table id="fallas-table">
+                <thead>
+                  <tr>
+                    <th>Efecto de la falla (EF)</th>
+                    <th>Modo de falla (FM)</th>
+                    <th>Causa de la falla (FC)</th>
+                    <th>Controles preventivos actuales</th>
+                    <th>Controles detectivos actuales</th>
+                  </tr>
+                </thead>
+                <tbody id="fallas-body">
+                </tbody>
+              </table>
+            </div>
+            <div class="detail-tab-content" id="tab-riesgos">
+              <div class="grid-3">
+                <label>Severidad (S):<br>
+                  <select id="severidad"></select>
+                </label>
+                <label>Ocurrencia (O):<br>
+                  <select id="ocurrencia"></select>
+                </label>
+                <label>Detección (D):<br>
+                  <select id="deteccion"></select>
+                </label>
+              </div>
+              <div>
+                <strong>Prioridad de acción (AP):</strong> <span id="ap-display" class="ap-cell"></span>
+              </div>
+              <label>Características especiales:<br>
+                <input type="text" id="caracteristicas">
+              </label>
+
+              <!-- Caja plegable para guías de detección y clasificación.  Utilizamos un elemento
+                   <details> para permitir mostrar u ocultar las guías sin necesidad de
+                   JavaScript.  El usuario puede hacer clic en el texto del resumen para
+                   desplegar o contraer las guías. -->
+              <details id="guidelines-box" open style="margin-top:8px;">
+                <summary id="toggle-guidelines" style="cursor:pointer;font-weight:bold;color:#004080;">
+                  Ocultar/Mostrar guías
+                </summary>
+                <div class="guidelines">
+                  <h4>Guías de detección (D)</h4>
+                  <ul>
+                    <li><strong>D=1</strong>: Poka‑yoke 100 % preventivo – el modo de falla no puede producirse ni procesarse.</li>
+                    <li><strong>D=2</strong>: Poka‑yoke detectivo 100 % en estación – detiene el proceso si ocurre la falla.</li>
+                    <li><strong>D=3</strong>: Detección automática en estación (poka‑yoke detectivo) que detiene la línea si se detecta la falla.</li>
+                    <li><strong>D=4</strong>: Detección automática post‑proceso (fuera de la estación principal).</li>
+                    <li><strong>D=5</strong>: Verificación automática en línea (sin poka‑yoke) o por muestreo con R&R aceptable.</li>
+                    <li><strong>D=6</strong>: Inspección visual o medición manual por muestreo/post‑proceso con R&R aprobado.</li>
+                  </ul>
+                  <h4>Clasificación de características especiales</h4>
+                  <ul>
+                    <li><strong>Crítica</strong>: Severidad ≥ 9 (riesgo de seguridad, funcionalidad o incumplimiento normativo).</li>
+                    <li><strong>Significativa</strong>: Severidad de 5 a 8 y ocurrencia ≥ 4 (alto impacto o características importantes).</li>
+                  </ul>
+                </div>
+              </details>
+            </div>
+            <div class="detail-tab-content" id="tab-optimizacion">
+              <h4>Acciones y seguimiento</h4>
+              <div class="grid-2">
+                <label>Acción preventiva:<br>
+                  <input type="text" id="accionPrev">
+                </label>
+                <label>Acción detectiva:<br>
+                  <input type="text" id="accionDet">
+                </label>
+                <label>Nombre responsable:<br>
+                  <input type="text" id="personaResp">
+                </label>
+                <label>Fecha objetivo de terminación:<br>
+                  <input type="date" id="fechaObjetivo">
+                </label>
+                <label>Estatus:<br>
+                  <select id="estatus">
+                    <option value="">Seleccione…</option>
+                    <option value="Abierto">Abierto</option>
+                    <option value="Implementación pendiente">Implementación pendiente</option>
+                    <option value="Decisión pendiente">Decisión pendiente</option>
+                    <option value="Completa">Completa</option>
+                    <option value="No implementado">No implementado</option>
+                  </select>
+                </label>
+                <label>Acción tomada:<br>
+                  <input type="text" id="accionTomada">
+                </label>
+                <label>Fecha de terminación:<br>
+                  <input type="date" id="fechaTerminacion">
+                </label>
+                <label>Severidad (post):<br>
+                  <select id="sPost"></select>
+                </label>
+                <label>Ocurrencia (post):<br>
+                  <select id="oPost"></select>
+                </label>
+                <label>Detección (post):<br>
+                  <select id="dPost"></select>
+                </label>
+                <label>Características especiales (post):<br>
+                  <input type="text" id="caracteristicasPost">
+                </label>
+                <label>Prioridad de acción post:<br>
+                  <span id="ap-post-display" class="ap-cell"></span>
+                </label>
+                <label>Observaciones:<br>
+                  <textarea id="observaciones"></textarea>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="actions">
+        <button id="save-btn">Guardar AMFE</button>
+        <button id="export-btn">Exportar a Excel</button>
+      </div>
+    </section>
+    <!-- Sección plan de control -->
+    <section id="control-section" class="tab-content">
+    <h2>Plan de control</h2>
+    <!-- Cabecera del plan de control según el formato estándar -->
+    <div id="control-header" class="grid-4" style="margin-bottom:8px;">
+      <label>Fase:<br>
+        <select id="cpPhase">
+          <option value="">Seleccione…</option>
+          <option value="Prototipo">Prototipo</option>
+          <option value="Prelanzamiento">Prelanzamiento</option>
+          <option value="Producción">Producción</option>
+        </select>
+      </label>
+      <label>Nº plan de control:<br>
+        <input type="text" id="cpNumber">
+      </label>
+      <label>Contacto principal / Teléfono:<br>
+        <input type="text" id="cpContact">
+      </label>
+      <label>Fecha (original):<br>
+        <input type="date" id="cpDateOriginal">
+      </label>
+      <label>Fecha (revisión):<br>
+        <input type="date" id="cpDateRevision">
+      </label>
+      <label>Nº de parte / Último cambio:<br>
+        <input type="text" id="cpPartNumber">
+      </label>
+      <label>Equipo principal:<br>
+        <input type="text" id="cpMainTeam">
+      </label>
+      <label>Nombre / Descripción de la parte:<br>
+        <input type="text" id="cpPartDescription">
+      </label>
+      <label>Proveedor / Planta:<br>
+        <input type="text" id="cpSupplierPlant">
+      </label>
+      <label>Código de proveedor:<br>
+        <input type="text" id="cpSupplierCode">
+      </label>
+      <label>Aprobación proveedor / Fecha:<br>
+        <input type="date" id="cpApprovalSupplier">
+      </label>
+      <label>Aprobación técnica cliente / Fecha:<br>
+        <input type="date" id="cpApprovalTechClient">
+      </label>
+      <label>Aprobación calidad cliente / Fecha:<br>
+        <input type="date" id="cpApprovalQualityClient">
+      </label>
+      <label>Otra aprobación / Fecha:<br>
+        <input type="date" id="cpApprovalOther">
+      </label>
+    </div>
+      <table id="control-table" class="control-standard">
+        <thead>
+          <tr>
+            <th>Nº proceso / Parte</th>
+            <th>Nombre de proceso</th>
+            <th>Máquina, utillaje, herramientas</th>
+            <th>Nº característica</th>
+            <th>Producto</th>
+            <th>Proceso</th>
+            <th>Clase especial</th>
+            <th>Especificación / Tolerancia (producto/proceso)</th>
+            <th>Técnica de medición</th>
+            <th>Error proofing</th>
+            <th>Muestra – Cantidad</th>
+            <th>Muestra – Frecuencia</th>
+            <th>Método de control</th>
+            <th>Plan de reacción</th>
+          </tr>
+        </thead>
+        <tbody id="control-body"></tbody>
+      </table>
+    </section>
+    <!-- Sección de Vista estándar (formato AIAG-VDA) -->
+    <section id="standard-section" class="tab-content">
+      <h2>Vista estándar del AMFE (AIAG‑VDA)</h2>
+      <p>A continuación se muestra el AMFE en el formato tabular estándar. Puede exportarse a PDF para imprimir o compartir.</p>
+      <div id="standard-table-container" style="overflow-x:auto; border:1px solid #ccc; margin-bottom:8px;">
+        <!-- La tabla se generará dinámicamente mediante script.js -->
+      </div>
+      <button id="export-standard" class="btn">Exportar vista a PDF</button>
+    </section>
+  </main>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <!-- Librerías para exportar la vista estándar a PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

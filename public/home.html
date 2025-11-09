@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inicio – Gestor AMFE/Plan de Control</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    /* Estilos específicos para la página de inicio */
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #1f497d;
+      color: #fff;
+      padding: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.6rem;
+    }
+    main {
+      padding: 1rem;
+    }
+    #lists {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+    .list-section h2 {
+      margin-bottom: 0.5rem;
+    }
+    .list-section input[type="text"] {
+      width: 100%;
+      padding: 0.4rem;
+      margin-bottom: 0.5rem;
+    }
+    .doc-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid #ccc;
+      padding: 0.5rem;
+      margin-bottom: 0.3rem;
+      border-radius: 4px;
+      background: #f9f9f9;
+    }
+    .doc-actions button {
+      margin-left: 0.3rem;
+    }
+    .btn-primary {
+      background: #1f497d;
+      color: #fff;
+      border: none;
+      padding: 0.6rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-primary:hover {
+      background: #16325c;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gestor AMFE/Plan de Control</h1>
+    <button id="new-amfe" class="btn-primary">Nuevo AMFE</button>
+  </header>
+  <main>
+    <div id="lists">
+      <div class="list-section">
+        <h2>AMFEs guardados</h2>
+        <input type="text" id="search" placeholder="Buscar por nombre…">
+        <div id="doc-list"></div>
+      </div>
+    </div>
+  </main>
+  <script>
+    // Página de inicio para servidor: trabaja con API REST en lugar de localStorage
+    const newBtn = document.getElementById('new-amfe');
+    const docListDiv = document.getElementById('doc-list');
+    const searchInput = document.getElementById('search');
+
+    // Obtener la lista de documentos desde el servidor
+    async function fetchDocs() {
+      const res = await fetch('/api/docs');
+      if (!res.ok) throw new Error('No se pudo cargar la lista de AMFEs');
+      return await res.json();
+    }
+
+    // Renderiza la lista de documentos
+    async function renderList() {
+      const filter = searchInput.value.toLowerCase();
+      const docs = await fetchDocs();
+      docListDiv.innerHTML = '';
+      docs
+        .filter(doc => doc.name.toLowerCase().includes(filter))
+        .forEach(doc => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'doc-item';
+          const info = document.createElement('div');
+          info.textContent = `${doc.name} (Modificado: ${new Date(doc.lastModified).toLocaleDateString()})`;
+          const actions = document.createElement('div');
+          actions.className = 'doc-actions';
+          // Abrir AMFE
+          const openBtn = document.createElement('button');
+          openBtn.textContent = 'Abrir';
+          openBtn.onclick = () => {
+            window.location.href = 'index.html?id=' + encodeURIComponent(doc.id);
+          };
+          // Renombrar AMFE
+          const renameBtn = document.createElement('button');
+          renameBtn.textContent = 'Renombrar';
+          renameBtn.onclick = async () => {
+            const nuevo = prompt('Nuevo nombre para el AMFE:', doc.name);
+            if (!nuevo || nuevo.trim() === '') return;
+            await fetch('/api/docs/' + encodeURIComponent(doc.id), {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: nuevo.trim() })
+            });
+            renderList();
+          };
+          // Eliminar AMFE
+          const deleteBtn = document.createElement('button');
+          deleteBtn.textContent = 'Eliminar';
+          deleteBtn.onclick = async () => {
+            if (!confirm('¿Desea eliminar este AMFE? Esta acción no se puede deshacer.')) return;
+            await fetch('/api/docs/' + encodeURIComponent(doc.id), { method: 'DELETE' });
+            renderList();
+          };
+          actions.appendChild(openBtn);
+          actions.appendChild(renameBtn);
+          actions.appendChild(deleteBtn);
+          wrapper.appendChild(info);
+          wrapper.appendChild(actions);
+          docListDiv.appendChild(wrapper);
+        });
+    }
+
+    // Crear un nuevo AMFE
+    newBtn.addEventListener('click', async () => {
+      // Solicita al servidor la creación con nombre por defecto
+      const res = await fetch('/api/docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Nuevo AMFE' })
+      });
+      const meta = await res.json();
+      window.location.href = 'index.html?id=' + encodeURIComponent(meta.id);
+    });
+
+    // Escuchar cambios en el filtro de búsqueda
+    searchInput.addEventListener('input', () => {
+      renderList().catch(err => console.error(err));
+    });
+
+    // Carga inicial
+    renderList().catch(err => console.error(err));
+  </script>
+</body>
+</html>
