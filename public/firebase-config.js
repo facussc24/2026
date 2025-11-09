@@ -1,14 +1,14 @@
 // Firebase Configuration
-// TODO: Replace with your Firebase project credentials from Firebase Console
-// Go to: Firebase Console > Project Settings > General > Your apps > Firebase SDK snippet > Config
+// Credentials configured for barackingenieria-e763c project
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAUQxlBCiYoR4-tlGL-S3xR8LXrrMkx1Tk",
+  authDomain: "barackingenieria-e763c.firebaseapp.com",
+  projectId: "barackingenieria-e763c",
+  storageBucket: "barackingenieria-e763c.firebasestorage.app",
+  messagingSenderId: "44704892099",
+  appId: "1:44704892099:web:738c8cbc3cea65808a8e76",
+  measurementId: "G-ZHZ3R9XXDM"
 };
 
 // Initialize Firebase
