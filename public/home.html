@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inicio – Gestor AMFE/Plan de Control</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="toast.css">
   <style>
     /* Estilos específicos para la página de inicio */
     body {
@@ -87,6 +88,9 @@
   <!-- Firebase Configuration -->
   <script src="firebase-config.js"></script>
   
+  <!-- UI Enhancements -->
+  <script src="ui-enhancements.js"></script>
+  
   <script>
     // Página de inicio para Firebase: trabaja con Firestore
     const newBtn = document.getElementById('new-amfe');
@@ -98,7 +102,11 @@
      * @param {string} message - Mensaje de error
      */
     function showError(message) {
-      alert('Error: ' + message);
+      if (typeof toast !== 'undefined') {
+        toast.error(message);
+      } else {
+        alert('Error: ' + message);
+      }
     }
 
     /**
@@ -106,7 +114,11 @@
      * @param {string} message - Mensaje de éxito
      */
     function showSuccess(message) {
-      console.log('Éxito:', message);
+      if (typeof toast !== 'undefined') {
+        toast.success(message);
+      } else {
+        console.log('Éxito:', message);
+      }
     }
 
     /**
@@ -209,6 +221,11 @@
     // Crear un nuevo AMFE
     newBtn.addEventListener('click', async () => {
       try {
+        // Show loading
+        if (typeof loading !== 'undefined') {
+          loading.show();
+        }
+        
         // Crear nuevo documento en Firebase
         const docRef = await db.collection(COLLECTION_NAME).add({
           name: 'Nuevo AMFE',
@@ -226,8 +243,17 @@
           }
         });
         
+        // Hide loading (will redirect, but just in case)
+        if (typeof loading !== 'undefined') {
+          loading.hide();
+        }
+        
         window.location.href = 'index.html?id=' + encodeURIComponent(docRef.id);
       } catch (error) {
+        // Hide loading on error
+        if (typeof loading !== 'undefined') {
+          loading.hide();
+        }
         showError('Error al crear nuevo AMFE en Firebase: ' + error.message);
       }
     });

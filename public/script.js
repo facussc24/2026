@@ -1140,8 +1140,17 @@ async function saveData() {
   };
   try {
     if (!currentDocId) {
-      alert('Error: No hay documento activo');
+      if (typeof toast !== 'undefined') {
+        toast.error('No hay documento activo');
+      } else {
+        alert('Error: No hay documento activo');
+      }
       return;
+    }
+    
+    // Show loading if available
+    if (typeof loading !== 'undefined') {
+      loading.show();
     }
     
     // Actualizar documento en Firestore
@@ -1151,10 +1160,31 @@ async function saveData() {
       lastModified: firebase.firestore.FieldValue.serverTimestamp()
     });
     
-    alert('AMFE guardado correctamente en Firebase');
+    // Hide loading
+    if (typeof loading !== 'undefined') {
+      loading.hide();
+    }
+    
+    // Show success message
+    if (typeof toast !== 'undefined') {
+      toast.success('AMFE guardado correctamente en Firebase');
+    } else {
+      alert('AMFE guardado correctamente en Firebase');
+    }
   } catch (err) {
     console.error('Error al guardar datos en Firebase:', err);
-    alert('Error al guardar datos: ' + err.message);
+    
+    // Hide loading
+    if (typeof loading !== 'undefined') {
+      loading.hide();
+    }
+    
+    // Show error message
+    if (typeof toast !== 'undefined') {
+      toast.error('Error al guardar: ' + err.message);
+    } else {
+      alert('Error al guardar datos: ' + err.message);
+    }
   }
 }
 
@@ -1601,3 +1631,63 @@ function toggleGuidelines() {
     toggleBtn.textContent = 'Mostrar guías';
   }
 }
+// ========== AUTO-SAVE AND UI ENHANCEMENTS ==========
+
+// Initialize auto-save manager if available
+let autoSaveManager;
+if (typeof AutoSaveManager !== 'undefined') {
+  autoSaveManager = new AutoSaveManager(async () => {
+    // This function will be called by auto-save
+    await persistServer();
+  }, 30000); // Auto-save every 30 seconds
+
+  // Mark as dirty when user makes changes
+  const formInputs = document.querySelectorAll('input, select, textarea');
+  formInputs.forEach(input => {
+    input.addEventListener('change', () => {
+      if (autoSaveManager) {
+        autoSaveManager.markDirty();
+      }
+    });
+    input.addEventListener('input', () => {
+      if (autoSaveManager) {
+        autoSaveManager.markDirty();
+      }
+    });
+  });
+}
+
+// Enable Firebase offline persistence for better UX
+if (typeof firebase !== 'undefined' && firebase.firestore) {
+  firebase.firestore().enablePersistence()
+    .then(() => {
+      console.log('Firebase offline persistence enabled');
+      if (typeof toast !== 'undefined') {
+        toast.info('Modo offline habilitado - Tus cambios se sincronizarán automáticamente', 4000);
+      }
+    })
+    .catch((err) => {
+      if (err.code === 'failed-precondition') {
+        console.warn('Multiple tabs open - persistence disabled');
+      } else if (err.code === 'unimplemented') {
+        console.warn('Browser does not support persistence');
+      }
+    });
+}
+
+// Connection status monitoring
+if (typeof firebase !== 'undefined' && firebase.database) {
+  const connectedRef = firebase.database().ref('.info/connected');
+  connectedRef.on('value', (snap) => {
+    if (snap.val() === true) {
+      console.log('Connected to Firebase');
+    } else {
+      console.log('Disconnected from Firebase');
+      if (typeof toast !== 'undefined') {
+        toast.warning('Sin conexión - Trabajando en modo offline');
+      }
+    }
+  });
+}
+
+console.log('Auto-save and UI enhancements initialized');
