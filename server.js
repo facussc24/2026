@@ -1,13 +1,13 @@
-import http from 'http';
-import handler from 'serve-handler';
+const express = require('express');
+const path = require('path');
 
-const server = http.createServer((request, response) => {
-  return handler(request, response, {
-    "public": "public",
-    "single": true
-  });
-});
+const app = express();
 
-server.listen(3000, () => {
-  console.log('Running at http://localhost:3000');
+// Servir archivos estáticos desde la carpeta public
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Iniciar servidor
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor AMFE escuchando en http://localhost:${PORT}`);
 });

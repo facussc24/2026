@@ -1,357 +1,374 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Barack Ingeniería - Soluciones de gestión de ingeniería para optimizar el ciclo de vida de productos, desde el diseño hasta la implementación.">
-    <title>Barack Ingeniería</title>
-    <link rel="icon" href="favicon.ico" type="image/x-icon">
-
-    <!-- Preconnect to CDNs for faster resource fetching -->
-    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preconnect" href="https://unpkg.com" crossorigin>
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-
-    <!-- Optimized, non-blocking CSS loading -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"></noscript>
-    <link rel="preload" href="bundle.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
-    <noscript><link rel="stylesheet" href="bundle.css"></noscript>
-    <link rel="stylesheet" href="css/task-status.css">
-    <link rel="stylesheet" href="css/auth.css">
-    <link rel="stylesheet" href="css/animations.css">
-    <link rel="stylesheet" href="css/drag-drop.css">
-    <link rel="stylesheet" href="modules/planning/planning.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/alyssaxuu/flowy/flowy.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
-    <style>
-        .material-symbols-outlined {
-            vertical-align: middle;
-            font-variation-settings:
-                'FILL' 0,
-                'wght' 400,
-                'GRAD' 0,
-                'opsz' 24
-        }
-        .chart-container svg {
-            transform: rotate(-90deg);
-        }
-        .chart-circle {
-            transition: stroke-dashoffset 0.8s ease-in-out;
-        }
-        .progress-bar-inner {
-            transition: width 0.5s ease-in-out;
-        }
-        .chart-container {
-            position: relative;
-        }
-        .chart-tooltip {
-            display: none;
-            position: absolute;
-            background-color: #333;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            pointer-events: none;
-            z-index: 10;
-            transition: opacity 0.2s;
-        }
-        .chart-container:hover .chart-tooltip-wrapper {
-            opacity: 1;
-        }
-        .chart-circle-segment:hover {
-            stroke-width: 4.8;
-            cursor: pointer;
-        }
-        .loading-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(255, 255, 255, 0.7);
-            dark: bg-opacity-70 dark:bg-card-dark;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 20;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
-        }
-        .loading-overlay.active {
-            opacity: 1;
-            visibility: visible;
-        }
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border-left-color: #0052cc;
-            animation: spin 1s ease infinite;
-        }
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-    </style>
-
-    <!-- Importmap for three.js and its modules -->
-    <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.167.0/build/three.module.js",
-        "three/examples/jsm/": "https://unpkg.com/three@0.167.0/examples/jsm/",
-        "lil-gui": "https://unpkg.com/lil-gui@0.19.1/dist/lil-gui.esm.js"
-      }
-    }
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        primary: {
-                            DEFAULT: "#0052cc", // A strong blue for primary actions
-                            light: "#e6f0ff", // Light blue for backgrounds/highlights
-                        },
-                        "background-light": "#f8f9fa",
-                        "background-dark": "#1a202c",
-                        "card-light": "#ffffff",
-                        "card-dark": "#2d3748",
-                        "text-light": "#172b4d",
-                        "text-dark": "#e2e8f0",
-                        "text-secondary-light": "#5e6c84",
-                        "text-secondary-dark": "#a0aec0",
-                        "border-light": "#dfe1e6",
-                        "border-dark": "#4a5568",
-                        "danger": "#de350b",
-                        "warning": "#ffab00",
-                        "success": "#36b37e",
-                        "info": "#00b8d9",
-                    },
-                    fontFamily: {
-                        display: ["Inter", "sans-serif"],
-                    },
-                    borderRadius: {
-                        DEFAULT: "0.5rem",
-                    },
-                },
-            },
-        };
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AMFE‑FMEA de Proceso</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
-<body class="bg-white">
+<body>
+  <header>
+    <!-- Eliminamos la palabra “Preliminar” para reflejar que este formato puede utilizarse en cualquier etapa del AMFE -->
+    <h1>AMFE‑FMEA de Proceso</h1>
+    <nav>
+      <!-- Enlace para volver al inicio, donde se listan los AMFEs guardados -->
+      <a href="home.html" class="btn-primary">Inicio</a>
+    </nav>
+  </header>
+  <!-- Datos generales del análisis (Paso 1: planificación y preparación) -->
+  <section id="general-info">
+    <h2>Datos generales</h2>
+    <div class="grid-3">
+      <label>Nombre de la organización:<br>
+        <input type="text" id="orgName" value="" required>
+      </label>
+      <label>Tema:<br>
+        <input type="text" id="tema" value="" required>
+      </label>
+      <label>Nº de AMFE:<br>
+        <input type="text" id="numeroAmfe" required>
+      </label>
+      <label>Revisión AMFE:<br>
+        <input type="text" id="revisionAmfe" required>
+      </label>
+      <label>Ubicación de la planta:<br>
+        <input type="text" id="planta" value="" required>
+      </label>
+      <label>Fecha inicio AMFE:<br>
+        <input type="date" id="fechaInicio" required>
+      </label>
+      <label>Responsable del proceso:<br>
+        <input type="text" id="responsable" value="" required>
+      </label>
+      <label>Nombre del cliente:<br>
+        <input type="text" id="cliente" value="" required>
+      </label>
+      <label>Fecha revisión AMFE:<br>
+        <input type="date" id="fechaRevision" required>
+      </label>
+      <label>Nivel de confidencialidad:<br>
+        <input type="text" id="confidencialidad" value="" required>
+      </label>
+      <label>Modelo-año plataforma:<br>
+        <input type="text" id="modelo" value="" required>
+      </label>
 
-<!-- Contenedor de Carga Global -->
-<div id="loading-overlay" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-[9999]">
-    <div class="loading-spinner"></div>
-    <p class="mt-4 text-slate-600 font-semibold">Cargando aplicación...</p>
-</div>
+      <!-- Equipo multifuncional -->
+      <label>Equipo multifuncional:<br>
+        <input type="text" id="equipo" value="" required placeholder="Lista de integrantes">
+      </label>
 
-<!-- Contenedor de Autenticación -->
-<div id="auth-container" class="fixed inset-0 flex items-center justify-center z-50 hidden">
-    <div class="auth-panel" id="login-panel">
-        <div class="auth-header">
-            <img src="barack_logo.png" alt="Logo" class="logo-img" loading="lazy">
-            <p class="subtitle">Inicie sesión para continuar.</p>
-        </div>
-        <form id="login-form" class="auth-form">
-            <div class="input-group">
-                <label for="login-email">Correo electrónico</label>
-                <input type="email" id="login-email" name="login-email" autocomplete="email" inputmode="email" required>
-            </div>
-            <div class="input-group">
-                <label for="login-password">Contraseña</label>
-                <input type="password" id="login-password" name="login-password" autocomplete="current-password" required>
-            </div>
-            <div class="forgot-password-link">
-                <a href="#/reset-password" data-auth-screen="reset" class="auth-link">¿Olvidaste tu contraseña?</a>
-            </div>
-            <button type="submit" class="submit-button">Iniciar Sesión</button>
-        </form>
-        <div class="auth-footer-text">
-            <span>¿No tienes cuenta?</span>
-            <a href="#/register" data-auth-screen="register" class="auth-link">Regístrate</a>
-        </div>
+      <!-- Número del plan de control -->
+      <label>Nº de plan de control:<br>
+        <input type="text" id="planNumber" required>
+      </label>
+
+      <!-- Contacto clave / Teléfono -->
+      <label>Contacto clave / Teléfono:<br>
+        <input type="text" id="contacto" required>
+      </label>
+
+      <!-- Tipo de plan (Prototipo, Prelanzamiento, Producción, Lanzamiento Seguro) -->
+      <label>Tipo de plan:<br>
+        <select id="tipoPlan" required>
+          <option value="">Seleccione…</option>
+          <option value="Prototipo">Prototipo</option>
+          <option value="Prelanzamiento">Prelanzamiento</option>
+          <option value="Producción">Producción</option>
+          <option value="Lanzamiento Seguro">Lanzamiento Seguro</option>
+        </select>
+      </label>
+
+      <!-- Número de parte (sistema/subsistema/componente) -->
+      <label>Nº de parte:<br>
+        <input type="text" id="numParte" required>
+      </label>
+
+      <!-- Último cambio de ingeniería -->
+      <label>Último nivel de cambio de ingeniería:<br>
+        <input type="text" id="ultimoCambio" required>
+      </label>
+
+      <!-- Aprobación proveedor/planta -->
+      <label>Aprobación proveedor/planta:<br>
+        <input type="date" id="aprobProv" required>
+      </label>
+
+      <!-- Aprobación ingeniería cliente -->
+      <label>Aprobación ingeniería cliente:<br>
+        <input type="date" id="aprobIngCliente" required>
+      </label>
+
+      <!-- Aprobación calidad cliente -->
+      <label>Aprobación calidad cliente:<br>
+        <input type="date" id="aprobCalidadCliente" required>
+      </label>
+
+      <!-- Otras aprobaciones -->
+      <label>Otras aprobaciones:<br>
+        <input type="text" id="aprobOtras" placeholder="Descripción / fecha">
+      </label>
     </div>
-        <!-- Panel de Registro -->
-        <div id="register-panel" class="auth-panel hidden">
-            <div class="text-center">
-                <i data-lucide="user-plus" class="mx-auto text-blue-600 h-16 w-16"></i>
-                <h1 class="text-4xl font-extrabold mt-4 text-slate-800">Crear Cuenta</h1>
-                <p class="text-slate-500 mt-2 mb-8">Solo se permiten correos del dominio de la empresa.</p>
+  </section>
+  <nav id="main-nav">
+    <button id="tab-fmea" class="tab-btn active">AMFE</button>
+    <button id="tab-control" class="tab-btn">Plan de control</button>
+    <button id="tab-standard" class="tab-btn">Vista estándar</button>
+  </nav>
+  <!-- Resumen de errores de validación -->
+  <div id="error-summary" class="error-summary" style="color:#b00020; font-weight:bold; margin:8px 0;"></div>
+  <main>
+    <!-- Sección AMFE con estructura y detalle -->
+    <section id="fmea-section" class="tab-content active">
+      <div id="structure-and-detail">
+        <!-- Panel de estructura (Paso 2) -->
+        <aside id="structure-panel">
+          <h3>Estructura (Paso&nbsp;2)</h3>
+          <ul id="item-list" class="tree"></ul>
+          <button id="add-item">+ Ítem</button>
+        </aside>
+        <!-- Panel de detalle: pasos 3, 4, 5, 6 -->
+        <section id="detail-panel">
+          <h3 id="detail-title">Detalle</h3>
+          <div id="detail-tabs" class="subtabs">
+            <button class="detail-tab active" data-tab="funciones">Funciones (Paso&nbsp;3)</button>
+            <button class="detail-tab" data-tab="fallas">Fallos (Paso&nbsp;4)</button>
+            <button class="detail-tab" data-tab="riesgos">Riesgos (Paso&nbsp;5)</button>
+            <button class="detail-tab" data-tab="optimizacion">Optimización (Paso&nbsp;6)</button>
+          </div>
+          <div id="detail-content">
+            <!-- Contenidos de cada sub-tab -->
+            <div class="detail-tab-content active" id="tab-funciones">
+              <form id="funciones-form">
+                <div class="grid-3">
+                  <label>Función del ítem (sistema/subsistema/proceso):<br>
+                    <textarea id="funcionItem"></textarea>
+                  </label>
+                  <label>Función del paso del proceso (característica del producto):<br>
+                    <textarea id="funcionPaso"></textarea>
+                  </label>
+                  <label>Función del elemento de trabajo (característica del proceso):<br>
+                    <textarea id="funcionElemento"></textarea>
+                  </label>
+                </div>
+              </form>
             </div>
-            <form id="register-form" class="auth-form">
-                <div class="input-group">
-                    <label for="register-name">Nombre Completo</label>
-                    <input type="text" id="register-name" name="register-name" autocomplete="name" required>
-                </div>
-                <div class="input-group">
-                    <label for="register-email">Correo de la empresa</label>
-                    <input
-                        type="email"
-                        id="register-email"
-                        name="register-email"
-                        placeholder="usuario@barackmercosul.com"
-                        inputmode="email"
-                        autocomplete="email"
-                        pattern="^[^@\s]+@barackmercosul\.com$"
-                        required
-                    >
-                </div>
-                <div class="input-group">
-                    <label for="register-password">Contraseña</label>
-                    <input type="password" id="register-password" name="register-password" autocomplete="new-password" minlength="6" required>
-                </div>
-                <button type="submit" class="submit-button">Crear Cuenta y Verificar</button>
-            </form>
-            <div class="auth-footer-text">
-                <span>¿Ya tienes una cuenta? </span>
-                <a href="#/login" data-auth-screen="login" class="auth-link">Inicia Sesión</a>
+            <div class="detail-tab-content" id="tab-fallas">
+              <div class="fallas-header">
+                <h4>Modos de falla</h4>
+                <button id="add-falla">+ Modo de Falla</button>
+              </div>
+              <table id="fallas-table">
+                <thead>
+                  <tr>
+                    <th>Efecto de la falla (EF)</th>
+                    <th>Modo de falla (FM)</th>
+                    <th>Causa de la falla (FC)</th>
+                    <th>Controles preventivos actuales</th>
+                    <th>Controles detectivos actuales</th>
+                  </tr>
+                </thead>
+                <tbody id="fallas-body">
+                </tbody>
+              </table>
             </div>
-        </div>
+            <div class="detail-tab-content" id="tab-riesgos">
+              <div class="grid-3">
+                <label>Severidad (S):<br>
+                  <select id="severidad"></select>
+                </label>
+                <label>Ocurrencia (O):<br>
+                  <select id="ocurrencia"></select>
+                </label>
+                <label>Detección (D):<br>
+                  <select id="deteccion"></select>
+                </label>
+              </div>
+              <div>
+                <strong>Prioridad de acción (AP):</strong> <span id="ap-display" class="ap-cell"></span>
+              </div>
+              <label>Características especiales:<br>
+                <input type="text" id="caracteristicas">
+              </label>
 
-        <!-- Panel de Olvidó Contraseña -->
-        <div id="reset-panel" class="auth-panel hidden">
-             <div class="text-center">
-                <i data-lucide="key-round" class="mx-auto text-blue-600 h-16 w-16"></i>
-                <h1 class="text-4xl font-extrabold mt-4 text-slate-800">Restablecer Contraseña</h1>
-                <p class="text-slate-500 mt-2 mb-8">Ingresa tu correo y te enviaremos un enlace para recuperarla.</p>
-            </div>
-            <form id="reset-form" class="auth-form">
-                <div class="input-group">
-                    <label for="reset-email">Correo electrónico</label>
-                    <input type="email" id="reset-email" name="reset-email" autocomplete="email" inputmode="email" required>
+              <!-- Caja plegable para guías de detección y clasificación.  Utilizamos un elemento
+                   <details> para permitir mostrar u ocultar las guías sin necesidad de
+                   JavaScript.  El usuario puede hacer clic en el texto del resumen para
+                   desplegar o contraer las guías. -->
+              <details id="guidelines-box" open style="margin-top:8px;">
+                <summary id="toggle-guidelines" style="cursor:pointer;font-weight:bold;color:#004080;">
+                  Ocultar/Mostrar guías
+                </summary>
+                <div class="guidelines">
+                  <h4>Guías de detección (D)</h4>
+                  <ul>
+                    <li><strong>D=1</strong>: Poka‑yoke 100 % preventivo – el modo de falla no puede producirse ni procesarse.</li>
+                    <li><strong>D=2</strong>: Poka‑yoke detectivo 100 % en estación – detiene el proceso si ocurre la falla.</li>
+                    <li><strong>D=3</strong>: Detección automática en estación (poka‑yoke detectivo) que detiene la línea si se detecta la falla.</li>
+                    <li><strong>D=4</strong>: Detección automática post‑proceso (fuera de la estación principal).</li>
+                    <li><strong>D=5</strong>: Verificación automática en línea (sin poka‑yoke) o por muestreo con R&R aceptable.</li>
+                    <li><strong>D=6</strong>: Inspección visual o medición manual por muestreo/post‑proceso con R&R aprobado.</li>
+                  </ul>
+                  <h4>Clasificación de características especiales</h4>
+                  <ul>
+                    <li><strong>Crítica</strong>: Severidad ≥ 9 (riesgo de seguridad, funcionalidad o incumplimiento normativo).</li>
+                    <li><strong>Significativa</strong>: Severidad de 5 a 8 y ocurrencia ≥ 4 (alto impacto o características importantes).</li>
+                  </ul>
                 </div>
-                <button type="submit" class="submit-button">Enviar Enlace</button>
-            </form>
-            <div class="auth-footer-text">
-                <span>Volver a </span>
-                <a href="#/login" data-auth-screen="login" class="auth-link">Iniciar Sesión</a>
+              </details>
             </div>
-        </div>
-        <!-- Panel de Verificar Email -->
-        <div id="verify-email-panel" class="auth-panel hidden">
-             <div class="text-center">
-                <i data-lucide="mail-warning" class="mx-auto text-amber-500 h-16 w-16"></i>
-                <h1 class="text-4xl font-extrabold mt-4 text-slate-800">Verifica tu Correo</h1>
-                <p class="text-slate-500 mt-2 mb-6">Hemos enviado un enlace de verificación a tu correo. Por favor, haz clic en él para activar tu cuenta. <br><strong>Revisa tu carpeta de spam si no lo encuentras.</strong></p>
-
-                <div class="space-y-4">
-                    <button id="resend-verification-btn" class="w-full bg-slate-600 text-white px-6 py-3 rounded-md hover:bg-slate-700 font-semibold transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">Reenviar Correo de Verificación</button>
-                    <a href="#/login" data-auth-screen="login" class="w-full block bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-semibold">Ya lo verifiqué, ir a Iniciar Sesión</a>
-                </div>
-                <p id="resend-timer" class="text-sm text-slate-400 mt-4 h-5"></p>
+            <div class="detail-tab-content" id="tab-optimizacion">
+              <h4>Acciones y seguimiento</h4>
+              <div class="grid-2">
+                <label>Acción preventiva:<br>
+                  <input type="text" id="accionPrev">
+                </label>
+                <label>Acción detectiva:<br>
+                  <input type="text" id="accionDet">
+                </label>
+                <label>Nombre responsable:<br>
+                  <input type="text" id="personaResp">
+                </label>
+                <label>Fecha objetivo de terminación:<br>
+                  <input type="date" id="fechaObjetivo">
+                </label>
+                <label>Estatus:<br>
+                  <select id="estatus">
+                    <option value="">Seleccione…</option>
+                    <option value="Abierto">Abierto</option>
+                    <option value="Implementación pendiente">Implementación pendiente</option>
+                    <option value="Decisión pendiente">Decisión pendiente</option>
+                    <option value="Completa">Completa</option>
+                    <option value="No implementado">No implementado</option>
+                  </select>
+                </label>
+                <label>Acción tomada:<br>
+                  <input type="text" id="accionTomada">
+                </label>
+                <label>Fecha de terminación:<br>
+                  <input type="date" id="fechaTerminacion">
+                </label>
+                <label>Severidad (post):<br>
+                  <select id="sPost"></select>
+                </label>
+                <label>Ocurrencia (post):<br>
+                  <select id="oPost"></select>
+                </label>
+                <label>Detección (post):<br>
+                  <select id="dPost"></select>
+                </label>
+                <label>Características especiales (post):<br>
+                  <input type="text" id="caracteristicasPost">
+                </label>
+                <label>Prioridad de acción post:<br>
+                  <span id="ap-post-display" class="ap-cell"></span>
+                </label>
+                <label>Observaciones:<br>
+                  <textarea id="observaciones"></textarea>
+                </label>
+              </div>
             </div>
-        </div>
+          </div>
+        </section>
+      </div>
+      <div class="actions">
+        <button id="save-btn">Guardar AMFE</button>
+        <button id="export-btn">Exportar a Excel</button>
+      </div>
+    </section>
+    <!-- Sección plan de control -->
+    <section id="control-section" class="tab-content">
+    <h2>Plan de control</h2>
+    <!-- Cabecera del plan de control según el formato estándar -->
+    <div id="control-header" class="grid-4" style="margin-bottom:8px;">
+      <label>Fase:<br>
+        <select id="cpPhase">
+          <option value="">Seleccione…</option>
+          <option value="Prototipo">Prototipo</option>
+          <option value="Prelanzamiento">Prelanzamiento</option>
+          <option value="Producción">Producción</option>
+        </select>
+      </label>
+      <label>Nº plan de control:<br>
+        <input type="text" id="cpNumber">
+      </label>
+      <label>Contacto principal / Teléfono:<br>
+        <input type="text" id="cpContact">
+      </label>
+      <label>Fecha (original):<br>
+        <input type="date" id="cpDateOriginal">
+      </label>
+      <label>Fecha (revisión):<br>
+        <input type="date" id="cpDateRevision">
+      </label>
+      <label>Nº de parte / Último cambio:<br>
+        <input type="text" id="cpPartNumber">
+      </label>
+      <label>Equipo principal:<br>
+        <input type="text" id="cpMainTeam">
+      </label>
+      <label>Nombre / Descripción de la parte:<br>
+        <input type="text" id="cpPartDescription">
+      </label>
+      <label>Proveedor / Planta:<br>
+        <input type="text" id="cpSupplierPlant">
+      </label>
+      <label>Código de proveedor:<br>
+        <input type="text" id="cpSupplierCode">
+      </label>
+      <label>Aprobación proveedor / Fecha:<br>
+        <input type="date" id="cpApprovalSupplier">
+      </label>
+      <label>Aprobación técnica cliente / Fecha:<br>
+        <input type="date" id="cpApprovalTechClient">
+      </label>
+      <label>Aprobación calidad cliente / Fecha:<br>
+        <input type="date" id="cpApprovalQualityClient">
+      </label>
+      <label>Otra aprobación / Fecha:<br>
+        <input type="date" id="cpApprovalOther">
+      </label>
     </div>
-</div>
-
-<!-- Vista Principal de la App (inicialmente oculta) -->
-<div id="app-view" class="bg-slate-100 min-h-screen flex flex-col hidden">
-    <!-- Barra de Navegación Superior -->
-    <header class="bg-white shadow-md z-40">
-        <div class="container mx-auto px-6 py-3 flex items-center justify-between">
-            <!-- Logo y Navegación Principal -->
-            <div class="flex items-center space-x-8">
-                <!-- Logo -->
-                <div class="flex-shrink-0">
-                    <img src="barack_logo.png" alt="Logo" class="h-10 w-auto" loading="lazy">
-                </div>
-                <!-- Navegación -->
-                <nav id="main-nav" class="hidden md:flex items-center space-x-2">
-                    <a href="#" data-view="landing-page" class="nav-link px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100">
-                        <i data-lucide="layout-dashboard" class="inline-block w-4 h-4 mr-1.5 -mt-0.5"></i>Página Principal
-                    </a>
-
-                    <a href="#" data-view="planning" class="nav-link px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100">
-                        <i data-lucide="calendar-clock" class="inline-block w-4 h-4 mr-1.5 -mt-0.5"></i>Planning
-                    </a>
-
-                    <!-- Dropdown de Configuración -->
-                    <div class="relative nav-dropdown">
-                        <button class="nav-link dropdown-toggle px-4 py-2 rounded-md text-sm font-medium text-slate-700 hover:bg-slate-100 flex items-center">
-                            <i data-lucide="settings" class="inline-block w-4 h-4 mr-1.5 -mt-0.5"></i>Configuración
-                            <i data-lucide="chevron-down" class="w-4 h-4 ml-1"></i>
-                        </button>
-                        <div class="dropdown-menu absolute mt-2 w-56 bg-white border rounded-lg shadow-xl">
-                            <a href="#" data-view="user_management" class="nav-link flex items-center gap-3 px-4 py-3 text-sm hover:bg-slate-100"><i data-lucide="user-cog" class="w-5 h-5 text-slate-500"></i>Usuarios</a>
-                        </div>
-                    </div>
-                </nav>
-            </div>
-
-            <!-- Menú de Usuario a la derecha -->
-            <div class="flex items-center">
-                <div id="notification-center-container" class="relative">
-                    <!-- Notification center will be rendered here by main.js -->
-                </div>
-
-                <div class="border-l border-slate-200 h-8 mx-4"></div>
-                <div id="user-menu-container" class="relative">
-                    <!-- User menu will be rendered here by main.js -->
-                </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Contenido Principal -->
-    <div class="flex-grow container mx-auto px-6 py-8">
-        <main id="main-content">
-            <header id="main-header" class="flex flex-wrap justify-between items-center gap-4 mb-6">
-                <div class="flex items-center gap-4">
-                    <h2 id="view-title" class="text-3xl font-bold text-slate-800"></h2>
-                </div>
-                <!-- Contenedor de acciones de la vista (búsqueda, agregar) -->
-                <div id="header-actions" class="flex items-center space-x-4">
-                    <div class="relative"><input type="text" id="search-input" placeholder="Buscar en esta vista..." class="pl-10 pr-4 py-2 border rounded-full w-64 bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"><i data-lucide="search" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5"></i></div>
-                    <div id="ai-assistant-button-container"></div>
-                    <button id="add-new-button" class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 flex items-center shadow-md transition-transform transform hover:scale-105"><i data-lucide="plus" class="mr-2 h-5 w-5"></i><span id="add-button-text"></span></button>
-                </div>
-            </header>
-            <!-- Contenedor de Vistas Dinámico -->
-            <div id="view-content"></div>
-        </main>
-    </div>
-</div>
-
-<!-- Contenedor para Modales y Notificaciones -->
-<div id="modal-container">
-</div>
-<div id="toast-container" class="fixed top-5 right-5 z-[1100] space-y-3"></div>
-
-<!--
-    AQUÍ ESTABA TODO EL CÓDIGO JAVASCRIPT.
-    AHORA SE CARGA DESDE EL ARCHIVO EXTERNO main.js
--->
-<!-- Library Scripts -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/20.0.3/tween.umd.js"></script>
-<script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/html2pdf.js-stable-fix@0.10.2/dist/html2pdf.bundle.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-
-<!-- Library Scripts -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/20.0.3/tween.umd.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/alyssaxuu/flowy/flowy.min.js"></script>
-<!-- Firebase Hosting Scripts -->
-<script type="module" src="main.js"></script>
+      <table id="control-table" class="control-standard">
+        <thead>
+          <tr>
+            <th>Nº proceso / Parte</th>
+            <th>Nombre de proceso</th>
+            <th>Máquina, utillaje, herramientas</th>
+            <th>Nº característica</th>
+            <th>Producto</th>
+            <th>Proceso</th>
+            <th>Clase especial</th>
+            <th>Especificación / Tolerancia (producto/proceso)</th>
+            <th>Técnica de medición</th>
+            <th>Error proofing</th>
+            <th>Muestra – Cantidad</th>
+            <th>Muestra – Frecuencia</th>
+            <th>Método de control</th>
+            <th>Plan de reacción</th>
+          </tr>
+        </thead>
+        <tbody id="control-body"></tbody>
+      </table>
+    </section>
+    <!-- Sección de Vista estándar (formato AIAG-VDA) -->
+    <section id="standard-section" class="tab-content">
+      <h2>Vista estándar del AMFE (AIAG‑VDA)</h2>
+      <p>A continuación se muestra el AMFE en el formato tabular estándar. Puede exportarse a PDF para imprimir o compartir.</p>
+      <div id="standard-table-container" style="overflow-x:auto; border:1px solid #ccc; margin-bottom:8px;">
+        <!-- La tabla se generará dinámicamente mediante script.js -->
+      </div>
+      <button id="export-standard" class="btn">Exportar vista a PDF</button>
+    </section>
+  </main>
+  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+  <!-- Librerías para exportar la vista estándar a PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Firebase SDK (v8 for compatibility with existing code) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
