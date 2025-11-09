@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas para la colección de AMFEs
+    match /amfes/{docId} {
+      // Permitir lectura y escritura a todos (modo público)
+      // NOTA: Cambia estas reglas según tus necesidades de seguridad
+      allow read, write: if true;
+      
+      // Para usar con autenticación (comentado por defecto):
+      // allow read: if request.auth != null;
+      // allow create: if request.auth != null;
+      // allow update, delete: if request.auth != null 
+      //   && resource.data.createdBy == request.auth.uid;
+    }
+  }
+}

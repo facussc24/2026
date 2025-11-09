@@ -2,9 +2,11 @@
 node_modules/
 package-lock.json
 
-# Data files (user-generated content)
-data/amfes/
-data/docs.json
+# Firebase
+.firebaserc
+.firebase/
+firebase-debug.log
+firestore-debug.log
 
 # OS files
 .DS_Store
@@ -24,3 +26,7 @@ npm-debug.log*
 # Environment files
 .env
 .env.local
+
+# Build artifacts
+dist/
+build/

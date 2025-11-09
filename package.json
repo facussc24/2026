@@ -1,15 +1,13 @@
 {
-  "name": "amfe-pro-app-final",
-  "version": "1.0.0",
-  "description": "Herramienta profesional para AMFE‑FMEA de proceso preliminar con estructura jerárquica y backend en Node.js",
-  "main": "server.js",
+  "name": "amfe-pro-app-firebase",
+  "version": "2.0.0",
+  "description": "Herramienta profesional para AMFE‑FMEA de proceso preliminar con Firebase Firestore",
   "scripts": {
-    "start": "node server.js"
+    "serve": "npx http-server public -p 3000"
   },
   "author": "",
-  "license": "MIT"
-  ,
-  "dependencies": {
-    "express": "^4.18.2"
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
   }
 }

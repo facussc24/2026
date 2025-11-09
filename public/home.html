@@ -80,8 +80,15 @@
       </div>
     </div>
   </main>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  
+  <!-- Firebase Configuration -->
+  <script src="firebase-config.js"></script>
+  
   <script>
-    // Página de inicio para servidor: trabaja con API REST en lugar de localStorage
+    // Página de inicio para Firebase: trabaja con Firestore
     const newBtn = document.getElementById('new-amfe');
     const docListDiv = document.getElementById('doc-list');
     const searchInput = document.getElementById('search');
@@ -99,22 +106,21 @@
      * @param {string} message - Mensaje de éxito
      */
     function showSuccess(message) {
-      // Simple alert for now - could be improved with toast notifications
       console.log('Éxito:', message);
     }
 
     /**
-     * Obtener la lista de documentos desde el servidor
+     * Obtener la lista de documentos desde Firebase
      */
     async function fetchDocs() {
       try {
-        const res = await fetch('/api/docs');
-        if (!res.ok) {
-          throw new Error('No se pudo cargar la lista de AMFEs');
-        }
-        return await res.json();
+        const snapshot = await db.collection(COLLECTION_NAME).orderBy('lastModified', 'desc').get();
+        return snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
       } catch (error) {
-        showError('No se pudo conectar con el servidor. Verifique que el servidor esté ejecutándose.');
+        showError('No se pudo cargar la lista de AMFEs desde Firebase. Verifique su configuración.');
         throw error;
       }
     }
@@ -129,7 +135,7 @@
         docListDiv.innerHTML = '';
         
         const filteredDocs = docs.filter(doc => 
-          doc.name.toLowerCase().includes(filter)
+          doc.name && doc.name.toLowerCase().includes(filter)
         );
         
         if (filteredDocs.length === 0) {
@@ -141,15 +147,20 @@
           const wrapper = document.createElement('div');
           wrapper.className = 'doc-item';
           const info = document.createElement('div');
-          info.textContent = `${doc.name} (Modificado: ${new Date(doc.lastModified).toLocaleDateString()})`;
+          const lastModified = doc.lastModified ? 
+            (doc.lastModified.toDate ? doc.lastModified.toDate().toLocaleDateString() : 'N/A') : 
+            'N/A';
+          info.textContent = `${doc.name} (Modificado: ${lastModified})`;
           const actions = document.createElement('div');
           actions.className = 'doc-actions';
+          
           // Abrir AMFE
           const openBtn = document.createElement('button');
           openBtn.textContent = 'Abrir';
           openBtn.onclick = () => {
             window.location.href = 'index.html?id=' + encodeURIComponent(doc.id);
           };
+          
           // Renombrar AMFE
           const renameBtn = document.createElement('button');
           renameBtn.textContent = 'Renombrar';
@@ -157,38 +168,31 @@
             const nuevo = prompt('Nuevo nombre para el AMFE:', doc.name);
             if (!nuevo || nuevo.trim() === '') return;
             try {
-              const res = await fetch('/api/docs/' + encodeURIComponent(doc.id), {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: nuevo.trim() })
+              await db.collection(COLLECTION_NAME).doc(doc.id).update({
+                name: nuevo.trim(),
+                lastModified: firebase.firestore.FieldValue.serverTimestamp()
               });
-              if (!res.ok) {
-                throw new Error('No se pudo renombrar el documento');
-              }
               showSuccess('Documento renombrado correctamente');
               renderList();
             } catch (error) {
               showError('Error al renombrar: ' + error.message);
             }
           };
+          
           // Eliminar AMFE
           const deleteBtn = document.createElement('button');
           deleteBtn.textContent = 'Eliminar';
           deleteBtn.onclick = async () => {
             if (!confirm('¿Desea eliminar este AMFE? Esta acción no se puede deshacer.')) return;
             try {
-              const res = await fetch('/api/docs/' + encodeURIComponent(doc.id), { 
-                method: 'DELETE' 
-              });
-              if (!res.ok) {
-                throw new Error('No se pudo eliminar el documento');
-              }
+              await db.collection(COLLECTION_NAME).doc(doc.id).delete();
               showSuccess('Documento eliminado correctamente');
               renderList();
             } catch (error) {
               showError('Error al eliminar: ' + error.message);
             }
           };
+          
           actions.appendChild(openBtn);
           actions.appendChild(renameBtn);
           actions.appendChild(deleteBtn);
@@ -198,26 +202,33 @@
         });
       } catch (error) {
         console.error('Error rendering list:', error);
-        docListDiv.innerHTML = '<p style="color: red;">Error al cargar los documentos. Por favor, recargue la página.</p>';
+        docListDiv.innerHTML = '<p style="color: red;">Error al cargar los documentos desde Firebase. Por favor, verifique su configuración y recargue la página.</p>';
       }
     }
 
     // Crear un nuevo AMFE
     newBtn.addEventListener('click', async () => {
       try {
-        // Solicita al servidor la creación con nombre por defecto
-        const res = await fetch('/api/docs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: 'Nuevo AMFE' })
+        // Crear nuevo documento en Firebase
+        const docRef = await db.collection(COLLECTION_NAME).add({
+          name: 'Nuevo AMFE',
+          lastModified: firebase.firestore.FieldValue.serverTimestamp(),
+          content: {
+            general: {
+              orgName: '', tema: '', numeroAmfe: '', revisionAmfe: '', planta: '', 
+              fechaInicio: '', responsable: '', cliente: '', fechaRevision: '', 
+              confidencialidad: '', modelo: '', equipo: '', planNumber: '', contacto: '', 
+              tipoPlan: '', numParte: '', ultimoCambio: '', aprobProv: '', 
+              aprobIngCliente: '', aprobCalidadCliente: '', aprobOtras: ''
+            },
+            items: [],
+            selected: { itemId: null, stepId: null, elementId: null }
+          }
         });
-        if (!res.ok) {
-          throw new Error('No se pudo crear el documento');
-        }
-        const meta = await res.json();
-        window.location.href = 'index.html?id=' + encodeURIComponent(meta.id);
+        
+        window.location.href = 'index.html?id=' + encodeURIComponent(docRef.id);
       } catch (error) {
-        showError('Error al crear nuevo AMFE: ' + error.message);
+        showError('Error al crear nuevo AMFE en Firebase: ' + error.message);
       }
     });
 

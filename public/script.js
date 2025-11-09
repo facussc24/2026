@@ -4,8 +4,7 @@
 // añadir múltiples pasos por ítem, múltiples elementos (4M) por paso y
 // múltiples modos de falla por elemento. La evaluación de riesgos y la
 // planificación de acciones se realiza a nivel de elemento. Los datos se
-// persisten en un backend Node.js vía fetch a /api/fmeas y pueden exportarse
-// a Excel mediante SheetJS.
+// persisten en Firebase Firestore y pueden exportarse a Excel mediante SheetJS.
 
 // Estado global de la aplicación
 const state = {
@@ -1094,7 +1093,7 @@ function updateControlPlan() {
   });
 }
 
-// Recoge los datos del formulario y del estado y los envía al backend
+// Recoge los datos del formulario y del estado y los envía a Firebase
 async function saveData() {
   // Actualizar datos generales
   state.general.orgName = document.getElementById('orgName').value;
@@ -1135,24 +1134,27 @@ async function saveData() {
   }
   // Construir payload
   const payload = {
-    ...state.general,
-    created: new Date().toISOString(),
+    general: state.general,
+    controlHeader: state.controlHeader,
     items: state.items
   };
   try {
-    const resp = await fetch('/api/fmeas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (resp.ok) {
-      alert('AMFE guardado correctamente');
-    } else {
-      alert('Error al guardar el AMFE');
+    if (!currentDocId) {
+      alert('Error: No hay documento activo');
+      return;
     }
+    
+    // Actualizar documento en Firestore
+    await db.collection(COLLECTION_NAME).doc(currentDocId).update({
+      name: state.general.tema || 'Nuevo AMFE',
+      content: payload,
+      lastModified: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    
+    alert('AMFE guardado correctamente en Firebase');
   } catch (err) {
-    console.error('Error al guardar datos', err);
-    alert('Error al guardar datos');
+    console.error('Error al guardar datos en Firebase:', err);
+    alert('Error al guardar datos: ' + err.message);
   }
 }
 
@@ -1375,13 +1377,20 @@ function initControlHeaderUI() {
 }
 
 
-// --- Funciones para persistencia en servidor ---
+// --- Funciones para persistencia en Firebase ---
 async function loadFromServer() {
   if (!currentDocId) return;
   try {
-    const res = await fetch('/api/docs/' + encodeURIComponent(currentDocId));
-    if (!res.ok) throw new Error('Error al cargar documento');
-    const saved = await res.json();
+    const doc = await db.collection(COLLECTION_NAME).doc(currentDocId).get();
+    
+    if (!doc.exists) {
+      console.error('Documento no encontrado en Firebase');
+      return;
+    }
+    
+    const data = doc.data();
+    const saved = data.content;
+    
     // Copiar propiedades guardadas al estado actual
     if (saved.general) {
       Object.assign(state.general, saved.general);
@@ -1393,23 +1402,24 @@ async function loadFromServer() {
       Object.assign(state.controlHeader, saved.controlHeader);
     }
   } catch (ex) {
-    console.error(ex);
+    console.error('Error al cargar desde Firebase:', ex);
   }
 }
 
-// Guardar estado en servidor
+// Guardar estado en Firebase (auto-save)
 async function persistServer() {
   if (!currentDocId) return;
   try {
     const copy = JSON.parse(JSON.stringify(state));
     const name = state.general.tema && state.general.tema.trim() !== '' ? state.general.tema.trim() : 'AMFE sin tema';
-    await fetch('/api/docs/' + encodeURIComponent(currentDocId), {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: name, content: copy })
+    
+    await db.collection(COLLECTION_NAME).doc(currentDocId).update({
+      name: name,
+      content: copy,
+      lastModified: firebase.firestore.FieldValue.serverTimestamp()
     });
   } catch (ex) {
-    console.error('Error al guardar en servidor:', ex);
+    console.error('Error al guardar en Firebase:', ex);
   }
 }
 

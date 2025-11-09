@@ -1,4 +1,4 @@
-# AMFE‑FMEA de Proceso (versión profesional)
+# AMFE‑FMEA de Proceso (versión Firebase)
 
 Este proyecto implementa una herramienta completa para la elaboración de
 **AMFE‑FMEA de Proceso Preliminar** siguiendo las directrices de AIAG‑VDA.
@@ -8,20 +8,26 @@ descomposición del proceso (sistema → paso → elemento 4M). Cada elemento
 puede contener múltiples **modos de falla** con sus efectos, modos y
 causas. La evaluación de riesgos (Severidad, Ocurrencia, Detección y
 Prioridad de Acción) y las acciones de optimización se gestionan a nivel
-de elemento. Además, incluye un backend en Node.js para guardar y
-recuperar análisis y una utilidad de exportación a Excel.
+de elemento. Los datos se almacenan en **Firebase Firestore** en la nube
+y la aplicación incluye utilidad de exportación a Excel.
+
+## 🔥 Ahora con Firebase
+
+Esta aplicación usa **Firebase Firestore** para almacenamiento en la nube:
+- ✅ Sin necesidad de servidor Node.js
+- ✅ Escalabilidad automática
+- ✅ Acceso desde cualquier lugar
+- ✅ Backup automático
+- ✅ Plan gratuito generoso
 
 ## 📋 Tabla de Contenidos
 
 - [Características](#-características)
+- [Configuración Rápida](#-configuración-rápida)
 - [Estructura del Proyecto](#-estructura-del-proyecto)
 - [Requisitos](#-requisitos)
-- [Instalación y Configuración](#-instalación-y-configuración)
-- [Cómo Ejecutar](#-cómo-ejecutar)
+- [Guía de Configuración Completa](#-guía-de-configuración-completa)
 - [Uso de la Interfaz](#-uso-de-la-interfaz)
-- [Mejoras Recientes](#-mejoras-recientes)
-- [Próximos Pasos](#-próximos-pasos)
-- [Migración a Firebase](#-migración-a-firebase)
 - [Referencias](#-referencias)
 
 ## ✨ Características
@@ -32,11 +38,49 @@ recuperar análisis y una utilidad de exportación a Excel.
 - ✅ **Clasificación de características especiales** (Crítica/Significativa)
 - ✅ **Plan de control integrado**
 - ✅ **Exportación a Excel** con formato profesional
-- ✅ **Backend con persistencia de datos**
+- ✅ **Almacenamiento en la nube con Firebase Firestore**
 - ✅ **Gestión multi-documento**
 - ✅ **Búsqueda y filtrado**
 - ✅ **Validación de datos completa**
 - ✅ **Interfaz responsive**
+- ✅ **Sin servidor que mantener**
+
+## 🚀 Configuración Rápida
+
+### Paso 1: Obtener el código
+```bash
+git clone https://github.com/facussc24/2026.git
+cd 2026
+```
+
+### Paso 2: Configurar Firebase
+1. Crea un proyecto en [Firebase Console](https://console.firebase.google.com/)
+2. Crea una base de datos Firestore (modo prueba)
+3. Obtén tus credenciales de Firebase
+4. Abre `public/firebase-config.js`
+5. Reemplaza los valores de ejemplo con tus credenciales
+
+```javascript
+const firebaseConfig = {
+  apiKey: "TU_API_KEY_AQUI",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto-id",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abc123"
+};
+```
+
+### Paso 3: Ejecutar
+```bash
+npm install
+npm run serve
+```
+
+### Paso 4: Abrir en navegador
+Ve a: http://localhost:3000/home.html
+
+**📖 Para instrucciones detalladas, ver [FIREBASE_SETUP.md](FIREBASE_SETUP.md)**
 
 ## 📂 Estructura del proyecto
 
@@ -206,3 +250,49 @@ El documento cubre:
 Esperamos que esta herramienta te sirva para documentar y analizar
 procesos de manera profesional y conforme a los estándares de la
 industria automotriz.
+## 📂 Estructura del Proyecto
+
+```
+2026/
+├── public/                      # Aplicación frontend
+│   ├── index.html              # Interfaz principal del editor AMFE
+│   ├── home.html               # Página de inicio (lista de AMFEs)
+│   ├── styles.css              # Estilos responsive
+│   ├── script.js               # Lógica principal
+│   └── firebase-config.js      # ⚙️ CONFIGURAR AQUÍ tus credenciales
+├── firestore.rules              # Reglas de seguridad
+├── firebase.json                # Configuración Firebase
+├── package.json                 # Dependencias
+├── FIREBASE_SETUP.md            # 📖 Guía detallada paso a paso
+└── README.md                    # Este archivo
+```
+
+## 🎯 Cambios Importantes - Versión Firebase
+
+Esta versión usa **Firebase** en lugar de servidor Node.js:
+
+### ✅ Lo que cambió:
+- ❌ **Eliminado**: server.js, carpeta data/, Express
+- ✅ **Agregado**: Firebase Firestore, firebase-config.js
+- ✅ **Actualizado**: script.js, home.html, index.html para usar Firebase
+
+### �� Archivo Clave para Configurar:
+**`public/firebase-config.js`** ← Edita este archivo con tus credenciales de Firebase
+
+### 📖 Documentación:
+- **FIREBASE_SETUP.md**: Guía completa de configuración
+- **FIREBASE_MIGRATION_GUIDE.md**: Referencia técnica de la migración
+
+## 🌐 Deploy a Producción (Opcional)
+
+### Opción 1: Firebase Hosting (Recomendado)
+```bash
+npm install -g firebase-tools
+firebase login
+firebase init hosting
+firebase deploy
+```
+
+### Opción 2: Cualquier hosting estático
+Solo sube la carpeta `public/` a tu hosting favorito (Netlify, Vercel, etc.)
+
