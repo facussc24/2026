@@ -1517,13 +1517,14 @@ async function exportStandardToPDF() {
   const container = document.getElementById('standard-table-container');
   if (!container) return;
   // Cargar librerías si no están presentes
-  if (typeof html2canvas === 'undefined' || typeof jsPDF === 'undefined') {
+  if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
     alert('Las librerías de exportación no están disponibles.');
     return;
   }
   // Renderizar como canvas
   const canvas = await html2canvas(container, { scale: 1 });
   const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
   const pdf = new jsPDF('l', 'pt', [canvas.width, canvas.height]);
   pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
   pdf.save('vista_estandar_amfe.pdf');
