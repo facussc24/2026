@@ -99,10 +99,18 @@
     async function renderList() {
       const filter = searchInput.value.toLowerCase();
       const docs = await fetchDocs();
+      const filteredDocs = docs.filter(doc => doc.name.toLowerCase().includes(filter));
       docListDiv.innerHTML = '';
-      docs
-        .filter(doc => doc.name.toLowerCase().includes(filter))
-        .forEach(doc => {
+
+      if (filteredDocs.length === 0) {
+        const emptyMessage = document.createElement('p');
+        emptyMessage.id = 'empty-message';
+        emptyMessage.textContent = 'No se encontraron AMFEs. Cree uno nuevo para comenzar.';
+        docListDiv.appendChild(emptyMessage);
+        return;
+      }
+
+      filteredDocs.forEach(doc => {
           const wrapper = document.createElement('div');
           wrapper.className = 'doc-item';
           const info = document.createElement('div');

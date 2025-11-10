@@ -487,6 +487,49 @@ function addItem() {
   renderDetail();
 }
 
+// Elimina un ítem
+function deleteItem(itemId) {
+  if (!confirm('¿Está seguro de que desea eliminar este ítem y todo su contenido?')) return;
+  state.items = state.items.filter(item => item.id !== itemId);
+  if (state.selected.itemId === itemId) {
+    state.selected = { itemId: null, stepId: null, elementId: null };
+  }
+  renderStructure();
+  renderDetail();
+}
+
+// Elimina un paso de un ítem
+function deleteStep(itemId, stepId) {
+  if (!confirm('¿Está seguro de que desea eliminar este paso y todos sus elementos?')) return;
+  const item = state.items.find(it => it.id === itemId);
+  if (item) {
+    item.steps = item.steps.filter(step => step.id !== stepId);
+    if (state.selected.stepId === stepId) {
+      state.selected.stepId = null;
+      state.selected.elementId = null;
+    }
+  }
+  renderStructure();
+  renderDetail();
+}
+
+// Elimina un elemento de un paso
+function deleteElement(itemId, stepId, elementId) {
+  if (!confirm('¿Está seguro de que desea eliminar este elemento?')) return;
+  const item = state.items.find(it => it.id === itemId);
+  if (item) {
+    const step = item.steps.find(st => st.id === stepId);
+    if (step) {
+      step.elements = step.elements.filter(el => el.id !== elementId);
+      if (state.selected.elementId === elementId) {
+        state.selected.elementId = null;
+      }
+    }
+  }
+  renderStructure();
+  renderDetail();
+}
+
 // Añade un paso dentro de un ítem
 function addStep(itemId) {
   const item = state.items.find(it => it.id === itemId);
@@ -787,6 +830,16 @@ function renderStructure() {
       }
     });
     btnContainer.appendChild(renameBtn);
+    // Botón para eliminar ítem
+    const deleteItemBtn = document.createElement('button');
+    deleteItemBtn.textContent = '🗑️';
+    deleteItemBtn.className = 'small';
+    deleteItemBtn.title = 'Eliminar ítem';
+    deleteItemBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      deleteItem(item.id);
+    });
+    btnContainer.appendChild(deleteItemBtn);
     rowDiv.appendChild(btnContainer);
     liItem.appendChild(rowDiv);
     // Lista de pasos
@@ -835,6 +888,16 @@ function renderStructure() {
         }
       });
       btnStepContainer.appendChild(renStepBtn);
+      // Botón para eliminar paso
+      const deleteStepBtn = document.createElement('button');
+      deleteStepBtn.textContent = '🗑️';
+      deleteStepBtn.className = 'small';
+      deleteStepBtn.title = 'Eliminar paso';
+      deleteStepBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        deleteStep(item.id, step.id);
+      });
+      btnStepContainer.appendChild(deleteStepBtn);
       rowStep.appendChild(btnStepContainer);
       liStep.appendChild(rowStep);
       // Lista de elementos
@@ -842,7 +905,7 @@ function renderStructure() {
       ulEls.className = 'step-list';
       step.elements.forEach(el => {
         const liEl = document.createElement('li');
-        // Fila para el elemento (solo texto, sin botones)
+        // Fila para el elemento (con botón de eliminar)
         const rowEl = document.createElement('div');
         rowEl.className = 'tree-row';
         const elSpan = document.createElement('span');
@@ -860,6 +923,19 @@ function renderStructure() {
           elSpan.classList.add('active');
         }
         rowEl.appendChild(elSpan);
+        // Botón para eliminar elemento
+        const deleteElBtn = document.createElement('button');
+        deleteElBtn.textContent = '🗑️';
+        deleteElBtn.className = 'small';
+        deleteElBtn.title = 'Eliminar elemento';
+        deleteElBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          deleteElement(item.id, step.id, el.id);
+        });
+        const btnElContainer = document.createElement('span');
+        btnElContainer.className = 'tree-buttons';
+        btnElContainer.appendChild(deleteElBtn);
+        rowEl.appendChild(btnElContainer);
         liEl.appendChild(rowEl);
         ulEls.appendChild(liEl);
       });
@@ -1078,38 +1154,53 @@ function updateControlPlan() {
 
 // Recoge los datos del formulario y del estado y los envía al backend
 async function saveData() {
-  // Actualizar datos generales
-  state.general.orgName = document.getElementById('orgName').value;
-  state.general.tema = document.getElementById('tema').value;
-  state.general.numeroAmfe = document.getElementById('numeroAmfe').value;
-  state.general.revisionAmfe = document.getElementById('revisionAmfe').value;
-  state.general.planta = document.getElementById('planta').value;
-  state.general.fechaInicio = document.getElementById('fechaInicio').value;
-  state.general.responsable = document.getElementById('responsable').value;
-  state.general.cliente = document.getElementById('cliente').value;
-  state.general.fechaRevision = document.getElementById('fechaRevision').value;
-  state.general.confidencialidad = document.getElementById('confidencialidad').value;
-  state.general.modelo = document.getElementById('modelo').value;
-  state.general.equipo = document.getElementById('equipo').value;
-  // Campos adicionales del plan
-  state.general.planNumber = document.getElementById('planNumber').value;
-  state.general.contacto = document.getElementById('contacto').value;
-  state.general.tipoPlan = document.getElementById('tipoPlan').value;
-  // Campos adicionales de trazabilidad
-  state.general.numParte = document.getElementById('numParte').value;
-  state.general.ultimoCambio = document.getElementById('ultimoCambio').value;
-  state.general.aprobProv = document.getElementById('aprobProv').value;
-  state.general.aprobIngCliente = document.getElementById('aprobIngCliente').value;
-  state.general.aprobCalidadCliente = document.getElementById('aprobCalidadCliente').value;
-  state.general.aprobOtras = document.getElementById('aprobOtras').value;
-  // Guardar datos del elemento activo antes de exportar
-  saveElementData();
-  // Validar datos antes de guardar
-  if (!validateData()) {
-    return;
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Guardando...';
+
+  // Allow UI to update before blocking for validation
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  try {
+    // Actualizar datos generales
+    state.general.orgName = document.getElementById('orgName').value;
+    state.general.tema = document.getElementById('tema').value;
+    state.general.numeroAmfe = document.getElementById('numeroAmfe').value;
+    state.general.revisionAmfe = document.getElementById('revisionAmfe').value;
+    state.general.planta = document.getElementById('planta').value;
+    state.general.fechaInicio = document.getElementById('fechaInicio').value;
+    state.general.responsable = document.getElementById('responsable').value;
+    state.general.cliente = document.getElementById('cliente').value;
+    state.general.fechaRevision = document.getElementById('fechaRevision').value;
+    state.general.confidencialidad = document.getElementById('confidencialidad').value;
+    state.general.modelo = document.getElementById('modelo').value;
+    state.general.equipo = document.getElementById('equipo').value;
+    // Campos adicionales del plan
+    state.general.planNumber = document.getElementById('planNumber').value;
+    state.general.contacto = document.getElementById('contacto').value;
+    state.general.tipoPlan = document.getElementById('tipoPlan').value;
+    // Campos adicionales de trazabilidad
+    state.general.numParte = document.getElementById('numParte').value;
+    state.general.ultimoCambio = document.getElementById('ultimoCambio').value;
+    state.general.aprobProv = document.getElementById('aprobProv').value;
+    state.general.aprobIngCliente = document.getElementById('aprobIngCliente').value;
+    state.general.aprobCalidadCliente = document.getElementById('aprobCalidadCliente').value;
+    state.general.aprobOtras = document.getElementById('aprobOtras').value;
+
+    // Guardar datos del elemento activo
+    saveElementData();
+
+    // Validar datos antes de guardar
+    if (!validateData()) {
+      return; // La validación falló, el botón se reactivará en el finally
+    }
+
+    // Guardar los datos en el servidor
+    await persistServer();
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Guardar AMFE';
   }
-  // Guardar los datos en el servidor
-  await persistServer();
 }
 
 // Exporta el estado actual a un archivo Excel (FMEA y Plan de control)
@@ -1377,13 +1468,11 @@ async function loadFromServer() {
 async function persistServer() {
   if (!currentDocId) return;
   const statusEl = document.getElementById('save-status');
-  const saveBtn = document.getElementById('save-btn');
   if (statusEl) {
     statusEl.textContent = 'Guardando...';
     statusEl.style.color = 'orange';
   }
-  saveBtn.disabled = true;
-  saveBtn.textContent = 'Guardando...';
+
   try {
     const copy = JSON.parse(JSON.stringify(state));
     const name = state.general.tema && state.general.tema.trim() !== '' ? state.general.tema.trim() : 'AMFE sin tema';
@@ -1392,6 +1481,7 @@ async function persistServer() {
       content: copy,
       lastModified: new Date().toISOString()
     }, { merge: true });
+
     if (statusEl) {
       statusEl.textContent = 'Guardado correctamente.';
       statusEl.style.color = 'green';
@@ -1405,9 +1495,6 @@ async function persistServer() {
       statusEl.textContent = 'Error al guardar.';
       statusEl.style.color = 'red';
     }
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = 'Guardar AMFE';
   }
 }
 
