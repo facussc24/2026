@@ -233,28 +233,10 @@ function validateData() {
   const issues = [];
   // Validar cabecera
   const general = state.general;
-  const requiredFields = ['orgName', 'tema', 'numeroAmfe', 'revisionAmfe', 'planta', 'fechaInicio', 'responsable', 'cliente', 'fechaRevision', 'confidencialidad', 'modelo', 'equipo', 'planNumber', 'contacto', 'tipoPlan', 'numParte', 'ultimoCambio', 'aprobProv', 'aprobIngCliente', 'aprobCalidadCliente'];
+  const requiredFields = ['tema', 'numeroAmfe'];
   const fieldNames = {
-    orgName: 'Nombre de la organización',
     tema: 'Tema',
     numeroAmfe: 'Nº de AMFE',
-    revisionAmfe: 'Revisión AMFE',
-    planta: 'Ubicación de la planta',
-    fechaInicio: 'Fecha inicio AMFE',
-    responsable: 'Responsable del proceso',
-    cliente: 'Nombre del cliente',
-    fechaRevision: 'Fecha revisión AMFE',
-    confidencialidad: 'Nivel de confidencialidad',
-    modelo: 'Modelo‑año plataforma',
-    equipo: 'Equipo multifuncional',
-    planNumber: 'Nº de plan de control',
-    contacto: 'Contacto clave / Teléfono',
-    tipoPlan: 'Tipo de plan',
-    numParte: 'Nº de parte',
-    ultimoCambio: 'Último nivel de cambio de ingeniería',
-    aprobProv: 'Aprobación proveedor/planta',
-    aprobIngCliente: 'Aprobación ingeniería cliente',
-    aprobCalidadCliente: 'Aprobación calidad cliente'
   };
   requiredFields.forEach(field => {
     if (!general[field] || general[field].trim() === '') {
@@ -1120,13 +1102,6 @@ async function saveData() {
   state.general.aprobIngCliente = document.getElementById('aprobIngCliente').value;
   state.general.aprobCalidadCliente = document.getElementById('aprobCalidadCliente').value;
   state.general.aprobOtras = document.getElementById('aprobOtras').value;
-  // Actualiza automáticamente la fecha de revisión a hoy
-  const today = new Date();
-  const isoDate = today.toISOString().split('T')[0];
-  state.general.fechaRevision = isoDate;
-  // Actualizar el input de fechaRevision para que refleje la nueva fecha
-  const fechaRevInput = document.getElementById('fechaRevision');
-  if (fechaRevInput) fechaRevInput.value = isoDate;
   // Guardar datos del elemento activo antes de exportar
   saveElementData();
   // Validar datos antes de guardar
