@@ -909,7 +909,7 @@ function renderStructure() {
         const rowEl = document.createElement('div');
         rowEl.className = 'tree-row';
         const elSpan = document.createElement('span');
-        elSpan.textContent = `${el.type}`;
+        elSpan.textContent = `${el.name}`; // Mostrar nombre en lugar de tipo
         elSpan.addEventListener('click', e => {
           state.selected = { itemId: item.id, stepId: step.id, elementId: el.id };
           renderStructure();
@@ -923,6 +923,26 @@ function renderStructure() {
           elSpan.classList.add('active');
         }
         rowEl.appendChild(elSpan);
+
+        const btnElContainer = document.createElement('span');
+        btnElContainer.className = 'tree-buttons';
+
+        // Botón para renombrar elemento
+        const renameElBtn = document.createElement('button');
+        renameElBtn.textContent = '✎';
+        renameElBtn.className = 'small';
+        renameElBtn.title = 'Renombrar elemento';
+        renameElBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          const newName = prompt('Nuevo nombre para el elemento:', el.name);
+          if (newName && newName.trim()) {
+            el.name = newName.trim();
+            renderStructure();
+            renderDetail(); // Actualizar título si está seleccionado
+          }
+        });
+        btnElContainer.appendChild(renameElBtn);
+
         // Botón para eliminar elemento
         const deleteElBtn = document.createElement('button');
         deleteElBtn.textContent = '🗑️';
@@ -932,9 +952,8 @@ function renderStructure() {
           e.stopPropagation();
           deleteElement(item.id, step.id, el.id);
         });
-        const btnElContainer = document.createElement('span');
-        btnElContainer.className = 'tree-buttons';
         btnElContainer.appendChild(deleteElBtn);
+
         rowEl.appendChild(btnElContainer);
         liEl.appendChild(rowEl);
         ulEls.appendChild(liEl);
