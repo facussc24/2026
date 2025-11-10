@@ -1113,80 +1113,52 @@ async function saveData() {
 }
 
 // Exporta el estado actual a un archivo Excel (FMEA y Plan de control)
-function exportToExcel() {
-  // Asegura que los cambios del elemento activo se guardan
-  saveElementData();
-  // Actualizar información general desde el formulario antes de validar.
-  // Esto evita que se usen valores obsoletos de state.general cuando se
-  // exporta directamente sin pulsar "Guardar AMFE".
-  state.general.orgName = document.getElementById('orgName').value;
-  state.general.tema = document.getElementById('tema').value;
-  state.general.numeroAmfe = document.getElementById('numeroAmfe').value;
-  state.general.revisionAmfe = document.getElementById('revisionAmfe').value;
-  state.general.planta = document.getElementById('planta').value;
-  state.general.fechaInicio = document.getElementById('fechaInicio').value;
-  state.general.responsable = document.getElementById('responsable').value;
-  state.general.cliente = document.getElementById('cliente').value;
-  state.general.fechaRevision = document.getElementById('fechaRevision').value;
-  state.general.confidencialidad = document.getElementById('confidencialidad').value;
-  state.general.modelo = document.getElementById('modelo').value;
-  state.general.equipo = document.getElementById('equipo').value;
-  state.general.planNumber = document.getElementById('planNumber').value;
-  state.general.contacto = document.getElementById('contacto').value;
-  state.general.tipoPlan = document.getElementById('tipoPlan').value;
-  state.general.numParte = document.getElementById('numParte').value;
-  state.general.ultimoCambio = document.getElementById('ultimoCambio').value;
-  state.general.aprobProv = document.getElementById('aprobProv').value;
-  state.general.aprobIngCliente = document.getElementById('aprobIngCliente').value;
-  state.general.aprobCalidadCliente = document.getElementById('aprobCalidadCliente').value;
-  state.general.aprobOtras = document.getElementById('aprobOtras').value;
-  // Validar datos antes de exportar
-  if (!validateData()) {
-    return;
-  }
-  // Construir datos para la hoja AMFE
-  const amfeRows = [];
-  state.items.forEach(item => {
-    item.steps.forEach(step => {
-      step.elements.forEach(el => {
-        // Si no hay fallas, aún se exporta una fila vacía para el elemento
-        if (el.fallas.length === 0) {
-          const row = {
-            'Nº de AMFE': state.general.numeroAmfe || '',
-            'Revisión': state.general.revisionAmfe || '',
-            'Item del proceso': item.name,
-            'Paso del proceso': step.name,
-            'Elemento de trabajo del proceso': el.type,
-            'Función del ítem del proceso': el.funciones.funcionItem,
-            'Función del paso del proceso': el.funciones.funcionPaso,
-            'Función del elemento de trabajo': el.funciones.funcionElemento,
-            'Efecto de la falla (EF)': '',
-            'Modo de falla (FM)': '',
-            'Causa de la falla (FC)': '',
-            'Controles preventivos actuales': '',
-            'Controles detectivos actuales': '',
-            'Severidad (S)': el.riesgos.severidad,
-            'Ocurrencia (O)': el.riesgos.ocurrencia,
-            'Detección (D)': el.riesgos.deteccion,
-            'AP (High/Medium/Low)': el.riesgos.ap,
-            'Características especiales': el.riesgos.caracteristicas,
-            'Acción preventiva': el.acciones.accionPrev,
-            'Acción detectiva': el.acciones.accionDet,
-            'Nombre de la persona responsable': el.acciones.personaResp,
-            'Fecha objetivo de terminación': el.acciones.fechaObjetivo,
-            'Estatus': el.acciones.estatus,
-            'Acción tomada': el.acciones.accionTomada,
-            'Fecha de terminación': el.acciones.fechaTerminacion,
-            'Severidad post (S)': el.riesgos.sPost,
-            'Ocurrencia post (O)': el.riesgos.oPost,
-            'Detección post (D)': el.riesgos.dPost,
-            'Características especiales post': el.riesgos.caracteristicasPost,
-            'AP FMEA post': el.riesgos.apPost,
-            'Observaciones': el.acciones.observaciones
-          };
-          amfeRows.push(row);
-        } else {
-          el.fallas.forEach(falla => {
+async function exportToExcel() {
+  const exportBtn = document.getElementById('export-btn');
+  exportBtn.disabled = true;
+  exportBtn.textContent = 'Exportando...';
+
+  // Allow UI to update before blocking the thread
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  try {
+    // Asegura que los cambios del elemento activo se guardan
+    saveElementData();
+    // Actualizar información general desde el formulario antes de validar.
+    // Esto evita que se usen valores obsoletos de state.general cuando se
+    // exporta directamente sin pulsar "Guardar AMFE".
+    state.general.orgName = document.getElementById('orgName').value;
+    state.general.tema = document.getElementById('tema').value;
+    state.general.numeroAmfe = document.getElementById('numeroAmfe').value;
+    state.general.revisionAmfe = document.getElementById('revisionAmfe').value;
+    state.general.planta = document.getElementById('planta').value;
+    state.general.fechaInicio = document.getElementById('fechaInicio').value;
+    state.general.responsable = document.getElementById('responsable').value;
+    state.general.cliente = document.getElementById('cliente').value;
+    state.general.fechaRevision = document.getElementById('fechaRevision').value;
+    state.general.confidencialidad = document.getElementById('confidencialidad').value;
+    state.general.modelo = document.getElementById('modelo').value;
+    state.general.equipo = document.getElementById('equipo').value;
+    state.general.planNumber = document.getElementById('planNumber').value;
+    state.general.contacto = document.getElementById('contacto').value;
+    state.general.tipoPlan = document.getElementById('tipoPlan').value;
+    state.general.numParte = document.getElementById('numParte').value;
+    state.general.ultimoCambio = document.getElementById('ultimoCambio').value;
+    state.general.aprobProv = document.getElementById('aprobProv').value;
+    state.general.aprobIngCliente = document.getElementById('aprobIngCliente').value;
+    state.general.aprobCalidadCliente = document.getElementById('aprobCalidadCliente').value;
+    state.general.aprobOtras = document.getElementById('aprobOtras').value;
+    // Validar datos antes de exportar
+    if (!validateData()) {
+      return;
+    }
+    // Construir datos para la hoja AMFE
+    const amfeRows = [];
+    state.items.forEach(item => {
+      item.steps.forEach(step => {
+        step.elements.forEach(el => {
+          // Si no hay fallas, aún se exporta una fila vacía para el elemento
+          if (el.fallas.length === 0) {
             const row = {
               'Nº de AMFE': state.general.numeroAmfe || '',
               'Revisión': state.general.revisionAmfe || '',
@@ -1196,11 +1168,11 @@ function exportToExcel() {
               'Función del ítem del proceso': el.funciones.funcionItem,
               'Función del paso del proceso': el.funciones.funcionPaso,
               'Función del elemento de trabajo': el.funciones.funcionElemento,
-              'Efecto de la falla (EF)': falla.efecto,
-              'Modo de falla (FM)': falla.modo,
-              'Causa de la falla (FC)': falla.causa,
-              'Controles preventivos actuales': falla.controlesPrev,
-              'Controles detectivos actuales': falla.controlesDetect,
+              'Efecto de la falla (EF)': '',
+              'Modo de falla (FM)': '',
+              'Causa de la falla (FC)': '',
+              'Controles preventivos actuales': '',
+              'Controles detectivos actuales': '',
               'Severidad (S)': el.riesgos.severidad,
               'Ocurrencia (O)': el.riesgos.ocurrencia,
               'Detección (D)': el.riesgos.deteccion,
@@ -1221,38 +1193,78 @@ function exportToExcel() {
               'Observaciones': el.acciones.observaciones
             };
             amfeRows.push(row);
-          });
-        }
+          } else {
+            el.fallas.forEach(falla => {
+              const row = {
+                'Nº de AMFE': state.general.numeroAmfe || '',
+                'Revisión': state.general.revisionAmfe || '',
+                'Item del proceso': item.name,
+                'Paso del proceso': step.name,
+                'Elemento de trabajo del proceso': el.type,
+                'Función del ítem del proceso': el.funciones.funcionItem,
+                'Función del paso del proceso': el.funciones.funcionPaso,
+                'Función del elemento de trabajo': el.funciones.funcionElemento,
+                'Efecto de la falla (EF)': falla.efecto,
+                'Modo de falla (FM)': falla.modo,
+                'Causa de la falla (FC)': falla.causa,
+                'Controles preventivos actuales': falla.controlesPrev,
+                'Controles detectivos actuales': falla.controlesDetect,
+                'Severidad (S)': el.riesgos.severidad,
+                'Ocurrencia (O)': el.riesgos.ocurrencia,
+                'Detección (D)': el.riesgos.deteccion,
+                'AP (High/Medium/Low)': el.riesgos.ap,
+                'Características especiales': el.riesgos.caracteristicas,
+                'Acción preventiva': el.acciones.accionPrev,
+                'Acción detectiva': el.acciones.accionDet,
+                'Nombre de la persona responsable': el.acciones.personaResp,
+                'Fecha objetivo de terminación': el.acciones.fechaObjetivo,
+                'Estatus': el.acciones.estatus,
+                'Acción tomada': el.acciones.accionTomada,
+                'Fecha de terminación': el.acciones.fechaTerminacion,
+                'Severidad post (S)': el.riesgos.sPost,
+                'Ocurrencia post (O)': el.riesgos.oPost,
+                'Detección post (D)': el.riesgos.dPost,
+                'Características especiales post': el.riesgos.caracteristicasPost,
+                'AP FMEA post': el.riesgos.apPost,
+                'Observaciones': el.acciones.observaciones
+              };
+              amfeRows.push(row);
+            });
+          }
+        });
       });
     });
-  });
-  // Construir hoja Plan de control
-  const controlRows = [];
-  const controlHeaders = [
-    'Nº proceso / Parte', 'Nombre de proceso', 'Máquina, utillaje, herramientas',
-    'Nº característica', 'Producto', 'Proceso', 'Clase especial',
-    'Especificación / Tolerancia (producto/proceso)', 'Técnica de medición',
-    'Error proofing', 'Muestra – Cantidad', 'Muestra – Frecuencia',
-    'Método de control', 'Plan de reacción'
-  ];
-  Array.from(controlBody.children).forEach(tr => {
-    const row = {};
-    const tds = Array.from(tr.children);
-    tds.forEach((td, i) => {
-      const header = controlHeaders[i];
-      const input = td.querySelector('input, select, textarea');
-      row[header] = input ? input.value : td.textContent;
+    // Construir hoja Plan de control
+    const controlRows = [];
+    const controlHeaders = [
+      'Nº proceso / Parte', 'Nombre de proceso', 'Máquina, utillaje, herramientas',
+      'Nº característica', 'Producto', 'Proceso', 'Clase especial',
+      'Especificación / Tolerancia (producto/proceso)', 'Técnica de medición',
+      'Error proofing', 'Muestra – Cantidad', 'Muestra – Frecuencia',
+      'Método de control', 'Plan de reacción'
+    ];
+    Array.from(controlBody.children).forEach(tr => {
+      const row = {};
+      const tds = Array.from(tr.children);
+      tds.forEach((td, i) => {
+        const header = controlHeaders[i];
+        const input = td.querySelector('input, select, textarea');
+        row[header] = input ? input.value : td.textContent;
+      });
+      controlRows.push(row);
     });
-    controlRows.push(row);
-  });
-  // Crear workbook
-  const wb = XLSX.utils.book_new();
-  const wsAmfe = XLSX.utils.json_to_sheet(amfeRows);
-  XLSX.utils.book_append_sheet(wb, wsAmfe, 'AMFE');
-  const wsCp = XLSX.utils.json_to_sheet(controlRows);
-  XLSX.utils.book_append_sheet(wb, wsCp, 'Plan de Control');
-  // Guardar
-  XLSX.writeFile(wb, 'AMFE-FMEA.xlsx');
+    // Crear workbook
+    const wb = XLSX.utils.book_new();
+    const wsAmfe = XLSX.utils.json_to_sheet(amfeRows);
+    XLSX.utils.book_append_sheet(wb, wsAmfe, 'AMFE');
+    const wsCp = XLSX.utils.json_to_sheet(controlRows);
+    XLSX.utils.book_append_sheet(wb, wsCp, 'Plan de Control');
+    // Guardar
+    XLSX.writeFile(wb, 'AMFE-FMEA.xlsx');
+  } finally {
+    exportBtn.disabled = false;
+    exportBtn.textContent = 'Exportar a Excel';
+  }
 }
 
 // Event Listeners generales
@@ -1365,10 +1377,13 @@ async function loadFromServer() {
 async function persistServer() {
   if (!currentDocId) return;
   const statusEl = document.getElementById('save-status');
+  const saveBtn = document.getElementById('save-btn');
   if (statusEl) {
     statusEl.textContent = 'Guardando...';
     statusEl.style.color = 'orange';
   }
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Guardando...';
   try {
     const copy = JSON.parse(JSON.stringify(state));
     const name = state.general.tema && state.general.tema.trim() !== '' ? state.general.tema.trim() : 'AMFE sin tema';
@@ -1390,6 +1405,9 @@ async function persistServer() {
       statusEl.textContent = 'Error al guardar.';
       statusEl.style.color = 'red';
     }
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Guardar AMFE';
   }
 }
 
