@@ -1500,7 +1500,11 @@ async function exportStandardToPDF() {
   const canvas = await html2canvas(container, { scale: 1 });
   const imgData = canvas.toDataURL('image/png');
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF('l', 'pt', [canvas.width, canvas.height]);
+  const pdf = new jsPDF({
+    orientation: 'l',
+    unit: 'pt',
+    format: [canvas.width, canvas.height]
+  });
   pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
   pdf.save('vista_estandar_amfe.pdf');
 }
