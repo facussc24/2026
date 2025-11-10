@@ -525,3 +525,255 @@ section#control-section table td {
 .btn-primary:hover {
   background: #16325c;
 }
+
+/* ------------ Estilos para la página de inicio mejorada ------------ */
+.home body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
+  color: #343a40;
+}
+
+.home header {
+  background: #fff;
+  color: #343a40;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.home header h1 {
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.home main {
+  padding: 2rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.home #lists {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.home .list-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.8rem;
+}
+
+.home .list-section input[type="text"] {
+  width: 100%;
+  padding: 0.8rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.home .list-section input[type="text"]:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.home .doc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
+  transition: background-color 0.2s;
+}
+
+.home .doc-item:last-child {
+  border-bottom: none;
+}
+
+.home .doc-item:hover {
+  background-color: #f8f9fa;
+}
+
+.home .doc-name {
+  font-weight: 600;
+}
+
+.home .doc-last-modified {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.home .doc-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.home .btn {
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.home .btn:active {
+  transform: translateY(1px);
+}
+
+.home .btn-primary {
+  background-color: #007bff;
+  color: white;
+}
+
+.home .btn-primary:hover {
+  background-color: #0056b3;
+}
+
+.home .btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.home .btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.home .btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.home .btn-danger:hover {
+  background-color: #c82333;
+}
+
+/* ------------ Mejoras visuales para index.html ------------ */
+
+/* Hacer la cabecera y la navegación de pestañas fija */
+body:not(.home) header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+body:not(.home) #main-nav {
+  position: sticky;
+  top: 50px; /* Ajustar según la altura de la cabecera */
+  z-index: 99;
+  background: #fff;
+}
+
+/* Ajustar el espaciado y el relleno de las secciones principales */
+section#general-info,
+main {
+  padding: 1.5rem 2rem;
+}
+
+section#general-info {
+  background: #fff;
+  border-bottom: 1px solid #dee2e6;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  margin-bottom: 1rem;
+  border-radius: 8px;
+}
+
+section#general-info h2 {
+  font-size: 1.6rem;
+  margin-bottom: 1.5rem;
+  color: #343a40;
+}
+
+/* Mejorar el espaciado en los formularios */
+.grid-3, .grid-2 {
+  gap: 1.5rem;
+}
+
+label {
+  font-weight: 600;
+  color: #495057;
+  font-size: 0.95rem;
+}
+
+input, textarea, select {
+  padding: 0.6rem;
+  font-size: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  margin-top: 0.3rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: #80bdff;
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Mejorar la apariencia de la estructura y el panel de detalles */
+#structure-and-detail {
+  gap: 1.5rem;
+}
+
+#structure-panel, #detail-panel {
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border: none;
+}
+
+#structure-panel {
+  flex-basis: 300px; /* Aumentar el ancho base del panel de estructura */
+}
+
+#structure-panel h3, #detail-panel h3 {
+  font-size: 1.4rem;
+  margin-bottom: 1.2rem;
+  color: #343a40;
+}
+
+/* ------------ Sistema de notificaciones (Toast) ------------ */
+#toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.toast {
+  background-color: #333;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.error {
+  background-color: #dc3545;
+}
+
+.toast.success {
+  background-color: #28a745;
+}
