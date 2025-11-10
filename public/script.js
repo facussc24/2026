@@ -1500,7 +1500,7 @@ async function exportStandardToPDF() {
   const canvas = await html2canvas(container, { scale: 1 });
   const imgData = canvas.toDataURL('image/png');
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({
+  const pdf = new window.jspdf.jsPDF({
     orientation: 'l',
     unit: 'pt',
     format: [canvas.width, canvas.height]
