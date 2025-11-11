@@ -3299,3 +3299,367 @@ if (originalSaveBtn) {
     }
   });
 }
+
+// ===================================================================
+// INTUITIVE UX IMPROVEMENTS - PHASE 3
+// ===================================================================
+
+// Inline Guidance System
+const IntuitiveGuidance = {
+  shown: {},
+  
+  show(id, icon, title, text, container) {
+    if (this.shown[id]) return;
+    
+    const guidance = document.createElement('div');
+    guidance.className = 'inline-guidance';
+    guidance.id = `guidance-${id}`;
+    guidance.innerHTML = `
+      <div class="inline-guidance-icon">${icon}</div>
+      <div class="inline-guidance-content">
+        <div class="inline-guidance-title">${title}</div>
+        <div class="inline-guidance-text">${text}</div>
+      </div>
+      <button class="inline-guidance-dismiss" onclick="IntuitiveGuidance.dismiss('${id}')">Entendido</button>
+    `;
+    
+    const targetContainer = document.querySelector(container);
+    if (targetContainer) {
+      targetContainer.insertBefore(guidance, targetContainer.firstChild);
+      this.shown[id] = true;
+      localStorage.setItem(`guidance_${id}`, 'shown');
+    }
+  },
+  
+  dismiss(id) {
+    const guidance = document.getElementById(`guidance-${id}`);
+    if (guidance) {
+      guidance.style.animation = 'slideOutToTop 0.3s ease-out';
+      setTimeout(() => guidance.remove(), 300);
+    }
+  },
+  
+  isShown(id) {
+    return localStorage.getItem(`guidance_${id}`) === 'shown';
+  }
+};
+
+// Smart Defaults and Suggestions
+const SmartDefaults = {
+  suggestions: {},
+  
+  loadFromLocalStorage() {
+    const saved = localStorage.getItem('amfe_smart_defaults');
+    if (saved) {
+      this.suggestions = JSON.parse(saved);
+    }
+  },
+  
+  saveValue(field, value) {
+    if (!value || value.trim() === '') return;
+    
+    if (!this.suggestions[field]) {
+      this.suggestions[field] = [];
+    }
+    
+    // Add unique values only
+    if (!this.suggestions[field].includes(value)) {
+      this.suggestions[field].unshift(value);
+      // Keep only last 5 suggestions
+      this.suggestions[field] = this.suggestions[field].slice(0, 5);
+      localStorage.setItem('amfe_smart_defaults', JSON.stringify(this.suggestions));
+    }
+  },
+  
+  getSuggestions(field) {
+    return this.suggestions[field] || [];
+  },
+  
+  showSuggestionsFor(inputId, fieldName) {
+    const suggestions = this.getSuggestions(fieldName);
+    if (suggestions.length === 0) return;
+    
+    const input = document.getElementById(inputId);
+    if (!input || input.value) return; // Don't show if already filled
+    
+    const container = input.parentElement;
+    let suggestionsPanel = container.querySelector('.smart-suggestions');
+    
+    if (!suggestionsPanel) {
+      suggestionsPanel = document.createElement('div');
+      suggestionsPanel.className = 'smart-suggestions';
+      suggestionsPanel.innerHTML = `
+        <div class="smart-suggestions-title">
+          <span class="smart-suggestions-title-icon">💡</span>
+          Sugerencias basadas en anteriores:
+        </div>
+      `;
+      
+      suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'smart-suggestion-item';
+        item.innerHTML = `
+          <span class="smart-suggestion-text">${suggestion}</span>
+          <span class="smart-suggestion-action">Usar →</span>
+        `;
+        item.onclick = () => {
+          input.value = suggestion;
+          input.dispatchEvent(new Event('input'));
+          suggestionsPanel.remove();
+        };
+        suggestionsPanel.appendChild(item);
+      });
+      
+      container.appendChild(suggestionsPanel);
+    }
+  }
+};
+
+// Workflow Progress Tracker
+const WorkflowProgress = {
+  steps: [
+    {id: 'general', label: 'Datos Generales'},
+    {id: 'structure', label: 'Estructura'},
+    {id: 'analysis', label: 'Análisis'},
+    {id: 'controls', label: 'Controles'},
+    {id: 'iatf', label: 'IATF 16949'}
+  ],
+  
+  currentStep: 'general',
+  
+  render() {
+    const existing = document.getElementById('workflow-progress');
+    if (existing) existing.remove();
+    
+    const workflow = document.createElement('div');
+    workflow.id = 'workflow-progress';
+    workflow.className = 'workflow-steps';
+    
+    this.steps.forEach((step, index) => {
+      const stepDiv = document.createElement('div');
+      stepDiv.className = 'workflow-step';
+      
+      if (step.id === this.currentStep) {
+        stepDiv.classList.add('workflow-step-active');
+      } else if (this.isStepCompleted(step.id)) {
+        stepDiv.classList.add('workflow-step-completed');
+      }
+      
+      stepDiv.innerHTML = `
+        <div class="workflow-step-number">${this.isStepCompleted(step.id) ? '' : index + 1}</div>
+        <div class="workflow-step-label">${step.label}</div>
+      `;
+      
+      workflow.appendChild(stepDiv);
+    });
+    
+    const progressCard = document.querySelector('.progress-card');
+    if (progressCard) {
+      progressCard.after(workflow);
+    }
+  },
+  
+  setStep(stepId) {
+    this.currentStep = stepId;
+    this.render();
+  },
+  
+  isStepCompleted(stepId) {
+    // Check if step has required data filled
+    switch(stepId) {
+      case 'general':
+        return state.general.orgName && state.general.numeroAmfe;
+      case 'structure':
+        return state.items.length > 0;
+      case 'analysis':
+        return state.items.some(item => item.steps && item.steps.length > 0);
+      case 'controls':
+        // Check if any element has controls defined
+        return state.items.some(item => 
+          item.steps && item.steps.some(step => 
+            step.elements && step.elements.some(el => el.metodosDeteccion)
+          )
+        );
+      case 'iatf':
+        // Check if IATF section has data
+        return state.items.some(item =>
+          item.steps && item.steps.some(step =>
+            step.elements && step.elements.some(el => el.temporaryControl || el.supplyChain || el.escalation)
+          )
+        );
+      default:
+        return false;
+    }
+  },
+  
+  getCompletionPercentage() {
+    const completed = this.steps.filter(step => this.isStepCompleted(step.id)).length;
+    return Math.round((completed / this.steps.length) * 100);
+  }
+};
+
+// Next Step Indicator
+const NextStepIndicator = {
+  indicator: null,
+  
+  show(message, action) {
+    this.hide(); // Remove existing indicator
+    
+    this.indicator = document.createElement('div');
+    this.indicator.className = 'next-step-indicator';
+    this.indicator.innerHTML = `
+      <span class="next-step-indicator-icon">👉</span>
+      <span>${message}</span>
+    `;
+    this.indicator.onclick = action;
+    
+    document.body.appendChild(this.indicator);
+  },
+  
+  hide() {
+    if (this.indicator) {
+      this.indicator.remove();
+      this.indicator = null;
+    }
+  },
+  
+  updateBasedOnState() {
+    // Show appropriate next step based on current state
+    if (state.items.length === 0) {
+      this.show('Próximo: Agregar un ítem al proceso', () => {
+        document.getElementById('add-item')?.click();
+      });
+    } else if (!state.selected.itemId) {
+      this.show('Próximo: Seleccionar un ítem para trabajar', () => {
+        const firstItem = document.querySelector('.tree-row-item');
+        if (firstItem) firstItem.click();
+      });
+    } else if (state.selected.itemId && !state.selected.stepId) {
+      this.show('Próximo: Agregar un paso al ítem seleccionado', () => {
+        const addStepBtn = document.querySelector(`[onclick*="addStep"]`);
+        if (addStepBtn) addStepBtn.click();
+      });
+    } else {
+      this.hide();
+    }
+  }
+};
+
+// Enhanced Empty State
+function showEnhancedEmptyState(container, icon, title, description, actionText, actionCallback) {
+  const emptyState = document.createElement('div');
+  emptyState.className = 'empty-state-enhanced';
+  emptyState.innerHTML = `
+    <div class="empty-state-enhanced-icon">${icon}</div>
+    <div class="empty-state-enhanced-title">${title}</div>
+    <div class="empty-state-enhanced-description">${description}</div>
+    <button class="empty-state-enhanced-action" onclick="this.parentElement.remove(); (${actionCallback.toString()})()">
+      ${actionText}
+    </button>
+  `;
+  
+  const targetContainer = document.querySelector(container);
+  if (targetContainer) {
+    // Only add if container is empty or has minimal content
+    if (targetContainer.children.length <= 1) {
+      targetContainer.appendChild(emptyState);
+    }
+  }
+}
+
+// Completion Badge Generator
+function getCompletionBadge(completionPercentage) {
+  let badgeClass, icon, text;
+  
+  if (completionPercentage === 100) {
+    badgeClass = 'completion-badge-complete';
+    icon = '✓';
+    text = 'Completado';
+  } else if (completionPercentage >= 50) {
+    badgeClass = 'completion-badge-partial';
+    icon = '●';
+    text = `${completionPercentage}%`;
+  } else {
+    badgeClass = 'completion-badge-incomplete';
+    icon = '○';
+    text = `${completionPercentage}%`;
+  }
+  
+  return `<span class="completion-badge ${badgeClass}">
+    <span class="completion-badge-icon">${icon}</span>
+    ${text}
+  </span>`;
+}
+
+// Initialize Intuitive Features
+function initIntuitiveFeatures() {
+  // Load smart defaults
+  SmartDefaults.loadFromLocalStorage();
+  
+  // Show initial guidance if first time
+  if (!IntuitiveGuidance.isShown('welcome')) {
+    IntuitiveGuidance.show(
+      'welcome',
+      '👋',
+      '¡Bienvenido al Gestor AMFE-FMEA!',
+      'Complete los datos generales para comenzar. Use la estructura del lado izquierdo para organizar su análisis en ítems, pasos y elementos.',
+      '#general-info'
+    );
+  }
+  
+  // Render workflow progress
+  WorkflowProgress.render();
+  
+  // Update next step indicator
+  NextStepIndicator.updateBasedOnState();
+  
+  // Show empty state for structure panel if no items
+  if (state.items.length === 0) {
+    setTimeout(() => {
+      showEnhancedEmptyState(
+        '#item-list',
+        '📋',
+        'Comience su análisis AMFE',
+        'Agregue el primer ítem del proceso para comenzar a identificar modos de falla potenciales y sus controles.',
+        'Agregar Primer Ítem',
+        () => document.getElementById('add-item')?.click()
+      );
+    }, 1000);
+  }
+  
+  // Add smart suggestions to common fields
+  const fieldsWithSuggestions = [
+    {id: 'orgName', field: 'organization'},
+    {id: 'responsable', field: 'responsible'},
+    {id: 'planta', field: 'plant'},
+    {id: 'cliente', field: 'client'}
+  ];
+  
+  fieldsWithSuggestions.forEach(({id, field}) => {
+    const input = document.getElementById(id);
+    if (input) {
+      input.addEventListener('focus', () => {
+        SmartDefaults.showSuggestionsFor(id, field);
+      });
+      
+      input.addEventListener('blur', () => {
+        if (input.value) {
+          SmartDefaults.saveValue(field, input.value);
+        }
+      });
+    }
+  });
+  
+  // Update indicators on state change
+  setInterval(() => {
+    WorkflowProgress.render();
+    NextStepIndicator.updateBasedOnState();
+  }, 5000);
+}
+
+// Initialize on DOM ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initIntuitiveFeatures);
+} else {
+  initIntuitiveFeatures();
+}

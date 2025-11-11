@@ -1414,3 +1414,386 @@ button:focus-visible,
   border-right: 6px solid transparent;
   border-bottom: 6px solid rgba(44, 62, 80, 0.95);
 }
+
+/* ========================================
+   INTUITIVE UX IMPROVEMENTS - PHASE 3
+   ======================================== */
+
+/* Inline Guidance System */
+.inline-guidance {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  animation: slideInFromTop 0.5s ease-out;
+}
+
+.inline-guidance-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.inline-guidance-content {
+  flex: 1;
+}
+
+.inline-guidance-title {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.inline-guidance-text {
+  font-size: 14px;
+  opacity: 0.95;
+}
+
+.inline-guidance-dismiss {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.3s;
+}
+
+.inline-guidance-dismiss:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Empty State Design */
+.empty-state-enhanced {
+  text-align: center;
+  padding: 60px 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.empty-state-enhanced-icon {
+  font-size: 72px;
+  margin-bottom: 20px;
+  opacity: 0.6;
+}
+
+.empty-state-enhanced-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.empty-state-enhanced-description {
+  font-size: 16px;
+  color: #7f8c8d;
+  margin-bottom: 25px;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+.empty-state-enhanced-action {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 14px 32px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 16px;
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.empty-state-enhanced-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+/* Completion Status Badges */
+.completion-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+.completion-badge-complete {
+  background: #d4edda;
+  color: #155724;
+}
+
+.completion-badge-partial {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.completion-badge-incomplete {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.completion-badge-icon {
+  font-size: 14px;
+}
+
+/* Visual Workflow Steps */
+.workflow-steps {
+  display: flex;
+  justify-content: space-between;
+  margin: 25px 0;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.workflow-step {
+  flex: 1;
+  text-align: center;
+  position: relative;
+  padding: 15px;
+}
+
+.workflow-step::after {
+  content: '';
+  position: absolute;
+  top: 30px;
+  right: -50%;
+  width: 100%;
+  height: 3px;
+  background: #e0e0e0;
+  z-index: 0;
+}
+
+.workflow-step:last-child::after {
+  display: none;
+}
+
+.workflow-step-number {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  color: #999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 10px;
+  font-size: 20px;
+  font-weight: 700;
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s;
+}
+
+.workflow-step-active .workflow-step-number {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  transform: scale(1.1);
+}
+
+.workflow-step-completed .workflow-step-number {
+  background: #28a745;
+  color: white;
+}
+
+.workflow-step-completed .workflow-step-number::after {
+  content: '✓';
+  font-size: 24px;
+}
+
+.workflow-step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  margin-top: 8px;
+}
+
+.workflow-step-active .workflow-step-label {
+  color: #667eea;
+}
+
+.workflow-step-completed .workflow-step-label {
+  color: #28a745;
+}
+
+/* Smart Suggestions Panel */
+.smart-suggestions {
+  background: #f8f9fa;
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  padding: 15px;
+  margin: 15px 0;
+}
+
+.smart-suggestions-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #667eea;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.smart-suggestions-title-icon {
+  font-size: 18px;
+}
+
+.smart-suggestion-item {
+  background: white;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin: 8px 0;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.smart-suggestion-item:hover {
+  border-color: #667eea;
+  background: #f7fafc;
+  transform: translateX(5px);
+}
+
+.smart-suggestion-text {
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+.smart-suggestion-action {
+  font-size: 12px;
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* Next Step Indicator */
+.next-step-indicator {
+  position: fixed;
+  bottom: 100px;
+  right: 30px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+  padding: 15px 20px;
+  border-radius: 30px;
+  box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  animation: pulse 2s infinite;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 250px;
+}
+
+.next-step-indicator:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(245, 87, 108, 0.5);
+}
+
+.next-step-indicator-icon {
+  font-size: 20px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Completion Percentage Circle */
+.completion-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: conic-gradient(
+    #28a745 0deg,
+    #28a745 var(--completion-angle, 0deg),
+    #e0e0e0 var(--completion-angle, 0deg),
+    #e0e0e0 360deg
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.completion-circle-inner {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: #2c3e50;
+}
+
+/* Responsive adjustments for intuitive features */
+@media (max-width: 768px) {
+  .workflow-steps {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .workflow-step::after {
+    display: none;
+  }
+  
+  .next-step-indicator {
+    bottom: 80px;
+    right: 15px;
+    font-size: 13px;
+    padding: 12px 16px;
+    max-width: 200px;
+  }
+  
+  .inline-guidance {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .empty-state-enhanced {
+    padding: 40px 15px;
+  }
+  
+  .empty-state-enhanced-icon {
+    font-size: 56px;
+  }
+}
