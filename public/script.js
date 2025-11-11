@@ -2720,3 +2720,94 @@ function updateEscalationAlerts() {
     alertsDiv.style.display = 'none';
   }
 }
+
+// Collapsible sections functionality
+function toggleSection(contentId) {
+  const content = document.getElementById(contentId);
+  const header = content.previousElementSibling;
+  
+  if (content.classList.contains('collapsed')) {
+    content.classList.remove('collapsed');
+    header.classList.remove('collapsed');
+  } else {
+    content.classList.add('collapsed');
+    header.classList.add('collapsed');
+  }
+}
+
+// Scroll to top functionality
+function scrollToTop() {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+}
+
+// Initialize collapsible sections on page load
+document.addEventListener('DOMContentLoaded', () => {
+  // Collapse "Datos generales" by default after 2 seconds to give user time to see it
+  setTimeout(() => {
+    const generalInfoContent = document.getElementById('general-info-content');
+    const generalInfoHeader = generalInfoContent?.previousElementSibling;
+    if (generalInfoContent && !generalInfoContent.querySelector('input:focus')) {
+      generalInfoContent.classList.add('collapsed');
+      if (generalInfoHeader) {
+        generalInfoHeader.classList.add('collapsed');
+      }
+    }
+  }, 2000);
+});
+
+// Update progress summary
+function updateProgressSummary() {
+  let itemCount = 0;
+  let elementCount = 0;
+  let criticalCount = 0;
+  let completedElements = 0;
+  
+  state.items.forEach(item => {
+    itemCount++;
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        elementCount++;
+        
+        // Count critical risks
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity >= 9) {
+          criticalCount++;
+        }
+        
+        // Check if element is completed (has basic data filled)
+        if (el.funciones.funcionElemento && el.riesgos.severidad && el.riesgos.ocurrencia && el.riesgos.deteccion) {
+          completedElements++;
+        }
+      });
+    });
+  });
+  
+  const completion = elementCount > 0 ? Math.round((completedElements / elementCount) * 100) : 0;
+  
+  // Update progress displays
+  const itemsEl = document.getElementById('progress-items');
+  const elementsEl = document.getElementById('progress-elements');
+  const criticalEl = document.getElementById('progress-critical');
+  const completionEl = document.getElementById('progress-completion');
+  
+  if (itemsEl) itemsEl.textContent = itemCount;
+  if (elementsEl) elementsEl.textContent = elementCount;
+  if (criticalEl) criticalEl.textContent = criticalCount;
+  if (completionEl) completionEl.textContent = completion + '%';
+}
+
+// Call updateProgressSummary whenever the state changes
+const originalRenderStructure = renderStructure;
+renderStructure = function() {
+  originalRenderStructure();
+  updateProgressSummary();
+};
+
+const originalSaveElementData = saveElementData;
+saveElementData = function() {
+  originalSaveElementData();
+  updateProgressSummary();
+};

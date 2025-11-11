@@ -17,8 +17,12 @@
     </nav>
   </header>
   <!-- Datos generales del análisis (Paso 1: planificación y preparación) -->
-  <section id="general-info">
-    <h2>Datos generales</h2>
+  <section id="general-info" class="collapsible-section">
+    <h2 class="collapsible-header" onclick="toggleSection('general-info-content')">
+      <span class="collapse-icon">▼</span>
+      Datos generales
+    </h2>
+    <div id="general-info-content" class="collapsible-content">
     <div class="grid-3">
       <label>Nombre de la organización:<br>
         <input type="text" id="orgName" value="" required>
@@ -115,6 +119,7 @@
         <label for="safetyApproval" style="margin-bottom:0; color:#c0392b; font-weight:bold;">Aprobación de Seguridad Requerida (Severidad Crítica Detectada)</label>
       </div>
     </div>
+    </div>
   </section>
   <nav id="main-nav">
     <button id="tab-fmea" class="tab-btn active">AMFE</button>
@@ -125,6 +130,31 @@
   </nav>
   <!-- Resumen de errores de validación -->
   <div id="error-summary" class="error-summary" style="color:#b00020; font-weight:bold; margin:8px 0;"></div>
+  
+  <!-- Progress summary card -->
+  <div id="progress-summary" class="progress-card">
+    <div class="progress-item">
+      <span class="progress-icon">📝</span>
+      <span class="progress-label">Ítems</span>
+      <span class="progress-value" id="progress-items">0</span>
+    </div>
+    <div class="progress-item">
+      <span class="progress-icon">⚙️</span>
+      <span class="progress-label">Elementos</span>
+      <span class="progress-value" id="progress-elements">0</span>
+    </div>
+    <div class="progress-item">
+      <span class="progress-icon">⚠️</span>
+      <span class="progress-label">Riesgos Críticos</span>
+      <span class="progress-value critical" id="progress-critical">0</span>
+    </div>
+    <div class="progress-item">
+      <span class="progress-icon">✅</span>
+      <span class="progress-label">Completado</span>
+      <span class="progress-value" id="progress-completion">0%</span>
+    </div>
+  </div>
+  
   <main>
     <!-- Sección AMFE con estructura y detalle -->
     <section id="fmea-section" class="tab-content active">
@@ -300,7 +330,12 @@
     </div>
     <!-- Sección plan de control -->
     <section id="control-section" class="tab-content">
-    <h2>Plan de control</h2>
+    <div class="collapsible-section">
+      <h2 class="collapsible-header" onclick="toggleSection('control-header-content')">
+        <span class="collapse-icon">▼</span>
+        Datos del Plan de Control
+      </h2>
+      <div id="control-header-content" class="collapsible-content collapsed">
     <!-- Cabecera del plan de control según el formato estándar -->
     <div id="control-header" class="grid-4" style="margin-bottom:8px;">
       <label>Fase:<br>
@@ -351,6 +386,10 @@
         <input type="date" id="cpApprovalOther">
       </label>
     </div>
+      </div>
+    </div>
+    
+    <h2 style="margin-top: 2rem;">Tabla del Plan de Control</h2>
       <table id="control-table" class="control-standard">
         <thead>
           <tr>
@@ -473,6 +512,17 @@
       </div>
     </section>
   </main>
+  
+  <!-- Quick actions floating bar -->
+  <div id="quick-actions">
+    <button class="btn btn-primary" onclick="document.getElementById('save-btn').click()" title="Guardar AMFE">
+      💾 Guardar
+    </button>
+    <button class="btn btn-secondary" onclick="scrollToTop()" title="Volver arriba">
+      ⬆️ Arriba
+    </button>
+  </div>
+  
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
   <!-- Librerías para exportar la vista estándar a PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
