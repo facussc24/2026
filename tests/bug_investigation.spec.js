@@ -10,17 +10,14 @@ test.describe('Bug Investigation', () => {
 
     // --- Cleanup: Delete all existing documents robustly ---
     const docList = page.locator('#doc-list');
-    const dialogHandler = dialog => dialog.accept();
-    page.on('dialog', dialogHandler);
-
-    let count = await docList.locator('.doc-item').count();
-    while (count > 0) {
-        await docList.locator('.doc-item').first().locator('button.btn-danger').click();
-        await expect(docList.locator('.doc-item')).toHaveCount(count - 1, { timeout: 10000 });
-        count = await docList.locator('.doc-item').count();
+    const initialCount = await docList.locator('.doc-item').count();
+    for (let i = 0; i < initialCount; i++) {
+        const firstItem = docList.locator('.doc-item').first();
+        page.once('dialog', dialog => dialog.accept());
+        await firstItem.locator('button.btn-danger').click();
+        // Wait for the specific item to be removed from the DOM before proceeding
+        await expect(firstItem).not.toBeAttached({ timeout: 10000 });
     }
-
-    page.off('dialog', dialogHandler);
     await expect(page.locator('#empty-message')).toBeVisible();
 
 
@@ -94,9 +91,8 @@ test.describe('Bug Investigation', () => {
     await renamedDocItem.locator('button:has-text("Eliminar")').click();
 
     // --- Verify Deletion and Empty State ---
-    // Reload the page to ensure we're checking the persisted state
-    await page.goto('http://localhost:3000/home.html');
-    await expect(renamedDocItem).not.toBeVisible();
+    // The UI should update automatically without a reload. We wait for the item to disappear.
+    await expect(renamedDocItem).not.toBeVisible({ timeout: 10000 });
     await expect(page.locator('#empty-message')).toBeVisible();
   });
 });
