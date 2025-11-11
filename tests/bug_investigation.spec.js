@@ -11,14 +11,15 @@ test.describe('Bug Investigation', () => {
     // --- Cleanup: Delete all existing documents robustly ---
     const docList = page.locator('#doc-list');
     const initialCount = await docList.locator('.doc-item').count();
-    for (let i = 0; i < initialCount; i++) {
-        const firstItem = docList.locator('.doc-item').first();
+
+    for (let i = initialCount; i > 0; i--) {
         page.once('dialog', dialog => dialog.accept());
-        await firstItem.locator('button.btn-danger').click();
-        // Wait for the specific item to be removed from the DOM before proceeding
-        await expect(firstItem).not.toBeAttached({ timeout: 10000 });
+        await docList.locator('.doc-item').first().locator('button.btn-danger').click();
+        // Wait for the count of items to decrease, which is a more stable assertion
+        await expect(docList.locator('.doc-item')).toHaveCount(i - 1, { timeout: 10000 });
     }
-    await expect(page.locator('#empty-message')).toBeVisible();
+
+    await expect(page.locator('#empty-message')).toBeVisible({ timeout: 10000 });
 
 
     // --- Create a new FMEA ---
@@ -58,14 +59,30 @@ test.describe('Bug Investigation', () => {
     await page.locator('#ocurrencia').selectOption('3');
     await page.locator('#deteccion').selectOption('4');
 
+    // A severity of 9 requires safety approval. The checkbox must be checked.
+    await expect(page.locator('#safety-approval-container')).toBeVisible();
+    await page.locator('#safetyApproval').check();
+
     await page.locator('button[data-tab="optimizacion"]').click();
     await page.locator('#accionPrev').fill('Preventive Action');
     await page.locator('#personaResp').fill('John Doe');
     await page.locator('#fechaObjetivo').fill('2025-12-31');
 
     // --- Save ---
-    await page.locator('#save-btn').click();
-    await expect(page.locator('#save-status:has-text("Guardado correctamente.")')).toBeVisible();
+    // The save button triggers a sequence of three 'prompt' dialogs.
+    // We must handle them for the save operation to complete.
+    page.locator('#save-btn').click(); // No await, as it will be blocked by the dialog
+
+    // Wait for and accept each dialog in sequence.
+    const dialog1 = await page.waitForEvent('dialog');
+    await dialog1.accept('Initial save with test data');
+
+    const dialog2 = await page.waitForEvent('dialog');
+    await dialog2.accept('Test Requester');
+
+    const dialog3 = await page.waitForEvent('dialog');
+    await dialog3.accept('Test Approver');
+    await expect(page.locator('#save-status:has-text("Guardado correctamente.")')).toBeVisible({ timeout: 10000 });
 
     // --- Control Plan ---
     await page.locator('#tab-control').click();

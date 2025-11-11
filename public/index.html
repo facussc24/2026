@@ -120,6 +120,7 @@
     <button id="tab-fmea" class="tab-btn active">AMFE</button>
     <button id="tab-control" class="tab-btn">Plan de control</button>
     <button id="tab-standard" class="tab-btn">Vista estándar</button>
+    <button id="tab-instructions" class="tab-btn">Instrucciones de Proceso</button>
   </nav>
   <!-- Resumen de errores de validación -->
   <div id="error-summary" class="error-summary" style="color:#b00020; font-weight:bold; margin:8px 0;"></div>
@@ -277,10 +278,13 @@
           </div>
         </section>
       </div>
-      <div class="actions">
-        <button id="save-btn">Guardar AMFE</button>
-        <button id="export-btn">Exportar a Excel</button>
-        <button id="history-btn">Historial de Cambios</button>
+      <div class="actions" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <button id="save-btn">Guardar AMFE</button>
+          <button id="export-btn">Exportar a Excel</button>
+          <a href="lessons.html" id="lessons-learned-btn" class="btn">Lecciones Aprendidas</a>
+          <button id="history-btn">Historial de Cambios</button>
+        </div>
         <span id="save-status" style="margin-left: 10px;"></span>
       </div>
     </section>
@@ -359,6 +363,8 @@
             <th>Especificación / Tolerancia (producto/proceso)</th>
             <th>Técnica de medición</th>
             <th>Error proofing</th>
+            <th>Método de Verificación de Efectividad</th>
+            <th>Frecuencia de Verificación</th>
             <th>Muestra – Cantidad</th>
             <th>Muestra – Frecuencia</th>
             <th>Método de control</th>
@@ -376,6 +382,15 @@
         <!-- La tabla se generará dinámicamente mediante script.js -->
       </div>
       <button id="export-standard" class="btn">Exportar vista a PDF</button>
+    </section>
+    <!-- Sección de Instrucciones de Proceso -->
+    <section id="instructions-section" class="tab-content">
+      <h2>Instrucciones de Proceso / Trabajo</h2>
+      <p>A continuación se muestran las instrucciones de trabajo generadas a partir del AMFE. Puede exportarlas a PDF.</p>
+      <div id="instructions-container" style="border:1px solid #ccc; padding:10px; margin-bottom:8px;">
+        <!-- Las instrucciones se generarán dinámicamente aquí -->
+      </div>
+      <button id="export-instructions" class="btn">Exportar Instrucciones a PDF</button>
     </section>
   </main>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
