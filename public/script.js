@@ -34,7 +34,8 @@ const state = {
     aprobProv: '',
     aprobIngCliente: '',
     aprobCalidadCliente: '',
-    aprobOtras: ''
+    aprobOtras: '',
+    safetyApproval: false
   },
   items: [], // array de ítems {id, name, steps: [...]}
   selected: {
@@ -322,6 +323,13 @@ function validateData() {
       });
     });
   });
+
+  // Validar aprobación de seguridad si hay características críticas
+  const hasCritical = state.items.some(item => item.steps.some(step => step.elements.some(el => el.riesgos.caracteristicas === 'Crítica')));
+  if (hasCritical && !state.general.safetyApproval) {
+    issues.push('Debe marcar la casilla de "Aprobación de Seguridad" porque se han detectado características críticas.');
+  }
+
   if (issues.length > 0) {
     // Mostrar errores en resumen
     displayValidationErrors(issues);
@@ -393,10 +401,15 @@ function updateApDisplays() {
   caracteristicasField.value = classif;
   // Aplicar resaltado visual a la clasificación de características especiales
   caracteristicasField.classList.remove('critica', 'significativa');
+  const safetyApprovalContainer = document.getElementById('safety-approval-container');
   if (classif === 'Crítica') {
     caracteristicasField.classList.add('critica');
+    safetyApprovalContainer.style.display = 'flex';
   } else if (classif === 'Significativa') {
     caracteristicasField.classList.add('significativa');
+    safetyApprovalContainer.style.display = 'none';
+  } else {
+    safetyApprovalContainer.style.display = 'none';
   }
   // Post
   // La severidad post debe igualar siempre a la severidad original (invariabilidad de S)
@@ -1112,17 +1125,20 @@ function updateControlPlan() {
         });
         tdMeas.appendChild(measInput);
         tr.appendChild(tdMeas);
-        // 10: Error proofing
+        // 10: Error proofing (Controles de prevención)
         const tdError = document.createElement('td');
         const errorInput = document.createElement('input');
         errorInput.type = 'text';
         errorInput.placeholder = 'Poka yoke / Error proofing';
-        errorInput.value = el.control.errorProofing || '';
-        errorInput.addEventListener('input', () => {
-          el.control.errorProofing = errorInput.value;
-        });
+        // Combinar controles preventivos actuales y acciones preventivas
+        const prevControls = el.fallas.map(f => f.controlesPrev).filter(Boolean);
+        if (el.acciones.accionPrev) prevControls.push(el.acciones.accionPrev);
+        el.control.errorProofing = prevControls.join('; ');
+        errorInput.value = el.control.errorProofing;
+        errorInput.setAttribute('readonly', 'readonly'); // Solo lectura
         tdError.appendChild(errorInput);
         tr.appendChild(tdError);
+
         // 11: Muestra – Cantidad
         const tdQty = document.createElement('td');
         const qtyInput = document.createElement('input');
@@ -1134,6 +1150,7 @@ function updateControlPlan() {
         });
         tdQty.appendChild(qtyInput);
         tr.appendChild(tdQty);
+
         // 12: Muestra – Frecuencia
         const tdFreq = document.createElement('td');
         const freqInput = document.createElement('input');
@@ -1145,15 +1162,18 @@ function updateControlPlan() {
         });
         tdFreq.appendChild(freqInput);
         tr.appendChild(tdFreq);
-        // 13: Método de control
+
+        // 13: Método de control (Controles de detección)
         const tdCtrl = document.createElement('td');
         const ctrlInput = document.createElement('input');
         ctrlInput.type = 'text';
         ctrlInput.placeholder = 'Método de control';
-        ctrlInput.value = el.control.controlMethod || '';
-        ctrlInput.addEventListener('input', () => {
-          el.control.controlMethod = ctrlInput.value;
-        });
+        // Combinar controles detectivos actuales y acciones detectivas
+        const detectControls = el.fallas.map(f => f.controlesDetect).filter(Boolean);
+        if (el.acciones.accionDet) detectControls.push(el.acciones.accionDet);
+        el.control.controlMethod = detectControls.join('; ');
+        ctrlInput.value = el.control.controlMethod;
+        ctrlInput.setAttribute('readonly', 'readonly'); // Solo lectura
         tdCtrl.appendChild(ctrlInput);
         tr.appendChild(tdCtrl);
         // 14: Plan de reacción
@@ -1207,6 +1227,7 @@ async function saveData() {
     state.general.aprobIngCliente = document.getElementById('aprobIngCliente').value;
     state.general.aprobCalidadCliente = document.getElementById('aprobCalidadCliente').value;
     state.general.aprobOtras = document.getElementById('aprobOtras').value;
+    state.general.safetyApproval = document.getElementById('safetyApproval').checked;
 
     // Guardar datos del elemento activo
     saveElementData();
@@ -1385,6 +1406,55 @@ addFallaBtn.addEventListener('click', addFalla);
 saveBtn.addEventListener('click', saveData);
 exportBtn.addEventListener('click', exportToExcel);
 
+// --- Lógica para el historial de cambios ---
+const historyBtn = document.getElementById('history-btn');
+const historyModal = document.getElementById('history-modal');
+const closeBtn = document.querySelector('.close-btn');
+const historyList = document.getElementById('history-list');
+
+// Muestra el modal del historial
+async function showHistory() {
+  historyList.innerHTML = '<li>Cargando historial...</li>';
+  historyModal.style.display = 'block';
+
+  try {
+    const snapshot = await db.collection('changeLogs')
+      .where('docId', '==', currentDocId)
+      .orderBy('timestamp', 'desc')
+      .get();
+
+    if (snapshot.empty) {
+      historyList.innerHTML = '<li>No hay historial de cambios para este documento.</li>';
+      return;
+    }
+
+    historyList.innerHTML = '';
+    snapshot.forEach(doc => {
+      const log = doc.data();
+      const li = document.createElement('li');
+      const date = log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Fecha desconocida';
+      li.innerHTML = `<strong>${date}:</strong> ${log.change} (Solicitante: ${log.requester || 'N/A'}, Aprobador: ${log.approver || 'N/A'})`;
+      historyList.appendChild(li);
+    });
+  } catch (error) {
+    console.error("Error al obtener el historial:", error);
+    historyList.innerHTML = '<li>Error al cargar el historial.</li>';
+  }
+}
+
+// Oculta el modal
+function hideHistory() {
+  historyModal.style.display = 'none';
+}
+
+historyBtn.addEventListener('click', showHistory);
+closeBtn.addEventListener('click', hideHistory);
+window.addEventListener('click', (event) => {
+  if (event.target == historyModal) {
+    hideHistory();
+  }
+});
+
 // Tab principal (FMEA / Plan de control)
 document.getElementById('tab-fmea').addEventListener('click', () => {
   document.getElementById('fmea-section').classList.add('active');
@@ -1419,6 +1489,19 @@ function init() {
 
   // Inicializar cabecera del plan de control
   initControlHeaderUI();
+  // Inicializar información general
+  initGeneralInfoUI();
+}
+
+function initGeneralInfoUI() {
+  // Aquí puedes añadir todos los campos de información general que necesites inicializar
+  const safetyApprovalCheckbox = document.getElementById('safetyApproval');
+  if (safetyApprovalCheckbox) {
+    safetyApprovalCheckbox.checked = state.general.safetyApproval || false;
+    safetyApprovalCheckbox.addEventListener('change', () => {
+      state.general.safetyApproval = safetyApprovalCheckbox.checked;
+    });
+  }
 }
 
 // Cargar valores de la cabecera del plan de control en los campos del DOM y registrar escuchadores
@@ -1488,6 +1571,23 @@ async function loadFromServer() {
 // Guardar estado en servidor
 async function persistServer() {
   if (!currentDocId) return;
+
+  const changeDescription = prompt("Por favor, describe los cambios realizados en esta versión:");
+  if (changeDescription === null || changeDescription.trim() === '') {
+    alert("El guardado ha sido cancelado. Debes proporcionar una descripción de los cambios.");
+    return;
+  }
+  const requester = prompt("Introduce el nombre del solicitante del cambio:");
+  if (requester === null || requester.trim() === '') {
+    alert("El guardado ha sido cancelado. Debes introducir un solicitante.");
+    return;
+  }
+  const approver = prompt("Introduce el nombre del aprobador del cambio:");
+  if (approver === null || approver.trim() === '') {
+    alert("El guardado ha sido cancelado. Debes introducir un aprobador.");
+    return;
+  }
+
   const statusEl = document.getElementById('save-status');
   if (statusEl) {
     statusEl.textContent = 'Guardando...';
@@ -1497,11 +1597,14 @@ async function persistServer() {
   try {
     const copy = JSON.parse(JSON.stringify(state));
     const name = state.general.tema && state.general.tema.trim() !== '' ? state.general.tema.trim() : 'AMFE sin tema';
+
     await db.collection('docs').doc(currentDocId).set({
       name: name,
       content: copy,
       lastModified: new Date().toISOString()
     }, { merge: true });
+
+    await persistChangeLog(changeDescription, requester, approver);
 
     if (statusEl) {
       statusEl.textContent = 'Guardado correctamente.';
@@ -1516,6 +1619,22 @@ async function persistServer() {
       statusEl.textContent = 'Error al guardar.';
       statusEl.style.color = 'red';
     }
+  }
+}
+
+// Guarda una entrada en el historial de cambios
+async function persistChangeLog(changeDescription, requester, approver) {
+  if (!currentDocId) return;
+  try {
+    await db.collection('changeLogs').add({
+      docId: currentDocId,
+      change: changeDescription,
+      requester: requester,
+      approver: approver,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error al guardar en el historial de cambios:", error);
   }
 }
 

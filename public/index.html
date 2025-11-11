@@ -109,6 +109,11 @@
       <label>Otras aprobaciones:<br>
         <input type="text" id="aprobOtras" placeholder="Descripción / fecha">
       </label>
+      <!-- Aprobación de seguridad para características críticas -->
+      <div id="safety-approval-container" style="display:none; align-items:center; background-color:#fff0f0; padding:10px; border-radius:4px; grid-column: 1 / -1;">
+        <input type="checkbox" id="safetyApproval" style="width:auto; margin-right:10px;">
+        <label for="safetyApproval" style="margin-bottom:0; color:#c0392b; font-weight:bold;">Aprobación de Seguridad Requerida (Severidad Crítica Detectada)</label>
+      </div>
     </div>
   </section>
   <nav id="main-nav">
@@ -275,9 +280,19 @@
       <div class="actions">
         <button id="save-btn">Guardar AMFE</button>
         <button id="export-btn">Exportar a Excel</button>
+        <button id="history-btn">Historial de Cambios</button>
         <span id="save-status" style="margin-left: 10px;"></span>
       </div>
     </section>
+
+    <!-- Modal para el historial de cambios -->
+    <div id="history-modal" class="modal" style="display:none;">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>Historial de Cambios</h2>
+        <ul id="history-list"></ul>
+      </div>
+    </div>
     <!-- Sección plan de control -->
     <section id="control-section" class="tab-content">
     <h2>Plan de control</h2>
