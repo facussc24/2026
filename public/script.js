@@ -2918,3 +2918,384 @@ if (document.readyState === 'loading') {
 } else {
   improveTreeItemHover();
 }
+
+// ==================== FORM VALIDATION ====================
+const FormValidator = {
+  requiredFields: [
+    'orgName', 'tema', 'numeroAmfe', 'planta', 'responsable', 'cliente'
+  ],
+  
+  validateField(fieldId, value) {
+    const field = document.getElementById(fieldId);
+    if (!field) return true;
+    
+    const isRequired = this.requiredFields.includes(fieldId);
+    const isEmpty = !value || value.trim() === '';
+    
+    if (isRequired && isEmpty) {
+      this.markFieldInvalid(field, 'Este campo es obligatorio');
+      return false;
+    } else {
+      this.markFieldValid(field);
+      return true;
+    }
+  },
+  
+  markFieldInvalid(field, message) {
+    field.classList.add('field-error');
+    field.classList.remove('field-valid');
+    
+    // Remove existing error message
+    const existingError = field.parentElement.querySelector('.error-message');
+    if (existingError) existingError.remove();
+    
+    // Add error message
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'error-message';
+    errorMsg.textContent = message;
+    field.parentElement.appendChild(errorMsg);
+  },
+  
+  markFieldValid(field) {
+    field.classList.remove('field-error');
+    field.classList.add('field-valid');
+    
+    // Remove error message
+    const existingError = field.parentElement.querySelector('.error-message');
+    if (existingError) existingError.remove();
+  },
+  
+  validateAllFields() {
+    let allValid = true;
+    this.requiredFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        const isValid = this.validateField(fieldId, field.value);
+        if (!isValid) allValid = false;
+      }
+    });
+    return allValid;
+  },
+  
+  addRequiredIndicators() {
+    this.requiredFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        const label = field.previousElementSibling || field.parentElement.querySelector('label');
+        if (label && !label.classList.contains('field-required')) {
+          label.classList.add('field-required');
+        }
+      }
+    });
+  }
+};
+
+// ==================== AUTO-SAVE ====================
+const AutoSave = {
+  intervalId: null,
+  lastSaveTime: null,
+  saveInterval: 30000, // 30 seconds
+  
+  init() {
+    this.createIndicator();
+    this.startAutoSave();
+    this.loadFromLocalStorage();
+  },
+  
+  createIndicator() {
+    if (document.getElementById('auto-save-indicator')) return;
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'auto-save-indicator';
+    indicator.innerHTML = '<span class="spinner"></span><span id="auto-save-text">Guardando...</span>';
+    document.body.appendChild(indicator);
+  },
+  
+  showIndicator(text, status) {
+    const indicator = document.getElementById('auto-save-indicator');
+    const textEl = document.getElementById('auto-save-text');
+    
+    if (indicator && textEl) {
+      textEl.textContent = text;
+      indicator.className = `show ${status}`;
+      
+      // Hide after 3 seconds
+      setTimeout(() => {
+        indicator.classList.remove('show');
+      }, 3000);
+    }
+  },
+  
+  save() {
+    try {
+      this.showIndicator('Guardando...', 'saving');
+      
+      // Save to localStorage
+      const dataToSave = {
+        state: state,
+        timestamp: new Date().toISOString(),
+        documentId: new URLSearchParams(window.location.search).get('id')
+      };
+      
+      localStorage.setItem('amfe_autosave', JSON.stringify(dataToSave));
+      this.lastSaveTime = new Date();
+      
+      const timeStr = this.lastSaveTime.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'});
+      this.showIndicator(`Guardado automático ${timeStr}`, 'saved');
+    } catch (error) {
+      console.error('Auto-save error:', error);
+      this.showIndicator('Error al guardar', 'error');
+    }
+  },
+  
+  loadFromLocalStorage() {
+    try {
+      const saved = localStorage.getItem('amfe_autosave');
+      if (saved) {
+        const data = JSON.parse(saved);
+        const currentDocId = new URLSearchParams(window.location.search).get('id');
+        
+        // Only restore if it's the same document
+        if (data.documentId === currentDocId) {
+          const savedDate = new Date(data.timestamp);
+          const minutesAgo = Math.floor((new Date() - savedDate) / 60000);
+          
+          if (minutesAgo < 60) { // Only restore if less than 1 hour old
+            const restore = confirm(
+              `Se encontró un guardado automático de hace ${minutesAgo} minuto(s). ¿Desea restaurarlo?`
+            );
+            
+            if (restore) {
+              Object.assign(state, data.state);
+              renderStructure();
+              this.showIndicator('Datos restaurados', 'saved');
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Load from localStorage error:', error);
+    }
+  },
+  
+  startAutoSave() {
+    // Save every 30 seconds
+    this.intervalId = setInterval(() => {
+      this.save();
+    }, this.saveInterval);
+    
+    // Save before page unload
+    window.addEventListener('beforeunload', () => {
+      this.save();
+    });
+  },
+  
+  stopAutoSave() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
+  }
+};
+
+// ==================== STRUCTURE SEARCH/FILTER ====================
+const StructureSearch = {
+  init() {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+    
+    // Add search box
+    const searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.id = 'structure-search';
+    searchBox.placeholder = 'Buscar proceso, paso o elemento...';
+    
+    const structureHeading = sidebar.querySelector('h3');
+    if (structureHeading) {
+      structureHeading.after(searchBox);
+    }
+    
+    // Add search functionality
+    searchBox.addEventListener('input', (e) => {
+      this.filterStructure(e.target.value);
+    });
+  },
+  
+  filterStructure(query) {
+    const treeContainer = document.getElementById('tree-container');
+    if (!treeContainer) return;
+    
+    query = query.toLowerCase().trim();
+    
+    if (!query) {
+      // Show all items
+      const allItems = treeContainer.querySelectorAll('.tree-row, .sub-tree li');
+      allItems.forEach(item => {
+        item.style.display = '';
+        const text = item.querySelector('.item-name, span');
+        if (text) {
+          text.innerHTML = text.textContent; // Remove highlights
+        }
+      });
+      return;
+    }
+    
+    let hasResults = false;
+    
+    // Filter items
+    state.items.forEach(item => {
+      const itemEl = document.querySelector(`[data-item-id="${item.id}"]`);
+      if (!itemEl) return;
+      
+      const itemMatches = item.name.toLowerCase().includes(query);
+      let stepMatches = false;
+      
+      // Check steps
+      if (item.steps) {
+        item.steps.forEach(step => {
+          const stepEl = document.querySelector(`[data-step-id="${step.id}"]`);
+          if (!stepEl) return;
+          
+          const stepMatch = step.name.toLowerCase().includes(query);
+          stepEl.style.display = stepMatch || itemMatches ? '' : 'none';
+          
+          if (stepMatch || itemMatches) {
+            stepMatches = true;
+            hasResults = true;
+            this.highlightText(stepEl, query);
+          }
+        });
+      }
+      
+      itemEl.style.display = itemMatches || stepMatches ? '' : 'none';
+      if (itemMatches) {
+        hasResults = true;
+        this.highlightText(itemEl, query);
+      }
+    });
+    
+    // Show "no results" message
+    let noResultsMsg = treeContainer.querySelector('.search-no-results');
+    if (!hasResults) {
+      if (!noResultsMsg) {
+        noResultsMsg = document.createElement('div');
+        noResultsMsg.className = 'search-no-results';
+        noResultsMsg.textContent = 'No se encontraron resultados';
+        treeContainer.appendChild(noResultsMsg);
+      }
+    } else {
+      if (noResultsMsg) noResultsMsg.remove();
+    }
+  },
+  
+  highlightText(element, query) {
+    const textEl = element.querySelector('.item-name, span');
+    if (!textEl) return;
+    
+    const text = textEl.textContent;
+    const regex = new RegExp(`(${query})`, 'gi');
+    textEl.innerHTML = text.replace(regex, '<span class="search-highlight">$1</span>');
+  }
+};
+
+// ==================== CONTEXT HELP ====================
+const ContextHelp = {
+  helpTexts: {
+    'numeroAmfe': 'Número único que identifica este AMFE en el sistema de gestión de calidad.',
+    'revisionAmfe': 'Número de revisión del documento (ej: Rev. 01, Rev. 02).',
+    'severidad': 'Gravedad del efecto de la falla para el cliente (1=mínima, 10=máxima).',
+    'ocurrencia': 'Probabilidad de que ocurra la causa de la falla (1=remota, 10=muy alta).',
+    'deteccion': 'Capacidad de detectar la falla antes de que llegue al cliente (1=muy alta, 10=muy baja).',
+    'specialChar': 'Características que afectan la seguridad, cumplimiento normativo o satisfacción del cliente.'
+  },
+  
+  init() {
+    // Add help icons to specific fields
+    Object.keys(this.helpTexts).forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        const label = field.previousElementSibling || field.parentElement.querySelector('label');
+        if (label && !label.querySelector('.help-icon')) {
+          const helpIcon = document.createElement('span');
+          helpIcon.className = 'help-icon';
+          helpIcon.textContent = '?';
+          helpIcon.setAttribute('data-help', fieldId);
+          label.appendChild(helpIcon);
+          
+          // Add tooltip on hover
+          helpIcon.addEventListener('mouseenter', (e) => this.showTooltip(e, fieldId));
+          helpIcon.addEventListener('mouseleave', () => this.hideTooltip());
+        }
+      }
+    });
+  },
+  
+  showTooltip(event, fieldId) {
+    const helpText = this.helpTexts[fieldId];
+    if (!helpText) return;
+    
+    // Remove existing tooltip
+    this.hideTooltip();
+    
+    const tooltip = document.createElement('div');
+    tooltip.className = 'help-tooltip';
+    tooltip.textContent = helpText;
+    tooltip.id = 'active-help-tooltip';
+    
+    document.body.appendChild(tooltip);
+    
+    // Position tooltip
+    const rect = event.target.getBoundingClientRect();
+    tooltip.style.position = 'absolute';
+    tooltip.style.top = (rect.bottom + window.scrollY + 10) + 'px';
+    tooltip.style.left = (rect.left + window.scrollX - 10) + 'px';
+  },
+  
+  hideTooltip() {
+    const tooltip = document.getElementById('active-help-tooltip');
+    if (tooltip) tooltip.remove();
+  }
+};
+
+// ==================== INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', () => {
+  // Initialize all new features
+  setTimeout(() => {
+    FormValidator.addRequiredIndicators();
+    AutoSave.init();
+    StructureSearch.init();
+    ContextHelp.init();
+    
+    // Add validation listeners
+    FormValidator.requiredFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        field.addEventListener('blur', () => {
+          FormValidator.validateField(fieldId, field.value);
+        });
+        
+        field.addEventListener('input', () => {
+          if (field.classList.contains('field-error')) {
+            FormValidator.validateField(fieldId, field.value);
+          }
+        });
+      }
+    });
+  }, 1000);
+});
+
+// Override save function to include validation
+const originalSaveBtn = document.getElementById('save-btn');
+if (originalSaveBtn) {
+  originalSaveBtn.addEventListener('click', (e) => {
+    if (!FormValidator.validateAllFields()) {
+      e.preventDefault();
+      alert('Por favor complete todos los campos obligatorios antes de guardar.');
+      // Scroll to first error
+      const firstError = document.querySelector('.field-error');
+      if (firstError) {
+        firstError.scrollIntoView({behavior: 'smooth', block: 'center'});
+        firstError.focus();
+      }
+    }
+  });
+}
