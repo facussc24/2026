@@ -1797,3 +1797,323 @@ button:focus-visible,
     font-size: 56px;
   }
 }
+
+/* ========================================
+   PAGE LENGTH REDUCTION FEATURES
+   ======================================== */
+
+/* Page Controls in Header */
+.page-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: 15px;
+}
+
+.btn-control {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-control:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-control:active {
+  transform: translateY(0);
+}
+
+.btn-control span {
+  font-size: 16px;
+}
+
+/* Compact Mode Styles */
+body.compact-mode {
+  font-size: 13px;
+}
+
+body.compact-mode header {
+  padding: 0.8rem 1.5rem;
+}
+
+body.compact-mode h1 {
+  font-size: 1.3rem;
+}
+
+body.compact-mode h2 {
+  font-size: 1.1rem;
+  margin: 12px 0 8px;
+}
+
+body.compact-mode h3 {
+  font-size: 1rem;
+  margin: 10px 0 6px;
+}
+
+body.compact-mode .grid-3,
+body.compact-mode .grid-2 {
+  gap: 10px;
+}
+
+body.compact-mode label {
+  margin-bottom: 8px;
+}
+
+body.compact-mode input,
+body.compact-mode textarea,
+body.compact-mode select {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+body.compact-mode button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+body.compact-mode .progress-card {
+  padding: 12px;
+  gap: 12px;
+}
+
+body.compact-mode .progress-item {
+  padding: 8px 12px;
+}
+
+body.compact-mode .progress-icon {
+  font-size: 20px;
+}
+
+body.compact-mode .progress-value {
+  font-size: 20px;
+}
+
+body.compact-mode table {
+  font-size: 12px;
+}
+
+body.compact-mode th,
+body.compact-mode td {
+  padding: 6px 8px;
+}
+
+body.compact-mode .tree li {
+  padding: 4px 6px;
+  margin: 2px 0;
+}
+
+body.compact-mode .collapsible-header {
+  padding: 10px 15px;
+}
+
+body.compact-mode .collapsible-content {
+  padding: 12px 15px;
+}
+
+body.compact-mode .inline-guidance {
+  padding: 12px 15px;
+  margin: 12px 0;
+}
+
+body.compact-mode .workflow-steps {
+  padding: 12px;
+  gap: 8px;
+}
+
+body.compact-mode .workflow-step {
+  padding: 8px 12px;
+}
+
+body.compact-mode #structure-panel {
+  padding: 15px;
+}
+
+body.compact-mode #detail-panel {
+  padding: 15px;
+}
+
+/* Full-screen table mode */
+.fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  z-index: 9999 !important;
+  background: white !important;
+  overflow: auto !important;
+  padding: 20px !important;
+  margin: 0 !important;
+}
+
+.fullscreen::before {
+  content: "Presione ESC para salir del modo pantalla completa";
+  display: block;
+  position: sticky;
+  top: 0;
+  background: #2c3e50;
+  color: white;
+  padding: 12px 20px;
+  text-align: center;
+  font-weight: 500;
+  border-radius: 8px;
+  margin-bottom: 15px;
+  z-index: 10000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Full-screen button for tables */
+.table-fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--secondary-color);
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.table-fullscreen-btn:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Toast animation */
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+}
+
+/* Responsive adjustments for compact mode */
+@media (max-width: 768px) {
+  .page-controls {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  
+  .btn-control {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  
+  .btn-control span {
+    font-size: 14px;
+  }
+  
+  body.compact-mode {
+    font-size: 12px;
+  }
+  
+  body.compact-mode h1 {
+    font-size: 1.2rem;
+  }
+  
+  body.compact-mode .progress-card {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* Additional spacing reductions */
+section {
+  margin-bottom: 25px; /* Reduced from 30px or more */
+}
+
+body.compact-mode section {
+  margin-bottom: 15px;
+}
+
+.grid-3 {
+  gap: 15px; /* Reduced from 20px */
+}
+
+body.compact-mode .grid-3 {
+  gap: 8px;
+}
+
+/* Tighter table spacing */
+table {
+  margin: 15px 0; /* Reduced from 20px */
+}
+
+body.compact-mode table {
+  margin: 10px 0;
+}
+
+/* Reduced vertical spacing in main content */
+main {
+  padding: 20px 2rem 80px; /* Reduced top padding */
+}
+
+body.compact-mode main {
+  padding: 15px 1.5rem 80px;
+}
+
+/* Compact tab styling */
+.tabs button {
+  padding: 10px 18px; /* Reduced from 12px 20px */
+}
+
+body.compact-mode .tabs button {
+  padding: 8px 15px;
+}
+
+/* Reduced modal padding */
+.modal-content {
+  padding: 20px; /* Reduced from 25px */
+}
+
+body.compact-mode .modal-content {
+  padding: 15px;
+}
+
+/* Tighter form groups */
+.form-group {
+  margin-bottom: 15px; /* Reduced from 20px */
+}
+
+body.compact-mode .form-group {
+  margin-bottom: 10px;
+}
+

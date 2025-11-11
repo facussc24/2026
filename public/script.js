@@ -2772,6 +2772,111 @@ function toggleSection(contentId) {
   }
 }
 
+// Collapse All Sections functionality
+function collapseAllSections() {
+  const collapsibleSections = document.querySelectorAll('.collapsible-content');
+  collapsibleSections.forEach(content => {
+    const header = content.previousElementSibling;
+    content.classList.add('collapsed');
+    if (header) {
+      header.classList.add('collapsed');
+    }
+  });
+  
+  // Show notification
+  showToast('Todas las secciones colapsadas', 'info');
+}
+
+// Expand All Sections functionality
+function expandAllSections() {
+  const collapsibleSections = document.querySelectorAll('.collapsible-content');
+  collapsibleSections.forEach(content => {
+    const header = content.previousElementSibling;
+    content.classList.remove('collapsed');
+    if (header) {
+      header.classList.remove('collapsed');
+    }
+  });
+  
+  // Show notification
+  showToast('Todas las secciones expandidas', 'info');
+}
+
+// Compact Mode Toggle
+let isCompactMode = localStorage.getItem('compactMode') === 'true';
+
+function toggleCompactMode() {
+  isCompactMode = !isCompactMode;
+  localStorage.setItem('compactMode', isCompactMode);
+  
+  const body = document.body;
+  if (isCompactMode) {
+    body.classList.add('compact-mode');
+    showToast('Modo compacto activado', 'success');
+  } else {
+    body.classList.remove('compact-mode');
+    showToast('Modo completo activado', 'success');
+  }
+}
+
+// Apply compact mode on load
+function applyCompactMode() {
+  if (isCompactMode) {
+    document.body.classList.add('compact-mode');
+  }
+}
+
+// Full-screen mode for tables
+function toggleFullScreenTable(tableId) {
+  const tableContainer = document.getElementById(tableId)?.closest('.table-container, section');
+  if (!tableContainer) return;
+  
+  if (tableContainer.classList.contains('fullscreen')) {
+    tableContainer.classList.remove('fullscreen');
+    document.body.style.overflow = '';
+  } else {
+    tableContainer.classList.add('fullscreen');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+// Close fullscreen with ESC key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const fullscreenElements = document.querySelectorAll('.fullscreen');
+    fullscreenElements.forEach(el => {
+      el.classList.remove('fullscreen');
+      document.body.style.overflow = '';
+    });
+  }
+});
+
+// Toast notification system (if not already defined)
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 12px 20px;
+    background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10000;
+    animation: slideIn 0.3s ease-out;
+  `;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
 // Scroll to top functionality
 function scrollToTop() {
   window.scrollTo({
@@ -2782,6 +2887,9 @@ function scrollToTop() {
 
 // Initialize collapsible sections on page load
 document.addEventListener('DOMContentLoaded', () => {
+  // Apply compact mode if saved
+  applyCompactMode();
+  
   // Collapse "Datos generales" by default after 2 seconds to give user time to see it
   setTimeout(() => {
     const generalInfoContent = document.getElementById('general-info-content');
@@ -2793,7 +2901,36 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   }, 2000);
+  
+  // Add collapse/expand all buttons to header if not exist
+  addPageControlButtons();
 });
+
+// Add page control buttons to header
+function addPageControlButtons() {
+  const header = document.querySelector('header');
+  if (!header || document.getElementById('page-controls')) return;
+  
+  const nav = header.querySelector('nav');
+  if (!nav) return;
+  
+  const controlsDiv = document.createElement('div');
+  controlsDiv.id = 'page-controls';
+  controlsDiv.className = 'page-controls';
+  controlsDiv.innerHTML = `
+    <button onclick="collapseAllSections()" class="btn-control" title="Colapsar todas las secciones">
+      <span>▲▲</span>
+    </button>
+    <button onclick="expandAllSections()" class="btn-control" title="Expandir todas las secciones">
+      <span>▼▼</span>
+    </button>
+    <button onclick="toggleCompactMode()" class="btn-control" title="Alternar modo compacto">
+      <span>⚙️</span>
+    </button>
+  `;
+  
+  nav.appendChild(controlsDiv);
+}
 
 // Update progress summary
 function updateProgressSummary() {
