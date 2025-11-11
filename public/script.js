@@ -784,6 +784,8 @@ function renderFallasTable() {
 
 // Renderiza la estructura completa (items, pasos, elementos)
 function renderStructure() {
+  // Asegurarse de que el detalle se actualice con la estructura
+  renderDetail();
   itemList.innerHTML = '';
   state.items.forEach(item => {
     const liItem = document.createElement('li');
