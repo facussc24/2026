@@ -10,7 +10,11 @@
 <body class="home">
   <header>
     <h1>Gestor AMFE/Plan de Control</h1>
-    <button id="new-amfe" class="btn-primary">Nuevo AMFE</button>
+    <div class="creation-gate">
+      <input type="checkbox" id="lessons-reviewed-checkbox">
+      <label for="lessons-reviewed-checkbox">He revisado las <a href="lessons.html" target="_blank">Lecciones Aprendidas</a> y las he tenido en cuenta.</label>
+    </div>
+    <button id="new-amfe" class="btn-primary" disabled>Nuevo AMFE</button>
   </header>
   <main>
     <div id="lists">
@@ -30,6 +34,13 @@
     const newBtn = document.getElementById('new-amfe');
     const docListDiv = document.getElementById('doc-list');
     const searchInput = document.getElementById('search');
+    const lessonsCheckbox = document.getElementById('lessons-reviewed-checkbox');
+
+    // Habilitar el botón "Nuevo AMFE" solo si se marcan las lecciones aprendidas
+    lessonsCheckbox.addEventListener('change', () => {
+        newBtn.disabled = !lessonsCheckbox.checked;
+    });
+
 
     // --- Sistema de notificaciones (Toast) ---
     function showToast(message, type = 'info') {

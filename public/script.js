@@ -320,6 +320,19 @@ function validateData() {
             }
           }
         }
+        // Validar campos de verificación de Poka-Yoke
+        const isPokaYoke = el.control && el.control.errorProofing && el.control.errorProofing.toLowerCase().includes('poka-yoke');
+        if (isPokaYoke) {
+            if (!el.control.verificationMethod || el.control.verificationMethod.trim() === '') {
+                issues.push(`El campo "Método de Verificación de Efectividad" es obligatorio para Poka-Yoke en el elemento ${el.type} del paso "${step.name}".`);
+            }
+            if (!el.control.verificationFrequency || el.control.verificationFrequency.trim() === '') {
+                issues.push(`El campo "Frecuencia de Verificación" es obligatorio para Poka-Yoke en el elemento ${el.type} del paso "${step.name}".`);
+            }
+            if (!el.control.reactionPlan || el.control.reactionPlan.trim() === '') {
+                issues.push(`El campo "Plan de reacción" es obligatorio para Poka-Yoke en el elemento ${el.type} del paso "${step.name}".`);
+            }
+        }
       });
     });
   });
@@ -1006,6 +1019,8 @@ function updateControlPlan() {
             specTol: '',
             measurementTech: '',
             errorProofing: '',
+            verificationMethod: '',
+            verificationFrequency: '',
             sampleQuantity: '',
             sampleFrequency: '',
             controlMethod: '',
@@ -1090,9 +1105,7 @@ function updateControlPlan() {
         const tdClass = document.createElement('td');
         const classInput = document.createElement('input');
         const classif = computeClassification(el.riesgos.severidad, el.riesgos.ocurrencia) || '';
-        if (!el.control.specialClass) {
-          el.control.specialClass = classif;
-        }
+        el.control.specialClass = classif;
         classInput.value = el.control.specialClass;
         classInput.setAttribute('readonly', 'readonly');
         classInput.classList.remove('critica', 'significativa');
@@ -1138,6 +1151,40 @@ function updateControlPlan() {
         errorInput.setAttribute('readonly', 'readonly'); // Solo lectura
         tdError.appendChild(errorInput);
         tr.appendChild(tdError);
+
+        // Nuevos campos para Verificación de Poka-Yoke
+        const isPokaYoke = el.control.errorProofing && el.control.errorProofing.toLowerCase().includes('poka-yoke');
+
+        // Método de Verificación
+        const tdVerifMethod = document.createElement('td');
+        const verifMethodInput = document.createElement('input');
+        verifMethodInput.type = 'text';
+        verifMethodInput.placeholder = 'Método de Verificación';
+        verifMethodInput.value = el.control.verificationMethod || '';
+        verifMethodInput.addEventListener('input', () => {
+          el.control.verificationMethod = verifMethodInput.value;
+        });
+        if (!isPokaYoke) {
+            verifMethodInput.setAttribute('readonly', 'readonly');
+        }
+        tdVerifMethod.appendChild(verifMethodInput);
+        tr.appendChild(tdVerifMethod);
+
+        // Frecuencia de Verificación
+        const tdVerifFreq = document.createElement('td');
+        const verifFreqInput = document.createElement('input');
+        verifFreqInput.type = 'text';
+        verifFreqInput.placeholder = 'Frecuencia';
+        verifFreqInput.value = el.control.verificationFrequency || '';
+        verifFreqInput.addEventListener('input', () => {
+          el.control.verificationFrequency = verifFreqInput.value;
+        });
+        if (!isPokaYoke) {
+            verifFreqInput.setAttribute('readonly', 'readonly');
+        }
+        tdVerifFreq.appendChild(verifFreqInput);
+        tr.appendChild(tdVerifFreq);
+
 
         // 11: Muestra – Cantidad
         const tdQty = document.createElement('td');
@@ -1759,15 +1806,94 @@ document.getElementById('tab-standard').addEventListener('click', () => {
   document.getElementById('standard-section').classList.add('active');
   document.getElementById('fmea-section').classList.remove('active');
   document.getElementById('control-section').classList.remove('active');
+  document.getElementById('instructions-section').classList.remove('active');
   document.getElementById('tab-standard').classList.add('active');
   document.getElementById('tab-fmea').classList.remove('active');
   document.getElementById('tab-control').classList.remove('active');
+  document.getElementById('tab-instructions').classList.remove('active');
   // Generar la tabla estándar al activar la pestaña
   renderStandardView();
 });
 
+document.getElementById('tab-instructions').addEventListener('click', () => {
+    document.getElementById('instructions-section').classList.add('active');
+    document.getElementById('fmea-section').classList.remove('active');
+    document.getElementById('control-section').classList.remove('active');
+    document.getElementById('standard-section').classList.remove('active');
+    document.getElementById('tab-instructions').classList.add('active');
+    document.getElementById('tab-fmea').classList.remove('active');
+    document.getElementById('tab-control').classList.remove('active');
+    document.getElementById('tab-standard').classList.remove('active');
+    renderWorkInstructions();
+});
+
 // Botón de exportación de la vista estándar
 document.getElementById('export-standard').addEventListener('click', exportStandardToPDF);
+
+// --- Lógica para Instrucciones de Proceso ---
+function renderWorkInstructions() {
+    const container = document.getElementById('instructions-container');
+    if (!container) return;
+
+    container.innerHTML = ''; // Limpiar contenedor
+
+    state.items.forEach(item => {
+        item.steps.forEach(step => {
+            const instructionDiv = document.createElement('div');
+            instructionDiv.className = 'work-instruction';
+
+            const title = document.createElement('h3');
+            title.textContent = `Paso: ${step.name}`;
+            instructionDiv.appendChild(title);
+
+            const ul = document.createElement('ul');
+            step.elements.forEach(el => {
+                const li = document.createElement('li');
+                let instructionText = `<strong>Elemento: ${el.type}</strong><br>`;
+
+                // Añadir controles
+                const controls = [
+                    ...el.fallas.map(f => f.controlesDetect),
+                    el.acciones.accionDet
+                ].filter(Boolean).join('; ');
+
+                if (controls) {
+                    instructionText += `Control a aplicar: ${controls}<br>`;
+                }
+
+                // Añadir plan de reacción
+                if (el.control && el.control.reactionPlan) {
+                    instructionText += `Plan de reacción en caso de fallo: ${el.control.reactionPlan}`;
+                }
+
+                li.innerHTML = instructionText;
+                ul.appendChild(li);
+            });
+
+            instructionDiv.appendChild(ul);
+            container.appendChild(instructionDiv);
+        });
+    });
+}
+
+async function exportInstructionsToPDF() {
+    const container = document.getElementById('instructions-container');
+    if (!container) return;
+
+    const canvas = await html2canvas(container, { scale: 1 });
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'pt',
+        format: [canvas.width, canvas.height]
+    });
+    pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+    pdf.save('instrucciones_de_proceso.pdf');
+}
+
+document.getElementById('export-instructions').addEventListener('click', exportInstructionsToPDF);
+
 
 // No longer need to wrap these functions
 
