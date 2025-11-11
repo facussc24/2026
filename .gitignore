@@ -55,3 +55,4 @@ firestore-debug.log
 # Python cache
 *.pyc
 __pycache__/
+test_iatf.js
