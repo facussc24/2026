@@ -2811,3 +2811,110 @@ saveElementData = function() {
   originalSaveElementData();
   updateProgressSummary();
 };
+
+// Add keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Ctrl+S or Cmd+S to save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    const saveBtn = document.getElementById('save-btn');
+    if (saveBtn) {
+      saveBtn.click();
+    }
+  }
+  
+  // Escape to close modals
+  if (e.key === 'Escape') {
+    const modals = document.querySelectorAll('.modal, .iatf-modal');
+    modals.forEach(modal => {
+      if (modal.style.display !== 'none') {
+        modal.style.display = 'none';
+      }
+    });
+  }
+});
+
+// Add tooltips to action buttons
+document.addEventListener('DOMContentLoaded', () => {
+  // Add tooltip styles if not already present
+  if (!document.getElementById('tooltip-styles')) {
+    const tooltipStyles = document.createElement('style');
+    tooltipStyles.id = 'tooltip-styles';
+    tooltipStyles.textContent = `
+      [data-tooltip] {
+        position: relative;
+      }
+      
+      [data-tooltip]::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.5rem;
+        background: rgba(0,0,0,0.9);
+        color: white;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        margin-bottom: 5px;
+        z-index: 1000;
+      }
+      
+      [data-tooltip]:hover::after {
+        opacity: 1;
+      }
+    `;
+    document.head.appendChild(tooltipStyles);
+  }
+  
+  // Ensure progress summary is initialized
+  setTimeout(() => {
+    if (typeof updateProgressSummary === 'function') {
+      updateProgressSummary();
+    }
+  }, 500);
+});
+
+// Improve tree item hover effects
+const improveTreeItemHover = () => {
+  const style = document.createElement('style');
+  style.textContent = `
+    .tree-row:hover {
+      background-color: rgba(52, 152, 219, 0.1);
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+    }
+    
+    .tree-row.active {
+      background-color: var(--secondary-color);
+      color: white;
+      border-radius: 4px;
+    }
+    
+    .subtabs .detail-tab {
+      position: relative;
+    }
+    
+    .subtabs .detail-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--secondary-color);
+    }
+  `;
+  document.head.appendChild(style);
+};
+
+// Initialize improvements
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', improveTreeItemHover);
+} else {
+  improveTreeItemHover();
+}
