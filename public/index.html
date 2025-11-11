@@ -121,6 +121,7 @@
     <button id="tab-control" class="tab-btn">Plan de control</button>
     <button id="tab-standard" class="tab-btn">Vista estándar</button>
     <button id="tab-instructions" class="tab-btn">Instrucciones de Proceso</button>
+    <button id="tab-iatf" class="tab-btn">Gestión IATF 16949</button>
   </nav>
   <!-- Resumen de errores de validación -->
   <div id="error-summary" class="error-summary" style="color:#b00020; font-weight:bold; margin:8px 0;"></div>
@@ -391,6 +392,85 @@
         <!-- Las instrucciones se generarán dinámicamente aquí -->
       </div>
       <button id="export-instructions" class="btn">Exportar Instrucciones a PDF</button>
+    </section>
+    <!-- Sección de Gestión IATF 16949 -->
+    <section id="iatf-section" class="tab-content">
+      <h2>Gestión de Cumplimiento IATF 16949</h2>
+      
+      <!-- Subsección: Controles Temporales -->
+      <div class="iatf-subsection">
+        <h3>1. Gestión de Controles Temporales (IATF 8.5.6.1.1)</h3>
+        <p>Gestión de desviaciones temporales de controles principales del proceso.</p>
+        
+        <div id="temporary-controls-active-warning" style="display:none; background:#fff3cd; border:2px solid #ffc107; padding:15px; margin:10px 0; border-radius:5px;">
+          <h4 style="color:#856404; margin-top:0;">⚠️ CONTROLES TEMPORALES ACTIVOS</h4>
+          <div id="active-controls-list"></div>
+        </div>
+        
+        <table class="iatf-table">
+          <thead>
+            <tr>
+              <th>Proceso/Paso</th>
+              <th>Elemento</th>
+              <th>Control Principal</th>
+              <th>Control Alternativo</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="temporary-controls-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Subsección: Pass-Through Characteristics -->
+      <div class="iatf-subsection">
+        <h3>2. Gestión de Riesgos de Cadena de Suministro</h3>
+        <p>Identificación y control de Pass-Through Characteristics (PTCs) y gestión de proveedores.</p>
+        
+        <table class="iatf-table">
+          <thead>
+            <tr>
+              <th>Proceso/Paso</th>
+              <th>Elemento</th>
+              <th>Es PTC</th>
+              <th>Proveedor</th>
+              <th>PFMEA Proveedor</th>
+              <th>Última Auditoría</th>
+              <th>Estado</th>
+              <th>Control en Fabricación</th>
+            </tr>
+          </thead>
+          <tbody id="supply-chain-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Subsección: Escalación de Riesgos -->
+      <div class="iatf-subsection">
+        <h3>3. Proceso de Escalación de Riesgos</h3>
+        <p>Registro y seguimiento de modos de fallo que requieren escalación a la dirección.</p>
+        
+        <div id="escalation-alerts" style="background:#ffebee; border:2px solid #f44336; padding:15px; margin:10px 0; border-radius:5px; display:none;">
+          <h4 style="color:#c62828; margin-top:0;">🚨 ALERTAS DE ESCALACIÓN</h4>
+          <div id="escalation-alerts-list"></div>
+        </div>
+        
+        <table class="iatf-table">
+          <thead>
+            <tr>
+              <th>Proceso/Paso</th>
+              <th>Elemento</th>
+              <th>Severidad</th>
+              <th>Modo de Fallo</th>
+              <th>Requiere Escalación</th>
+              <th>Escalado A</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="escalation-body"></tbody>
+        </table>
+      </div>
     </section>
   </main>
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>

@@ -343,6 +343,43 @@ function validateData() {
     issues.push('Debe marcar la casilla de "Aprobación de Seguridad" porque se han detectado características críticas.');
   }
 
+  // Validar controles temporales activos (IATF 8.5.6.1.1)
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        if (el.temporaryControl && el.temporaryControl.isActive) {
+          // Verificar que hay trazabilidad
+          if (!el.temporaryControl.traceabilityLots || el.temporaryControl.traceabilityLots.length === 0) {
+            issues.push(`Control temporal activo en ${el.type} (${step.name}) requiere registros de trazabilidad.`);
+          }
+          // Verificar verificaciones diarias
+          const daysSinceActivation = Math.floor((new Date() - new Date(el.temporaryControl.activationDate)) / (1000 * 60 * 60 * 24));
+          if (daysSinceActivation > 0 && (!el.temporaryControl.dailyVerifications || el.temporaryControl.dailyVerifications.length < daysSinceActivation)) {
+            issues.push(`Control temporal activo en ${el.type} (${step.name}) requiere verificación diaria. Días activo: ${daysSinceActivation}, Verificaciones: ${el.temporaryControl.dailyVerifications?.length || 0}`);
+          }
+        }
+        
+        // Validar Pass-Through Characteristics
+        if (el.supplyChain && el.supplyChain.isPassThrough) {
+          if (!el.supplyChain.supplierName || el.supplyChain.supplierName.trim() === '') {
+            issues.push(`Pass-Through Characteristic en ${el.type} (${step.name}) requiere especificar el proveedor.`);
+          }
+          if (!el.supplyChain.controlAtManufacture || el.supplyChain.controlAtManufacture.trim() === '') {
+            issues.push(`Pass-Through Characteristic en ${el.type} (${step.name}) requiere especificar controles en el punto de fabricación.`);
+          }
+        }
+        
+        // Validar escalación de riesgos de alta severidad
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity >= 9) {
+          if (!el.escalation || !el.escalation.escalatedTo || el.escalation.escalatedTo.trim() === '') {
+            issues.push(`Severidad crítica (${severity}) en ${el.type} (${step.name}) requiere escalación a la dirección.`);
+          }
+        }
+      });
+    });
+  });
+
   if (issues.length > 0) {
     // Mostrar errores en resumen
     displayValidationErrors(issues);
@@ -619,7 +656,38 @@ function addElement(itemId, stepId) {
       fechaTerminacion: '',
       observaciones: ''
     },
-    fallas: []
+    fallas: [],
+    // Nuevos campos para IATF 16949 compliance
+    temporaryControl: {
+      hasAlternative: false,
+      alternativeMethod: '',
+      isActive: false,
+      activationDate: '',
+      deactivationDate: '',
+      limitType: '', // 'date' o 'quantity'
+      limitValue: '',
+      riskAssessment: '',
+      approvalInternal: '',
+      approvalClient: '',
+      reason: '',
+      dailyVerifications: [],
+      traceabilityLots: []
+    },
+    supplyChain: {
+      isPassThrough: false,
+      supplierName: '',
+      supplierPFMEA: '',
+      supplierAuditDate: '',
+      supplierAuditStatus: '',
+      controlAtManufacture: ''
+    },
+    escalation: {
+      requiresEscalation: false,
+      escalationDate: '',
+      escalatedTo: '',
+      escalationReason: '',
+      escalationStatus: ''
+    }
   };
   step.elements.push(element);
   state.selected = { itemId: itemId, stepId: stepId, elementId: element.id };
@@ -1024,7 +1092,45 @@ function updateControlPlan() {
             sampleQuantity: '',
             sampleFrequency: '',
             controlMethod: '',
-            reactionPlan: ''
+            reactionPlan: '',
+            msaStatus: ''
+          };
+        }
+        // Inicializar campos adicionales para IATF compliance si no existen
+        if (!el.temporaryControl) {
+          el.temporaryControl = {
+            hasAlternative: false,
+            alternativeMethod: '',
+            isActive: false,
+            activationDate: '',
+            deactivationDate: '',
+            limitType: '',
+            limitValue: '',
+            riskAssessment: '',
+            approvalInternal: '',
+            approvalClient: '',
+            reason: '',
+            dailyVerifications: [],
+            traceabilityLots: []
+          };
+        }
+        if (!el.supplyChain) {
+          el.supplyChain = {
+            isPassThrough: false,
+            supplierName: '',
+            supplierPFMEA: '',
+            supplierAuditDate: '',
+            supplierAuditStatus: '',
+            controlAtManufacture: ''
+          };
+        }
+        if (!el.escalation) {
+          el.escalation = {
+            requiresEscalation: false,
+            escalationDate: '',
+            escalatedTo: '',
+            escalationReason: '',
+            escalationStatus: ''
           };
         }
         const tr = document.createElement('tr');
@@ -1507,17 +1613,25 @@ document.getElementById('tab-fmea').addEventListener('click', () => {
   document.getElementById('fmea-section').classList.add('active');
   document.getElementById('control-section').classList.remove('active');
   document.getElementById('standard-section').classList.remove('active');
+  document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
   document.getElementById('tab-fmea').classList.add('active');
   document.getElementById('tab-control').classList.remove('active');
   document.getElementById('tab-standard').classList.remove('active');
+  document.getElementById('tab-instructions').classList.remove('active');
+  document.getElementById('tab-iatf').classList.remove('active');
 });
 document.getElementById('tab-control').addEventListener('click', () => {
   document.getElementById('control-section').classList.add('active');
   document.getElementById('fmea-section').classList.remove('active');
   document.getElementById('standard-section').classList.remove('active');
+  document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
   document.getElementById('tab-control').classList.add('active');
   document.getElementById('tab-fmea').classList.remove('active');
   document.getElementById('tab-standard').classList.remove('active');
+  document.getElementById('tab-instructions').classList.remove('active');
+  document.getElementById('tab-iatf').classList.remove('active');
   // Recalcular el plan de control para reflejar cualquier cambio en las clasificaciones.
   updateControlPlan();
 });
@@ -1807,10 +1921,12 @@ document.getElementById('tab-standard').addEventListener('click', () => {
   document.getElementById('fmea-section').classList.remove('active');
   document.getElementById('control-section').classList.remove('active');
   document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
   document.getElementById('tab-standard').classList.add('active');
   document.getElementById('tab-fmea').classList.remove('active');
   document.getElementById('tab-control').classList.remove('active');
   document.getElementById('tab-instructions').classList.remove('active');
+  document.getElementById('tab-iatf').classList.remove('active');
   // Generar la tabla estándar al activar la pestaña
   renderStandardView();
 });
@@ -1820,10 +1936,12 @@ document.getElementById('tab-instructions').addEventListener('click', () => {
     document.getElementById('fmea-section').classList.remove('active');
     document.getElementById('control-section').classList.remove('active');
     document.getElementById('standard-section').classList.remove('active');
+    document.getElementById('iatf-section').classList.remove('active');
     document.getElementById('tab-instructions').classList.add('active');
     document.getElementById('tab-fmea').classList.remove('active');
     document.getElementById('tab-control').classList.remove('active');
     document.getElementById('tab-standard').classList.remove('active');
+    document.getElementById('tab-iatf').classList.remove('active');
     renderWorkInstructions();
 });
 
@@ -1935,5 +2053,670 @@ function toggleGuidelines() {
   } else {
     guideBox.style.display = 'none';
     toggleBtn.textContent = 'Mostrar guías';
+  }
+}
+
+// ============================================
+// GESTIÓN IATF 16949
+// ============================================
+
+// Tab handler for IATF section
+document.getElementById('tab-iatf').addEventListener('click', () => {
+  document.getElementById('iatf-section').classList.add('active');
+  document.getElementById('fmea-section').classList.remove('active');
+  document.getElementById('control-section').classList.remove('active');
+  document.getElementById('standard-section').classList.remove('active');
+  document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('tab-iatf').classList.add('active');
+  document.getElementById('tab-fmea').classList.remove('active');
+  document.getElementById('tab-control').classList.remove('active');
+  document.getElementById('tab-standard').classList.remove('active');
+  document.getElementById('tab-instructions').classList.remove('active');
+  renderIATFSection();
+});
+
+// Update existing tab handlers to handle IATF tab
+const originalFmeaHandler = document.getElementById('tab-fmea');
+originalFmeaHandler.addEventListener('click', () => {
+  document.getElementById('tab-iatf').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
+});
+
+const originalControlHandler = document.getElementById('tab-control');
+originalControlHandler.addEventListener('click', () => {
+  document.getElementById('tab-iatf').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
+});
+
+// Render IATF Section
+function renderIATFSection() {
+  renderTemporaryControls();
+  renderSupplyChain();
+  renderEscalation();
+  updateActiveControlsWarning();
+  updateEscalationAlerts();
+}
+
+// Render Temporary Controls Table
+function renderTemporaryControls() {
+  const tbody = document.getElementById('temporary-controls-body');
+  tbody.innerHTML = '';
+  
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        const tr = document.createElement('tr');
+        
+        // Proceso/Paso
+        const tdProcess = document.createElement('td');
+        tdProcess.textContent = `${item.name} / ${step.name}`;
+        tr.appendChild(tdProcess);
+        
+        // Elemento
+        const tdElement = document.createElement('td');
+        tdElement.textContent = el.type;
+        tr.appendChild(tdElement);
+        
+        // Control Principal
+        const tdMainControl = document.createElement('td');
+        tdMainControl.textContent = el.control?.controlMethod || 'No definido';
+        tr.appendChild(tdMainControl);
+        
+        // Control Alternativo
+        const tdAltControl = document.createElement('td');
+        const altInput = document.createElement('input');
+        altInput.type = 'text';
+        altInput.value = el.temporaryControl.alternativeMethod || '';
+        altInput.placeholder = 'Método alternativo aprobado';
+        altInput.addEventListener('input', () => {
+          el.temporaryControl.alternativeMethod = altInput.value;
+          el.temporaryControl.hasAlternative = altInput.value.trim() !== '';
+        });
+        tdAltControl.appendChild(altInput);
+        tr.appendChild(tdAltControl);
+        
+        // Estado
+        const tdStatus = document.createElement('td');
+        if (el.temporaryControl.isActive) {
+          const activeSpan = document.createElement('span');
+          activeSpan.className = 'status-active';
+          activeSpan.textContent = 'ACTIVO';
+          tdStatus.appendChild(activeSpan);
+        } else {
+          const inactiveSpan = document.createElement('span');
+          inactiveSpan.className = 'status-inactive';
+          inactiveSpan.textContent = 'Inactivo';
+          tdStatus.appendChild(inactiveSpan);
+        }
+        tr.appendChild(tdStatus);
+        
+        // Acciones
+        const tdActions = document.createElement('td');
+        
+        if (!el.temporaryControl.isActive && el.temporaryControl.hasAlternative) {
+          const btnActivate = document.createElement('button');
+          btnActivate.className = 'btn-activate';
+          btnActivate.textContent = 'Activar';
+          btnActivate.addEventListener('click', () => {
+            showActivateTemporaryControlModal(item, step, el);
+          });
+          tdActions.appendChild(btnActivate);
+        }
+        
+        if (el.temporaryControl.isActive) {
+          const btnDeactivate = document.createElement('button');
+          btnDeactivate.className = 'btn-deactivate';
+          btnDeactivate.textContent = 'Desactivar';
+          btnDeactivate.addEventListener('click', () => {
+            deactivateTemporaryControl(item, step, el);
+          });
+          tdActions.appendChild(btnDeactivate);
+          
+          const btnVerify = document.createElement('button');
+          btnVerify.className = 'btn-configure';
+          btnVerify.textContent = 'Verificar';
+          btnVerify.addEventListener('click', () => {
+            showDailyVerificationModal(item, step, el);
+          });
+          tdActions.appendChild(btnVerify);
+        }
+        
+        tr.appendChild(tdActions);
+        tbody.appendChild(tr);
+      });
+    });
+  });
+}
+
+// Show modal to activate temporary control
+function showActivateTemporaryControlModal(item, step, el) {
+  // Create modal
+  const modal = document.createElement('div');
+  modal.className = 'iatf-modal';
+  modal.innerHTML = `
+    <div class="iatf-modal-content">
+      <h3>⚠️ Activar Control Temporal</h3>
+      <p><strong>Proceso:</strong> ${item.name} / ${step.name}</p>
+      <p><strong>Elemento:</strong> ${el.type}</p>
+      <p><strong>Control Alternativo:</strong> ${el.temporaryControl.alternativeMethod}</p>
+      
+      <label>
+        Motivo de activación (obligatorio):
+        <textarea id="temp-reason" required></textarea>
+      </label>
+      
+      <label>
+        Evaluación de riesgos (tipo FMEA) (obligatorio):
+        <textarea id="temp-risk" required placeholder="Describir el efecto del método sustitutivo..."></textarea>
+      </label>
+      
+      <label>
+        Tipo de límite:
+        <select id="temp-limit-type">
+          <option value="date">Fecha límite</option>
+          <option value="quantity">Cantidad de producción</option>
+        </select>
+      </label>
+      
+      <label>
+        Valor del límite:
+        <input type="text" id="temp-limit-value" placeholder="Fecha (YYYY-MM-DD) o cantidad">
+      </label>
+      
+      <label>
+        Aprobación interna (nombre):
+        <input type="text" id="temp-approval-internal" required>
+      </label>
+      
+      <label>
+        Aprobación del cliente (si requerido):
+        <input type="text" id="temp-approval-client">
+      </label>
+      
+      <div class="iatf-modal-buttons">
+        <button class="btn-cancel">Cancelar</button>
+        <button class="btn-confirm">Activar Control Temporal</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+  
+  // Cancel button
+  modal.querySelector('.btn-cancel').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  // Confirm button
+  modal.querySelector('.btn-confirm').addEventListener('click', () => {
+    const reason = document.getElementById('temp-reason').value;
+    const risk = document.getElementById('temp-risk').value;
+    const limitType = document.getElementById('temp-limit-type').value;
+    const limitValue = document.getElementById('temp-limit-value').value;
+    const approvalInternal = document.getElementById('temp-approval-internal').value;
+    const approvalClient = document.getElementById('temp-approval-client').value;
+    
+    if (!reason || !risk || !approvalInternal) {
+      alert('Debe completar los campos obligatorios: Motivo, Evaluación de riesgos y Aprobación interna.');
+      return;
+    }
+    
+    // Activate temporary control
+    el.temporaryControl.isActive = true;
+    el.temporaryControl.activationDate = new Date().toISOString().split('T')[0];
+    el.temporaryControl.reason = reason;
+    el.temporaryControl.riskAssessment = risk;
+    el.temporaryControl.limitType = limitType;
+    el.temporaryControl.limitValue = limitValue;
+    el.temporaryControl.approvalInternal = approvalInternal;
+    el.temporaryControl.approvalClient = approvalClient;
+    
+    alert(`⚠️ CONTROL TEMPORAL ACTIVADO\n\nControl: ${el.temporaryControl.alternativeMethod}\nSe requiere trazabilidad del 100% del producto.\nSe debe revisar diariamente la eficacia del control.`);
+    
+    document.body.removeChild(modal);
+    renderIATFSection();
+  });
+}
+
+// Deactivate temporary control
+function deactivateTemporaryControl(item, step, el) {
+  if (!confirm(`¿Está seguro de desactivar el control temporal para ${el.type}?`)) {
+    return;
+  }
+  
+  el.temporaryControl.isActive = false;
+  el.temporaryControl.deactivationDate = new Date().toISOString().split('T')[0];
+  
+  alert('Control temporal desactivado. El control principal ha sido restaurado.');
+  renderIATFSection();
+}
+
+// Show daily verification modal
+function showDailyVerificationModal(item, step, el) {
+  const modal = document.createElement('div');
+  modal.className = 'iatf-modal';
+  modal.innerHTML = `
+    <div class="iatf-modal-content">
+      <h3>Verificación Diaria del Control Temporal</h3>
+      <p><strong>Control:</strong> ${el.temporaryControl.alternativeMethod}</p>
+      
+      <label>
+        Fecha de verificación:
+        <input type="date" id="verify-date" value="${new Date().toISOString().split('T')[0]}">
+      </label>
+      
+      <label>
+        Verificado por:
+        <input type="text" id="verify-by" required>
+      </label>
+      
+      <label>
+        Resultado de verificación:
+        <select id="verify-result">
+          <option value="OK">Conforme</option>
+          <option value="NOK">No conforme</option>
+        </select>
+      </label>
+      
+      <label>
+        Lote/Serie rastreado:
+        <input type="text" id="verify-lot">
+      </label>
+      
+      <label>
+        Observaciones:
+        <textarea id="verify-obs"></textarea>
+      </label>
+      
+      <div class="iatf-modal-buttons">
+        <button class="btn-cancel">Cancelar</button>
+        <button class="btn-confirm">Registrar Verificación</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+  
+  modal.querySelector('.btn-cancel').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  modal.querySelector('.btn-confirm').addEventListener('click', () => {
+    const date = document.getElementById('verify-date').value;
+    const by = document.getElementById('verify-by').value;
+    const result = document.getElementById('verify-result').value;
+    const lot = document.getElementById('verify-lot').value;
+    const obs = document.getElementById('verify-obs').value;
+    
+    if (!by) {
+      alert('Debe indicar quién realizó la verificación.');
+      return;
+    }
+    
+    el.temporaryControl.dailyVerifications.push({
+      date,
+      by,
+      result,
+      lot,
+      observations: obs
+    });
+    
+    if (lot) {
+      el.temporaryControl.traceabilityLots.push(lot);
+    }
+    
+    alert('Verificación registrada correctamente.');
+    document.body.removeChild(modal);
+  });
+}
+
+// Update active controls warning
+function updateActiveControlsWarning() {
+  const warningDiv = document.getElementById('temporary-controls-active-warning');
+  const listDiv = document.getElementById('active-controls-list');
+  
+  const activeControls = [];
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        if (el.temporaryControl.isActive) {
+          activeControls.push({
+            process: `${item.name} / ${step.name}`,
+            element: el.type,
+            control: el.temporaryControl.alternativeMethod,
+            activationDate: el.temporaryControl.activationDate,
+            limit: `${el.temporaryControl.limitType === 'date' ? 'Fecha' : 'Cantidad'}: ${el.temporaryControl.limitValue}`
+          });
+        }
+      });
+    });
+  });
+  
+  if (activeControls.length > 0) {
+    warningDiv.style.display = 'block';
+    listDiv.innerHTML = '<ul>' + activeControls.map(c => 
+      `<li><strong>${c.process} - ${c.element}:</strong> ${c.control} (Activado: ${c.activationDate}, ${c.limit})</li>`
+    ).join('') + '</ul>';
+  } else {
+    warningDiv.style.display = 'none';
+  }
+}
+
+// Render Supply Chain Management Table
+function renderSupplyChain() {
+  const tbody = document.getElementById('supply-chain-body');
+  tbody.innerHTML = '';
+  
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        const tr = document.createElement('tr');
+        
+        // Proceso/Paso
+        const tdProcess = document.createElement('td');
+        tdProcess.textContent = `${item.name} / ${step.name}`;
+        tr.appendChild(tdProcess);
+        
+        // Elemento
+        const tdElement = document.createElement('td');
+        tdElement.textContent = el.type;
+        tr.appendChild(tdElement);
+        
+        // Es PTC
+        const tdPTC = document.createElement('td');
+        const ptcCheck = document.createElement('input');
+        ptcCheck.type = 'checkbox';
+        ptcCheck.checked = el.supplyChain.isPassThrough;
+        ptcCheck.addEventListener('change', () => {
+          el.supplyChain.isPassThrough = ptcCheck.checked;
+        });
+        tdPTC.appendChild(ptcCheck);
+        tr.appendChild(tdPTC);
+        
+        // Proveedor
+        const tdSupplier = document.createElement('td');
+        const supplierInput = document.createElement('input');
+        supplierInput.type = 'text';
+        supplierInput.value = el.supplyChain.supplierName || '';
+        supplierInput.addEventListener('input', () => {
+          el.supplyChain.supplierName = supplierInput.value;
+        });
+        tdSupplier.appendChild(supplierInput);
+        tr.appendChild(tdSupplier);
+        
+        // PFMEA Proveedor
+        const tdPFMEA = document.createElement('td');
+        const pfmeaInput = document.createElement('input');
+        pfmeaInput.type = 'text';
+        pfmeaInput.value = el.supplyChain.supplierPFMEA || '';
+        pfmeaInput.placeholder = 'Ref. documento';
+        pfmeaInput.addEventListener('input', () => {
+          el.supplyChain.supplierPFMEA = pfmeaInput.value;
+        });
+        tdPFMEA.appendChild(pfmeaInput);
+        tr.appendChild(tdPFMEA);
+        
+        // Última Auditoría
+        const tdAudit = document.createElement('td');
+        const auditInput = document.createElement('input');
+        auditInput.type = 'date';
+        auditInput.value = el.supplyChain.supplierAuditDate || '';
+        auditInput.addEventListener('input', () => {
+          el.supplyChain.supplierAuditDate = auditInput.value;
+        });
+        tdAudit.appendChild(auditInput);
+        tr.appendChild(tdAudit);
+        
+        // Estado
+        const tdStatus = document.createElement('td');
+        const statusSelect = document.createElement('select');
+        statusSelect.innerHTML = `
+          <option value="">Seleccionar...</option>
+          <option value="Conforme">Conforme</option>
+          <option value="No conforme">No conforme</option>
+          <option value="Pendiente">Pendiente</option>
+        `;
+        statusSelect.value = el.supplyChain.supplierAuditStatus || '';
+        statusSelect.addEventListener('change', () => {
+          el.supplyChain.supplierAuditStatus = statusSelect.value;
+        });
+        tdStatus.appendChild(statusSelect);
+        tr.appendChild(tdStatus);
+        
+        // Control en Fabricación
+        const tdControl = document.createElement('td');
+        const controlInput = document.createElement('input');
+        controlInput.type = 'text';
+        controlInput.value = el.supplyChain.controlAtManufacture || '';
+        controlInput.placeholder = 'Describir controles...';
+        controlInput.addEventListener('input', () => {
+          el.supplyChain.controlAtManufacture = controlInput.value;
+        });
+        tdControl.appendChild(controlInput);
+        tr.appendChild(tdControl);
+        
+        tbody.appendChild(tr);
+      });
+    });
+  });
+}
+
+// Render Escalation Table
+function renderEscalation() {
+  const tbody = document.getElementById('escalation-body');
+  tbody.innerHTML = '';
+  
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        // Solo mostrar elementos con severidad alta o con escalación existente
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity < 9 && !el.escalation.requiresEscalation) {
+          return; // Skip this element
+        }
+        
+        const tr = document.createElement('tr');
+        
+        // Proceso/Paso
+        const tdProcess = document.createElement('td');
+        tdProcess.textContent = `${item.name} / ${step.name}`;
+        tr.appendChild(tdProcess);
+        
+        // Elemento
+        const tdElement = document.createElement('td');
+        tdElement.textContent = el.type;
+        tr.appendChild(tdElement);
+        
+        // Severidad
+        const tdSeverity = document.createElement('td');
+        tdSeverity.textContent = el.riesgos.severidad || 'N/A';
+        if (severity >= 9) {
+          tdSeverity.style.backgroundColor = '#ffcccc';
+          tdSeverity.style.fontWeight = 'bold';
+        }
+        tr.appendChild(tdSeverity);
+        
+        // Modo de Fallo
+        const tdFailure = document.createElement('td');
+        const failures = el.fallas.map(f => f.modo).filter(Boolean).join(', ');
+        tdFailure.textContent = failures || 'No definido';
+        tr.appendChild(tdFailure);
+        
+        // Requiere Escalación
+        const tdRequires = document.createElement('td');
+        const requiresCheck = document.createElement('input');
+        requiresCheck.type = 'checkbox';
+        requiresCheck.checked = el.escalation.requiresEscalation || severity >= 9;
+        requiresCheck.disabled = severity >= 9; // Auto-required for high severity
+        requiresCheck.addEventListener('change', () => {
+          el.escalation.requiresEscalation = requiresCheck.checked;
+          if (!requiresCheck.checked) {
+            el.escalation.escalationDate = '';
+            el.escalation.escalatedTo = '';
+            el.escalation.escalationReason = '';
+            el.escalation.escalationStatus = '';
+          }
+        });
+        tdRequires.appendChild(requiresCheck);
+        tr.appendChild(tdRequires);
+        
+        // Escalado A
+        const tdEscalatedTo = document.createElement('td');
+        const escalatedInput = document.createElement('input');
+        escalatedInput.type = 'text';
+        escalatedInput.value = el.escalation.escalatedTo || '';
+        escalatedInput.placeholder = 'Nombre/Cargo';
+        escalatedInput.addEventListener('input', () => {
+          el.escalation.escalatedTo = escalatedInput.value;
+        });
+        tdEscalatedTo.appendChild(escalatedInput);
+        tr.appendChild(tdEscalatedTo);
+        
+        // Fecha
+        const tdDate = document.createElement('td');
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.value = el.escalation.escalationDate || '';
+        dateInput.addEventListener('input', () => {
+          el.escalation.escalationDate = dateInput.value;
+        });
+        tdDate.appendChild(dateInput);
+        tr.appendChild(tdDate);
+        
+        // Estado
+        const tdStatus = document.createElement('td');
+        const statusSelect = document.createElement('select');
+        statusSelect.innerHTML = `
+          <option value="">Seleccionar...</option>
+          <option value="Pendiente">Pendiente</option>
+          <option value="En revisión">En revisión</option>
+          <option value="Resuelta">Resuelta</option>
+        `;
+        statusSelect.value = el.escalation.escalationStatus || '';
+        statusSelect.addEventListener('change', () => {
+          el.escalation.escalationStatus = statusSelect.value;
+        });
+        tdStatus.appendChild(statusSelect);
+        tr.appendChild(tdStatus);
+        
+        // Acciones
+        const tdActions = document.createElement('td');
+        const btnEscalate = document.createElement('button');
+        btnEscalate.className = 'btn-escalate';
+        btnEscalate.textContent = 'Registrar Escalación';
+        btnEscalate.addEventListener('click', () => {
+          showEscalationModal(item, step, el);
+        });
+        tdActions.appendChild(btnEscalate);
+        tr.appendChild(tdActions);
+        
+        tbody.appendChild(tr);
+      });
+    });
+  });
+}
+
+// Show escalation modal
+function showEscalationModal(item, step, el) {
+  const modal = document.createElement('div');
+  modal.className = 'iatf-modal';
+  modal.innerHTML = `
+    <div class="iatf-modal-content">
+      <h3>🚨 Registrar Escalación de Riesgo</h3>
+      <p><strong>Proceso:</strong> ${item.name} / ${step.name}</p>
+      <p><strong>Elemento:</strong> ${el.type}</p>
+      <p><strong>Severidad:</strong> ${el.riesgos.severidad}</p>
+      
+      <label>
+        Escalado a (nombre/cargo):
+        <input type="text" id="esc-to" value="${el.escalation.escalatedTo || ''}" required>
+      </label>
+      
+      <label>
+        Fecha de escalación:
+        <input type="date" id="esc-date" value="${el.escalation.escalationDate || new Date().toISOString().split('T')[0]}">
+      </label>
+      
+      <label>
+        Motivo de escalación:
+        <textarea id="esc-reason" required>${el.escalation.escalationReason || ''}</textarea>
+      </label>
+      
+      <label>
+        Estado:
+        <select id="esc-status">
+          <option value="Pendiente">Pendiente</option>
+          <option value="En revisión">En revisión</option>
+          <option value="Resuelta">Resuelta</option>
+        </select>
+      </label>
+      
+      <div class="iatf-modal-buttons">
+        <button class="btn-cancel">Cancelar</button>
+        <button class="btn-confirm">Guardar Escalación</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+  
+  modal.querySelector('.btn-cancel').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  modal.querySelector('.btn-confirm').addEventListener('click', () => {
+    const to = document.getElementById('esc-to').value;
+    const date = document.getElementById('esc-date').value;
+    const reason = document.getElementById('esc-reason').value;
+    const status = document.getElementById('esc-status').value;
+    
+    if (!to || !reason) {
+      alert('Debe completar los campos obligatorios.');
+      return;
+    }
+    
+    el.escalation.requiresEscalation = true;
+    el.escalation.escalatedTo = to;
+    el.escalation.escalationDate = date;
+    el.escalation.escalationReason = reason;
+    el.escalation.escalationStatus = status;
+    
+    alert('Escalación registrada correctamente.');
+    document.body.removeChild(modal);
+    renderIATFSection();
+  });
+}
+
+// Update escalation alerts
+function updateEscalationAlerts() {
+  const alertsDiv = document.getElementById('escalation-alerts');
+  const listDiv = document.getElementById('escalation-alerts-list');
+  
+  const pendingEscalations = [];
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity >= 9 && (!el.escalation.escalatedTo || el.escalation.escalationStatus === 'Pendiente')) {
+          pendingEscalations.push({
+            process: `${item.name} / ${step.name}`,
+            element: el.type,
+            severity: el.riesgos.severidad
+          });
+        }
+      });
+    });
+  });
+  
+  if (pendingEscalations.length > 0) {
+    alertsDiv.style.display = 'block';
+    listDiv.innerHTML = '<ul>' + pendingEscalations.map(e => 
+      `<li><strong>${e.process} - ${e.element}:</strong> Severidad ${e.severity} - Requiere escalación inmediata</li>`
+    ).join('') + '</ul>';
+  } else {
+    alertsDiv.style.display = 'none';
   }
 }
