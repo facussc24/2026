@@ -71,6 +71,30 @@ if (!currentDocId) {
   window.location.href = 'home.html';
 }
 
+// Security: Sanitize HTML to prevent XSS attacks
+function escapeHtml(unsafe) {
+  if (typeof unsafe !== 'string') return unsafe;
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Performance: Debounce function to limit execution frequency
+function debounce(func, wait) {
+  let timeout;
+  return function() {
+    const context = this;
+    const args = arguments;
+    clearTimeout(timeout);
+    timeout = setTimeout(function() {
+      func.apply(context, args);
+    }, wait);
+  };
+}
+
 // Generador de ID simple para ítems/steps/elements/fallas
 let idCounter = 0;
 function genId() {
@@ -1586,7 +1610,11 @@ async function showHistory() {
       const log = doc.data();
       const li = document.createElement('li');
       const date = log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Fecha desconocida';
-      li.innerHTML = `<strong>${date}:</strong> ${log.change} (Solicitante: ${log.requester || 'N/A'}, Aprobador: ${log.approver || 'N/A'})`;
+      // Security: Sanitize user-provided data to prevent XSS
+      const safeChange = escapeHtml(log.change || '');
+      const safeRequester = escapeHtml(log.requester || 'N/A');
+      const safeApprover = escapeHtml(log.approver || 'N/A');
+      li.innerHTML = `<strong>${date}:</strong> ${safeChange} (Solicitante: ${safeRequester}, Aprobador: ${safeApprover})`;
       historyList.appendChild(li);
     });
   } catch (error) {
@@ -1967,13 +1995,15 @@ function renderWorkInstructions() {
             const ul = document.createElement('ul');
             step.elements.forEach(el => {
                 const li = document.createElement('li');
-                let instructionText = `<strong>Elemento: ${el.type}</strong><br>`;
+                // Security: Sanitize all user input to prevent XSS
+                const safeType = escapeHtml(el.type || '');
+                let instructionText = `<strong>Elemento: ${safeType}</strong><br>`;
 
                 // Añadir controles
                 const controls = [
                     ...el.fallas.map(f => f.controlesDetect),
                     el.acciones.accionDet
-                ].filter(Boolean).join('; ');
+                ].filter(Boolean).map(c => escapeHtml(c)).join('; ');
 
                 if (controls) {
                     instructionText += `Control a aplicar: ${controls}<br>`;
@@ -1981,7 +2011,8 @@ function renderWorkInstructions() {
 
                 // Añadir plan de reacción
                 if (el.control && el.control.reactionPlan) {
-                    instructionText += `Plan de reacción en caso de fallo: ${el.control.reactionPlan}`;
+                    const safePlan = escapeHtml(el.control.reactionPlan);
+                    instructionText += `Plan de reacción en caso de fallo: ${safePlan}`;
                 }
 
                 li.innerHTML = instructionText;
@@ -2396,9 +2427,15 @@ function updateActiveControlsWarning() {
   
   if (activeControls.length > 0) {
     warningDiv.style.display = 'block';
-    listDiv.innerHTML = '<ul>' + activeControls.map(c => 
-      `<li><strong>${c.process} - ${c.element}:</strong> ${c.control} (Activado: ${c.activationDate}, ${c.limit})</li>`
-    ).join('') + '</ul>';
+    // Security: Sanitize all user data to prevent XSS
+    listDiv.innerHTML = '<ul>' + activeControls.map(c => {
+      const safeProcess = escapeHtml(c.process || '');
+      const safeElement = escapeHtml(c.element || '');
+      const safeControl = escapeHtml(c.control || '');
+      const safeActivationDate = escapeHtml(c.activationDate || '');
+      const safeLimit = escapeHtml(c.limit || '');
+      return `<li><strong>${safeProcess} - ${safeElement}:</strong> ${safeControl} (Activado: ${safeActivationDate}, ${safeLimit})</li>`;
+    }).join('') + '</ul>';
   } else {
     warningDiv.style.display = 'none';
   }
@@ -2995,9 +3032,12 @@ const AutoSave = {
   intervalId: null,
   lastSaveTime: null,
   saveInterval: 30000, // 30 seconds
+  debouncedSave: null,
   
   init() {
     this.createIndicator();
+    // Performance: Debounce auto-save to prevent excessive writes
+    this.debouncedSave = debounce(() => this.save(), 2000);
     this.startAutoSave();
     this.loadFromLocalStorage();
   },
