@@ -95,6 +95,9 @@ function debounce(func, wait) {
   };
 }
 
+// BUG FIX #2: Mutex lock to prevent concurrent saves
+let isSaving = false;
+
 // Generador de ID simple para ítems/steps/elements/fallas
 let idCounter = 0;
 function genId() {
@@ -905,7 +908,16 @@ function renderStructure() {
   // Asegurarse de que el detalle se actualice con la estructura
   renderDetail();
   itemList.innerHTML = '';
+  
+  // BUG FIX #1: Handle empty state gracefully
+  if (!state.items || state.items.length === 0) {
+    itemList.innerHTML = '<li style="padding:20px; text-align:center; color:#666;">No hay ítems. Haga clic en "+ Ítem" para comenzar.</li>';
+    return;
+  }
+  
   state.items.forEach(item => {
+    // BUG FIX #1: Ensure steps array exists
+    if (!item.steps) item.steps = [];
     const liItem = document.createElement('li');
     // Crear contenedor de fila para el ítem (nombre y botones)
     const rowDiv = document.createElement('div');
