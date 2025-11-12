@@ -71,6 +71,33 @@ if (!currentDocId) {
   window.location.href = 'home.html';
 }
 
+// Security: Sanitize HTML to prevent XSS attacks
+function escapeHtml(unsafe) {
+  if (typeof unsafe !== 'string') return unsafe;
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// Performance: Debounce function to limit execution frequency
+function debounce(func, wait) {
+  let timeout;
+  return function() {
+    const context = this;
+    const args = arguments;
+    clearTimeout(timeout);
+    timeout = setTimeout(function() {
+      func.apply(context, args);
+    }, wait);
+  };
+}
+
+// BUG FIX #2: Mutex lock to prevent concurrent saves
+let isSaving = false;
+
 // Generador de ID simple para ítems/steps/elements/fallas
 let idCounter = 0;
 function genId() {
@@ -342,6 +369,43 @@ function validateData() {
   if (hasCritical && !state.general.safetyApproval) {
     issues.push('Debe marcar la casilla de "Aprobación de Seguridad" porque se han detectado características críticas.');
   }
+
+  // Validar controles temporales activos (IATF 8.5.6.1.1)
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        if (el.temporaryControl && el.temporaryControl.isActive) {
+          // Verificar que hay trazabilidad
+          if (!el.temporaryControl.traceabilityLots || el.temporaryControl.traceabilityLots.length === 0) {
+            issues.push(`Control temporal activo en ${el.type} (${step.name}) requiere registros de trazabilidad.`);
+          }
+          // Verificar verificaciones diarias
+          const daysSinceActivation = Math.floor((new Date() - new Date(el.temporaryControl.activationDate)) / (1000 * 60 * 60 * 24));
+          if (daysSinceActivation > 0 && (!el.temporaryControl.dailyVerifications || el.temporaryControl.dailyVerifications.length < daysSinceActivation)) {
+            issues.push(`Control temporal activo en ${el.type} (${step.name}) requiere verificación diaria. Días activo: ${daysSinceActivation}, Verificaciones: ${el.temporaryControl.dailyVerifications?.length || 0}`);
+          }
+        }
+        
+        // Validar Pass-Through Characteristics
+        if (el.supplyChain && el.supplyChain.isPassThrough) {
+          if (!el.supplyChain.supplierName || el.supplyChain.supplierName.trim() === '') {
+            issues.push(`Pass-Through Characteristic en ${el.type} (${step.name}) requiere especificar el proveedor.`);
+          }
+          if (!el.supplyChain.controlAtManufacture || el.supplyChain.controlAtManufacture.trim() === '') {
+            issues.push(`Pass-Through Characteristic en ${el.type} (${step.name}) requiere especificar controles en el punto de fabricación.`);
+          }
+        }
+        
+        // Validar escalación de riesgos de alta severidad
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity >= 9) {
+          if (!el.escalation || !el.escalation.escalatedTo || el.escalation.escalatedTo.trim() === '') {
+            issues.push(`Severidad crítica (${severity}) en ${el.type} (${step.name}) requiere escalación a la dirección.`);
+          }
+        }
+      });
+    });
+  });
 
   if (issues.length > 0) {
     // Mostrar errores en resumen
@@ -619,7 +683,38 @@ function addElement(itemId, stepId) {
       fechaTerminacion: '',
       observaciones: ''
     },
-    fallas: []
+    fallas: [],
+    // Nuevos campos para IATF 16949 compliance
+    temporaryControl: {
+      hasAlternative: false,
+      alternativeMethod: '',
+      isActive: false,
+      activationDate: '',
+      deactivationDate: '',
+      limitType: '', // 'date' o 'quantity'
+      limitValue: '',
+      riskAssessment: '',
+      approvalInternal: '',
+      approvalClient: '',
+      reason: '',
+      dailyVerifications: [],
+      traceabilityLots: []
+    },
+    supplyChain: {
+      isPassThrough: false,
+      supplierName: '',
+      supplierPFMEA: '',
+      supplierAuditDate: '',
+      supplierAuditStatus: '',
+      controlAtManufacture: ''
+    },
+    escalation: {
+      requiresEscalation: false,
+      escalationDate: '',
+      escalatedTo: '',
+      escalationReason: '',
+      escalationStatus: ''
+    }
   };
   step.elements.push(element);
   state.selected = { itemId: itemId, stepId: stepId, elementId: element.id };
@@ -813,7 +908,16 @@ function renderStructure() {
   // Asegurarse de que el detalle se actualice con la estructura
   renderDetail();
   itemList.innerHTML = '';
+  
+  // BUG FIX #1: Handle empty state gracefully
+  if (!state.items || state.items.length === 0) {
+    itemList.innerHTML = '<li style="padding:20px; text-align:center; color:#666;">No hay ítems. Haga clic en "+ Ítem" para comenzar.</li>';
+    return;
+  }
+  
   state.items.forEach(item => {
+    // BUG FIX #1: Ensure steps array exists
+    if (!item.steps) item.steps = [];
     const liItem = document.createElement('li');
     // Crear contenedor de fila para el ítem (nombre y botones)
     const rowDiv = document.createElement('div');
@@ -1024,7 +1128,45 @@ function updateControlPlan() {
             sampleQuantity: '',
             sampleFrequency: '',
             controlMethod: '',
-            reactionPlan: ''
+            reactionPlan: '',
+            msaStatus: ''
+          };
+        }
+        // Inicializar campos adicionales para IATF compliance si no existen
+        if (!el.temporaryControl) {
+          el.temporaryControl = {
+            hasAlternative: false,
+            alternativeMethod: '',
+            isActive: false,
+            activationDate: '',
+            deactivationDate: '',
+            limitType: '',
+            limitValue: '',
+            riskAssessment: '',
+            approvalInternal: '',
+            approvalClient: '',
+            reason: '',
+            dailyVerifications: [],
+            traceabilityLots: []
+          };
+        }
+        if (!el.supplyChain) {
+          el.supplyChain = {
+            isPassThrough: false,
+            supplierName: '',
+            supplierPFMEA: '',
+            supplierAuditDate: '',
+            supplierAuditStatus: '',
+            controlAtManufacture: ''
+          };
+        }
+        if (!el.escalation) {
+          el.escalation = {
+            requiresEscalation: false,
+            escalationDate: '',
+            escalatedTo: '',
+            escalationReason: '',
+            escalationStatus: ''
           };
         }
         const tr = document.createElement('tr');
@@ -1480,7 +1622,11 @@ async function showHistory() {
       const log = doc.data();
       const li = document.createElement('li');
       const date = log.timestamp ? new Date(log.timestamp).toLocaleString() : 'Fecha desconocida';
-      li.innerHTML = `<strong>${date}:</strong> ${log.change} (Solicitante: ${log.requester || 'N/A'}, Aprobador: ${log.approver || 'N/A'})`;
+      // Security: Sanitize user-provided data to prevent XSS
+      const safeChange = escapeHtml(log.change || '');
+      const safeRequester = escapeHtml(log.requester || 'N/A');
+      const safeApprover = escapeHtml(log.approver || 'N/A');
+      li.innerHTML = `<strong>${date}:</strong> ${safeChange} (Solicitante: ${safeRequester}, Aprobador: ${safeApprover})`;
       historyList.appendChild(li);
     });
   } catch (error) {
@@ -1507,17 +1653,25 @@ document.getElementById('tab-fmea').addEventListener('click', () => {
   document.getElementById('fmea-section').classList.add('active');
   document.getElementById('control-section').classList.remove('active');
   document.getElementById('standard-section').classList.remove('active');
+  document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
   document.getElementById('tab-fmea').classList.add('active');
   document.getElementById('tab-control').classList.remove('active');
   document.getElementById('tab-standard').classList.remove('active');
+  document.getElementById('tab-instructions').classList.remove('active');
+  document.getElementById('tab-iatf').classList.remove('active');
 });
 document.getElementById('tab-control').addEventListener('click', () => {
   document.getElementById('control-section').classList.add('active');
   document.getElementById('fmea-section').classList.remove('active');
   document.getElementById('standard-section').classList.remove('active');
+  document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
   document.getElementById('tab-control').classList.add('active');
   document.getElementById('tab-fmea').classList.remove('active');
   document.getElementById('tab-standard').classList.remove('active');
+  document.getElementById('tab-instructions').classList.remove('active');
+  document.getElementById('tab-iatf').classList.remove('active');
   // Recalcular el plan de control para reflejar cualquier cambio en las clasificaciones.
   updateControlPlan();
 });
@@ -1807,10 +1961,12 @@ document.getElementById('tab-standard').addEventListener('click', () => {
   document.getElementById('fmea-section').classList.remove('active');
   document.getElementById('control-section').classList.remove('active');
   document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
   document.getElementById('tab-standard').classList.add('active');
   document.getElementById('tab-fmea').classList.remove('active');
   document.getElementById('tab-control').classList.remove('active');
   document.getElementById('tab-instructions').classList.remove('active');
+  document.getElementById('tab-iatf').classList.remove('active');
   // Generar la tabla estándar al activar la pestaña
   renderStandardView();
 });
@@ -1820,10 +1976,12 @@ document.getElementById('tab-instructions').addEventListener('click', () => {
     document.getElementById('fmea-section').classList.remove('active');
     document.getElementById('control-section').classList.remove('active');
     document.getElementById('standard-section').classList.remove('active');
+    document.getElementById('iatf-section').classList.remove('active');
     document.getElementById('tab-instructions').classList.add('active');
     document.getElementById('tab-fmea').classList.remove('active');
     document.getElementById('tab-control').classList.remove('active');
     document.getElementById('tab-standard').classList.remove('active');
+    document.getElementById('tab-iatf').classList.remove('active');
     renderWorkInstructions();
 });
 
@@ -1849,13 +2007,15 @@ function renderWorkInstructions() {
             const ul = document.createElement('ul');
             step.elements.forEach(el => {
                 const li = document.createElement('li');
-                let instructionText = `<strong>Elemento: ${el.type}</strong><br>`;
+                // Security: Sanitize all user input to prevent XSS
+                const safeType = escapeHtml(el.type || '');
+                let instructionText = `<strong>Elemento: ${safeType}</strong><br>`;
 
                 // Añadir controles
                 const controls = [
                     ...el.fallas.map(f => f.controlesDetect),
                     el.acciones.accionDet
-                ].filter(Boolean).join('; ');
+                ].filter(Boolean).map(c => escapeHtml(c)).join('; ');
 
                 if (controls) {
                     instructionText += `Control a aplicar: ${controls}<br>`;
@@ -1863,7 +2023,8 @@ function renderWorkInstructions() {
 
                 // Añadir plan de reacción
                 if (el.control && el.control.reactionPlan) {
-                    instructionText += `Plan de reacción en caso de fallo: ${el.control.reactionPlan}`;
+                    const safePlan = escapeHtml(el.control.reactionPlan);
+                    instructionText += `Plan de reacción en caso de fallo: ${safePlan}`;
                 }
 
                 li.innerHTML = instructionText;
@@ -1936,4 +2097,1758 @@ function toggleGuidelines() {
     guideBox.style.display = 'none';
     toggleBtn.textContent = 'Mostrar guías';
   }
+}
+
+// ============================================
+// GESTIÓN IATF 16949
+// ============================================
+
+// Tab handler for IATF section
+document.getElementById('tab-iatf').addEventListener('click', () => {
+  document.getElementById('iatf-section').classList.add('active');
+  document.getElementById('fmea-section').classList.remove('active');
+  document.getElementById('control-section').classList.remove('active');
+  document.getElementById('standard-section').classList.remove('active');
+  document.getElementById('instructions-section').classList.remove('active');
+  document.getElementById('tab-iatf').classList.add('active');
+  document.getElementById('tab-fmea').classList.remove('active');
+  document.getElementById('tab-control').classList.remove('active');
+  document.getElementById('tab-standard').classList.remove('active');
+  document.getElementById('tab-instructions').classList.remove('active');
+  renderIATFSection();
+});
+
+// Update existing tab handlers to handle IATF tab
+const originalFmeaHandler = document.getElementById('tab-fmea');
+originalFmeaHandler.addEventListener('click', () => {
+  document.getElementById('tab-iatf').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
+});
+
+const originalControlHandler = document.getElementById('tab-control');
+originalControlHandler.addEventListener('click', () => {
+  document.getElementById('tab-iatf').classList.remove('active');
+  document.getElementById('iatf-section').classList.remove('active');
+});
+
+// Render IATF Section
+function renderIATFSection() {
+  renderTemporaryControls();
+  renderSupplyChain();
+  renderEscalation();
+  updateActiveControlsWarning();
+  updateEscalationAlerts();
+}
+
+// Render Temporary Controls Table
+function renderTemporaryControls() {
+  const tbody = document.getElementById('temporary-controls-body');
+  tbody.innerHTML = '';
+  
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        const tr = document.createElement('tr');
+        
+        // Proceso/Paso
+        const tdProcess = document.createElement('td');
+        tdProcess.textContent = `${item.name} / ${step.name}`;
+        tr.appendChild(tdProcess);
+        
+        // Elemento
+        const tdElement = document.createElement('td');
+        tdElement.textContent = el.type;
+        tr.appendChild(tdElement);
+        
+        // Control Principal
+        const tdMainControl = document.createElement('td');
+        tdMainControl.textContent = el.control?.controlMethod || 'No definido';
+        tr.appendChild(tdMainControl);
+        
+        // Control Alternativo
+        const tdAltControl = document.createElement('td');
+        const altInput = document.createElement('input');
+        altInput.type = 'text';
+        altInput.value = el.temporaryControl.alternativeMethod || '';
+        altInput.placeholder = 'Método alternativo aprobado';
+        altInput.addEventListener('input', () => {
+          el.temporaryControl.alternativeMethod = altInput.value;
+          el.temporaryControl.hasAlternative = altInput.value.trim() !== '';
+        });
+        tdAltControl.appendChild(altInput);
+        tr.appendChild(tdAltControl);
+        
+        // Estado
+        const tdStatus = document.createElement('td');
+        if (el.temporaryControl.isActive) {
+          const activeSpan = document.createElement('span');
+          activeSpan.className = 'status-active';
+          activeSpan.textContent = 'ACTIVO';
+          tdStatus.appendChild(activeSpan);
+        } else {
+          const inactiveSpan = document.createElement('span');
+          inactiveSpan.className = 'status-inactive';
+          inactiveSpan.textContent = 'Inactivo';
+          tdStatus.appendChild(inactiveSpan);
+        }
+        tr.appendChild(tdStatus);
+        
+        // Acciones
+        const tdActions = document.createElement('td');
+        
+        if (!el.temporaryControl.isActive && el.temporaryControl.hasAlternative) {
+          const btnActivate = document.createElement('button');
+          btnActivate.className = 'btn-activate';
+          btnActivate.textContent = 'Activar';
+          btnActivate.addEventListener('click', () => {
+            showActivateTemporaryControlModal(item, step, el);
+          });
+          tdActions.appendChild(btnActivate);
+        }
+        
+        if (el.temporaryControl.isActive) {
+          const btnDeactivate = document.createElement('button');
+          btnDeactivate.className = 'btn-deactivate';
+          btnDeactivate.textContent = 'Desactivar';
+          btnDeactivate.addEventListener('click', () => {
+            deactivateTemporaryControl(item, step, el);
+          });
+          tdActions.appendChild(btnDeactivate);
+          
+          const btnVerify = document.createElement('button');
+          btnVerify.className = 'btn-configure';
+          btnVerify.textContent = 'Verificar';
+          btnVerify.addEventListener('click', () => {
+            showDailyVerificationModal(item, step, el);
+          });
+          tdActions.appendChild(btnVerify);
+        }
+        
+        tr.appendChild(tdActions);
+        tbody.appendChild(tr);
+      });
+    });
+  });
+}
+
+// Show modal to activate temporary control
+function showActivateTemporaryControlModal(item, step, el) {
+  // Create modal
+  const modal = document.createElement('div');
+  modal.className = 'iatf-modal';
+  modal.innerHTML = `
+    <div class="iatf-modal-content">
+      <h3>⚠️ Activar Control Temporal</h3>
+      <p><strong>Proceso:</strong> ${item.name} / ${step.name}</p>
+      <p><strong>Elemento:</strong> ${el.type}</p>
+      <p><strong>Control Alternativo:</strong> ${el.temporaryControl.alternativeMethod}</p>
+      
+      <label>
+        Motivo de activación (obligatorio):
+        <textarea id="temp-reason" required></textarea>
+      </label>
+      
+      <label>
+        Evaluación de riesgos (tipo FMEA) (obligatorio):
+        <textarea id="temp-risk" required placeholder="Describir el efecto del método sustitutivo..."></textarea>
+      </label>
+      
+      <label>
+        Tipo de límite:
+        <select id="temp-limit-type">
+          <option value="date">Fecha límite</option>
+          <option value="quantity">Cantidad de producción</option>
+        </select>
+      </label>
+      
+      <label>
+        Valor del límite:
+        <input type="text" id="temp-limit-value" placeholder="Fecha (YYYY-MM-DD) o cantidad">
+      </label>
+      
+      <label>
+        Aprobación interna (nombre):
+        <input type="text" id="temp-approval-internal" required>
+      </label>
+      
+      <label>
+        Aprobación del cliente (si requerido):
+        <input type="text" id="temp-approval-client">
+      </label>
+      
+      <div class="iatf-modal-buttons">
+        <button class="btn-cancel">Cancelar</button>
+        <button class="btn-confirm">Activar Control Temporal</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+  
+  // Cancel button
+  modal.querySelector('.btn-cancel').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  // Confirm button
+  modal.querySelector('.btn-confirm').addEventListener('click', () => {
+    const reason = document.getElementById('temp-reason').value;
+    const risk = document.getElementById('temp-risk').value;
+    const limitType = document.getElementById('temp-limit-type').value;
+    const limitValue = document.getElementById('temp-limit-value').value;
+    const approvalInternal = document.getElementById('temp-approval-internal').value;
+    const approvalClient = document.getElementById('temp-approval-client').value;
+    
+    if (!reason || !risk || !approvalInternal) {
+      alert('Debe completar los campos obligatorios: Motivo, Evaluación de riesgos y Aprobación interna.');
+      return;
+    }
+    
+    // Activate temporary control
+    el.temporaryControl.isActive = true;
+    el.temporaryControl.activationDate = new Date().toISOString().split('T')[0];
+    el.temporaryControl.reason = reason;
+    el.temporaryControl.riskAssessment = risk;
+    el.temporaryControl.limitType = limitType;
+    el.temporaryControl.limitValue = limitValue;
+    el.temporaryControl.approvalInternal = approvalInternal;
+    el.temporaryControl.approvalClient = approvalClient;
+    
+    alert(`⚠️ CONTROL TEMPORAL ACTIVADO\n\nControl: ${el.temporaryControl.alternativeMethod}\nSe requiere trazabilidad del 100% del producto.\nSe debe revisar diariamente la eficacia del control.`);
+    
+    document.body.removeChild(modal);
+    renderIATFSection();
+  });
+}
+
+// Deactivate temporary control
+function deactivateTemporaryControl(item, step, el) {
+  if (!confirm(`¿Está seguro de desactivar el control temporal para ${el.type}?`)) {
+    return;
+  }
+  
+  el.temporaryControl.isActive = false;
+  el.temporaryControl.deactivationDate = new Date().toISOString().split('T')[0];
+  
+  alert('Control temporal desactivado. El control principal ha sido restaurado.');
+  renderIATFSection();
+}
+
+// Show daily verification modal
+function showDailyVerificationModal(item, step, el) {
+  const modal = document.createElement('div');
+  modal.className = 'iatf-modal';
+  modal.innerHTML = `
+    <div class="iatf-modal-content">
+      <h3>Verificación Diaria del Control Temporal</h3>
+      <p><strong>Control:</strong> ${el.temporaryControl.alternativeMethod}</p>
+      
+      <label>
+        Fecha de verificación:
+        <input type="date" id="verify-date" value="${new Date().toISOString().split('T')[0]}">
+      </label>
+      
+      <label>
+        Verificado por:
+        <input type="text" id="verify-by" required>
+      </label>
+      
+      <label>
+        Resultado de verificación:
+        <select id="verify-result">
+          <option value="OK">Conforme</option>
+          <option value="NOK">No conforme</option>
+        </select>
+      </label>
+      
+      <label>
+        Lote/Serie rastreado:
+        <input type="text" id="verify-lot">
+      </label>
+      
+      <label>
+        Observaciones:
+        <textarea id="verify-obs"></textarea>
+      </label>
+      
+      <div class="iatf-modal-buttons">
+        <button class="btn-cancel">Cancelar</button>
+        <button class="btn-confirm">Registrar Verificación</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+  
+  modal.querySelector('.btn-cancel').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  modal.querySelector('.btn-confirm').addEventListener('click', () => {
+    const date = document.getElementById('verify-date').value;
+    const by = document.getElementById('verify-by').value;
+    const result = document.getElementById('verify-result').value;
+    const lot = document.getElementById('verify-lot').value;
+    const obs = document.getElementById('verify-obs').value;
+    
+    if (!by) {
+      alert('Debe indicar quién realizó la verificación.');
+      return;
+    }
+    
+    el.temporaryControl.dailyVerifications.push({
+      date,
+      by,
+      result,
+      lot,
+      observations: obs
+    });
+    
+    if (lot) {
+      el.temporaryControl.traceabilityLots.push(lot);
+    }
+    
+    alert('Verificación registrada correctamente.');
+    document.body.removeChild(modal);
+  });
+}
+
+// Update active controls warning
+function updateActiveControlsWarning() {
+  const warningDiv = document.getElementById('temporary-controls-active-warning');
+  const listDiv = document.getElementById('active-controls-list');
+  
+  const activeControls = [];
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        if (el.temporaryControl.isActive) {
+          activeControls.push({
+            process: `${item.name} / ${step.name}`,
+            element: el.type,
+            control: el.temporaryControl.alternativeMethod,
+            activationDate: el.temporaryControl.activationDate,
+            limit: `${el.temporaryControl.limitType === 'date' ? 'Fecha' : 'Cantidad'}: ${el.temporaryControl.limitValue}`
+          });
+        }
+      });
+    });
+  });
+  
+  if (activeControls.length > 0) {
+    warningDiv.style.display = 'block';
+    // Security: Sanitize all user data to prevent XSS
+    listDiv.innerHTML = '<ul>' + activeControls.map(c => {
+      const safeProcess = escapeHtml(c.process || '');
+      const safeElement = escapeHtml(c.element || '');
+      const safeControl = escapeHtml(c.control || '');
+      const safeActivationDate = escapeHtml(c.activationDate || '');
+      const safeLimit = escapeHtml(c.limit || '');
+      return `<li><strong>${safeProcess} - ${safeElement}:</strong> ${safeControl} (Activado: ${safeActivationDate}, ${safeLimit})</li>`;
+    }).join('') + '</ul>';
+  } else {
+    warningDiv.style.display = 'none';
+  }
+}
+
+// Render Supply Chain Management Table
+function renderSupplyChain() {
+  const tbody = document.getElementById('supply-chain-body');
+  tbody.innerHTML = '';
+  
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        const tr = document.createElement('tr');
+        
+        // Proceso/Paso
+        const tdProcess = document.createElement('td');
+        tdProcess.textContent = `${item.name} / ${step.name}`;
+        tr.appendChild(tdProcess);
+        
+        // Elemento
+        const tdElement = document.createElement('td');
+        tdElement.textContent = el.type;
+        tr.appendChild(tdElement);
+        
+        // Es PTC
+        const tdPTC = document.createElement('td');
+        const ptcCheck = document.createElement('input');
+        ptcCheck.type = 'checkbox';
+        ptcCheck.checked = el.supplyChain.isPassThrough;
+        ptcCheck.addEventListener('change', () => {
+          el.supplyChain.isPassThrough = ptcCheck.checked;
+        });
+        tdPTC.appendChild(ptcCheck);
+        tr.appendChild(tdPTC);
+        
+        // Proveedor
+        const tdSupplier = document.createElement('td');
+        const supplierInput = document.createElement('input');
+        supplierInput.type = 'text';
+        supplierInput.value = el.supplyChain.supplierName || '';
+        supplierInput.addEventListener('input', () => {
+          el.supplyChain.supplierName = supplierInput.value;
+        });
+        tdSupplier.appendChild(supplierInput);
+        tr.appendChild(tdSupplier);
+        
+        // PFMEA Proveedor
+        const tdPFMEA = document.createElement('td');
+        const pfmeaInput = document.createElement('input');
+        pfmeaInput.type = 'text';
+        pfmeaInput.value = el.supplyChain.supplierPFMEA || '';
+        pfmeaInput.placeholder = 'Ref. documento';
+        pfmeaInput.addEventListener('input', () => {
+          el.supplyChain.supplierPFMEA = pfmeaInput.value;
+        });
+        tdPFMEA.appendChild(pfmeaInput);
+        tr.appendChild(tdPFMEA);
+        
+        // Última Auditoría
+        const tdAudit = document.createElement('td');
+        const auditInput = document.createElement('input');
+        auditInput.type = 'date';
+        auditInput.value = el.supplyChain.supplierAuditDate || '';
+        auditInput.addEventListener('input', () => {
+          el.supplyChain.supplierAuditDate = auditInput.value;
+        });
+        tdAudit.appendChild(auditInput);
+        tr.appendChild(tdAudit);
+        
+        // Estado
+        const tdStatus = document.createElement('td');
+        const statusSelect = document.createElement('select');
+        statusSelect.innerHTML = `
+          <option value="">Seleccionar...</option>
+          <option value="Conforme">Conforme</option>
+          <option value="No conforme">No conforme</option>
+          <option value="Pendiente">Pendiente</option>
+        `;
+        statusSelect.value = el.supplyChain.supplierAuditStatus || '';
+        statusSelect.addEventListener('change', () => {
+          el.supplyChain.supplierAuditStatus = statusSelect.value;
+        });
+        tdStatus.appendChild(statusSelect);
+        tr.appendChild(tdStatus);
+        
+        // Control en Fabricación
+        const tdControl = document.createElement('td');
+        const controlInput = document.createElement('input');
+        controlInput.type = 'text';
+        controlInput.value = el.supplyChain.controlAtManufacture || '';
+        controlInput.placeholder = 'Describir controles...';
+        controlInput.addEventListener('input', () => {
+          el.supplyChain.controlAtManufacture = controlInput.value;
+        });
+        tdControl.appendChild(controlInput);
+        tr.appendChild(tdControl);
+        
+        tbody.appendChild(tr);
+      });
+    });
+  });
+}
+
+// Render Escalation Table
+function renderEscalation() {
+  const tbody = document.getElementById('escalation-body');
+  tbody.innerHTML = '';
+  
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        // Solo mostrar elementos con severidad alta o con escalación existente
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity < 9 && !el.escalation.requiresEscalation) {
+          return; // Skip this element
+        }
+        
+        const tr = document.createElement('tr');
+        
+        // Proceso/Paso
+        const tdProcess = document.createElement('td');
+        tdProcess.textContent = `${item.name} / ${step.name}`;
+        tr.appendChild(tdProcess);
+        
+        // Elemento
+        const tdElement = document.createElement('td');
+        tdElement.textContent = el.type;
+        tr.appendChild(tdElement);
+        
+        // Severidad
+        const tdSeverity = document.createElement('td');
+        tdSeverity.textContent = el.riesgos.severidad || 'N/A';
+        if (severity >= 9) {
+          tdSeverity.style.backgroundColor = '#ffcccc';
+          tdSeverity.style.fontWeight = 'bold';
+        }
+        tr.appendChild(tdSeverity);
+        
+        // Modo de Fallo
+        const tdFailure = document.createElement('td');
+        const failures = el.fallas.map(f => f.modo).filter(Boolean).join(', ');
+        tdFailure.textContent = failures || 'No definido';
+        tr.appendChild(tdFailure);
+        
+        // Requiere Escalación
+        const tdRequires = document.createElement('td');
+        const requiresCheck = document.createElement('input');
+        requiresCheck.type = 'checkbox';
+        requiresCheck.checked = el.escalation.requiresEscalation || severity >= 9;
+        requiresCheck.disabled = severity >= 9; // Auto-required for high severity
+        requiresCheck.addEventListener('change', () => {
+          el.escalation.requiresEscalation = requiresCheck.checked;
+          if (!requiresCheck.checked) {
+            el.escalation.escalationDate = '';
+            el.escalation.escalatedTo = '';
+            el.escalation.escalationReason = '';
+            el.escalation.escalationStatus = '';
+          }
+        });
+        tdRequires.appendChild(requiresCheck);
+        tr.appendChild(tdRequires);
+        
+        // Escalado A
+        const tdEscalatedTo = document.createElement('td');
+        const escalatedInput = document.createElement('input');
+        escalatedInput.type = 'text';
+        escalatedInput.value = el.escalation.escalatedTo || '';
+        escalatedInput.placeholder = 'Nombre/Cargo';
+        escalatedInput.addEventListener('input', () => {
+          el.escalation.escalatedTo = escalatedInput.value;
+        });
+        tdEscalatedTo.appendChild(escalatedInput);
+        tr.appendChild(tdEscalatedTo);
+        
+        // Fecha
+        const tdDate = document.createElement('td');
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.value = el.escalation.escalationDate || '';
+        dateInput.addEventListener('input', () => {
+          el.escalation.escalationDate = dateInput.value;
+        });
+        tdDate.appendChild(dateInput);
+        tr.appendChild(tdDate);
+        
+        // Estado
+        const tdStatus = document.createElement('td');
+        const statusSelect = document.createElement('select');
+        statusSelect.innerHTML = `
+          <option value="">Seleccionar...</option>
+          <option value="Pendiente">Pendiente</option>
+          <option value="En revisión">En revisión</option>
+          <option value="Resuelta">Resuelta</option>
+        `;
+        statusSelect.value = el.escalation.escalationStatus || '';
+        statusSelect.addEventListener('change', () => {
+          el.escalation.escalationStatus = statusSelect.value;
+        });
+        tdStatus.appendChild(statusSelect);
+        tr.appendChild(tdStatus);
+        
+        // Acciones
+        const tdActions = document.createElement('td');
+        const btnEscalate = document.createElement('button');
+        btnEscalate.className = 'btn-escalate';
+        btnEscalate.textContent = 'Registrar Escalación';
+        btnEscalate.addEventListener('click', () => {
+          showEscalationModal(item, step, el);
+        });
+        tdActions.appendChild(btnEscalate);
+        tr.appendChild(tdActions);
+        
+        tbody.appendChild(tr);
+      });
+    });
+  });
+}
+
+// Show escalation modal
+function showEscalationModal(item, step, el) {
+  const modal = document.createElement('div');
+  modal.className = 'iatf-modal';
+  modal.innerHTML = `
+    <div class="iatf-modal-content">
+      <h3>🚨 Registrar Escalación de Riesgo</h3>
+      <p><strong>Proceso:</strong> ${item.name} / ${step.name}</p>
+      <p><strong>Elemento:</strong> ${el.type}</p>
+      <p><strong>Severidad:</strong> ${el.riesgos.severidad}</p>
+      
+      <label>
+        Escalado a (nombre/cargo):
+        <input type="text" id="esc-to" value="${el.escalation.escalatedTo || ''}" required>
+      </label>
+      
+      <label>
+        Fecha de escalación:
+        <input type="date" id="esc-date" value="${el.escalation.escalationDate || new Date().toISOString().split('T')[0]}">
+      </label>
+      
+      <label>
+        Motivo de escalación:
+        <textarea id="esc-reason" required>${el.escalation.escalationReason || ''}</textarea>
+      </label>
+      
+      <label>
+        Estado:
+        <select id="esc-status">
+          <option value="Pendiente">Pendiente</option>
+          <option value="En revisión">En revisión</option>
+          <option value="Resuelta">Resuelta</option>
+        </select>
+      </label>
+      
+      <div class="iatf-modal-buttons">
+        <button class="btn-cancel">Cancelar</button>
+        <button class="btn-confirm">Guardar Escalación</button>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  modal.style.display = 'block';
+  
+  modal.querySelector('.btn-cancel').addEventListener('click', () => {
+    document.body.removeChild(modal);
+  });
+  
+  modal.querySelector('.btn-confirm').addEventListener('click', () => {
+    const to = document.getElementById('esc-to').value;
+    const date = document.getElementById('esc-date').value;
+    const reason = document.getElementById('esc-reason').value;
+    const status = document.getElementById('esc-status').value;
+    
+    if (!to || !reason) {
+      alert('Debe completar los campos obligatorios.');
+      return;
+    }
+    
+    el.escalation.requiresEscalation = true;
+    el.escalation.escalatedTo = to;
+    el.escalation.escalationDate = date;
+    el.escalation.escalationReason = reason;
+    el.escalation.escalationStatus = status;
+    
+    alert('Escalación registrada correctamente.');
+    document.body.removeChild(modal);
+    renderIATFSection();
+  });
+}
+
+// Update escalation alerts
+function updateEscalationAlerts() {
+  const alertsDiv = document.getElementById('escalation-alerts');
+  const listDiv = document.getElementById('escalation-alerts-list');
+  
+  const pendingEscalations = [];
+  state.items.forEach(item => {
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity >= 9 && (!el.escalation.escalatedTo || el.escalation.escalationStatus === 'Pendiente')) {
+          pendingEscalations.push({
+            process: `${item.name} / ${step.name}`,
+            element: el.type,
+            severity: el.riesgos.severidad
+          });
+        }
+      });
+    });
+  });
+  
+  if (pendingEscalations.length > 0) {
+    alertsDiv.style.display = 'block';
+    listDiv.innerHTML = '<ul>' + pendingEscalations.map(e => 
+      `<li><strong>${e.process} - ${e.element}:</strong> Severidad ${e.severity} - Requiere escalación inmediata</li>`
+    ).join('') + '</ul>';
+  } else {
+    alertsDiv.style.display = 'none';
+  }
+}
+
+// Collapsible sections functionality
+function toggleSection(contentId) {
+  const content = document.getElementById(contentId);
+  const header = content.previousElementSibling;
+  
+  if (content.classList.contains('collapsed')) {
+    content.classList.remove('collapsed');
+    header.classList.remove('collapsed');
+  } else {
+    content.classList.add('collapsed');
+    header.classList.add('collapsed');
+  }
+}
+
+// Collapse All Sections functionality
+function collapseAllSections() {
+  const collapsibleSections = document.querySelectorAll('.collapsible-content');
+  collapsibleSections.forEach(content => {
+    const header = content.previousElementSibling;
+    content.classList.add('collapsed');
+    if (header) {
+      header.classList.add('collapsed');
+    }
+  });
+  
+  // Show notification
+  showToast('Todas las secciones colapsadas', 'info');
+}
+
+// Expand All Sections functionality
+function expandAllSections() {
+  const collapsibleSections = document.querySelectorAll('.collapsible-content');
+  collapsibleSections.forEach(content => {
+    const header = content.previousElementSibling;
+    content.classList.remove('collapsed');
+    if (header) {
+      header.classList.remove('collapsed');
+    }
+  });
+  
+  // Show notification
+  showToast('Todas las secciones expandidas', 'info');
+}
+
+// Compact Mode Toggle
+let isCompactMode = localStorage.getItem('compactMode') === 'true';
+
+function toggleCompactMode() {
+  isCompactMode = !isCompactMode;
+  localStorage.setItem('compactMode', isCompactMode);
+  
+  const body = document.body;
+  if (isCompactMode) {
+    body.classList.add('compact-mode');
+    showToast('Modo compacto activado', 'success');
+  } else {
+    body.classList.remove('compact-mode');
+    showToast('Modo completo activado', 'success');
+  }
+}
+
+// Apply compact mode on load
+function applyCompactMode() {
+  if (isCompactMode) {
+    document.body.classList.add('compact-mode');
+  }
+}
+
+// Full-screen mode for tables
+function toggleFullScreenTable(tableId) {
+  const tableContainer = document.getElementById(tableId)?.closest('.table-container, section');
+  if (!tableContainer) return;
+  
+  if (tableContainer.classList.contains('fullscreen')) {
+    tableContainer.classList.remove('fullscreen');
+    document.body.style.overflow = '';
+  } else {
+    tableContainer.classList.add('fullscreen');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+// Close fullscreen with ESC key
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const fullscreenElements = document.querySelectorAll('.fullscreen');
+    fullscreenElements.forEach(el => {
+      el.classList.remove('fullscreen');
+      document.body.style.overflow = '';
+    });
+  }
+});
+
+// Toast notification system (if not already defined)
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    padding: 12px 20px;
+    background: ${type === 'success' ? '#4CAF50' : type === 'error' ? '#f44336' : '#2196F3'};
+    color: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10000;
+    animation: slideIn 0.3s ease-out;
+  `;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// Scroll to top functionality
+function scrollToTop() {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+}
+
+// Initialize collapsible sections on page load
+document.addEventListener('DOMContentLoaded', () => {
+  // Apply compact mode if saved
+  applyCompactMode();
+  
+  // Collapse "Datos generales" by default after 2 seconds to give user time to see it
+  setTimeout(() => {
+    const generalInfoContent = document.getElementById('general-info-content');
+    const generalInfoHeader = generalInfoContent?.previousElementSibling;
+    if (generalInfoContent && !generalInfoContent.querySelector('input:focus')) {
+      generalInfoContent.classList.add('collapsed');
+      if (generalInfoHeader) {
+        generalInfoHeader.classList.add('collapsed');
+      }
+    }
+  }, 2000);
+  
+  // Add collapse/expand all buttons to header if not exist
+  addPageControlButtons();
+});
+
+// Add page control buttons to header
+function addPageControlButtons() {
+  const header = document.querySelector('header');
+  if (!header || document.getElementById('page-controls')) return;
+  
+  const nav = header.querySelector('nav');
+  if (!nav) return;
+  
+  const controlsDiv = document.createElement('div');
+  controlsDiv.id = 'page-controls';
+  controlsDiv.className = 'page-controls';
+  controlsDiv.innerHTML = `
+    <button onclick="collapseAllSections()" class="btn-control" title="Colapsar todas las secciones">
+      <span>▲▲</span>
+    </button>
+    <button onclick="expandAllSections()" class="btn-control" title="Expandir todas las secciones">
+      <span>▼▼</span>
+    </button>
+    <button onclick="toggleCompactMode()" class="btn-control" title="Alternar modo compacto">
+      <span>⚙️</span>
+    </button>
+  `;
+  
+  nav.appendChild(controlsDiv);
+}
+
+// Update progress summary
+function updateProgressSummary() {
+  let itemCount = 0;
+  let elementCount = 0;
+  let criticalCount = 0;
+  let completedElements = 0;
+  
+  state.items.forEach(item => {
+    itemCount++;
+    item.steps.forEach(step => {
+      step.elements.forEach(el => {
+        elementCount++;
+        
+        // Count critical risks
+        const severity = parseInt(el.riesgos.severidad) || 0;
+        if (severity >= 9) {
+          criticalCount++;
+        }
+        
+        // Check if element is completed (has basic data filled)
+        if (el.funciones.funcionElemento && el.riesgos.severidad && el.riesgos.ocurrencia && el.riesgos.deteccion) {
+          completedElements++;
+        }
+      });
+    });
+  });
+  
+  const completion = elementCount > 0 ? Math.round((completedElements / elementCount) * 100) : 0;
+  
+  // Update progress displays
+  const itemsEl = document.getElementById('progress-items');
+  const elementsEl = document.getElementById('progress-elements');
+  const criticalEl = document.getElementById('progress-critical');
+  const completionEl = document.getElementById('progress-completion');
+  
+  if (itemsEl) itemsEl.textContent = itemCount;
+  if (elementsEl) elementsEl.textContent = elementCount;
+  if (criticalEl) criticalEl.textContent = criticalCount;
+  if (completionEl) completionEl.textContent = completion + '%';
+}
+
+// Call updateProgressSummary whenever the state changes
+const originalRenderStructure = renderStructure;
+renderStructure = function() {
+  originalRenderStructure();
+  updateProgressSummary();
+};
+
+const originalSaveElementData = saveElementData;
+saveElementData = function() {
+  originalSaveElementData();
+  updateProgressSummary();
+};
+
+// Add keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Ctrl+S or Cmd+S to save
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    const saveBtn = document.getElementById('save-btn');
+    if (saveBtn) {
+      saveBtn.click();
+    }
+  }
+  
+  // Escape to close modals
+  if (e.key === 'Escape') {
+    const modals = document.querySelectorAll('.modal, .iatf-modal');
+    modals.forEach(modal => {
+      if (modal.style.display !== 'none') {
+        modal.style.display = 'none';
+      }
+    });
+  }
+});
+
+// Add tooltips to action buttons
+document.addEventListener('DOMContentLoaded', () => {
+  // Add tooltip styles if not already present
+  if (!document.getElementById('tooltip-styles')) {
+    const tooltipStyles = document.createElement('style');
+    tooltipStyles.id = 'tooltip-styles';
+    tooltipStyles.textContent = `
+      [data-tooltip] {
+        position: relative;
+      }
+      
+      [data-tooltip]::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.5rem;
+        background: rgba(0,0,0,0.9);
+        color: white;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+        margin-bottom: 5px;
+        z-index: 1000;
+      }
+      
+      [data-tooltip]:hover::after {
+        opacity: 1;
+      }
+    `;
+    document.head.appendChild(tooltipStyles);
+  }
+  
+  // Ensure progress summary is initialized
+  setTimeout(() => {
+    if (typeof updateProgressSummary === 'function') {
+      updateProgressSummary();
+    }
+  }, 500);
+});
+
+// Improve tree item hover effects
+const improveTreeItemHover = () => {
+  const style = document.createElement('style');
+  style.textContent = `
+    .tree-row:hover {
+      background-color: rgba(52, 152, 219, 0.1);
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+    }
+    
+    .tree-row.active {
+      background-color: var(--secondary-color);
+      color: white;
+      border-radius: 4px;
+    }
+    
+    .subtabs .detail-tab {
+      position: relative;
+    }
+    
+    .subtabs .detail-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--secondary-color);
+    }
+  `;
+  document.head.appendChild(style);
+};
+
+// Initialize improvements
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', improveTreeItemHover);
+} else {
+  improveTreeItemHover();
+}
+
+// ==================== FORM VALIDATION ====================
+const FormValidator = {
+  requiredFields: [
+    'orgName', 'tema', 'numeroAmfe', 'planta', 'responsable', 'cliente'
+  ],
+  
+  validateField(fieldId, value) {
+    const field = document.getElementById(fieldId);
+    if (!field) return true;
+    
+    const isRequired = this.requiredFields.includes(fieldId);
+    const isEmpty = !value || value.trim() === '';
+    
+    if (isRequired && isEmpty) {
+      this.markFieldInvalid(field, 'Este campo es obligatorio');
+      return false;
+    } else {
+      this.markFieldValid(field);
+      return true;
+    }
+  },
+  
+  markFieldInvalid(field, message) {
+    field.classList.add('field-error');
+    field.classList.remove('field-valid');
+    
+    // Remove existing error message
+    const existingError = field.parentElement.querySelector('.error-message');
+    if (existingError) existingError.remove();
+    
+    // Add error message
+    const errorMsg = document.createElement('div');
+    errorMsg.className = 'error-message';
+    errorMsg.textContent = message;
+    field.parentElement.appendChild(errorMsg);
+  },
+  
+  markFieldValid(field) {
+    field.classList.remove('field-error');
+    field.classList.add('field-valid');
+    
+    // Remove error message
+    const existingError = field.parentElement.querySelector('.error-message');
+    if (existingError) existingError.remove();
+  },
+  
+  validateAllFields() {
+    let allValid = true;
+    this.requiredFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        const isValid = this.validateField(fieldId, field.value);
+        if (!isValid) allValid = false;
+      }
+    });
+    return allValid;
+  },
+  
+  addRequiredIndicators() {
+    this.requiredFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        const label = field.previousElementSibling || field.parentElement.querySelector('label');
+        if (label && !label.classList.contains('field-required')) {
+          label.classList.add('field-required');
+        }
+      }
+    });
+  }
+};
+
+// ==================== AUTO-SAVE ====================
+const AutoSave = {
+  intervalId: null,
+  lastSaveTime: null,
+  saveInterval: 30000, // 30 seconds
+  debouncedSave: null,
+  
+  init() {
+    this.createIndicator();
+    // Performance: Debounce auto-save to prevent excessive writes
+    this.debouncedSave = debounce(() => this.save(), 2000);
+    this.startAutoSave();
+    this.loadFromLocalStorage();
+  },
+  
+  createIndicator() {
+    if (document.getElementById('auto-save-indicator')) return;
+    
+    const indicator = document.createElement('div');
+    indicator.id = 'auto-save-indicator';
+    indicator.innerHTML = '<span class="spinner"></span><span id="auto-save-text">Guardando...</span>';
+    document.body.appendChild(indicator);
+  },
+  
+  showIndicator(text, status) {
+    const indicator = document.getElementById('auto-save-indicator');
+    const textEl = document.getElementById('auto-save-text');
+    
+    if (indicator && textEl) {
+      textEl.textContent = text;
+      indicator.className = `show ${status}`;
+      
+      // Hide after 3 seconds
+      setTimeout(() => {
+        indicator.classList.remove('show');
+      }, 3000);
+    }
+  },
+  
+  save() {
+    try {
+      this.showIndicator('Guardando...', 'saving');
+      
+      // Save to localStorage
+      const dataToSave = {
+        state: state,
+        timestamp: new Date().toISOString(),
+        documentId: new URLSearchParams(window.location.search).get('id')
+      };
+      
+      localStorage.setItem('amfe_autosave', JSON.stringify(dataToSave));
+      this.lastSaveTime = new Date();
+      
+      const timeStr = this.lastSaveTime.toLocaleTimeString('es-ES', {hour: '2-digit', minute: '2-digit'});
+      this.showIndicator(`Guardado automático ${timeStr}`, 'saved');
+    } catch (error) {
+      console.error('Auto-save error:', error);
+      this.showIndicator('Error al guardar', 'error');
+    }
+  },
+  
+  loadFromLocalStorage() {
+    try {
+      const saved = localStorage.getItem('amfe_autosave');
+      if (saved) {
+        const data = JSON.parse(saved);
+        const currentDocId = new URLSearchParams(window.location.search).get('id');
+        
+        // Only restore if it's the same document
+        if (data.documentId === currentDocId) {
+          const savedDate = new Date(data.timestamp);
+          const minutesAgo = Math.floor((new Date() - savedDate) / 60000);
+          
+          if (minutesAgo < 60) { // Only restore if less than 1 hour old
+            const restore = confirm(
+              `Se encontró un guardado automático de hace ${minutesAgo} minuto(s). ¿Desea restaurarlo?`
+            );
+            
+            if (restore) {
+              Object.assign(state, data.state);
+              renderStructure();
+              this.showIndicator('Datos restaurados', 'saved');
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Load from localStorage error:', error);
+    }
+  },
+  
+  startAutoSave() {
+    // Save every 30 seconds
+    this.intervalId = setInterval(() => {
+      this.save();
+    }, this.saveInterval);
+    
+    // Save before page unload
+    window.addEventListener('beforeunload', () => {
+      this.save();
+    });
+  },
+  
+  stopAutoSave() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+    }
+  }
+};
+
+// ==================== STRUCTURE SEARCH/FILTER ====================
+const StructureSearch = {
+  init() {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+    
+    // Add search box
+    const searchBox = document.createElement('input');
+    searchBox.type = 'text';
+    searchBox.id = 'structure-search';
+    searchBox.placeholder = 'Buscar proceso, paso o elemento...';
+    
+    const structureHeading = sidebar.querySelector('h3');
+    if (structureHeading) {
+      structureHeading.after(searchBox);
+    }
+    
+    // Add search functionality
+    searchBox.addEventListener('input', (e) => {
+      this.filterStructure(e.target.value);
+    });
+  },
+  
+  filterStructure(query) {
+    const treeContainer = document.getElementById('tree-container');
+    if (!treeContainer) return;
+    
+    query = query.toLowerCase().trim();
+    
+    if (!query) {
+      // Show all items
+      const allItems = treeContainer.querySelectorAll('.tree-row, .sub-tree li');
+      allItems.forEach(item => {
+        item.style.display = '';
+        const text = item.querySelector('.item-name, span');
+        if (text) {
+          text.innerHTML = text.textContent; // Remove highlights
+        }
+      });
+      return;
+    }
+    
+    let hasResults = false;
+    
+    // Filter items
+    state.items.forEach(item => {
+      const itemEl = document.querySelector(`[data-item-id="${item.id}"]`);
+      if (!itemEl) return;
+      
+      const itemMatches = item.name.toLowerCase().includes(query);
+      let stepMatches = false;
+      
+      // Check steps
+      if (item.steps) {
+        item.steps.forEach(step => {
+          const stepEl = document.querySelector(`[data-step-id="${step.id}"]`);
+          if (!stepEl) return;
+          
+          const stepMatch = step.name.toLowerCase().includes(query);
+          stepEl.style.display = stepMatch || itemMatches ? '' : 'none';
+          
+          if (stepMatch || itemMatches) {
+            stepMatches = true;
+            hasResults = true;
+            this.highlightText(stepEl, query);
+          }
+        });
+      }
+      
+      itemEl.style.display = itemMatches || stepMatches ? '' : 'none';
+      if (itemMatches) {
+        hasResults = true;
+        this.highlightText(itemEl, query);
+      }
+    });
+    
+    // Show "no results" message
+    let noResultsMsg = treeContainer.querySelector('.search-no-results');
+    if (!hasResults) {
+      if (!noResultsMsg) {
+        noResultsMsg = document.createElement('div');
+        noResultsMsg.className = 'search-no-results';
+        noResultsMsg.textContent = 'No se encontraron resultados';
+        treeContainer.appendChild(noResultsMsg);
+      }
+    } else {
+      if (noResultsMsg) noResultsMsg.remove();
+    }
+  },
+  
+  highlightText(element, query) {
+    const textEl = element.querySelector('.item-name, span');
+    if (!textEl) return;
+    
+    const text = textEl.textContent;
+    const regex = new RegExp(`(${query})`, 'gi');
+    textEl.innerHTML = text.replace(regex, '<span class="search-highlight">$1</span>');
+  }
+};
+
+// ==================== CONTEXT HELP ====================
+const ContextHelp = {
+  helpTexts: {
+    'numeroAmfe': 'Número único que identifica este AMFE en el sistema de gestión de calidad.',
+    'revisionAmfe': 'Número de revisión del documento (ej: Rev. 01, Rev. 02).',
+    'severidad': 'Gravedad del efecto de la falla para el cliente (1=mínima, 10=máxima).',
+    'ocurrencia': 'Probabilidad de que ocurra la causa de la falla (1=remota, 10=muy alta).',
+    'deteccion': 'Capacidad de detectar la falla antes de que llegue al cliente (1=muy alta, 10=muy baja).',
+    'specialChar': 'Características que afectan la seguridad, cumplimiento normativo o satisfacción del cliente.'
+  },
+  
+  init() {
+    // Add help icons to specific fields
+    Object.keys(this.helpTexts).forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        const label = field.previousElementSibling || field.parentElement.querySelector('label');
+        if (label && !label.querySelector('.help-icon')) {
+          const helpIcon = document.createElement('span');
+          helpIcon.className = 'help-icon';
+          helpIcon.textContent = '?';
+          helpIcon.setAttribute('data-help', fieldId);
+          label.appendChild(helpIcon);
+          
+          // Add tooltip on hover
+          helpIcon.addEventListener('mouseenter', (e) => this.showTooltip(e, fieldId));
+          helpIcon.addEventListener('mouseleave', () => this.hideTooltip());
+        }
+      }
+    });
+  },
+  
+  showTooltip(event, fieldId) {
+    const helpText = this.helpTexts[fieldId];
+    if (!helpText) return;
+    
+    // Remove existing tooltip
+    this.hideTooltip();
+    
+    const tooltip = document.createElement('div');
+    tooltip.className = 'help-tooltip';
+    tooltip.textContent = helpText;
+    tooltip.id = 'active-help-tooltip';
+    
+    document.body.appendChild(tooltip);
+    
+    // Position tooltip
+    const rect = event.target.getBoundingClientRect();
+    tooltip.style.position = 'absolute';
+    tooltip.style.top = (rect.bottom + window.scrollY + 10) + 'px';
+    tooltip.style.left = (rect.left + window.scrollX - 10) + 'px';
+  },
+  
+  hideTooltip() {
+    const tooltip = document.getElementById('active-help-tooltip');
+    if (tooltip) tooltip.remove();
+  }
+};
+
+// ==================== INITIALIZATION ====================
+document.addEventListener('DOMContentLoaded', () => {
+  // Initialize all new features
+  setTimeout(() => {
+    FormValidator.addRequiredIndicators();
+    AutoSave.init();
+    StructureSearch.init();
+    ContextHelp.init();
+    
+    // Add validation listeners
+    FormValidator.requiredFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        field.addEventListener('blur', () => {
+          FormValidator.validateField(fieldId, field.value);
+        });
+        
+        field.addEventListener('input', () => {
+          if (field.classList.contains('field-error')) {
+            FormValidator.validateField(fieldId, field.value);
+          }
+        });
+      }
+    });
+  }, 1000);
+});
+
+// Override save function to include validation
+const originalSaveBtn = document.getElementById('save-btn');
+if (originalSaveBtn) {
+  originalSaveBtn.addEventListener('click', (e) => {
+    if (!FormValidator.validateAllFields()) {
+      e.preventDefault();
+      alert('Por favor complete todos los campos obligatorios antes de guardar.');
+      // Scroll to first error
+      const firstError = document.querySelector('.field-error');
+      if (firstError) {
+        firstError.scrollIntoView({behavior: 'smooth', block: 'center'});
+        firstError.focus();
+      }
+    }
+  });
+}
+
+// ===================================================================
+// INTUITIVE UX IMPROVEMENTS - PHASE 3
+// ===================================================================
+
+// Inline Guidance System
+const IntuitiveGuidance = {
+  shown: {},
+  
+  show(id, icon, title, text, container) {
+    if (this.shown[id]) return;
+    
+    const guidance = document.createElement('div');
+    guidance.className = 'inline-guidance';
+    guidance.id = `guidance-${id}`;
+    guidance.innerHTML = `
+      <div class="inline-guidance-icon">${icon}</div>
+      <div class="inline-guidance-content">
+        <div class="inline-guidance-title">${title}</div>
+        <div class="inline-guidance-text">${text}</div>
+      </div>
+      <button class="inline-guidance-dismiss" onclick="IntuitiveGuidance.dismiss('${id}')">Entendido</button>
+    `;
+    
+    const targetContainer = document.querySelector(container);
+    if (targetContainer) {
+      targetContainer.insertBefore(guidance, targetContainer.firstChild);
+      this.shown[id] = true;
+      localStorage.setItem(`guidance_${id}`, 'shown');
+    }
+  },
+  
+  dismiss(id) {
+    const guidance = document.getElementById(`guidance-${id}`);
+    if (guidance) {
+      guidance.style.animation = 'slideOutToTop 0.3s ease-out';
+      setTimeout(() => guidance.remove(), 300);
+    }
+  },
+  
+  isShown(id) {
+    return localStorage.getItem(`guidance_${id}`) === 'shown';
+  }
+};
+
+// Smart Defaults and Suggestions
+const SmartDefaults = {
+  suggestions: {},
+  
+  loadFromLocalStorage() {
+    const saved = localStorage.getItem('amfe_smart_defaults');
+    if (saved) {
+      this.suggestions = JSON.parse(saved);
+    }
+  },
+  
+  saveValue(field, value) {
+    if (!value || value.trim() === '') return;
+    
+    if (!this.suggestions[field]) {
+      this.suggestions[field] = [];
+    }
+    
+    // Add unique values only
+    if (!this.suggestions[field].includes(value)) {
+      this.suggestions[field].unshift(value);
+      // Keep only last 5 suggestions
+      this.suggestions[field] = this.suggestions[field].slice(0, 5);
+      localStorage.setItem('amfe_smart_defaults', JSON.stringify(this.suggestions));
+    }
+  },
+  
+  getSuggestions(field) {
+    return this.suggestions[field] || [];
+  },
+  
+  showSuggestionsFor(inputId, fieldName) {
+    const suggestions = this.getSuggestions(fieldName);
+    if (suggestions.length === 0) return;
+    
+    const input = document.getElementById(inputId);
+    if (!input || input.value) return; // Don't show if already filled
+    
+    const container = input.parentElement;
+    let suggestionsPanel = container.querySelector('.smart-suggestions');
+    
+    if (!suggestionsPanel) {
+      suggestionsPanel = document.createElement('div');
+      suggestionsPanel.className = 'smart-suggestions';
+      suggestionsPanel.innerHTML = `
+        <div class="smart-suggestions-title">
+          <span class="smart-suggestions-title-icon">💡</span>
+          Sugerencias basadas en anteriores:
+        </div>
+      `;
+      
+      suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'smart-suggestion-item';
+        item.innerHTML = `
+          <span class="smart-suggestion-text">${suggestion}</span>
+          <span class="smart-suggestion-action">Usar →</span>
+        `;
+        item.onclick = () => {
+          input.value = suggestion;
+          input.dispatchEvent(new Event('input'));
+          suggestionsPanel.remove();
+        };
+        suggestionsPanel.appendChild(item);
+      });
+      
+      container.appendChild(suggestionsPanel);
+    }
+  }
+};
+
+// Workflow Progress Tracker
+const WorkflowProgress = {
+  steps: [
+    {id: 'general', label: 'Datos Generales'},
+    {id: 'structure', label: 'Estructura'},
+    {id: 'analysis', label: 'Análisis'},
+    {id: 'controls', label: 'Controles'},
+    {id: 'iatf', label: 'IATF 16949'}
+  ],
+  
+  currentStep: 'general',
+  
+  render() {
+    const existing = document.getElementById('workflow-progress');
+    if (existing) existing.remove();
+    
+    const workflow = document.createElement('div');
+    workflow.id = 'workflow-progress';
+    workflow.className = 'workflow-steps';
+    
+    this.steps.forEach((step, index) => {
+      const stepDiv = document.createElement('div');
+      stepDiv.className = 'workflow-step';
+      
+      if (step.id === this.currentStep) {
+        stepDiv.classList.add('workflow-step-active');
+      } else if (this.isStepCompleted(step.id)) {
+        stepDiv.classList.add('workflow-step-completed');
+      }
+      
+      stepDiv.innerHTML = `
+        <div class="workflow-step-number">${this.isStepCompleted(step.id) ? '' : index + 1}</div>
+        <div class="workflow-step-label">${step.label}</div>
+      `;
+      
+      workflow.appendChild(stepDiv);
+    });
+    
+    const progressCard = document.querySelector('.progress-card');
+    if (progressCard) {
+      progressCard.after(workflow);
+    }
+  },
+  
+  setStep(stepId) {
+    this.currentStep = stepId;
+    this.render();
+  },
+  
+  isStepCompleted(stepId) {
+    // Check if step has required data filled
+    switch(stepId) {
+      case 'general':
+        return state.general.orgName && state.general.numeroAmfe;
+      case 'structure':
+        return state.items.length > 0;
+      case 'analysis':
+        return state.items.some(item => item.steps && item.steps.length > 0);
+      case 'controls':
+        // Check if any element has controls defined
+        return state.items.some(item => 
+          item.steps && item.steps.some(step => 
+            step.elements && step.elements.some(el => el.metodosDeteccion)
+          )
+        );
+      case 'iatf':
+        // Check if IATF section has data
+        return state.items.some(item =>
+          item.steps && item.steps.some(step =>
+            step.elements && step.elements.some(el => el.temporaryControl || el.supplyChain || el.escalation)
+          )
+        );
+      default:
+        return false;
+    }
+  },
+  
+  getCompletionPercentage() {
+    const completed = this.steps.filter(step => this.isStepCompleted(step.id)).length;
+    return Math.round((completed / this.steps.length) * 100);
+  }
+};
+
+// Next Step Indicator
+const NextStepIndicator = {
+  indicator: null,
+  
+  show(message, action) {
+    this.hide(); // Remove existing indicator
+    
+    this.indicator = document.createElement('div');
+    this.indicator.className = 'next-step-indicator';
+    this.indicator.innerHTML = `
+      <span class="next-step-indicator-icon">👉</span>
+      <span>${message}</span>
+    `;
+    this.indicator.onclick = action;
+    
+    document.body.appendChild(this.indicator);
+  },
+  
+  hide() {
+    if (this.indicator) {
+      this.indicator.remove();
+      this.indicator = null;
+    }
+  },
+  
+  updateBasedOnState() {
+    // Show appropriate next step based on current state
+    if (state.items.length === 0) {
+      this.show('Próximo: Agregar un ítem al proceso', () => {
+        document.getElementById('add-item')?.click();
+      });
+    } else if (!state.selected.itemId) {
+      this.show('Próximo: Seleccionar un ítem para trabajar', () => {
+        const firstItem = document.querySelector('.tree-row-item');
+        if (firstItem) firstItem.click();
+      });
+    } else if (state.selected.itemId && !state.selected.stepId) {
+      this.show('Próximo: Agregar un paso al ítem seleccionado', () => {
+        const addStepBtn = document.querySelector(`[onclick*="addStep"]`);
+        if (addStepBtn) addStepBtn.click();
+      });
+    } else {
+      this.hide();
+    }
+  }
+};
+
+// Enhanced Empty State
+function showEnhancedEmptyState(container, icon, title, description, actionText, actionCallback) {
+  const emptyState = document.createElement('div');
+  emptyState.className = 'empty-state-enhanced';
+  emptyState.innerHTML = `
+    <div class="empty-state-enhanced-icon">${icon}</div>
+    <div class="empty-state-enhanced-title">${title}</div>
+    <div class="empty-state-enhanced-description">${description}</div>
+    <button class="empty-state-enhanced-action" onclick="this.parentElement.remove(); (${actionCallback.toString()})()">
+      ${actionText}
+    </button>
+  `;
+  
+  const targetContainer = document.querySelector(container);
+  if (targetContainer) {
+    // Only add if container is empty or has minimal content
+    if (targetContainer.children.length <= 1) {
+      targetContainer.appendChild(emptyState);
+    }
+  }
+}
+
+// Completion Badge Generator
+function getCompletionBadge(completionPercentage) {
+  let badgeClass, icon, text;
+  
+  if (completionPercentage === 100) {
+    badgeClass = 'completion-badge-complete';
+    icon = '✓';
+    text = 'Completado';
+  } else if (completionPercentage >= 50) {
+    badgeClass = 'completion-badge-partial';
+    icon = '●';
+    text = `${completionPercentage}%`;
+  } else {
+    badgeClass = 'completion-badge-incomplete';
+    icon = '○';
+    text = `${completionPercentage}%`;
+  }
+  
+  return `<span class="completion-badge ${badgeClass}">
+    <span class="completion-badge-icon">${icon}</span>
+    ${text}
+  </span>`;
+}
+
+// Initialize Intuitive Features
+function initIntuitiveFeatures() {
+  // Load smart defaults
+  SmartDefaults.loadFromLocalStorage();
+  
+  // Show initial guidance if first time
+  if (!IntuitiveGuidance.isShown('welcome')) {
+    IntuitiveGuidance.show(
+      'welcome',
+      '👋',
+      '¡Bienvenido al Gestor AMFE-FMEA!',
+      'Complete los datos generales para comenzar. Use la estructura del lado izquierdo para organizar su análisis en ítems, pasos y elementos.',
+      '#general-info'
+    );
+  }
+  
+  // Render workflow progress
+  WorkflowProgress.render();
+  
+  // Update next step indicator
+  NextStepIndicator.updateBasedOnState();
+  
+  // Show empty state for structure panel if no items
+  if (state.items.length === 0) {
+    setTimeout(() => {
+      showEnhancedEmptyState(
+        '#item-list',
+        '📋',
+        'Comience su análisis AMFE',
+        'Agregue el primer ítem del proceso para comenzar a identificar modos de falla potenciales y sus controles.',
+        'Agregar Primer Ítem',
+        () => document.getElementById('add-item')?.click()
+      );
+    }, 1000);
+  }
+  
+  // Add smart suggestions to common fields
+  const fieldsWithSuggestions = [
+    {id: 'orgName', field: 'organization'},
+    {id: 'responsable', field: 'responsible'},
+    {id: 'planta', field: 'plant'},
+    {id: 'cliente', field: 'client'}
+  ];
+  
+  fieldsWithSuggestions.forEach(({id, field}) => {
+    const input = document.getElementById(id);
+    if (input) {
+      input.addEventListener('focus', () => {
+        SmartDefaults.showSuggestionsFor(id, field);
+      });
+      
+      input.addEventListener('blur', () => {
+        if (input.value) {
+          SmartDefaults.saveValue(field, input.value);
+        }
+      });
+    }
+  });
+  
+  // Update indicators on state change
+  setInterval(() => {
+    WorkflowProgress.render();
+    NextStepIndicator.updateBasedOnState();
+  }, 5000);
+}
+
+// Initialize on DOM ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initIntuitiveFeatures);
+} else {
+  initIntuitiveFeatures();
 }

@@ -17,8 +17,12 @@
     </nav>
   </header>
   <!-- Datos generales del análisis (Paso 1: planificación y preparación) -->
-  <section id="general-info">
-    <h2>Datos generales</h2>
+  <section id="general-info" class="collapsible-section">
+    <h2 class="collapsible-header" onclick="toggleSection('general-info-content')">
+      <span class="collapse-icon">▼</span>
+      Datos generales
+    </h2>
+    <div id="general-info-content" class="collapsible-content">
     <div class="grid-3">
       <label>Nombre de la organización:<br>
         <input type="text" id="orgName" value="" required>
@@ -115,15 +119,42 @@
         <label for="safetyApproval" style="margin-bottom:0; color:#c0392b; font-weight:bold;">Aprobación de Seguridad Requerida (Severidad Crítica Detectada)</label>
       </div>
     </div>
+    </div>
   </section>
   <nav id="main-nav">
     <button id="tab-fmea" class="tab-btn active">AMFE</button>
     <button id="tab-control" class="tab-btn">Plan de control</button>
     <button id="tab-standard" class="tab-btn">Vista estándar</button>
     <button id="tab-instructions" class="tab-btn">Instrucciones de Proceso</button>
+    <button id="tab-iatf" class="tab-btn">Gestión IATF 16949</button>
   </nav>
   <!-- Resumen de errores de validación -->
   <div id="error-summary" class="error-summary" style="color:#b00020; font-weight:bold; margin:8px 0;"></div>
+  
+  <!-- Progress summary card -->
+  <div id="progress-summary" class="progress-card">
+    <div class="progress-item">
+      <span class="progress-icon">📝</span>
+      <span class="progress-label">Ítems</span>
+      <span class="progress-value" id="progress-items">0</span>
+    </div>
+    <div class="progress-item">
+      <span class="progress-icon">⚙️</span>
+      <span class="progress-label">Elementos</span>
+      <span class="progress-value" id="progress-elements">0</span>
+    </div>
+    <div class="progress-item">
+      <span class="progress-icon">⚠️</span>
+      <span class="progress-label">Riesgos Críticos</span>
+      <span class="progress-value critical" id="progress-critical">0</span>
+    </div>
+    <div class="progress-item">
+      <span class="progress-icon">✅</span>
+      <span class="progress-label">Completado</span>
+      <span class="progress-value" id="progress-completion">0%</span>
+    </div>
+  </div>
+  
   <main>
     <!-- Sección AMFE con estructura y detalle -->
     <section id="fmea-section" class="tab-content active">
@@ -299,7 +330,12 @@
     </div>
     <!-- Sección plan de control -->
     <section id="control-section" class="tab-content">
-    <h2>Plan de control</h2>
+    <div class="collapsible-section">
+      <h2 class="collapsible-header" onclick="toggleSection('control-header-content')">
+        <span class="collapse-icon">▼</span>
+        Datos del Plan de Control
+      </h2>
+      <div id="control-header-content" class="collapsible-content collapsed">
     <!-- Cabecera del plan de control según el formato estándar -->
     <div id="control-header" class="grid-4" style="margin-bottom:8px;">
       <label>Fase:<br>
@@ -350,6 +386,10 @@
         <input type="date" id="cpApprovalOther">
       </label>
     </div>
+      </div>
+    </div>
+    
+    <h2 style="margin-top: 2rem;">Tabla del Plan de Control</h2>
       <table id="control-table" class="control-standard">
         <thead>
           <tr>
@@ -392,7 +432,97 @@
       </div>
       <button id="export-instructions" class="btn">Exportar Instrucciones a PDF</button>
     </section>
+    <!-- Sección de Gestión IATF 16949 -->
+    <section id="iatf-section" class="tab-content">
+      <h2>Gestión de Cumplimiento IATF 16949</h2>
+      
+      <!-- Subsección: Controles Temporales -->
+      <div class="iatf-subsection">
+        <h3>1. Gestión de Controles Temporales (IATF 8.5.6.1.1)</h3>
+        <p>Gestión de desviaciones temporales de controles principales del proceso.</p>
+        
+        <div id="temporary-controls-active-warning" style="display:none; background:#fff3cd; border:2px solid #ffc107; padding:15px; margin:10px 0; border-radius:5px;">
+          <h4 style="color:#856404; margin-top:0;">⚠️ CONTROLES TEMPORALES ACTIVOS</h4>
+          <div id="active-controls-list"></div>
+        </div>
+        
+        <table class="iatf-table">
+          <thead>
+            <tr>
+              <th>Proceso/Paso</th>
+              <th>Elemento</th>
+              <th>Control Principal</th>
+              <th>Control Alternativo</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="temporary-controls-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Subsección: Pass-Through Characteristics -->
+      <div class="iatf-subsection">
+        <h3>2. Gestión de Riesgos de Cadena de Suministro</h3>
+        <p>Identificación y control de Pass-Through Characteristics (PTCs) y gestión de proveedores.</p>
+        
+        <table class="iatf-table">
+          <thead>
+            <tr>
+              <th>Proceso/Paso</th>
+              <th>Elemento</th>
+              <th>Es PTC</th>
+              <th>Proveedor</th>
+              <th>PFMEA Proveedor</th>
+              <th>Última Auditoría</th>
+              <th>Estado</th>
+              <th>Control en Fabricación</th>
+            </tr>
+          </thead>
+          <tbody id="supply-chain-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Subsección: Escalación de Riesgos -->
+      <div class="iatf-subsection">
+        <h3>3. Proceso de Escalación de Riesgos</h3>
+        <p>Registro y seguimiento de modos de fallo que requieren escalación a la dirección.</p>
+        
+        <div id="escalation-alerts" style="background:#ffebee; border:2px solid #f44336; padding:15px; margin:10px 0; border-radius:5px; display:none;">
+          <h4 style="color:#c62828; margin-top:0;">🚨 ALERTAS DE ESCALACIÓN</h4>
+          <div id="escalation-alerts-list"></div>
+        </div>
+        
+        <table class="iatf-table">
+          <thead>
+            <tr>
+              <th>Proceso/Paso</th>
+              <th>Elemento</th>
+              <th>Severidad</th>
+              <th>Modo de Fallo</th>
+              <th>Requiere Escalación</th>
+              <th>Escalado A</th>
+              <th>Fecha</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="escalation-body"></tbody>
+        </table>
+      </div>
+    </section>
   </main>
+  
+  <!-- Quick actions floating bar -->
+  <div id="quick-actions">
+    <button class="btn btn-primary" onclick="document.getElementById('save-btn').click()" title="Guardar AMFE">
+      💾 Guardar
+    </button>
+    <button class="btn btn-secondary" onclick="scrollToTop()" title="Volver arriba">
+      ⬆️ Arriba
+    </button>
+  </div>
+  
   <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
   <!-- Librerías para exportar la vista estándar a PDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
